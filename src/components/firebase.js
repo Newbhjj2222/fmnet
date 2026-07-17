@@ -5,13 +5,13 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 
 // Firebase configuration - Hardcoded for immediate deployment
 const firebaseConfig = {
-  apiKey: "AIzaSyDemoKey123456789",
-  authDomain: "virtual-football-manager-demo.firebaseapp.com",
-  projectId: "virtual-football-manager-demo",
-  storageBucket: "virtual-football-manager-demo.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef123456",
-  measurementId: "G-XXXXXXXXXX"
+  apiKey: "AIzaSyD973O8vExYyGv-P5H96CyepNUaLAECXHQ",
+  authDomain: "vfmc-6d447.firebaseapp.com",
+  projectId: "vfmc-6d447",
+  storageBucket: "vfmc-6d447.firebasestorage.app",
+  messagingSenderId: "631390233813",
+  appId: "1:631390233813:web:fa057dca3a40f6e2ceee5c",
+  measurementId: "G-CQDJB77QEZ"
 };
 
 // Initialize Firebase
