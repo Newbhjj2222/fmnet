@@ -1,0 +1,117 @@
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.scrolled {
+  background: rgba(0, 0, 0, 0.85);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.navContainer {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-decoration: none;
+  letter-spacing: -0.5px;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.navLink:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.navLink.active {
+  color: var(--primary);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.navLink.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+.navIcon {
+  font-size: 1.125rem;
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Mobile */
+@media (max-width: 1024px) {
+  .navLinks {
+    display: none;
+  }
+  
+  .navContainer {
+    padding: 0 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .nav {
+    height: 56px;
+  }
+  
+  .navContainer {
+    height: 56px;
+    padding: 0 0.75rem;
+  }
+  
+  .logo {
+    font-size: 1.25rem;
+  }
+}
