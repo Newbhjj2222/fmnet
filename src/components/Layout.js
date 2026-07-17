@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Toaster } from 'react-hot-toast';
-import styles from './Layout.module.css';
+import styles from '@/styles/Layout.module.css';
 
 export default function Layout({ children, title = 'Virtual Football Manager Career' }) {
   const router = useRouter();
