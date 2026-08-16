@@ -16,7 +16,7 @@ import {
 
 import toast from 'react-hot-toast';
 
-import styles from './career.module.css';
+import styles from '@/styles/career.module.css';
 
 export default function Career() {
   const router = useRouter();
