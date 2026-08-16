@@ -1,0 +1,2019 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  padding: 28px;
+
+  color: #e5e7eb;
+
+  background:
+    radial-gradient(
+      circle at 8% 0%,
+      rgba(37, 99, 235, 0.16),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 95% 10%,
+      rgba(16, 185, 129, 0.10),
+      transparent 28%
+    ),
+    #070b14;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  color: #64748b;
+
+  background: #070b14;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+
+  border: 3px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #3b82f6;
+
+  border-radius: 50%;
+
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   COMMON
+========================================================= */
+
+.eyebrow {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #60a5fa;
+
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+
+/* =========================================================
+   CLUB SELECTION
+========================================================= */
+
+.selectionHero {
+  max-width: 1400px;
+
+  margin: 0 auto 26px;
+
+  padding: 38px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 24px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(17, 24, 39, 0.97),
+      rgba(10, 15, 28, 0.97)
+    );
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.heroBall {
+  width: 85px;
+  height: 85px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.20),
+      rgba(16, 185, 129, 0.10)
+    );
+
+  font-size: 42px;
+}
+
+.selectionHero h1 {
+  margin: 0;
+
+  color: #f8fafc;
+
+  font-size: clamp(30px, 5vw, 46px);
+  font-weight: 850;
+
+  letter-spacing: -1.3px;
+}
+
+.selectionHero p {
+  max-width: 650px;
+
+  margin: 8px 0 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.clubSelection {
+  max-width: 1400px;
+
+  margin: 0 auto;
+}
+
+.selectionToolbar {
+  display: flex;
+
+  gap: 12px;
+
+  margin-bottom: 18px;
+}
+
+.searchBox {
+  flex: 1;
+
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 0 15px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+
+  background: #0d1422;
+}
+
+.searchBox span {
+  color: #64748b;
+  font-size: 22px;
+}
+
+.searchBox input {
+  width: 100%;
+
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+
+  color: #e2e8f0;
+
+  font-size: 13px;
+}
+
+.searchBox input::placeholder {
+  color: #475569;
+}
+
+.filter {
+  min-width: 180px;
+
+  padding: 0 13px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+
+  outline: none;
+
+  background: #0d1422;
+  color: #cbd5e1;
+
+  font-size: 12px;
+}
+
+.clubGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 18px;
+}
+
+.clubSelectCard {
+  padding: 20px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 17px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 24, 39, 0.95),
+      rgba(10, 15, 27, 0.95)
+    );
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+.clubSelectCard:hover {
+  transform: translateY(-3px);
+
+  border-color:
+    rgba(59, 130, 246, 0.28);
+}
+
+.clubCardTop {
+  display: flex;
+  align-items: center;
+
+  gap: 13px;
+}
+
+.clubLogo {
+  width: 56px;
+  height: 56px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 13px;
+
+  background:
+    rgba(59, 130, 246, 0.08);
+
+  font-size: 25px;
+}
+
+.clubLogo img {
+  width: 43px;
+  height: 43px;
+
+  object-fit: contain;
+}
+
+.clubCardTop h2 {
+  margin: 0;
+
+  color: #f1f5f9;
+
+  font-size: 16px;
+}
+
+.clubCardTop span {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+.clubDescription {
+  min-height: 42px;
+
+  margin: 17px 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.clubQuickStats {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 6px;
+
+  margin-bottom: 15px;
+}
+
+.clubQuickStats div {
+  padding: 9px 6px;
+
+  border-radius: 8px;
+
+  background: rgba(255, 255, 255, 0.035);
+
+  text-align: center;
+}
+
+.clubQuickStats span {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #475569;
+
+  font-size: 8px;
+
+  text-transform: uppercase;
+}
+
+.clubQuickStats strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #cbd5e1;
+
+  font-size: 10px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chooseButton {
+  width: 100%;
+
+  padding: 11px 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border: 0;
+  border-radius: 9px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #1d4ed8
+    );
+
+  color: white;
+
+  cursor: pointer;
+
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.chooseButton:hover {
+  filter: brightness(1.08);
+}
+
+.noResults {
+  grid-column: 1 / -1;
+
+  padding: 70px 20px;
+
+  text-align: center;
+
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 15px;
+}
+
+.noResults span {
+  font-size: 30px;
+}
+
+.noResults h3 {
+  margin: 10px 0 5px;
+
+  color: #cbd5e1;
+}
+
+.noResults p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   CONTRACT MODAL
+========================================================= */
+
+.modalOverlay {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background:
+    rgba(2, 6, 23, 0.78);
+
+  backdrop-filter: blur(8px);
+}
+
+.contractModal {
+  position: relative;
+
+  width: min(100%, 520px);
+
+  max-height: 90vh;
+
+  overflow-y: auto;
+
+  padding: 28px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #111827,
+      #0a101d
+    );
+
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55);
+}
+
+.closeButton {
+  position: absolute;
+
+  top: 13px;
+  right: 15px;
+
+  width: 30px;
+  height: 30px;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.05);
+
+  color: #94a3b8;
+
+  cursor: pointer;
+
+  font-size: 21px;
+}
+
+.modalClub {
+  display: flex;
+  align-items: center;
+
+  gap: 14px;
+
+  margin-bottom: 22px;
+}
+
+.modalLogo {
+  width: 60px;
+  height: 60px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 13px;
+
+  background: rgba(59, 130, 246, 0.10);
+
+  font-size: 28px;
+}
+
+.modalLogo img {
+  width: 45px;
+  height: 45px;
+
+  object-fit: contain;
+}
+
+.modalClub span {
+  color: #60a5fa;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 1px;
+}
+
+.modalClub h2 {
+  margin: 3px 0 0;
+
+  color: #f8fafc;
+
+  font-size: 22px;
+}
+
+.contractTerms {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, 1fr);
+
+  gap: 8px;
+
+  margin-bottom: 16px;
+}
+
+.contractTerms div {
+  padding: 13px;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.contractTerms span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 9px;
+
+  text-transform: uppercase;
+}
+
+.contractTerms strong {
+  display: block;
+
+  color: #cbd5e1;
+
+  font-size: 11px;
+
+  line-height: 1.4;
+}
+
+.boardMessage {
+  display: flex;
+
+  gap: 10px;
+
+  padding: 13px;
+
+  margin-bottom: 16px;
+
+  border: 1px solid rgba(59, 130, 246, 0.10);
+  border-radius: 10px;
+
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.boardMessage span {
+  font-size: 20px;
+}
+
+.boardMessage p {
+  margin: 0;
+
+  color: #94a3b8;
+
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.signButton {
+  width: 100%;
+
+  padding: 13px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #10b981
+    );
+
+  color: white;
+
+  cursor: pointer;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   ACTIVE CLUB HEADER
+========================================================= */
+
+.clubHeader {
+  max-width: 1400px;
+
+  margin: 0 auto 18px;
+
+  padding: 25px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 25px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(17, 24, 39, 0.97),
+      rgba(10, 15, 27, 0.97)
+    );
+}
+
+.clubHeaderLeft {
+  display: flex;
+  align-items: center;
+
+  gap: 17px;
+}
+
+.clubHeaderLogo {
+  width: 82px;
+  height: 82px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 17px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.18),
+      rgba(16, 185, 129, 0.10)
+    );
+
+  font-size: 36px;
+}
+
+.clubHeaderLogo img {
+  width: 62px;
+  height: 62px;
+
+  object-fit: contain;
+}
+
+.clubHeader h1 {
+  margin: 0;
+
+  color: #f8fafc;
+
+  font-size: clamp(24px, 4vw, 35px);
+  font-weight: 850;
+}
+
+.clubHeader p {
+  margin: 3px 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+.clubHeaderMeta {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 6px;
+
+  margin-top: 8px;
+}
+
+.clubHeaderMeta span {
+  padding: 4px 7px;
+
+  border-radius: 5px;
+
+  background: rgba(255, 255, 255, 0.04);
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.boardConfidence {
+  min-width: 190px;
+
+  padding: 16px;
+
+  border-radius: 13px;
+
+  background: rgba(255, 255, 255, 0.035);
+
+  text-align: right;
+}
+
+.boardConfidence > span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.boardConfidence > strong {
+  display: block;
+
+  margin: 3px 0;
+
+  color: #34d399;
+
+  font-size: 26px;
+}
+
+.confidenceTrack {
+  width: 100%;
+  height: 5px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: #172033;
+}
+
+.confidenceBar {
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #f59e0b,
+      #10b981
+    );
+}
+
+.boardConfidence small {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+.managementNav {
+  max-width: 1400px;
+
+  margin: 0 auto 18px;
+
+  padding: 5px;
+
+  display: flex;
+
+  gap: 4px;
+
+  overflow-x: auto;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+
+  background: #0b111d;
+}
+
+.managementNav button {
+  flex: 1;
+
+  min-width: 100px;
+
+  padding: 10px 13px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: transparent;
+
+  color: #64748b;
+
+  cursor: pointer;
+
+  font-size: 11px;
+  font-weight: 650;
+
+  white-space: nowrap;
+}
+
+.managementNav button:hover {
+  color: #cbd5e1;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.managementNav button span {
+  margin-right: 5px;
+}
+
+.managementNav .activeNav {
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.22),
+      rgba(16, 185, 129, 0.08)
+    );
+}
+
+
+/* =========================================================
+   ALERTS
+========================================================= */
+
+.warningBanner,
+.dangerBanner {
+  max-width: 1400px;
+
+  margin: 0 auto 18px;
+
+  padding: 14px 17px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  border-radius: 12px;
+}
+
+.warningBanner {
+  border: 1px solid rgba(245, 158, 11, 0.18);
+
+  background:
+    rgba(245, 158, 11, 0.055);
+}
+
+.dangerBanner {
+  border: 1px solid rgba(239, 68, 68, 0.18);
+
+  background:
+    rgba(239, 68, 68, 0.055);
+}
+
+.warningBanner > span,
+.dangerBanner > span {
+  font-size: 22px;
+}
+
+.warningBanner div,
+.dangerBanner div {
+  flex: 1;
+}
+
+.warningBanner strong,
+.dangerBanner strong {
+  color: #f1f5f9;
+
+  font-size: 12px;
+}
+
+.warningBanner p,
+.dangerBanner p {
+  margin: 3px 0 0;
+
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+.warningBanner button,
+.dangerBanner button {
+  padding: 9px 13px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: #f59e0b;
+
+  color: #111827;
+
+  cursor: pointer;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   CONTENT
+========================================================= */
+
+.content {
+  max-width: 1400px;
+
+  margin: 0 auto;
+}
+
+.statGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 12px;
+
+  margin-bottom: 18px;
+}
+
+.metricCard,
+.financeCard {
+  padding: 17px;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 24, 39, 0.94),
+      rgba(10, 15, 27, 0.94)
+    );
+}
+
+.metricCard span,
+.financeCard span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.metricCard strong,
+.financeCard strong {
+  display: block;
+
+  margin-top: 6px;
+
+  color: #f8fafc;
+
+  font-size: 21px;
+}
+
+.metricCard small,
+.financeCard small {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #475569;
+
+  font-size: 9px;
+}
+
+.twoColumn {
+  display: grid;
+
+  grid-template-columns: 1fr 1fr;
+
+  gap: 18px;
+
+  margin-bottom: 18px;
+}
+
+.managementCard {
+  padding: 21px;
+
+  margin-bottom: 18px;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 24, 39, 0.95),
+      rgba(10, 15, 27, 0.95)
+    );
+}
+
+.cardTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  margin-bottom: 18px;
+}
+
+.cardTitle > div > span {
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.cardTitle h2 {
+  margin: 3px 0 0;
+
+  color: #f1f5f9;
+
+  font-size: 18px;
+}
+
+.cardTitle > span {
+  font-size: 20px;
+}
+
+.performanceGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 8px;
+}
+
+.performanceGrid div {
+  padding: 13px 7px;
+
+  text-align: center;
+
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.performanceGrid strong {
+  display: block;
+
+  color: #f1f5f9;
+
+  font-size: 22px;
+}
+
+.performanceGrid span {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.green {
+  color: #34d399 !important;
+}
+
+.yellow {
+  color: #fbbf24 !important;
+}
+
+.red {
+  color: #f87171 !important;
+}
+
+
+/* =========================================================
+   BOARD FEELING
+========================================================= */
+
+.boardFeeling {
+  min-height: 125px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 17px;
+}
+
+.boardFace {
+  width: 80px;
+  height: 80px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background:
+    rgba(255, 255, 255, 0.04);
+
+  font-size: 38px;
+}
+
+.boardFeeling strong {
+  color: #f1f5f9;
+
+  font-size: 17px;
+}
+
+.boardFeeling p {
+  max-width: 280px;
+
+  margin: 5px 0 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   OBJECTIVES
+========================================================= */
+
+.objectives {
+  display: flex;
+  flex-direction: column;
+
+  gap: 11px;
+}
+
+.objective {
+  display: flex;
+
+  gap: 12px;
+
+  padding: 13px;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.objectiveIcon {
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 8px;
+
+  background: rgba(37, 99, 235, 0.10);
+
+  color: #60a5fa;
+
+  font-size: 13px;
+}
+
+.objectiveBody {
+  flex: 1;
+}
+
+.objectiveTop {
+  display: flex;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.objectiveTop strong {
+  color: #cbd5e1;
+
+  font-size: 11px;
+}
+
+.objectiveTop span {
+  color: #60a5fa;
+
+  font-size: 10px;
+}
+
+.objectiveTrack {
+  width: 100%;
+  height: 5px;
+
+  margin: 8px 0 5px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: #172033;
+}
+
+.objectiveTrack div {
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #10b981
+    );
+}
+
+.objectiveBody small {
+  color: #475569;
+
+  font-size: 9px;
+}
+
+.empty {
+  padding: 30px;
+
+  color: #475569;
+
+  text-align: center;
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   BOARD ROOM
+========================================================= */
+
+.boardRoom {
+  margin-bottom: 18px;
+
+  padding: 27px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 17px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(17, 24, 39, 0.97),
+      rgba(10, 15, 27, 0.97)
+    );
+}
+
+.boardRoomHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.boardRoomHeader > div:first-child > span {
+  color: #60a5fa;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 1px;
+}
+
+.boardRoomHeader h1 {
+  margin: 5px 0;
+
+  color: #f8fafc;
+
+  font-size: 27px;
+}
+
+.boardRoomHeader p {
+  max-width: 550px;
+
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.bigConfidence {
+  min-width: 120px;
+
+  padding: 15px;
+
+  text-align: center;
+
+  border-radius: 12px;
+
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.bigConfidence strong {
+  display: block;
+
+  color: #34d399;
+
+  font-size: 29px;
+}
+
+.bigConfidence span {
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.boardRules {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 9px;
+
+  margin-top: 22px;
+}
+
+.boardRules > div {
+  display: flex;
+
+  gap: 10px;
+
+  padding: 13px;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.boardRules > div > span {
+  font-size: 20px;
+}
+
+.boardRules strong {
+  color: #cbd5e1;
+
+  font-size: 11px;
+}
+
+.boardRules p {
+  margin: 3px 0 0;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+
+.actionGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 10px;
+}
+
+.actionGrid button {
+  padding: 17px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 11px;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  color: #cbd5e1;
+
+  cursor: pointer;
+
+  text-align: left;
+}
+
+.actionGrid button:hover {
+  border-color:
+    rgba(59, 130, 246, 0.22);
+
+  background:
+    rgba(59, 130, 246, 0.05);
+}
+
+.actionGrid button > span {
+  margin-bottom: 9px;
+
+  font-size: 22px;
+}
+
+.actionGrid strong {
+  font-size: 11px;
+}
+
+.actionGrid small {
+  margin-top: 4px;
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+
+/* =========================================================
+   SQUAD
+========================================================= */
+
+.squadOverview {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 10px;
+}
+
+.squadOverview div {
+  padding: 17px;
+
+  text-align: center;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.squadOverview strong {
+  display: block;
+
+  color: #f1f5f9;
+
+  font-size: 20px;
+}
+
+.squadOverview span {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.comingSoon {
+  padding: 45px 20px;
+
+  margin-top: 14px;
+
+  text-align: center;
+
+  border: 1px dashed rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+}
+
+.comingSoon span {
+  font-size: 30px;
+}
+
+.comingSoon h3 {
+  margin: 8px 0 4px;
+
+  color: #cbd5e1;
+
+  font-size: 14px;
+}
+
+.comingSoon p {
+  max-width: 430px;
+
+  margin: 0 auto;
+
+  color: #64748b;
+
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   FINANCE
+========================================================= */
+
+.financeCard strong {
+  color: #34d399;
+}
+
+.financeNotice {
+  display: flex;
+
+  gap: 13px;
+
+  padding: 15px;
+
+  border-radius: 10px;
+
+  background:
+    rgba(16, 185, 129, 0.05);
+}
+
+.financeNotice > span {
+  font-size: 22px;
+}
+
+.financeNotice strong {
+  color: #cbd5e1;
+
+  font-size: 12px;
+}
+
+.financeNotice p {
+  margin: 4px 0 0;
+
+  color: #64748b;
+
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   CONTRACT PAGE
+========================================================= */
+
+.contractPage {
+  padding: 26px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 17px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 24, 39, 0.96),
+      rgba(10, 15, 27, 0.96)
+    );
+}
+
+.contractPageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding-bottom: 20px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.contractPageHeader > div:first-child > span {
+  color: #60a5fa;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 1px;
+}
+
+.contractPageHeader h1 {
+  margin: 5px 0 2px;
+
+  color: #f8fafc;
+
+  font-size: 26px;
+}
+
+.contractPageHeader p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.contractStatus {
+  padding: 11px 15px;
+
+  border-radius: 10px;
+
+  background: rgba(16, 185, 129, 0.06);
+
+  text-align: center;
+}
+
+.contractStatus span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 8px;
+}
+
+.contractStatus strong {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #34d399;
+
+  font-size: 11px;
+}
+
+.contractGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 9px;
+
+  margin: 20px 0;
+}
+
+.contractGrid div {
+  padding: 15px;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.contractGrid span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.contractGrid strong {
+  display: block;
+
+  color: #cbd5e1;
+
+  font-size: 11px;
+}
+
+.renewalBox {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 14px;
+
+  margin-top: 10px;
+
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 10px;
+
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.renewalBox > span {
+  font-size: 21px;
+}
+
+.renewalBox > div {
+  flex: 1;
+}
+
+.renewalBox strong {
+  color: #f1f5f9;
+
+  font-size: 11px;
+}
+
+.renewalBox p {
+  margin: 3px 0 0;
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.renewalBox button {
+  padding: 9px 12px;
+
+  border: 0;
+  border-radius: 7px;
+
+  background: #f59e0b;
+
+  color: #111827;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.leaveButton {
+  margin-top: 20px;
+
+  padding: 9px 13px;
+
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  border-radius: 8px;
+
+  background: rgba(239, 68, 68, 0.05);
+
+  color: #f87171;
+
+  cursor: pointer;
+
+  font-size: 9px;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1100px) {
+
+  .clubGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .statGrid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .contractGrid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+}
+
+
+@media (max-width: 850px) {
+
+  .page {
+    padding: 16px;
+  }
+
+  .clubHeader {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .boardConfidence {
+    width: 100%;
+
+    text-align: left;
+  }
+
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+
+  .boardRules {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+
+@media (max-width: 650px) {
+
+  .page {
+    padding: 11px;
+  }
+
+  .selectionHero {
+    padding: 22px;
+
+    align-items: flex-start;
+  }
+
+  .heroBall {
+    width: 60px;
+    height: 60px;
+
+    border-radius: 15px;
+
+    font-size: 28px;
+  }
+
+  .selectionHero h1 {
+    font-size: 29px;
+  }
+
+  .selectionHero p {
+    font-size: 11px;
+  }
+
+  .selectionToolbar {
+    flex-direction: column;
+  }
+
+  .filter {
+    width: 100%;
+    height: 46px;
+  }
+
+  .clubGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .clubHeader {
+    padding: 18px;
+  }
+
+  .clubHeaderLeft {
+    align-items: flex-start;
+  }
+
+  .clubHeaderLogo {
+    width: 65px;
+    height: 65px;
+  }
+
+  .clubHeaderLogo img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .clubHeader h1 {
+    font-size: 24px;
+  }
+
+  .managementNav {
+    margin-left: -1px;
+    margin-right: -1px;
+  }
+
+  .managementNav button {
+    flex: 0 0 auto;
+    min-width: 88px;
+  }
+
+  .statGrid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .performanceGrid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .squadOverview {
+    grid-template-columns: 1fr;
+  }
+
+  .actionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .contractGrid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .boardRoomHeader {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .bigConfidence {
+    width: 100%;
+  }
+
+  .warningBanner,
+  .dangerBanner {
+    align-items: flex-start;
+
+    flex-wrap: wrap;
+  }
+
+  .warningBanner button,
+  .dangerBanner button {
+    width: 100%;
+  }
+
+}
+
+
+@media (max-width: 430px) {
+
+  .clubHeaderLeft {
+    gap: 10px;
+  }
+
+  .clubHeaderLogo {
+    width: 55px;
+    height: 55px;
+  }
+
+  .clubHeader h1 {
+    font-size: 20px;
+  }
+
+  .clubHeaderMeta {
+    display: none;
+  }
+
+  .statGrid {
+    gap: 7px;
+  }
+
+  .metricCard,
+  .financeCard {
+    padding: 12px;
+  }
+
+  .metricCard strong,
+  .financeCard strong {
+    font-size: 16px;
+  }
+
+  .contractGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .contractTerms {
+    grid-template-columns: 1fr;
+  }
+
+  .contractPage {
+    padding: 18px;
+  }
+
+  .contractPageHeader {
+    flex-direction: column;
+  }
+
+  .contractStatus {
+    width: 100%;
+  }
+
+  .renewalBox {
+    align-items: flex-start;
+
+    flex-wrap: wrap;
+  }
+
+  .renewalBox button {
+    width: 100%;
+  }
+
+}
