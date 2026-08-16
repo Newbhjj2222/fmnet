@@ -7,6 +7,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -18,17 +20,23 @@ import toast from 'react-hot-toast';
 
 import styles from './club.module.css';
 
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+const CONTRACT_WARNING_DAYS = 60;
+const DEFAULT_CONTRACT_YEARS = 2;
+const DEFAULT_SALARY = 50000;
 
 /* =========================================================
    HELPERS
 ========================================================= */
 
-const CONTRACT_WARNING_DAYS = 60;
-const CONTRACT_EXPIRED = 0;
-
-const DEFAULT_CONTRACT_YEARS = 2;
-
 function safeNumber(value, fallback = 0) {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
   const number = Number(value);
 
   return Number.isFinite(number)
@@ -36,24 +44,73 @@ function safeNumber(value, fallback = 0) {
     : fallback;
 }
 
-function formatMoney(value) {
-  const amount = safeNumber(value);
+function safeString(value, fallback = '') {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
 
+  if (typeof value === 'object') {
+    return (
+      value.name ||
+      value.title ||
+      value.label ||
+      value.displayName ||
+      value.id ||
+      fallback
+    );
+  }
+
+  return String(value);
+}
+
+function formatMoney(value) {
   return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(safeNumber(value));
 }
 
 function formatDate(value) {
   if (!value) return '-';
 
+  try {
+    if (
+      typeof value === 'object' &&
+      typeof value.toDate === 'function'
+    ) {
+      return value.toDate().toLocaleDateString();
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return date.toLocaleDateString();
+  } catch {
+    return '-';
+  }
+}
+
+function dateToISOString(value) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+
+  if (
+    typeof value === 'object' &&
+    typeof value.toDate === 'function'
+  ) {
+    return value.toDate().toISOString();
+  }
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return '-';
+    return new Date().toISOString();
   }
 
-  return date.toLocaleDateString();
+  return date.toISOString();
 }
 
 function daysBetween(start, end) {
@@ -100,10 +157,10 @@ function getContractStatus(contract) {
 
   const remaining = daysBetween(
     new Date().toISOString(),
-    contract.endDate
+    dateToISOString(contract.endDate)
   );
 
-  if (remaining <= CONTRACT_EXPIRED) {
+  if (remaining <= 0) {
     return 'expired';
   }
 
@@ -123,6 +180,69 @@ function getConfidenceLabel(value) {
   return 'Critical';
 }
 
+function getPlayerName(player) {
+  return (
+    player.name ||
+    player.fullName ||
+    player.displayName ||
+    `${player.firstName || ''} ${player.lastName || ''}`.trim() ||
+    'Unknown Player'
+  );
+}
+
+function getPlayerPosition(player) {
+  return (
+    player.position ||
+    player.role ||
+    player.positionName ||
+    'Player'
+  );
+}
+
+function getPlayerClubId(player) {
+  return (
+    player.clubId ||
+    player.currentClub ||
+    player.teamId ||
+    player.club ||
+    player.currentTeam ||
+    null
+  );
+}
+
+function normalizeRelation(value) {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'object') {
+    return (
+      value.id ||
+      value.name ||
+      value.title ||
+      value.label ||
+      null
+    );
+  }
+
+  return String(value);
+}
+
+function getRelationId(value) {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'object') {
+    return value.id || null;
+  }
+
+  return null;
+}
 
 /* =========================================================
    SSR
@@ -130,56 +250,279 @@ function getConfidenceLabel(value) {
 
 export async function getServerSideProps() {
   try {
+    /*
+     * -------------------------------------------------------
+     * LOAD CLUBS
+     * -------------------------------------------------------
+     */
+
     const clubsSnapshot = await getDocs(
       collection(db, 'clubs')
     );
+
+    /*
+     * -------------------------------------------------------
+     * LOAD COUNTRIES
+     * -------------------------------------------------------
+     */
+
+    const countriesSnapshot = await getDocs(
+      collection(db, 'countries')
+    );
+
+    const countriesMap = {};
+
+    countriesSnapshot.forEach((countryDoc) => {
+      const data = countryDoc.data();
+
+      countriesMap[countryDoc.id] = {
+        id: countryDoc.id,
+        ...data,
+        name:
+          data.name ||
+          data.countryName ||
+          data.title ||
+          countryDoc.id,
+      };
+    });
+
+    /*
+     * -------------------------------------------------------
+     * LOAD LEAGUES
+     * -------------------------------------------------------
+     */
+
+    const leaguesSnapshot = await getDocs(
+      collection(db, 'leagues')
+    );
+
+    const leaguesMap = {};
+
+    leaguesSnapshot.forEach((leagueDoc) => {
+      const data = leagueDoc.data();
+
+      leaguesMap[leagueDoc.id] = {
+        id: leagueDoc.id,
+        ...data,
+        name:
+          data.name ||
+          data.leagueName ||
+          data.title ||
+          leagueDoc.id,
+      };
+    });
+
+    /*
+     * -------------------------------------------------------
+     * LOAD PLAYERS
+     * -------------------------------------------------------
+     *
+     * Twebwe turazifilteringa nyuma kugira ngo code ibe
+     * compatible na structures zitandukanye.
+     */
+
+    const playersSnapshot = await getDocs(
+      collection(db, 'players')
+    );
+
+    const allPlayers = [];
+
+    playersSnapshot.forEach((playerDoc) => {
+      const data = playerDoc.data();
+
+      allPlayers.push({
+        id: playerDoc.id,
+        ...data,
+
+        name: getPlayerName(data),
+
+        position: getPlayerPosition(data),
+
+        age: safeNumber(
+          data.age,
+          0
+        ),
+
+        overall: safeNumber(
+          data.overall ??
+          data.rating ??
+          data.ovr,
+          0
+        ),
+
+        marketValue: safeNumber(
+          data.marketValue ??
+          data.value ??
+          data.transferValue,
+          0
+        ),
+
+        salary: safeNumber(
+          data.salary ??
+          data.wage ??
+          data.weeklyWage,
+          0
+        ),
+
+        nationality:
+          data.nationality ||
+          data.country ||
+          data.nationalityName ||
+          '',
+
+        clubId:
+          getPlayerClubId(data),
+      });
+    });
+
+    /*
+     * -------------------------------------------------------
+     * NORMALIZE CLUBS
+     * -------------------------------------------------------
+     */
 
     const clubs = [];
 
     clubsSnapshot.forEach((clubDoc) => {
       const data = clubDoc.data();
 
+      const countryId =
+        data.countryId ||
+        (
+          typeof data.country === 'object'
+            ? data.country.id
+            : null
+        );
+
+      const leagueId =
+        data.leagueId ||
+        (
+          typeof data.league === 'object'
+            ? data.league.id
+            : null
+        );
+
+      const country =
+        countriesMap[countryId] ||
+        (
+          typeof data.country === 'object'
+            ? data.country
+            : null
+        );
+
+      const league =
+        leaguesMap[leagueId] ||
+        (
+          typeof data.league === 'object'
+            ? data.league
+            : null
+        );
+
+      const clubPlayers =
+        allPlayers.filter(
+          (player) =>
+            String(player.clubId || '') ===
+            String(clubDoc.id)
+        );
+
       clubs.push({
         id: clubDoc.id,
 
-        name: data.name || 'Unnamed Club',
+        name:
+          data.name ||
+          data.clubName ||
+          'Unnamed Club',
 
-        logo: data.logo || null,
+        logo:
+          data.logo ||
+          data.logoUrl ||
+          data.badge ||
+          null,
 
-        league: data.league || 'Unknown League',
+        countryId:
+          countryId || null,
 
-        country: data.country || '',
+        countryName:
+          country?.name ||
+          (
+            typeof data.country === 'string'
+              ? data.country
+              : ''
+          ) ||
+          data.countryName ||
+          'Unknown Country',
 
-        stadium: data.stadium || '',
+        leagueId:
+          leagueId || null,
 
-        city: data.city || '',
+        leagueName:
+          league?.name ||
+          (
+            typeof data.league === 'string'
+              ? data.league
+              : ''
+          ) ||
+          data.leagueName ||
+          'Unknown League',
 
-        founded: data.founded || null,
+        country:
+          country ||
+          null,
 
-        reputation: safeNumber(
-          data.reputation,
-          50
-        ),
+        league:
+          league ||
+          null,
 
-        transferBudget: safeNumber(
-          data.transferBudget,
-          1000000
-        ),
+        stadium:
+          data.stadium ||
+          data.stadiumName ||
+          'Stadium',
 
-        wageBudget: safeNumber(
-          data.wageBudget,
-          100000
-        ),
+        city:
+          data.city ||
+          data.location ||
+          '',
 
-        balance: safeNumber(
-          data.balance,
-          5000000
-        ),
+        founded:
+          data.founded ||
+          data.established ||
+          null,
 
-        squadSize: safeNumber(
-          data.squadSize,
-          0
-        ),
+        reputation:
+          safeNumber(
+            data.reputation,
+            50
+          ),
+
+        transferBudget:
+          safeNumber(
+            data.transferBudget,
+            1000000
+          ),
+
+        wageBudget:
+          safeNumber(
+            data.wageBudget,
+            100000
+          ),
+
+        balance:
+          safeNumber(
+            data.balance ??
+            data.budget ??
+            data.clubBalance,
+            5000000
+          ),
+
+        squadSize:
+          clubPlayers.length ||
+          safeNumber(
+            data.squadSize,
+            0
+          ),
+
+        players:
+          clubPlayers,
 
         boardExpectation:
           data.boardExpectation ||
@@ -191,13 +534,67 @@ export async function getServerSideProps() {
             : [],
 
         facilities:
-          data.facilities || {},
+          data.facilities ||
+          {},
+
+        kits:
+          data.kits ||
+          {
+            home: data.homeKit || null,
+            away: data.awayKit || null,
+            third: data.thirdKit || null,
+            goalkeeper:
+              data.goalkeeperKit || null,
+          },
+
+        colors:
+          data.colors ||
+          {
+            primary:
+              data.primaryColor ||
+              '#111827',
+            secondary:
+              data.secondaryColor ||
+              '#ffffff',
+          },
+
+        managerSalary:
+          safeNumber(
+            data.managerSalary,
+            DEFAULT_SALARY
+          ),
+
+        salaryPeriod:
+          data.salaryPeriod ||
+          'weekly',
+
+        signingBonus:
+          safeNumber(
+            data.signingBonus,
+            0
+          ),
+
+        releaseClause:
+          safeNumber(
+            data.releaseClause,
+            0
+          ),
 
         status:
-          data.status || 'available',
+          data.status ||
+          'available',
 
         description:
-          data.description || '',
+          data.description ||
+          '',
+
+        history:
+          data.history ||
+          {},
+
+        social:
+          data.social ||
+          {},
       });
     });
 
@@ -212,7 +609,7 @@ export async function getServerSideProps() {
     };
   } catch (error) {
     console.error(
-      'SSR clubs error:',
+      'SSR CLUB PAGE ERROR:',
       error
     );
 
@@ -223,7 +620,6 @@ export async function getServerSideProps() {
     };
   }
 }
-
 
 /* =========================================================
    PAGE
@@ -270,9 +666,22 @@ export default function ClubPage({
   const [leagueFilter, setLeagueFilter] =
     useState('all');
 
+  const [playerSearch, setPlayerSearch] =
+    useState('');
 
   /* =======================================================
-     LOAD USER CAREER
+     USER NAME
+  ======================================================= */
+
+  const managerName =
+    userData?.displayName ||
+    userData?.name ||
+    user?.displayName ||
+    user?.email?.split('@')[0] ||
+    'Manager';
+
+  /* =======================================================
+     AUTH + CAREER
   ======================================================= */
 
   useEffect(() => {
@@ -290,6 +699,9 @@ export default function ClubPage({
     router,
   ]);
 
+  /* =======================================================
+     LOAD CAREER
+  ======================================================= */
 
   const loadCareer = async () => {
     try {
@@ -306,11 +718,13 @@ export default function ClubPage({
 
       if (!snapshot.exists()) {
         setCareerData({});
+        setClubInfo(null);
         setIsLoading(false);
         return;
       }
 
-      const data = snapshot.data();
+      const data =
+        snapshot.data();
 
       const career =
         data.careerData || {};
@@ -328,9 +742,300 @@ export default function ClubPage({
           await getDoc(clubRef);
 
         if (clubSnapshot.exists()) {
+          const clubData =
+            clubSnapshot.data();
+
+          /*
+           * Reload players for the current club.
+           * This makes sure changes made after SSR
+           * are visible.
+           */
+
+          let currentPlayers = [];
+
+          try {
+            const playersQuery =
+              query(
+                collection(
+                  db,
+                  'players'
+                ),
+                where(
+                  'clubId',
+                  '==',
+                  career.currentClub
+                )
+              );
+
+            const playerSnapshot =
+              await getDocs(
+                playersQuery
+              );
+
+            playerSnapshot.forEach(
+              (playerDoc) => {
+                const player =
+                  playerDoc.data();
+
+                currentPlayers.push({
+                  id: playerDoc.id,
+                  ...player,
+
+                  name:
+                    getPlayerName(
+                      player
+                    ),
+
+                  position:
+                    getPlayerPosition(
+                      player
+                    ),
+
+                  age:
+                    safeNumber(
+                      player.age,
+                      0
+                    ),
+
+                  overall:
+                    safeNumber(
+                      player.overall ??
+                      player.rating ??
+                      player.ovr,
+                      0
+                    ),
+
+                  marketValue:
+                    safeNumber(
+                      player.marketValue ??
+                      player.value,
+                      0
+                    ),
+
+                  salary:
+                    safeNumber(
+                      player.salary ??
+                      player.wage,
+                      0
+                    ),
+
+                  nationality:
+                    player.nationality ||
+                    player.country ||
+                    '',
+                });
+              }
+            );
+          } catch (playerError) {
+            console.error(
+              'Player query error:',
+              playerError
+            );
+          }
+
+          /*
+           * If clubId query finds nothing,
+           * fallback to all players and match
+           * currentClub/teamId/currentClub.
+           */
+
+          if (
+            currentPlayers.length === 0
+          ) {
+            try {
+              const allPlayersSnapshot =
+                await getDocs(
+                  collection(
+                    db,
+                    'players'
+                  )
+                );
+
+              allPlayersSnapshot.forEach(
+                (playerDoc) => {
+                  const player =
+                    playerDoc.data();
+
+                  const playerClub =
+                    getPlayerClubId(
+                      player
+                    );
+
+                  if (
+                    String(
+                      playerClub || ''
+                    ) ===
+                    String(
+                      career.currentClub
+                    )
+                  ) {
+                    currentPlayers.push({
+                      id:
+                        playerDoc.id,
+                      ...player,
+
+                      name:
+                        getPlayerName(
+                          player
+                        ),
+
+                      position:
+                        getPlayerPosition(
+                          player
+                        ),
+
+                      age:
+                        safeNumber(
+                          player.age,
+                          0
+                        ),
+
+                      overall:
+                        safeNumber(
+                          player.overall ??
+                          player.rating ??
+                          player.ovr,
+                          0
+                        ),
+
+                      marketValue:
+                        safeNumber(
+                          player.marketValue ??
+                          player.value,
+                          0
+                        ),
+
+                      salary:
+                        safeNumber(
+                          player.salary ??
+                          player.wage,
+                          0
+                        ),
+
+                      nationality:
+                        player.nationality ||
+                        player.country ||
+                        '',
+                    });
+                  }
+                }
+              );
+            } catch (fallbackError) {
+              console.error(
+                'Fallback player loading error:',
+                fallbackError
+              );
+            }
+          }
+
           setClubInfo({
-            id: clubSnapshot.id,
-            ...clubSnapshot.data(),
+            id:
+              clubSnapshot.id,
+
+            ...clubData,
+
+            name:
+              clubData.name ||
+              clubData.clubName ||
+              'Unnamed Club',
+
+            logo:
+              clubData.logo ||
+              clubData.logoUrl ||
+              clubData.badge ||
+              null,
+
+            league:
+              clubData.league ||
+              clubData.leagueName ||
+              'Unknown League',
+
+            country:
+              clubData.country ||
+              clubData.countryName ||
+              'Unknown Country',
+
+            leagueName:
+              clubData.leagueName ||
+              (
+                typeof clubData.league ===
+                'string'
+                  ? clubData.league
+                  : ''
+              ) ||
+              'Unknown League',
+
+            countryName:
+              clubData.countryName ||
+              (
+                typeof clubData.country ===
+                'string'
+                  ? clubData.country
+                  : ''
+              ) ||
+              'Unknown Country',
+
+            stadium:
+              clubData.stadium ||
+              'Stadium',
+
+            city:
+              clubData.city ||
+              clubData.location ||
+              '',
+
+            balance:
+              safeNumber(
+                clubData.balance ??
+                clubData.budget,
+                0
+              ),
+
+            transferBudget:
+              safeNumber(
+                clubData.transferBudget,
+                0
+              ),
+
+            wageBudget:
+              safeNumber(
+                clubData.wageBudget,
+                0
+              ),
+
+            squadSize:
+              currentPlayers.length ||
+              safeNumber(
+                clubData.squadSize,
+                0
+              ),
+
+            players:
+              currentPlayers,
+
+            kits:
+              clubData.kits ||
+              {
+                home:
+                  clubData.homeKit ||
+                  null,
+                away:
+                  clubData.awayKit ||
+                  null,
+                third:
+                  clubData.thirdKit ||
+                  null,
+              },
+
+            facilities:
+              clubData.facilities ||
+              {},
+
+            reputation:
+              safeNumber(
+                clubData.reputation,
+                50
+              ),
           });
         }
       } else {
@@ -350,19 +1055,22 @@ export default function ClubPage({
     }
   };
 
-
   /* =======================================================
-     DERIVED DATA
+     DERIVED
   ======================================================= */
 
   const currentClubId =
-    careerData?.currentClub || null;
+    careerData?.currentClub ||
+    null;
 
   const contract =
-    careerData?.clubContract || null;
+    careerData?.clubContract ||
+    null;
 
   const contractStatus =
-    getContractStatus(contract);
+    getContractStatus(
+      contract
+    );
 
   const boardConfidence =
     safeNumber(
@@ -375,422 +1083,603 @@ export default function ClubPage({
     clubInfo?.objectives ||
     [];
 
+  /* =======================================================
+     CLUB FILTER
+  ======================================================= */
+
+  const leagues = useMemo(() => {
+    return [
+      ...new Set(
+        clubs
+          .map(
+            (club) =>
+              club.leagueName ||
+              safeString(
+                club.league,
+                'Unknown League'
+              )
+          )
+          .filter(Boolean)
+      ),
+    ];
+  }, [clubs]);
+
   const filteredClubs =
     useMemo(() => {
-      return clubs.filter((club) => {
-        const searchValue =
-          search.trim().toLowerCase();
+      const value =
+        search
+          .trim()
+          .toLowerCase();
 
-        const matchesSearch =
-          !searchValue ||
-          club.name
-            .toLowerCase()
-            .includes(searchValue) ||
-          club.league
-            .toLowerCase()
-            .includes(searchValue) ||
-          club.country
-            .toLowerCase()
-            .includes(searchValue);
+      return clubs.filter(
+        (club) => {
+          const name =
+            safeString(
+              club.name
+            ).toLowerCase();
 
-        const matchesLeague =
-          leagueFilter === 'all' ||
-          club.league === leagueFilter;
+          const league =
+            safeString(
+              club.leagueName
+            ).toLowerCase();
 
-        return (
-          matchesSearch &&
-          matchesLeague
-        );
-      });
+          const country =
+            safeString(
+              club.countryName
+            ).toLowerCase();
+
+          const matchesSearch =
+            !value ||
+            name.includes(value) ||
+            league.includes(value) ||
+            country.includes(value);
+
+          const matchesLeague =
+            leagueFilter ===
+              'all' ||
+            club.leagueName ===
+              leagueFilter;
+
+          return (
+            matchesSearch &&
+            matchesLeague
+          );
+        }
+      );
     }, [
       clubs,
       search,
       leagueFilter,
     ]);
 
-  const leagues = useMemo(() => {
-    return [
-      ...new Set(
-        clubs
-          .map((club) => club.league)
-          .filter(Boolean)
-      ),
-    ];
-  }, [clubs]);
+  /* =======================================================
+     PLAYERS
+  ======================================================= */
 
+  const squad =
+    clubInfo?.players ||
+    [];
+
+  const filteredPlayers =
+    useMemo(() => {
+      const value =
+        playerSearch
+          .trim()
+          .toLowerCase();
+
+      if (!value) {
+        return squad;
+      }
+
+      return squad.filter(
+        (player) =>
+          getPlayerName(player)
+            .toLowerCase()
+            .includes(value) ||
+          safeString(
+            player.position
+          )
+            .toLowerCase()
+            .includes(value) ||
+          safeString(
+            player.nationality
+          )
+            .toLowerCase()
+            .includes(value)
+      );
+    }, [
+      squad,
+      playerSearch,
+    ]);
 
   /* =======================================================
      SELECT CLUB
   ======================================================= */
 
-  const openClubSelection = (club) => {
-    setSelectedClub(club);
-    setShowContract(true);
-  };
-
-
-  /* =======================================================
-     CREATE CONTRACT
-  ======================================================= */
-
-  const acceptClubContract = async () => {
-    if (!user || !selectedClub) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const startDate =
-        new Date().toISOString();
-
-      const endDate =
-        addYears(
-          startDate,
-          DEFAULT_CONTRACT_YEARS
-        );
-
-      const objectives =
-        selectedClub.objectives?.length
-          ? selectedClub.objectives
-          : [
-              {
-                id: 'league',
-                title:
-                  'Finish in a competitive league position',
-                target: 'Top half',
-                progress: 0,
-                completed: false,
-              },
-              {
-                id: 'matches',
-                title:
-                  'Build a competitive team',
-                target:
-                  'Improve squad quality',
-                progress: 0,
-                completed: false,
-              },
-              {
-                id: 'finance',
-                title:
-                  'Keep club finances healthy',
-                target:
-                  'Maintain positive balance',
-                progress: 0,
-                completed: false,
-              },
-            ];
-
-      const contractData = {
-        status: 'active',
-
-        clubId: selectedClub.id,
-
-        clubName:
-          selectedClub.name,
-
-        role: 'Head Coach',
-
-        startDate,
-
-        endDate,
-
-        durationYears:
-          DEFAULT_CONTRACT_YEARS,
-
-        salary:
-          safeNumber(
-            selectedClub.managerSalary,
-            50000
-          ),
-
-        salaryPeriod:
-          selectedClub.salaryPeriod ||
-          'weekly',
-
-        signingBonus:
-          safeNumber(
-            selectedClub.signingBonus,
-            0
-          ),
-
-        releaseClause:
-          safeNumber(
-            selectedClub.releaseClause,
-            0
-          ),
-
-        renewalOffered: false,
-
-        createdAt:
-          new Date().toISOString(),
-
-        updatedAt:
-          new Date().toISOString(),
-      };
-
-      const updatedCareer = {
-        ...(careerData || {}),
-
-        currentClub:
-          selectedClub.id,
-
-        currentClubName:
-          selectedClub.name,
-
-        clubContract:
-          contractData,
-
-        clubObjectives:
-          objectives,
-
-        boardConfidence: 70,
-
-        managerSalary:
-          contractData.salary,
-
-        transferBudget:
-          safeNumber(
-            selectedClub.transferBudget,
-            0
-          ),
-
-        wageBudget:
-          safeNumber(
-            selectedClub.wageBudget,
-            0
-          ),
-
-        clubJoinedAt:
-          startDate,
-
-        clubSeasons:
-          1,
-      };
-
-      const userRef = doc(
-        db,
-        'users',
-        user.uid
-      );
-
-      await updateDoc(
-        userRef,
-        {
-          careerData:
-            updatedCareer,
-
-          updatedAt:
-            serverTimestamp(),
-        }
-      );
-
-      setCareerData(
-        updatedCareer
-      );
-
-      setClubInfo(
-        selectedClub
-      );
-
-      setShowContract(false);
-      setSelectedClub(null);
-
-      toast.success(
-        `Contract signed with ${selectedClub.name}`
-      );
-
-      setActiveTab('overview');
-    } catch (error) {
-      console.error(
-        'Contract error:',
-        error
-      );
-
-      toast.error(
-        'Unable to sign contract'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  const openClubSelection =
+    (club) => {
+      setSelectedClub(club);
+      setShowContract(true);
+    };
 
   /* =======================================================
-     RESIGN / RENEW CONTRACT
+     ACCEPT CONTRACT
   ======================================================= */
 
-  const requestRenewal = async () => {
-    if (!user || !contract) {
-      return;
-    }
+  const acceptClubContract =
+    async () => {
+      if (
+        !user ||
+        !selectedClub
+      ) {
+        return;
+      }
 
-    try {
-      setSaving(true);
+      try {
+        setSaving(true);
 
-      const newEndDate =
-        addYears(
-          contract.endDate
-            ? contract.endDate
-            : new Date().toISOString(),
-          1
-        );
+        const startDate =
+          new Date().toISOString();
 
-      const updatedContract = {
-        ...contract,
+        const endDate =
+          addYears(
+            startDate,
+            DEFAULT_CONTRACT_YEARS
+          );
 
-        status: 'active',
+        const contractData = {
+          status:
+            'active',
 
-        endDate:
-          newEndDate,
+          clubId:
+            selectedClub.id,
 
-        durationYears:
-          safeNumber(
-            contract.durationYears,
-            2
-          ) + 1,
+          clubName:
+            selectedClub.name,
 
-        renewalOffered: false,
+          role:
+            'Head Coach',
 
-        updatedAt:
-          new Date().toISOString(),
-      };
+          startDate,
 
-      const updatedCareer = {
-        ...(careerData || {}),
+          endDate,
 
-        clubContract:
-          updatedContract,
+          durationYears:
+            DEFAULT_CONTRACT_YEARS,
 
-        boardConfidence:
-          Math.min(
-            boardConfidence + 5,
-            100
-          ),
-      };
+          salary:
+            safeNumber(
+              selectedClub.managerSalary,
+              DEFAULT_SALARY
+            ),
 
-      await updateDoc(
-        doc(
-          db,
-          'users',
-          user.uid
-        ),
-        {
-          careerData:
-            updatedCareer,
+          salaryPeriod:
+            selectedClub.salaryPeriod ||
+            'weekly',
+
+          signingBonus:
+            safeNumber(
+              selectedClub.signingBonus,
+              0
+            ),
+
+          releaseClause:
+            safeNumber(
+              selectedClub.releaseClause,
+              0
+            ),
+
+          renewalOffered:
+            false,
+
+          createdAt:
+            startDate,
 
           updatedAt:
-            serverTimestamp(),
-        }
-      );
+            startDate,
+        };
 
-      setCareerData(
-        updatedCareer
-      );
+        const objectives =
+          selectedClub.objectives?.length
+            ? selectedClub.objectives
+            : [
+                {
+                  id: 'league',
+                  title:
+                    'Finish in a competitive league position',
+                  target:
+                    'Top half',
+                  progress: 0,
+                  completed: false,
+                },
+                {
+                  id: 'matches',
+                  title:
+                    'Build a competitive team',
+                  target:
+                    'Improve squad quality',
+                  progress: 0,
+                  completed: false,
+                },
+                {
+                  id: 'finance',
+                  title:
+                    'Keep club finances healthy',
+                  target:
+                    'Maintain positive balance',
+                  progress: 0,
+                  completed: false,
+                },
+              ];
 
-      toast.success(
-        'The board has renewed your contract'
-      );
-    } catch (error) {
-      console.error(
-        error
-      );
+        const updatedCareer = {
+          ...(careerData || {}),
 
-      toast.error(
-        'Renewal failed'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+          currentClub:
+            selectedClub.id,
 
+          currentClubName:
+            selectedClub.name,
+
+          clubContract:
+            contractData,
+
+          clubObjectives:
+            objectives,
+
+          boardConfidence:
+            70,
+
+          managerSalary:
+            contractData.salary,
+
+          transferBudget:
+            safeNumber(
+              selectedClub.transferBudget,
+              0
+            ),
+
+          wageBudget:
+            safeNumber(
+              selectedClub.wageBudget,
+              0
+            ),
+
+          clubBalance:
+            safeNumber(
+              selectedClub.balance,
+              0
+            ),
+
+          clubJoinedAt:
+            startDate,
+
+          clubSeasons:
+            1,
+        };
+
+        await updateDoc(
+          doc(
+            db,
+            'users',
+            user.uid
+          ),
+          {
+            careerData:
+              updatedCareer,
+
+            updatedAt:
+              serverTimestamp(),
+          }
+        );
+
+        /*
+         * Mark club as occupied.
+         */
+
+        await updateDoc(
+          doc(
+            db,
+            'clubs',
+            selectedClub.id
+          ),
+          {
+            managerId:
+              user.uid,
+
+            managerName:
+              managerName,
+
+            managerStatus:
+              'active',
+
+            updatedAt:
+              serverTimestamp(),
+          }
+        );
+
+        setCareerData(
+          updatedCareer
+        );
+
+        setClubInfo(
+          selectedClub
+        );
+
+        setClubs(
+          (previous) =>
+            previous.map(
+              (club) =>
+                club.id ===
+                selectedClub.id
+                  ? {
+                      ...club,
+                      managerId:
+                        user.uid,
+                      managerName,
+                      managerStatus:
+                        'active',
+                    }
+                  : club
+            )
+        );
+
+        setShowContract(false);
+        setSelectedClub(null);
+
+        toast.success(
+          `Contract signed with ${selectedClub.name}`
+        );
+
+        setActiveTab(
+          'overview'
+        );
+      } catch (error) {
+        console.error(
+          'Contract error:',
+          error
+        );
+
+        toast.error(
+          'Unable to sign contract'
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /* =======================================================
+     RENEW CONTRACT
+  ======================================================= */
+
+  const requestRenewal =
+    async () => {
+      if (
+        !user ||
+        !contract
+      ) {
+        return;
+      }
+
+      try {
+        setSaving(true);
+
+        const newEndDate =
+          addYears(
+            contract.endDate
+              ? dateToISOString(
+                  contract.endDate
+                )
+              : new Date().toISOString(),
+            1
+          );
+
+        const updatedContract = {
+          ...contract,
+
+          status:
+            'active',
+
+          endDate:
+            newEndDate,
+
+          durationYears:
+            safeNumber(
+              contract.durationYears,
+              2
+            ) + 1,
+
+          renewalOffered:
+            false,
+
+          updatedAt:
+            new Date().toISOString(),
+        };
+
+        const updatedCareer = {
+          ...(careerData || {}),
+
+          clubContract:
+            updatedContract,
+
+          boardConfidence:
+            Math.min(
+              boardConfidence + 5,
+              100
+            ),
+        };
+
+        await updateDoc(
+          doc(
+            db,
+            'users',
+            user.uid
+          ),
+          {
+            careerData:
+              updatedCareer,
+
+            updatedAt:
+              serverTimestamp(),
+          }
+        );
+
+        setCareerData(
+          updatedCareer
+        );
+
+        toast.success(
+          'The board has renewed your contract'
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
+
+        toast.error(
+          'Renewal failed'
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   /* =======================================================
      LEAVE CLUB
   ======================================================= */
 
-  const leaveClub = async () => {
-    if (!user || !careerData) {
-      return;
-    }
+  const leaveClub =
+    async () => {
+      if (
+        !user ||
+        !careerData
+      ) {
+        return;
+      }
 
-    const confirmed =
-      window.confirm(
-        'Are you sure you want to leave the club?'
-      );
+      const confirmed =
+        window.confirm(
+          'Are you sure you want to resign from this club?'
+        );
 
-    if (!confirmed) {
-      return;
-    }
+      if (!confirmed) {
+        return;
+      }
 
-    try {
-      setSaving(true);
+      try {
+        setSaving(true);
 
-      const updatedCareer = {
-        ...careerData,
+        const oldClubId =
+          careerData.currentClub;
 
-        currentClub: null,
+        const updatedCareer = {
+          ...careerData,
 
-        currentClubName: null,
+          currentClub:
+            null,
 
-        clubContract: {
-          ...(careerData.clubContract || {}),
-          status: 'terminated',
-          terminatedAt:
-            new Date().toISOString(),
-          terminationReason:
-            'Manager resignation',
-        },
+          currentClubName:
+            null,
 
-        clubObjectives: [],
+          clubContract: {
+            ...(careerData.clubContract ||
+              {}),
 
-        managerSalary: 0,
+            status:
+              'terminated',
 
-        transferBudget: 0,
+            terminatedAt:
+              new Date().toISOString(),
 
-        wageBudget: 0,
+            terminationReason:
+              'Manager resignation',
+          },
 
-        clubSeasons: 0,
-      };
+          clubObjectives:
+            [],
 
-      await updateDoc(
-        doc(
-          db,
-          'users',
-          user.uid
-        ),
-        {
-          careerData:
-            updatedCareer,
+          managerSalary:
+            0,
 
-          updatedAt:
-            serverTimestamp(),
+          transferBudget:
+            0,
+
+          wageBudget:
+            0,
+
+          clubBalance:
+            0,
+
+          clubSeasons:
+            0,
+        };
+
+        await updateDoc(
+          doc(
+            db,
+            'users',
+            user.uid
+          ),
+          {
+            careerData:
+              updatedCareer,
+
+            updatedAt:
+              serverTimestamp(),
+          }
+        );
+
+        if (oldClubId) {
+          try {
+            await updateDoc(
+              doc(
+                db,
+                'clubs',
+                oldClubId
+              ),
+              {
+                managerId:
+                  null,
+
+                managerName:
+                  null,
+
+                managerStatus:
+                  'available',
+
+                updatedAt:
+                  serverTimestamp(),
+              }
+            );
+          } catch (clubError) {
+            console.error(
+              'Club release error:',
+              clubError
+            );
+          }
         }
-      );
 
-      setCareerData(
-        updatedCareer
-      );
+        setCareerData(
+          updatedCareer
+        );
 
-      setClubInfo(null);
+        setClubInfo(null);
 
-      toast.success(
-        'You have left the club'
-      );
-    } catch (error) {
-      console.error(
-        error
-      );
+        toast.success(
+          'You have left the club'
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
 
-      toast.error(
-        'Unable to leave the club'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
+        toast.error(
+          'Unable to leave the club'
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   /* =======================================================
      LOADING
@@ -801,8 +1690,16 @@ export default function ClubPage({
     isLoading
   ) {
     return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
+      <div
+        className={
+          styles.loading
+        }
+      >
+        <div
+          className={
+            styles.spinner
+          }
+        />
 
         <p>
           Loading club management...
@@ -814,7 +1711,6 @@ export default function ClubPage({
   if (!user) {
     return null;
   }
-
 
   /* =======================================================
      NO CLUB
@@ -834,16 +1730,30 @@ export default function ClubPage({
           />
         </Head>
 
-        <main className={styles.page}>
-
-          <section className={styles.selectionHero}>
-
-            <div className={styles.heroBall}>
+        <main
+          className={
+            styles.page
+          }
+        >
+          <section
+            className={
+              styles.selectionHero
+            }
+          >
+            <div
+              className={
+                styles.heroBall
+              }
+            >
               ⚽
             </div>
 
             <div>
-              <span className={styles.eyebrow}>
+              <span
+                className={
+                  styles.eyebrow
+                }
+              >
                 CLUB MANAGEMENT
               </span>
 
@@ -852,25 +1762,39 @@ export default function ClubPage({
               </h1>
 
               <p>
-                The boardroom is waiting. Pick a club,
-                negotiate your first contract and begin
-                building your legacy.
+                Welcome,{' '}
+                <strong>
+                  {managerName}
+                </strong>
+                . The boardroom is waiting.
+                Choose your club and begin
+                your managerial career.
               </p>
             </div>
-
           </section>
 
-
-          <section className={styles.clubSelection}>
-
-            <div className={styles.selectionToolbar}>
-
-              <div className={styles.searchBox}>
-                <span>⌕</span>
+          <section
+            className={
+              styles.clubSelection
+            }
+          >
+            <div
+              className={
+                styles.selectionToolbar
+              }
+            >
+              <div
+                className={
+                  styles.searchBox
+                }
+              >
+                <span>
+                  🔎
+                </span>
 
                 <input
                   type="text"
-                  placeholder="Search clubs..."
+                  placeholder="Search clubs, leagues or countries..."
                   value={search}
                   onChange={(event) =>
                     setSearch(
@@ -881,13 +1805,17 @@ export default function ClubPage({
               </div>
 
               <select
-                value={leagueFilter}
+                value={
+                  leagueFilter
+                }
                 onChange={(event) =>
                   setLeagueFilter(
                     event.target.value
                   )
                 }
-                className={styles.filter}
+                className={
+                  styles.filter
+                }
               >
                 <option value="all">
                   All Leagues
@@ -904,28 +1832,30 @@ export default function ClubPage({
                   )
                 )}
               </select>
-
             </div>
 
-
-            <div className={styles.clubGrid}>
-
-              {filteredClubs.length > 0 ? (
+            <div
+              className={
+                styles.clubGrid
+              }
+            >
+              {filteredClubs.length >
+              0 ? (
                 filteredClubs.map(
                   (club) => (
                     <article
-                      key={club.id}
+                      key={
+                        club.id
+                      }
                       className={
                         styles.clubSelectCard
                       }
                     >
-
                       <div
                         className={
                           styles.clubCardTop
                         }
                       >
-
                         <div
                           className={
                             styles.clubLogo
@@ -933,8 +1863,12 @@ export default function ClubPage({
                         >
                           {club.logo ? (
                             <img
-                              src={club.logo}
-                              alt={club.name}
+                              src={
+                                club.logo
+                              }
+                              alt={
+                                club.name
+                              }
                             />
                           ) : (
                             '⚽'
@@ -943,16 +1877,25 @@ export default function ClubPage({
 
                         <div>
                           <h2>
-                            {club.name}
+                            {
+                              club.name
+                            }
                           </h2>
 
                           <span>
-                            {club.league}
+                            {
+                              club.leagueName
+                            }
                           </span>
+
+                          <small>
+                            🌍{' '}
+                            {
+                              club.countryName
+                            }
+                          </small>
                         </div>
-
                       </div>
-
 
                       <p
                         className={
@@ -963,20 +1906,32 @@ export default function ClubPage({
                           `${club.name} are looking for a manager capable of leading the club to success.`}
                       </p>
 
-
                       <div
                         className={
                           styles.clubQuickStats
                         }
                       >
-
                         <div>
                           <span>
                             Reputation
                           </span>
 
                           <strong>
-                            {club.reputation}
+                            {
+                              club.reputation
+                            }
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            Players
+                          </span>
+
+                          <strong>
+                            {
+                              club.squadSize
+                            }
                           </strong>
                         </div>
 
@@ -986,25 +1941,13 @@ export default function ClubPage({
                           </span>
 
                           <strong>
-                            €{formatMoney(
+                            €
+                            {formatMoney(
                               club.transferBudget
                             )}
                           </strong>
                         </div>
-
-                        <div>
-                          <span>
-                            Stadium
-                          </span>
-
-                          <strong>
-                            {club.stadium ||
-                              'N/A'}
-                          </strong>
-                        </div>
-
                       </div>
-
 
                       <button
                         type="button"
@@ -1025,7 +1968,6 @@ export default function ClubPage({
                           →
                         </span>
                       </button>
-
                     </article>
                   )
                 )
@@ -1035,24 +1977,22 @@ export default function ClubPage({
                     styles.noResults
                   }
                 >
-                  <span>🔎</span>
+                  <span>
+                    🔎
+                  </span>
 
                   <h3>
                     No clubs found
                   </h3>
 
                   <p>
-                    Try another search or league.
+                    Try another search,
+                    league or country.
                   </p>
                 </div>
               )}
-
             </div>
-
           </section>
-
-
-          {/* CONTRACT MODAL */}
 
           {showContract &&
             selectedClub && (
@@ -1061,10 +2001,11 @@ export default function ClubPage({
                   styles.modalOverlay
                 }
                 onClick={() =>
-                  setShowContract(false)
+                  setShowContract(
+                    false
+                  )
                 }
               >
-
                 <div
                   className={
                     styles.contractModal
@@ -1073,26 +2014,25 @@ export default function ClubPage({
                     event.stopPropagation()
                   }
                 >
-
                   <button
                     type="button"
                     className={
                       styles.closeButton
                     }
                     onClick={() =>
-                      setShowContract(false)
+                      setShowContract(
+                        false
+                      )
                     }
                   >
                     ×
                   </button>
-
 
                   <div
                     className={
                       styles.modalClub
                     }
                   >
-
                     <div
                       className={
                         styles.modalLogo
@@ -1118,19 +2058,28 @@ export default function ClubPage({
                       </span>
 
                       <h2>
-                        {selectedClub.name}
+                        {
+                          selectedClub.name
+                        }
                       </h2>
+
+                      <small>
+                        {
+                          selectedClub.leagueName
+                        }{' '}
+                        •{' '}
+                        {
+                          selectedClub.countryName
+                        }
+                      </small>
                     </div>
-
                   </div>
-
 
                   <div
                     className={
                       styles.contractTerms
                     }
                   >
-
                     <div>
                       <span>
                         Role
@@ -1160,7 +2109,7 @@ export default function ClubPage({
                         €
                         {formatMoney(
                           selectedClub.managerSalary ||
-                          50000
+                            DEFAULT_SALARY
                         )}
                         / week
                       </strong>
@@ -1194,32 +2143,35 @@ export default function ClubPage({
 
                     <div>
                       <span>
-                        Board Expectation
+                        Stadium
                       </span>
 
                       <strong>
-                        {selectedClub.boardExpectation}
+                        {
+                          selectedClub.stadium
+                        }
                       </strong>
                     </div>
-
                   </div>
-
 
                   <div
                     className={
                       styles.boardMessage
                     }
                   >
-                    <span>👔</span>
+                    <span>
+                      👔
+                    </span>
 
                     <p>
-                      The board believes you can
-                      take this club forward. Your
-                      performance will determine
-                      whether they extend your stay.
+                      The board believes
+                      you can take this
+                      club forward. Your
+                      results, finances and
+                      objectives will
+                      determine your future.
                     </p>
                   </div>
-
 
                   <button
                     type="button"
@@ -1235,27 +2187,25 @@ export default function ClubPage({
                       ? 'Signing...'
                       : 'Accept Contract'}
                   </button>
-
                 </div>
-
               </div>
             )}
-
         </main>
       </>
     );
   }
 
-
   /* =======================================================
-     ACTIVE CLUB DASHBOARD
+     ACTIVE CLUB DATA
   ======================================================= */
 
   const remainingDays =
     contract?.endDate
       ? daysBetween(
           new Date().toISOString(),
-          contract.endDate
+          dateToISOString(
+            contract.endDate
+          )
         )
       : null;
 
@@ -1310,31 +2260,65 @@ export default function ClubPage({
     careerData?.currentPosition ||
     '-';
 
+  const clubLeague =
+    clubInfo?.leagueName ||
+    safeString(
+      clubInfo?.league,
+      'Unknown League'
+    );
+
+  const clubCountry =
+    clubInfo?.countryName ||
+    safeString(
+      clubInfo?.country,
+      'Unknown Country'
+    );
+
+  const clubPlayers =
+    clubInfo?.players ||
+    [];
+
+  /* =======================================================
+     ACTIVE PAGE
+  ======================================================= */
 
   return (
     <>
       <Head>
         <title>
-          {clubInfo?.name || 'Club Management'} | Virtual Football Manager
+          {clubInfo?.name ||
+            'Club Management'}{' '}
+          | Virtual Football Manager
         </title>
 
         <meta
           name="description"
-          content={`Manage ${clubInfo?.name || 'your club'} in Virtual Football Manager.`}
+          content={`Manage ${
+            clubInfo?.name ||
+            'your football club'
+          } in Virtual Football Manager.`}
         />
       </Head>
 
-
-      <main className={styles.page}>
-
+      <main
+        className={
+          styles.page
+        }
+      >
         {/* =================================================
-            CLUB HEADER
+            HEADER
         ================================================= */}
 
-        <section className={styles.clubHeader}>
-
-          <div className={styles.clubHeaderLeft}>
-
+        <section
+          className={
+            styles.clubHeader
+          }
+        >
+          <div
+            className={
+              styles.clubHeaderLeft
+            }
+          >
             <div
               className={
                 styles.clubHeaderLogo
@@ -1342,7 +2326,9 @@ export default function ClubPage({
             >
               {clubInfo?.logo ? (
                 <img
-                  src={clubInfo.logo}
+                  src={
+                    clubInfo.logo
+                  }
                   alt={
                     clubInfo.name
                   }
@@ -1353,7 +2339,6 @@ export default function ClubPage({
             </div>
 
             <div>
-
               <span
                 className={
                   styles.eyebrow
@@ -1363,13 +2348,11 @@ export default function ClubPage({
               </span>
 
               <h1>
-                {clubInfo?.name ||
-                  careerData?.currentClubName}
+                {clubInfo?.name}
               </h1>
 
               <p>
-                {clubInfo?.league ||
-                  'Professional Football Club'}
+                {clubLeague}
               </p>
 
               <div
@@ -1378,29 +2361,33 @@ export default function ClubPage({
                 }
               >
                 <span>
-                  🏟️{' '}
-                  {clubInfo?.stadium ||
-                    'Stadium'}
+                  🌍 {clubCountry}
                 </span>
 
                 <span>
-                  🌍{' '}
-                  {clubInfo?.country ||
-                    'Country'}
+                  🏟️{' '}
+                  {
+                    clubInfo?.stadium
+                  }
                 </span>
+
+                {clubInfo?.city && (
+                  <span>
+                    📍{' '}
+                    {
+                      clubInfo.city
+                    }
+                  </span>
+                )}
               </div>
-
             </div>
-
           </div>
-
 
           <div
             className={
               styles.boardConfidence
             }
           >
-
             <span>
               BOARD CONFIDENCE
             </span>
@@ -1433,14 +2420,11 @@ export default function ClubPage({
             <small>
               {confidenceLabel}
             </small>
-
           </div>
-
         </section>
 
-
         {/* =================================================
-            NAVIGATION
+            NAV
         ================================================= */}
 
         <nav
@@ -1448,25 +2432,52 @@ export default function ClubPage({
             styles.managementNav
           }
         >
-
           {[
-            ['overview', '🏠', 'Overview'],
-            ['board', '👔', 'Board'],
-            ['squad', '👥', 'Squad'],
-            ['finance', '💰', 'Finance'],
-            ['contract', '📄', 'Contract'],
+            [
+              'overview',
+              '🏠',
+              'Overview',
+            ],
+            [
+              'board',
+              '👔',
+              'Board',
+            ],
+            [
+              'squad',
+              '👥',
+              'Squad',
+            ],
+            [
+              'finance',
+              '💰',
+              'Finance',
+            ],
+            [
+              'club',
+              '🏟️',
+              'Club',
+            ],
+            [
+              'contract',
+              '📄',
+              'Contract',
+            ],
           ].map(
             ([id, icon, label]) => (
               <button
                 key={id}
                 type="button"
                 className={
-                  activeTab === id
+                  activeTab ===
+                  id
                     ? styles.activeNav
                     : ''
                 }
                 onClick={() =>
-                  setActiveTab(id)
+                  setActiveTab(
+                    id
+                  )
                 }
               >
                 <span>
@@ -1477,12 +2488,10 @@ export default function ClubPage({
               </button>
             )
           )}
-
         </nav>
 
-
         {/* =================================================
-            CONTRACT WARNING
+            CONTRACT ALERT
         ================================================= */}
 
         {contractStatus ===
@@ -1492,7 +2501,6 @@ export default function ClubPage({
               styles.warningBanner
             }
           >
-
             <span>
               ⚠️
             </span>
@@ -1503,12 +2511,14 @@ export default function ClubPage({
               </strong>
 
               <p>
-                Your contract expires in{' '}
+                Your contract expires
+                in{' '}
                 <b>
-                  {remainingDays}
+                  {
+                    remainingDays
+                  }
                 </b>{' '}
-                days. The board is reviewing
-                your performance.
+                days.
               </p>
             </div>
 
@@ -1521,10 +2531,8 @@ export default function ClubPage({
             >
               Request Renewal
             </button>
-
           </section>
         )}
-
 
         {contractStatus ===
           'expired' && (
@@ -1533,7 +2541,6 @@ export default function ClubPage({
               styles.dangerBanner
             }
           >
-
             <span>
               🚨
             </span>
@@ -1544,9 +2551,8 @@ export default function ClubPage({
               </strong>
 
               <p>
-                Your contract has expired.
-                The board must decide whether
-                to offer you a new deal.
+                Your managerial
+                contract has expired.
               </p>
             </div>
 
@@ -1559,10 +2565,8 @@ export default function ClubPage({
             >
               Renew Contract
             </button>
-
           </section>
         )}
-
 
         {/* =================================================
             OVERVIEW
@@ -1575,13 +2579,11 @@ export default function ClubPage({
               styles.content
             }
           >
-
             <div
               className={
                 styles.statGrid
               }
             >
-
               <div
                 className={
                   styles.metricCard
@@ -1596,7 +2598,27 @@ export default function ClubPage({
                 </strong>
 
                 <small>
-                  Current standing
+                  {clubLeague}
+                </small>
+              </div>
+
+              <div
+                className={
+                  styles.metricCard
+                }
+              >
+                <span>
+                  SQUAD
+                </span>
+
+                <strong>
+                  {
+                    clubPlayers.length
+                  }
+                </strong>
+
+                <small>
+                  Registered players
                 </small>
               </div>
 
@@ -1610,7 +2632,8 @@ export default function ClubPage({
                 </span>
 
                 <strong>
-                  €{formatMoney(
+                  €
+                  {formatMoney(
                     transferBudget
                   )}
                 </strong>
@@ -1626,34 +2649,12 @@ export default function ClubPage({
                 }
               >
                 <span>
-                  WEEKLY WAGE
+                  CLUB BALANCE
                 </span>
 
                 <strong>
                   €
                   {formatMoney(
-                    contract?.salary ||
-                    careerData?.managerSalary ||
-                    0
-                  )}
-                </strong>
-
-                <small>
-                  Manager salary
-                </small>
-              </div>
-
-              <div
-                className={
-                  styles.metricCard
-                }
-              >
-                <span>
-                  CLUB BALANCE
-                </span>
-
-                <strong>
-                  €{formatMoney(
                     balance
                   )}
                 </strong>
@@ -1662,24 +2663,18 @@ export default function ClubPage({
                   Financial health
                 </small>
               </div>
-
             </div>
-
 
             <div
               className={
                 styles.twoColumn
               }
             >
-
-              {/* SEASON PERFORMANCE */}
-
               <article
                 className={
                   styles.managementCard
                 }
               >
-
                 <div
                   className={
                     styles.cardTitle
@@ -1700,17 +2695,16 @@ export default function ClubPage({
                   </span>
                 </div>
 
-
                 <div
                   className={
                     styles.performanceGrid
                   }
                 >
-
                   <div>
                     <strong>
                       {matches}
                     </strong>
+
                     <span>
                       Matches
                     </span>
@@ -1724,6 +2718,7 @@ export default function ClubPage({
                     >
                       {wins}
                     </strong>
+
                     <span>
                       Wins
                     </span>
@@ -1737,6 +2732,7 @@ export default function ClubPage({
                     >
                       {draws}
                     </strong>
+
                     <span>
                       Draws
                     </span>
@@ -1750,24 +2746,19 @@ export default function ClubPage({
                     >
                       {losses}
                     </strong>
+
                     <span>
                       Losses
                     </span>
                   </div>
-
                 </div>
-
               </article>
-
-
-              {/* BOARD */}
 
               <article
                 className={
                   styles.managementCard
                 }
               >
-
                 <div
                   className={
                     styles.cardTitle
@@ -1793,49 +2784,48 @@ export default function ClubPage({
                     styles.boardFeeling
                   }
                 >
-
                   <div
                     className={
                       styles.boardFace
                     }
                   >
-                    {boardConfidence >= 70
+                    {boardConfidence >=
+                    70
                       ? '🙂'
-                      : boardConfidence >= 50
+                      : boardConfidence >=
+                        50
                       ? '😐'
                       : '😟'}
                   </div>
 
                   <div>
-
                     <strong>
-                      {confidenceLabel}
+                      {
+                        confidenceLabel
+                      }
                     </strong>
 
                     <p>
                       The board currently
-                      has {boardConfidence}%
-                      confidence in your
-                      management.
+                      has{' '}
+                      {
+                        boardConfidence
+                      }%
+                      confidence in{' '}
+                      {
+                        managerName
+                      }.
                     </p>
-
                   </div>
-
                 </div>
-
               </article>
-
             </div>
-
-
-            {/* OBJECTIVES */}
 
             <article
               className={
                 styles.managementCard
               }
             >
-
               <div
                 className={
                   styles.cardTitle
@@ -1856,17 +2846,18 @@ export default function ClubPage({
                 </span>
               </div>
 
-
               <div
                 className={
                   styles.objectives
                 }
               >
-
-                {objectives.length > 0 ? (
+                {objectives.length >
+                0 ? (
                   objectives.map(
-                    (objective, index) => {
-
+                    (
+                      objective,
+                      index
+                    ) => {
                       const progress =
                         safeNumber(
                           objective.progress,
@@ -1883,7 +2874,6 @@ export default function ClubPage({
                             styles.objective
                           }
                         >
-
                           <div
                             className={
                               styles.objectiveIcon
@@ -1899,7 +2889,6 @@ export default function ClubPage({
                               styles.objectiveBody
                             }
                           >
-
                             <div
                               className={
                                 styles.objectiveTop
@@ -1912,7 +2901,10 @@ export default function ClubPage({
                               </strong>
 
                               <span>
-                                {progress}%
+                                {
+                                  progress
+                                }
+                                %
                               </span>
                             </div>
 
@@ -1939,9 +2931,7 @@ export default function ClubPage({
                               {objective.target ||
                                 'Complete objective'}
                             </small>
-
                           </div>
-
                         </div>
                       );
                     }
@@ -1952,20 +2942,17 @@ export default function ClubPage({
                       styles.empty
                     }
                   >
-                    No board objectives yet.
+                    No board objectives
+                    yet.
                   </div>
                 )}
-
               </div>
-
             </article>
-
           </section>
         )}
 
-
         {/* =================================================
-            BOARD TAB
+            BOARD
         ================================================= */}
 
         {activeTab ===
@@ -1975,13 +2962,11 @@ export default function ClubPage({
               styles.content
             }
           >
-
             <article
               className={
                 styles.boardRoom
               }
             >
-
               <div
                 className={
                   styles.boardRoomHeader
@@ -1997,9 +2982,9 @@ export default function ClubPage({
                   </h1>
 
                   <p>
-                    Your relationship with the
-                    club hierarchy determines how
-                    long you keep your job.
+                    Your relationship with
+                    the board determines how
+                    long you remain in charge.
                   </p>
                 </div>
 
@@ -2009,7 +2994,10 @@ export default function ClubPage({
                   }
                 >
                   <strong>
-                    {boardConfidence}%
+                    {
+                      boardConfidence
+                    }
+                    %
                   </strong>
 
                   <span>
@@ -2018,13 +3006,11 @@ export default function ClubPage({
                 </div>
               </div>
 
-
               <div
                 className={
                   styles.boardRules
                 }
               >
-
                 <div>
                   <span>
                     🏆
@@ -2036,8 +3022,8 @@ export default function ClubPage({
                     </strong>
 
                     <p>
-                      League performance and
-                      match results influence
+                      League position and
+                      match results affect
                       board confidence.
                     </p>
                   </div>
@@ -2072,121 +3058,14 @@ export default function ClubPage({
 
                     <p>
                       Completing objectives
-                      improves your job security.
+                      improves job security.
                     </p>
                   </div>
                 </div>
-
               </div>
-
             </article>
-
-
-            <article
-              className={
-                styles.managementCard
-              }
-            >
-
-              <div
-                className={
-                  styles.cardTitle
-                }
-              >
-                <div>
-                  <span>
-                    MANAGEMENT
-                  </span>
-
-                  <h2>
-                    Managerial Decisions
-                  </h2>
-                </div>
-
-                <span>
-                  ⚙️
-                </span>
-              </div>
-
-
-              <div
-                className={
-                  styles.actionGrid
-                }
-              >
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveTab(
-                      'squad'
-                    )
-                  }
-                >
-                  <span>
-                    👥
-                  </span>
-
-                  <strong>
-                    Squad Management
-                  </strong>
-
-                  <small>
-                    Review your players
-                  </small>
-                </button>
-
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveTab(
-                      'finance'
-                    )
-                  }
-                >
-                  <span>
-                    💰
-                  </span>
-
-                  <strong>
-                    Club Finance
-                  </strong>
-
-                  <small>
-                    Manage budgets
-                  </small>
-                </button>
-
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveTab(
-                      'contract'
-                    )
-                  }
-                >
-                  <span>
-                    📄
-                  </span>
-
-                  <strong>
-                    Contract
-                  </strong>
-
-                  <small>
-                    Review your deal
-                  </small>
-                </button>
-
-              </div>
-
-            </article>
-
           </section>
         )}
-
 
         {/* =================================================
             SQUAD
@@ -2199,13 +3078,11 @@ export default function ClubPage({
               styles.content
             }
           >
-
             <article
               className={
                 styles.managementCard
               }
             >
-
               <div
                 className={
                   styles.cardTitle
@@ -2226,18 +3103,16 @@ export default function ClubPage({
                 </span>
               </div>
 
-
               <div
                 className={
                   styles.squadOverview
                 }
               >
-
                 <div>
                   <strong>
-                    {clubInfo?.squadSize ||
-                      careerData?.squadSize ||
-                      0}
+                    {
+                      clubPlayers.length
+                    }
                   </strong>
 
                   <span>
@@ -2247,7 +3122,8 @@ export default function ClubPage({
 
                 <div>
                   <strong>
-                    €{formatMoney(
+                    €
+                    {formatMoney(
                       wageBudget
                     )}
                   </strong>
@@ -2259,7 +3135,8 @@ export default function ClubPage({
 
                 <div>
                   <strong>
-                    €{formatMoney(
+                    €
+                    {formatMoney(
                       transferBudget
                     )}
                   </strong>
@@ -2268,38 +3145,168 @@ export default function ClubPage({
                     Transfer Budget
                   </span>
                 </div>
-
               </div>
-
 
               <div
                 className={
-                  styles.comingSoon
+                  styles.squadToolbar
                 }
               >
-
-                <span>
-                  👥
-                </span>
-
-                <h3>
-                  Squad Room
-                </h3>
-
-                <p>
-                  Player contracts, formations,
-                  starting XI, training and
-                  transfer negotiations will be
-                  managed here.
-                </p>
-
+                <input
+                  type="text"
+                  placeholder="Search player..."
+                  value={
+                    playerSearch
+                  }
+                  onChange={(event) =>
+                    setPlayerSearch(
+                      event.target.value
+                    )
+                  }
+                />
               </div>
 
-            </article>
+              {filteredPlayers.length >
+              0 ? (
+                <div
+                  className={
+                    styles.playerGrid
+                  }
+                >
+                  {filteredPlayers.map(
+                    (player) => (
+                      <article
+                        key={
+                          player.id
+                        }
+                        className={
+                          styles.playerCard
+                        }
+                      >
+                        <div
+                          className={
+                            styles.playerAvatar
+                          }
+                        >
+                          {player.photo ||
+                          player.image ? (
+                            <img
+                              src={
+                                player.photo ||
+                                player.image
+                              }
+                              alt={getPlayerName(
+                                player
+                              )}
+                            />
+                          ) : (
+                            '👤'
+                          )}
+                        </div>
 
+                        <div
+                          className={
+                            styles.playerMain
+                          }
+                        >
+                          <h3>
+                            {getPlayerName(
+                              player
+                            )}
+                          </h3>
+
+                          <span>
+                            {getPlayerPosition(
+                              player
+                            )}
+                          </span>
+
+                          <small>
+                            {player.nationality ||
+                              'Unknown nationality'}
+                          </small>
+                        </div>
+
+                        <div
+                          className={
+                            styles.playerRating
+                          }
+                        >
+                          <strong>
+                            {safeNumber(
+                              player.overall,
+                              0
+                            ) || '-'}
+                          </strong>
+
+                          <span>
+                            OVR
+                          </span>
+                        </div>
+
+                        <div
+                          className={
+                            styles.playerDetails
+                          }
+                        >
+                          <span>
+                            Age
+                          </span>
+
+                          <strong>
+                            {player.age ||
+                              '-'}
+                          </strong>
+
+                          <span>
+                            Value
+                          </span>
+
+                          <strong>
+                            €
+                            {formatMoney(
+                              player.marketValue
+                            )}
+                          </strong>
+
+                          <span>
+                            Wage
+                          </span>
+
+                          <strong>
+                            €
+                            {formatMoney(
+                              player.salary
+                            )}
+                          </strong>
+                        </div>
+                      </article>
+                    )
+                  )}
+                </div>
+              ) : (
+                <div
+                  className={
+                    styles.empty
+                  }
+                >
+                  <span>
+                    👥
+                  </span>
+
+                  <h3>
+                    No players found
+                  </h3>
+
+                  <p>
+                    No players are currently
+                    registered with this club.
+                  </p>
+                </div>
+              )}
+            </article>
           </section>
         )}
-
 
         {/* =================================================
             FINANCE
@@ -2312,13 +3319,11 @@ export default function ClubPage({
               styles.content
             }
           >
-
             <div
               className={
                 styles.statGrid
               }
             >
-
               <div
                 className={
                   styles.financeCard
@@ -2329,7 +3334,8 @@ export default function ClubPage({
                 </span>
 
                 <strong>
-                  €{formatMoney(
+                  €
+                  {formatMoney(
                     balance
                   )}
                 </strong>
@@ -2349,13 +3355,14 @@ export default function ClubPage({
                 </span>
 
                 <strong>
-                  €{formatMoney(
+                  €
+                  {formatMoney(
                     transferBudget
                   )}
                 </strong>
 
                 <small>
-                  Player transfers
+                  Transfer market
                 </small>
               </div>
 
@@ -2369,25 +3376,23 @@ export default function ClubPage({
                 </span>
 
                 <strong>
-                  €{formatMoney(
+                  €
+                  {formatMoney(
                     wageBudget
                   )}
                 </strong>
 
                 <small>
-                  Salary budget
+                  Player salaries
                 </small>
               </div>
-
             </div>
-
 
             <article
               className={
                 styles.managementCard
               }
             >
-
               <div
                 className={
                   styles.cardTitle
@@ -2395,11 +3400,11 @@ export default function ClubPage({
               >
                 <div>
                   <span>
-                    CLUB FINANCE
+                    FINANCE
                   </span>
 
                   <h2>
-                    Financial Management
+                    Club Financial Health
                   </h2>
                 </div>
 
@@ -2408,13 +3413,11 @@ export default function ClubPage({
                 </span>
               </div>
 
-
               <div
                 className={
                   styles.financeNotice
                 }
               >
-
                 <span>
                   💡
                 </span>
@@ -2425,19 +3428,311 @@ export default function ClubPage({
                   </strong>
 
                   <p>
-                    Transfer spending, player wages,
-                    bonuses and club income should
-                    remain within the board's budget.
+                    Transfer spending,
+                    wages, bonuses and
+                    operational costs affect
+                    your board confidence.
                   </p>
                 </div>
-
               </div>
-
             </article>
-
           </section>
         )}
 
+        {/* =================================================
+            CLUB INFORMATION
+        ================================================= */}
+
+        {activeTab ===
+          'club' && (
+          <section
+            className={
+              styles.content
+            }
+          >
+            <div
+              className={
+                styles.clubDetailsGrid
+              }
+            >
+              <article
+                className={
+                  styles.managementCard
+                }
+              >
+                <div
+                  className={
+                    styles.cardTitle
+                  }
+                >
+                  <div>
+                    <span>
+                      CLUB PROFILE
+                    </span>
+
+                    <h2>
+                      {
+                        clubInfo?.name
+                      }
+                    </h2>
+                  </div>
+
+                  <span>
+                    🏟️
+                  </span>
+                </div>
+
+                <div
+                  className={
+                    styles.infoList
+                  }
+                >
+                  <div>
+                    <span>
+                      Country
+                    </span>
+
+                    <strong>
+                      {
+                        clubCountry
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      League
+                    </span>
+
+                    <strong>
+                      {
+                        clubLeague
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Stadium
+                    </span>
+
+                    <strong>
+                      {
+                        clubInfo?.stadium ||
+                        '-'
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Location
+                    </span>
+
+                    <strong>
+                      {
+                        clubInfo?.city ||
+                        '-'
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Founded
+                    </span>
+
+                    <strong>
+                      {formatDate(
+                        clubInfo?.founded
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Reputation
+                    </span>
+
+                    <strong>
+                      {
+                        clubInfo?.reputation ||
+                        0
+                      }
+                    </strong>
+                  </div>
+                </div>
+              </article>
+
+              <article
+                className={
+                  styles.managementCard
+                }
+              >
+                <div
+                  className={
+                    styles.cardTitle
+                  }
+                >
+                  <div>
+                    <span>
+                      FACILITIES
+                    </span>
+
+                    <h2>
+                      Club Facilities
+                    </h2>
+                  </div>
+
+                  <span>
+                    🏗️
+                  </span>
+                </div>
+
+                <div
+                  className={
+                    styles.facilityGrid
+                  }
+                >
+                  {Object.keys(
+                    clubInfo?.facilities ||
+                      {}
+                  ).length >
+                  0 ? (
+                    Object.entries(
+                      clubInfo.facilities
+                    ).map(
+                      ([key, value]) => (
+                        <div
+                          key={
+                            key
+                          }
+                        >
+                          <span>
+                            {key}
+                          </span>
+
+                          <strong>
+                            {safeString(
+                              value,
+                              '-'
+                            )}
+                          </strong>
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <p>
+                      No facility data
+                      available.
+                    </p>
+                  )}
+                </div>
+              </article>
+            </div>
+
+            <article
+              className={
+                styles.managementCard
+              }
+            >
+              <div
+                className={
+                  styles.cardTitle
+                }
+              >
+                <div>
+                  <span>
+                    KIT
+                  </span>
+
+                  <h2>
+                    Club Jerseys
+                  </h2>
+                </div>
+
+                <span>
+                  👕
+                </span>
+              </div>
+
+              <div
+                className={
+                  styles.kitGrid
+                }
+              >
+                {[
+                  [
+                    'Home',
+                    clubInfo?.kits
+                      ?.home,
+                  ],
+                  [
+                    'Away',
+                    clubInfo?.kits
+                      ?.away,
+                  ],
+                  [
+                    'Third',
+                    clubInfo?.kits
+                      ?.third,
+                  ],
+                  [
+                    'Goalkeeper',
+                    clubInfo?.kits
+                      ?.goalkeeper,
+                  ],
+                ].map(
+                  ([name, kit]) => (
+                    <div
+                      key={
+                        name
+                      }
+                      className={
+                        styles.kitCard
+                      }
+                    >
+                      {kit ? (
+                        typeof kit ===
+                          'string' &&
+                        kit.startsWith(
+                          'http'
+                        ) ? (
+                          <img
+                            src={kit}
+                            alt={`${name} kit`}
+                          />
+                        ) : (
+                          <div
+                            className={
+                              styles.kitText
+                            }
+                          >
+                            {
+                              kit
+                            }
+                          </div>
+                        )
+                      ) : (
+                        <div
+                          className={
+                            styles.kitPlaceholder
+                          }
+                        >
+                          👕
+                        </div>
+                      )}
+
+                      <strong>
+                        {name} Kit
+                      </strong>
+                    </div>
+                  )
+                )}
+              </div>
+            </article>
+          </section>
+        )}
 
         {/* =================================================
             CONTRACT
@@ -2450,34 +3745,33 @@ export default function ClubPage({
               styles.content
             }
           >
-
             <article
               className={
                 styles.contractPage
               }
             >
-
               <div
                 className={
                   styles.contractPageHeader
                 }
               >
-
                 <div>
-
                   <span>
                     MANAGER CONTRACT
                   </span>
 
                   <h1>
-                    {contract?.role ||
-                      'Head Coach'}
+                    {
+                      contract?.role ||
+                      'Head Coach'
+                    }
                   </h1>
 
                   <p>
-                    {clubInfo?.name}
+                    {
+                      clubInfo?.name
+                    }
                   </p>
-
                 </div>
 
                 <div
@@ -2499,15 +3793,24 @@ export default function ClubPage({
                       : 'ACTIVE'}
                   </strong>
                 </div>
-
               </div>
-
 
               <div
                 className={
                   styles.contractGrid
                 }
               >
+                <div>
+                  <span>
+                    MANAGER
+                  </span>
+
+                  <strong>
+                    {
+                      managerName
+                    }
+                  </strong>
+                </div>
 
                 <div>
                   <span>
@@ -2539,7 +3842,8 @@ export default function ClubPage({
                   </span>
 
                   <strong>
-                    {remainingDays !== null
+                    {remainingDays !==
+                    null
                       ? `${Math.max(
                           0,
                           remainingDays
@@ -2562,8 +3866,19 @@ export default function ClubPage({
                   </strong>
                 </div>
 
-              </div>
+                <div>
+                  <span>
+                    SIGNING BONUS
+                  </span>
 
+                  <strong>
+                    €
+                    {formatMoney(
+                      contract?.signingBonus
+                    )}
+                  </strong>
+                </div>
+              </div>
 
               {remainingDays !==
                 null &&
@@ -2574,7 +3889,6 @@ export default function ClubPage({
                       styles.renewalBox
                     }
                   >
-
                     <span>
                       📋
                     </span>
@@ -2586,7 +3900,8 @@ export default function ClubPage({
 
                       <p>
                         The board is reviewing
-                        your future with the club.
+                        your future with the
+                        club.
                       </p>
                     </div>
 
@@ -2599,10 +3914,8 @@ export default function ClubPage({
                     >
                       Request Renewal
                     </button>
-
                   </div>
                 )}
-
 
               <button
                 type="button"
@@ -2616,12 +3929,9 @@ export default function ClubPage({
               >
                 Resign from Club
               </button>
-
             </article>
-
           </section>
         )}
-
       </main>
     </>
   );
