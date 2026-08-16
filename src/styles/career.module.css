@@ -1,0 +1,1212 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  margin-top: 70px;
+  padding: 32px;
+  color: #e5e7eb;
+
+  background:
+    radial-gradient(
+      circle at 10% 0%,
+      rgba(37, 99, 235, 0.18),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(16, 185, 129, 0.12),
+      transparent 28%
+    ),
+    #070b14;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   HERO
+========================================================= */
+
+.hero {
+  position: relative;
+  max-width: 1400px;
+  margin: 0 auto 24px;
+  padding: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(17, 24, 39, 0.96),
+      rgba(10, 15, 28, 0.96)
+    );
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.heroGlow {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+
+  right: -100px;
+  top: -180px;
+
+  border-radius: 50%;
+
+  background: rgba(37, 99, 235, 0.18);
+  filter: blur(50px);
+
+  pointer-events: none;
+}
+
+.profileArea {
+  position: relative;
+  z-index: 2;
+
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.avatar {
+  width: 96px;
+  height: 96px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 50%;
+  border: 3px solid rgba(59, 130, 246, 0.65);
+
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #10b981
+    );
+
+  box-shadow:
+    0 0 0 6px rgba(59, 130, 246, 0.08),
+    0 12px 35px rgba(0, 0, 0, 0.35);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar span {
+  font-size: 38px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.profileInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.profileInfo h1 {
+  margin: 0;
+
+  color: #f8fafc;
+
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.1;
+  font-weight: 800;
+
+  letter-spacing: -0.8px;
+}
+
+.profileInfo p {
+  margin: 0;
+
+  color: #94a3b8;
+
+  font-size: 15px;
+}
+
+.roleBadge {
+  width: fit-content;
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  margin-bottom: 4px;
+  padding: 5px 10px;
+
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 999px;
+
+  background: rgba(37, 99, 235, 0.10);
+
+  color: #60a5fa;
+
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  margin-top: 7px;
+}
+
+.meta span {
+  padding: 5px 9px;
+
+  border-radius: 7px;
+
+  background: rgba(255, 255, 255, 0.045);
+
+  color: #cbd5e1;
+
+  font-size: 11px;
+}
+
+.heroStats {
+  position: relative;
+  z-index: 2;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(70px, 1fr));
+
+  gap: 12px;
+}
+
+.heroStats div {
+  min-width: 78px;
+
+  padding: 15px 12px;
+
+  text-align: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 13px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.heroStats strong {
+  display: block;
+
+  color: #f8fafc;
+
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.heroStats span {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+
+/* =========================================================
+   XP
+========================================================= */
+
+.xpCard,
+.card,
+.clubCard,
+.timelineCard {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 24, 39, 0.95),
+      rgba(10, 15, 27, 0.95)
+    );
+
+  box-shadow:
+    0 15px 45px rgba(0, 0, 0, 0.18);
+}
+
+.xpCard {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+
+  padding: 22px;
+
+  border-radius: 18px;
+}
+
+.xpHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.sectionLabel {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.xpHeader h2,
+.cardHeader h2,
+.clubContent h2 {
+  margin: 0;
+
+  color: #f8fafc;
+
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.xpHeader > strong {
+  color: #60a5fa;
+  font-size: 13px;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 9px;
+
+  margin-top: 17px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: #111827;
+}
+
+.progressBar {
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #06b6d4,
+      #10b981
+    );
+
+  box-shadow:
+    0 0 15px rgba(37, 99, 235, 0.45);
+
+  transition: width 0.5s ease;
+}
+
+.xpFooter {
+  display: flex;
+  justify-content: space-between;
+
+  margin-top: 8px;
+
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+
+/* =========================================================
+   MAIN GRID
+========================================================= */
+
+.mainGrid {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+
+  gap: 24px;
+}
+
+.card {
+  padding: 23px;
+  border-radius: 18px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  margin-bottom: 20px;
+}
+
+.headerIcon {
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 10px;
+
+  background: rgba(59, 130, 246, 0.08);
+
+  font-size: 18px;
+}
+
+
+/* =========================================================
+   STATISTICS
+========================================================= */
+
+.statsList {
+  display: flex;
+  flex-direction: column;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 12px 0;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.statRow:last-child {
+  border-bottom: 0;
+}
+
+.statRow span {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.statRow strong {
+  color: #f1f5f9;
+  font-size: 14px;
+}
+
+.green {
+  color: #34d399 !important;
+}
+
+.yellow {
+  color: #fbbf24 !important;
+}
+
+.red {
+  color: #f87171 !important;
+}
+
+
+/* =========================================================
+   RECORD
+========================================================= */
+
+.recordCircle {
+  width: 175px;
+  height: 175px;
+
+  margin: 5px auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background:
+    conic-gradient(
+      #10b981 0deg,
+      #10b981 calc(var(--win-rate, 0) * 1deg),
+      #172033 calc(var(--win-rate, 0) * 1deg),
+      #172033 360deg
+    );
+
+  position: relative;
+}
+
+.recordCircle::before {
+  content: '';
+
+  position: absolute;
+  inset: 9px;
+
+  border-radius: 50%;
+
+  background: #0d1422;
+}
+
+.circleInner {
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.circleInner strong {
+  color: #f8fafc;
+
+  font-size: 36px;
+  font-weight: 850;
+}
+
+.circleInner span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.recordLegend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+
+  margin-bottom: 22px;
+}
+
+.recordLegend div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: #94a3b8;
+
+  font-size: 11px;
+}
+
+.recordLegend strong {
+  color: #e2e8f0;
+}
+
+.legendDotGreen,
+.legendDotYellow,
+.legendDotRed {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+}
+
+.legendDotGreen {
+  background: #10b981;
+}
+
+.legendDotYellow {
+  background: #f59e0b;
+}
+
+.legendDotRed {
+  background: #ef4444;
+}
+
+.rateGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 8px;
+}
+
+.rateGrid div {
+  padding: 12px 7px;
+
+  text-align: center;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.rateGrid strong {
+  display: block;
+
+  color: #f8fafc;
+
+  font-size: 17px;
+}
+
+.rateGrid span {
+  color: #64748b;
+
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+
+/* =========================================================
+   CLUB
+========================================================= */
+
+.clubCard {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+
+  min-height: 135px;
+
+  padding: 25px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 20px;
+
+  border-radius: 18px;
+}
+
+.clubLogoLarge {
+  width: 82px;
+  height: 82px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.18),
+      rgba(16, 185, 129, 0.10)
+    );
+
+  border: 1px solid rgba(59, 130, 246, 0.16);
+
+  font-size: 35px;
+}
+
+.clubLogoLarge img {
+  width: 65px;
+  height: 65px;
+
+  object-fit: contain;
+}
+
+.clubContent {
+  flex: 1;
+}
+
+.clubContent p {
+  margin: 5px 0 10px;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+.clubMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clubMeta span {
+  padding: 5px 8px;
+
+  border-radius: 6px;
+
+  background: rgba(255, 255, 255, 0.04);
+
+  color: #94a3b8;
+
+  font-size: 10px;
+}
+
+.clubPosition {
+  min-width: 110px;
+
+  padding: 15px;
+
+  text-align: center;
+
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.clubPosition span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+}
+
+.clubPosition strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #60a5fa;
+
+  font-size: 28px;
+}
+
+
+/* =========================================================
+   LOWER GRID
+========================================================= */
+
+.lowerGrid {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  gap: 24px;
+}
+
+
+/* =========================================================
+   FORM
+========================================================= */
+
+.formMatches {
+  display: flex;
+  flex-direction: column;
+}
+
+.matchItem {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 12px 0;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.matchItem:last-child {
+  border-bottom: 0;
+}
+
+.formBadge {
+  width: 32px;
+  height: 32px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 9px;
+
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.formWin {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.formDraw {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.formLoss {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.formUnknown {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.matchDetails {
+  flex: 1;
+
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.matchDetails strong {
+  overflow: hidden;
+
+  color: #cbd5e1;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchDetails strong span {
+  color: #475569;
+  margin: 0 3px;
+}
+
+.matchDetails > span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.matchDate {
+  color: #475569;
+  font-size: 10px;
+}
+
+.emptyState {
+  min-height: 170px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  color: #475569;
+}
+
+.emptyState span {
+  margin-bottom: 8px;
+
+  font-size: 30px;
+  opacity: 0.5;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   ACHIEVEMENTS
+========================================================= */
+
+.achievements {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.achievement {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 11px;
+
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 11px;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  opacity: 0.48;
+}
+
+.achievement.unlocked {
+  opacity: 1;
+
+  border-color: rgba(16, 185, 129, 0.15);
+
+  background: rgba(16, 185, 129, 0.045);
+}
+
+.achievement > div {
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.04);
+
+  font-size: 18px;
+}
+
+.achievement > span {
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.achievement strong {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.achievement small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.achievement b {
+  color: #34d399;
+  font-size: 16px;
+}
+
+
+/* =========================================================
+   TIMELINE
+========================================================= */
+
+.timelineCard {
+  max-width: 1400px;
+  margin: 0 auto;
+
+  padding: 25px;
+
+  border-radius: 18px;
+}
+
+.timeline {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.timeline::before {
+  content: '';
+
+  position: absolute;
+
+  left: 19px;
+  top: 20px;
+  bottom: 20px;
+
+  width: 1px;
+
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.timelineItem {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 9px 0;
+}
+
+.timelineIcon {
+  position: relative;
+  z-index: 1;
+
+  width: 39px;
+  height: 39px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 50%;
+
+  background: #101827;
+
+  font-size: 15px;
+}
+
+.timelineItem strong {
+  display: block;
+
+  color: #cbd5e1;
+
+  font-size: 12px;
+}
+
+.timelineItem p {
+  margin: 3px 0 0;
+
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loadingContainer {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  color: #64748b;
+
+  background: #070b14;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+
+  border: 3px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #3b82f6;
+
+  border-radius: 50%;
+
+  animation: spin 0.8s linear infinite;
+}
+
+.loadingContainer p {
+  margin: 0;
+
+  font-size: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1050px) {
+
+  .hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .heroStats {
+    width: 100%;
+  }
+
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+
+@media (max-width: 760px) {
+
+  .page {
+    padding: 15px;
+  }
+
+  .hero {
+    padding: 20px;
+
+    border-radius: 18px;
+  }
+
+  .profileArea {
+    align-items: flex-start;
+  }
+
+  .avatar {
+    width: 72px;
+    height: 72px;
+  }
+
+  .avatar span {
+    font-size: 28px;
+  }
+
+  .profileInfo h1 {
+    font-size: 25px;
+  }
+
+  .heroStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .heroStats div {
+    min-width: 0;
+  }
+
+  .xpCard,
+  .card,
+  .clubCard,
+  .timelineCard {
+    border-radius: 15px;
+  }
+
+  .clubCard {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .clubPosition {
+    width: 100%;
+  }
+
+  .lowerGrid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+
+@media (max-width: 480px) {
+
+  .page {
+    padding: 10px;
+  }
+
+  .hero {
+    padding: 16px;
+  }
+
+  .profileArea {
+    width: 100%;
+    gap: 13px;
+  }
+
+  .avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .avatar span {
+    font-size: 23px;
+  }
+
+  .profileInfo h1 {
+    font-size: 21px;
+  }
+
+  .profileInfo p {
+    font-size: 12px;
+  }
+
+  .roleBadge {
+    font-size: 8px;
+  }
+
+  .meta {
+    gap: 5px;
+  }
+
+  .meta span {
+    font-size: 9px;
+    padding: 4px 6px;
+  }
+
+  .heroStats {
+    gap: 7px;
+  }
+
+  .heroStats div {
+    padding: 11px 6px;
+  }
+
+  .heroStats strong {
+    font-size: 18px;
+  }
+
+  .heroStats span {
+    font-size: 8px;
+  }
+
+  .xpCard,
+  .card,
+  .timelineCard {
+    padding: 16px;
+  }
+
+  .xpHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .xpFooter {
+    gap: 10px;
+    flex-direction: column;
+  }
+
+  .clubCard {
+    padding: 17px;
+  }
+
+  .clubLogoLarge {
+    width: 65px;
+    height: 65px;
+  }
+
+  .clubLogoLarge img {
+    width: 50px;
+    height: 50px;
+  }
+
+  .clubContent h2 {
+    font-size: 17px;
+  }
+
+  .recordCircle {
+    width: 150px;
+    height: 150px;
+  }
+
+  .recordLegend {
+    gap: 10px;
+  }
+
+  .rateGrid strong {
+    font-size: 15px;
+  }
+
+}
