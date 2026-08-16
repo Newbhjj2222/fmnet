@@ -1,9 +1,9 @@
 /* ============================================================
-   club.module.css
-   Dark theme • responsive • vibrant & attractive
+   club.module.css — dark • responsive • attractive
+   all selectors are classes (no element selectors)
    ============================================================ */
 
-/* ----- root variables (scoped via .page) ----- */
+/* ----- root variables ----- */
 .page {
   --bg-primary: #0a0a0a;
   --bg-secondary: #111111;
@@ -38,10 +38,6 @@
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   min-height: 100vh;
   padding: 1.5rem;
-}
-
-/* ----- container ----- */
-.page {
   max-width: 1200px;
   margin: 0 auto;
   animation: fadeSlide 0.4s ease;
@@ -50,6 +46,10 @@
 @keyframes fadeSlide {
   0% { opacity: 0; transform: translateY(14px); }
   100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ----- loading ----- */
@@ -71,16 +71,12 @@
   animation: spin 0.9s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading p {
+.loadingText {
   color: var(--text-secondary);
   font-size: 1.1rem;
 }
 
-/* ----- typography ----- */
+/* ----- typography classes ----- */
 .eyebrow {
   font-size: 0.7rem;
   font-weight: 600;
@@ -94,7 +90,7 @@
   border: 1px solid var(--gold-glow);
 }
 
-h1 {
+.heading1 {
   font-size: 2rem;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -105,18 +101,30 @@ h1 {
   color: transparent;
 }
 
-h2 {
+.heading2 {
   font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0.3rem 0;
 }
 
-h3 {
+.heading3 {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0.2rem 0;
+}
+
+.paragraph {
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: 0.3rem 0;
+}
+
+.smallText {
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 /* ----- selection hero (no club) ----- */
@@ -141,14 +149,7 @@ h3 {
   box-shadow: 0 0 40px var(--gold-glow);
 }
 
-.selectionHero p {
-  color: var(--text-secondary);
-  font-size: 1.05rem;
-  max-width: 500px;
-  margin: 0.3rem 0;
-}
-
-.selectionHero strong {
+.selectionHero .highlight {
   color: var(--gold);
 }
 
@@ -176,17 +177,17 @@ h3 {
   transition: var(--transition);
 }
 
-.searchBox:focus-within {
+.searchBoxFocused {
   border-color: var(--gold);
   box-shadow: 0 0 20px var(--gold-glow);
 }
 
-.searchBox span {
+.searchIcon {
   color: var(--text-muted);
   margin-right: 0.6rem;
 }
 
-.searchBox input {
+.searchInput {
   flex: 1;
   background: transparent;
   border: none;
@@ -196,7 +197,7 @@ h3 {
   font-size: 0.95rem;
 }
 
-.filter {
+.filterSelect {
   background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
@@ -212,11 +213,11 @@ h3 {
   padding-right: 2.8rem;
 }
 
-.filter:hover {
+.filterSelect:hover {
   border-color: var(--border-light);
 }
 
-.filter:focus {
+.filterSelect:focus {
   outline: none;
   border-color: var(--gold);
 }
@@ -271,20 +272,22 @@ h3 {
   object-fit: cover;
 }
 
-.clubCardTop h2 {
+.clubCardName {
   font-size: 1.1rem;
+  font-weight: 600;
   margin: 0;
+  color: var(--text-primary);
 }
 
-.clubCardTop span {
+.clubCardLeague {
   display: block;
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
-.clubCardTop small {
-  color: var(--text-muted);
+.clubCardCountry {
   font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .clubDescription {
@@ -303,11 +306,11 @@ h3 {
   border-bottom: 1px solid var(--border-color);
 }
 
-.clubQuickStats div {
+.clubQuickStats .statItem {
   text-align: center;
 }
 
-.clubQuickStats span {
+.clubQuickStats .statLabel {
   display: block;
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -315,8 +318,9 @@ h3 {
   letter-spacing: 0.04em;
 }
 
-.clubQuickStats strong {
+.clubQuickStats .statValue {
   font-size: 1.1rem;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
@@ -348,7 +352,7 @@ h3 {
   color: var(--text-secondary);
 }
 
-.noResults span {
+.noResults .icon {
   font-size: 3rem;
   display: block;
   margin-bottom: 0.5rem;
@@ -435,19 +439,21 @@ h3 {
   object-fit: cover;
 }
 
-.modalClub span {
+.modalClub .badge {
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--gold);
 }
 
-.modalClub h2 {
+.modalClub .clubName {
   font-size: 1.3rem;
+  font-weight: 700;
   margin: 0.1rem 0;
+  color: var(--text-primary);
 }
 
-.modalClub small {
+.modalClub .leagueInfo {
   color: var(--text-secondary);
 }
 
@@ -461,20 +467,21 @@ h3 {
   margin: 1rem 0;
 }
 
-.contractTerms div {
+.contractTerms .termItem {
   display: flex;
   flex-direction: column;
 }
 
-.contractTerms span {
+.contractTerms .termLabel {
   font-size: 0.7rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.contractTerms strong {
+.contractTerms .termValue {
   font-size: 1rem;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -488,11 +495,11 @@ h3 {
   margin: 1rem 0 1.8rem;
 }
 
-.boardMessage span {
+.boardMessage .icon {
   font-size: 1.8rem;
 }
 
-.boardMessage p {
+.boardMessage .text {
   color: var(--text-secondary);
   margin: 0;
   font-size: 0.95rem;
@@ -562,12 +569,17 @@ h3 {
   object-fit: cover;
 }
 
-.clubHeader h1 {
+.clubHeader .clubName {
   font-size: 1.8rem;
+  font-weight: 800;
   margin: 0.1rem 0;
+  background: linear-gradient(135deg, #f7c948, #f5a623);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-.clubHeader p {
+.clubHeader .leagueName {
   color: var(--text-secondary);
   font-size: 0.95rem;
   margin: 0;
@@ -587,7 +599,7 @@ h3 {
   min-width: 150px;
 }
 
-.boardConfidence span {
+.boardConfidence .label {
   display: block;
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -595,7 +607,7 @@ h3 {
   letter-spacing: 0.06em;
 }
 
-.boardConfidence strong {
+.boardConfidence .value {
   font-size: 2rem;
   font-weight: 800;
   color: var(--gold);
@@ -616,7 +628,7 @@ h3 {
   transition: width 0.6s ease;
 }
 
-.boardConfidence small {
+.boardConfidence .statusLabel {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -633,7 +645,7 @@ h3 {
   padding: 0.4rem;
 }
 
-.managementNav button {
+.navButton {
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -648,12 +660,12 @@ h3 {
   gap: 0.4rem;
 }
 
-.managementNav button:hover {
+.navButton:hover {
   color: var(--text-primary);
   background: var(--bg-secondary);
 }
 
-.managementNav .activeNav {
+.navButtonActive {
   background: var(--gold-soft);
   color: var(--gold);
   border: 1px solid var(--gold-glow);
@@ -683,29 +695,25 @@ h3 {
   color: var(--red);
 }
 
-.warningBanner span,
-.dangerBanner span {
+.bannerIcon {
   font-size: 1.6rem;
 }
 
-.warningBanner div,
-.dangerBanner div {
+.bannerContent {
   flex: 1;
 }
 
-.warningBanner strong,
-.dangerBanner strong {
+.bannerTitle {
   display: block;
+  font-weight: 700;
 }
 
-.warningBanner p,
-.dangerBanner p {
+.bannerText {
   margin: 0.1rem 0;
   color: var(--text-secondary);
 }
 
-.warningBanner button,
-.dangerBanner button {
+.bannerButton {
   background: var(--bg-primary);
   border: 1px solid currentColor;
   color: currentColor;
@@ -716,8 +724,7 @@ h3 {
   transition: var(--transition);
 }
 
-.warningBanner button:hover,
-.dangerBanner button:hover {
+.bannerButton:hover {
   background: currentColor;
   color: var(--bg-primary);
 }
@@ -751,8 +758,8 @@ h3 {
   transform: translateY(-2px);
 }
 
-.metricCard span,
-.financeCard span {
+.metricCard .label,
+.financeCard .label {
   display: block;
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -760,8 +767,8 @@ h3 {
   letter-spacing: 0.04em;
 }
 
-.metricCard strong,
-.financeCard strong {
+.metricCard .value,
+.financeCard .value {
   font-size: 1.6rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -769,8 +776,8 @@ h3 {
   margin: 0.2rem 0;
 }
 
-.metricCard small,
-.financeCard small {
+.metricCard .sub,
+.financeCard .sub {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -810,19 +817,21 @@ h3 {
   margin-bottom: 1.2rem;
 }
 
-.cardTitle div span {
+.cardTitle .label {
   font-size: 0.7rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
-.cardTitle div h2 {
+.cardTitle .title {
   margin: 0.1rem 0 0;
   font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.cardTitle > span {
+.cardTitle .icon {
   font-size: 1.6rem;
 }
 
@@ -834,17 +843,17 @@ h3 {
   text-align: center;
 }
 
-.performanceGrid div {
+.performanceGrid .statItem {
   padding: 0.4rem;
 }
 
-.performanceGrid strong {
+.performanceGrid .statValue {
   font-size: 1.8rem;
   font-weight: 700;
   display: block;
 }
 
-.performanceGrid span {
+.performanceGrid .statLabel {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -864,12 +873,13 @@ h3 {
   font-size: 2.8rem;
 }
 
-.boardFeeling strong {
+.boardFeeling .feelingTitle {
   display: block;
   font-size: 1.1rem;
+  font-weight: 600;
 }
 
-.boardFeeling p {
+.boardFeeling .feelingText {
   color: var(--text-secondary);
   margin: 0.2rem 0 0;
 }
@@ -908,11 +918,12 @@ h3 {
   flex-wrap: wrap;
 }
 
-.objectiveTop strong {
+.objectiveTop .objectiveName {
   font-size: 0.95rem;
+  font-weight: 600;
 }
 
-.objectiveTop span {
+.objectiveTop .objectiveProgress {
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
@@ -925,13 +936,13 @@ h3 {
   overflow: hidden;
 }
 
-.objectiveTrack div {
+.objectiveTrack .trackFill {
   height: 100%;
   background: linear-gradient(90deg, var(--gold), var(--green));
   transition: width 0.5s ease;
 }
 
-.objectiveBody small {
+.objectiveBody .targetLabel {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
@@ -942,7 +953,7 @@ h3 {
   color: var(--text-muted);
 }
 
-.empty span {
+.empty .icon {
   font-size: 2.4rem;
   display: block;
   margin-bottom: 0.3rem;
@@ -972,14 +983,14 @@ h3 {
   border: 1px solid var(--gold-glow);
 }
 
-.bigConfidence strong {
+.bigConfidence .value {
   font-size: 2.4rem;
   font-weight: 800;
   color: var(--gold);
   display: block;
 }
 
-.bigConfidence span {
+.bigConfidence .label {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -990,23 +1001,24 @@ h3 {
   gap: 1.5rem;
 }
 
-.boardRules div {
+.boardRules .ruleItem {
   display: flex;
   gap: 0.8rem;
   align-items: flex-start;
 }
 
-.boardRules span {
+.boardRules .ruleIcon {
   font-size: 1.8rem;
   flex-shrink: 0;
 }
 
-.boardRules strong {
+.boardRules .ruleTitle {
   display: block;
   font-size: 1rem;
+  font-weight: 600;
 }
 
-.boardRules p {
+.boardRules .ruleDesc {
   margin: 0.1rem 0 0;
   color: var(--text-secondary);
   font-size: 0.9rem;
@@ -1023,17 +1035,17 @@ h3 {
   margin-bottom: 1rem;
 }
 
-.squadOverview div {
+.squadOverview .statItem {
   text-align: center;
 }
 
-.squadOverview strong {
+.squadOverview .statValue {
   display: block;
   font-size: 1.4rem;
   font-weight: 700;
 }
 
-.squadOverview span {
+.squadOverview .statLabel {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -1042,7 +1054,7 @@ h3 {
   margin: 1rem 0;
 }
 
-.squadToolbar input {
+.squadSearch {
   width: 100%;
   max-width: 320px;
   background: var(--bg-input);
@@ -1054,7 +1066,7 @@ h3 {
   transition: var(--transition);
 }
 
-.squadToolbar input:focus {
+.squadSearch:focus {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 20px var(--gold-glow);
@@ -1105,17 +1117,18 @@ h3 {
   text-align: center;
 }
 
-.playerMain h3 {
+.playerMain .playerName {
   font-size: 1rem;
+  font-weight: 600;
   margin: 0.1rem 0;
 }
 
-.playerMain span {
+.playerMain .playerPosition {
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
-.playerMain small {
+.playerMain .playerNationality {
   display: block;
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -1129,13 +1142,13 @@ h3 {
   margin: 0.3rem 0;
 }
 
-.playerRating strong {
+.playerRating .ratingValue {
   font-size: 1.6rem;
   font-weight: 700;
   color: var(--gold);
 }
 
-.playerRating span {
+.playerRating .ratingLabel {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -1150,11 +1163,11 @@ h3 {
   font-size: 0.8rem;
 }
 
-.playerDetails span {
+.playerDetails .detailLabel {
   color: var(--text-muted);
 }
 
-.playerDetails strong {
+.playerDetails .detailValue {
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -1169,15 +1182,16 @@ h3 {
   border-left: 4px solid var(--cyan);
 }
 
-.financeNotice span {
+.financeNotice .icon {
   font-size: 1.8rem;
 }
 
-.financeNotice strong {
+.financeNotice .title {
   display: block;
+  font-weight: 600;
 }
 
-.financeNotice p {
+.financeNotice .desc {
   margin: 0.1rem 0 0;
   color: var(--text-secondary);
 }
@@ -1202,18 +1216,18 @@ h3 {
   gap: 0.4rem;
 }
 
-.infoList div {
+.infoList .infoRow {
   display: flex;
   justify-content: space-between;
   padding: 0.3rem 0;
   border-bottom: 1px solid var(--border-color);
 }
 
-.infoList span {
+.infoList .infoLabel {
   color: var(--text-muted);
 }
 
-.infoList strong {
+.infoList .infoValue {
   color: var(--text-primary);
 }
 
@@ -1223,18 +1237,18 @@ h3 {
   gap: 0.4rem 1rem;
 }
 
-.facilityGrid div {
+.facilityGrid .facilityRow {
   display: flex;
   justify-content: space-between;
   padding: 0.2rem 0;
 }
 
-.facilityGrid span {
+.facilityGrid .facilityName {
   color: var(--text-muted);
   text-transform: capitalize;
 }
 
-.facilityGrid strong {
+.facilityGrid .facilityValue {
   color: var(--text-primary);
 }
 
@@ -1258,9 +1272,9 @@ h3 {
   border-color: var(--gold-soft);
 }
 
-.kitCard img,
-.kitCard .kitText,
-.kitCard .kitPlaceholder {
+.kitImage,
+.kitText,
+.kitPlaceholder {
   width: 100%;
   aspect-ratio: 3/4;
   object-fit: cover;
@@ -1274,14 +1288,14 @@ h3 {
   border: 1px solid var(--border-color);
 }
 
-.kitCard .kitText {
+.kitText {
   font-size: 0.9rem;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.kitCard strong {
+.kitCard .kitName {
   display: block;
   margin-top: 0.4rem;
   font-size: 0.8rem;
@@ -1304,11 +1318,11 @@ h3 {
   margin-bottom: 2rem;
 }
 
-.contractStatus {
+.contractStatusBox {
   text-align: right;
 }
 
-.contractStatus span {
+.contractStatusBox .statusLabel {
   display: block;
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -1316,7 +1330,7 @@ h3 {
   letter-spacing: 0.06em;
 }
 
-.contractStatus strong {
+.contractStatusBox .statusValue {
   font-size: 1.2rem;
   font-weight: 700;
   color: var(--gold);
@@ -1331,20 +1345,21 @@ h3 {
   border-bottom: 1px solid var(--border-color);
 }
 
-.contractGrid div {
+.contractGrid .contractItem {
   display: flex;
   flex-direction: column;
 }
 
-.contractGrid span {
+.contractGrid .itemLabel {
   font-size: 0.7rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.contractGrid strong {
+.contractGrid .itemValue {
   font-size: 1.05rem;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -1360,24 +1375,25 @@ h3 {
   flex-wrap: wrap;
 }
 
-.renewalBox span {
+.renewalBox .icon {
   font-size: 1.8rem;
 }
 
-.renewalBox div {
+.renewalBox .content {
   flex: 1;
 }
 
-.renewalBox strong {
+.renewalBox .title {
   display: block;
+  font-weight: 600;
 }
 
-.renewalBox p {
+.renewalBox .desc {
   margin: 0.1rem 0 0;
   color: var(--text-secondary);
 }
 
-.renewalBox button {
+.renewalBox .renewButton {
   background: var(--gold);
   border: none;
   color: #0a0a0a;
@@ -1388,7 +1404,7 @@ h3 {
   transition: var(--transition);
 }
 
-.renewalBox button:hover {
+.renewalBox .renewButton:hover {
   background: #f5a623;
   transform: scale(1.02);
 }
@@ -1441,7 +1457,7 @@ h3 {
     justify-content: center;
   }
 
-  .managementNav button {
+  .navButton {
     padding: 0.4rem 0.8rem;
     font-size: 0.8rem;
   }
@@ -1477,7 +1493,7 @@ h3 {
     padding: 0.6rem;
   }
 
-  h1 {
+  .heading1 {
     font-size: 1.6rem;
   }
 
@@ -1491,12 +1507,12 @@ h3 {
     font-size: 1.8rem;
   }
 
-  .managementNav button {
+  .navButton {
     padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
   }
 
-  .managementNav button span {
+  .navButton .navIcon {
     margin-right: 0.1rem;
   }
 
@@ -1504,8 +1520,8 @@ h3 {
     grid-template-columns: 1fr 1fr;
   }
 
-  .metricCard strong,
-  .financeCard strong {
+  .metricCard .value,
+  .financeCard .value {
     font-size: 1.2rem;
   }
 
