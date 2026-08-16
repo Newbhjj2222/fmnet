@@ -1,13 +1,13 @@
 /* ============================================================
-   analysis-post.module.css
+   club.module.css
    Dark theme • responsive • vibrant & attractive
    ============================================================ */
 
-/* ----- root variables (scoped via main) ----- */
+/* ----- root variables (scoped via .page) ----- */
 .page {
   --bg-primary: #0a0a0a;
   --bg-secondary: #111111;
-  --bg-card: #151515;
+  --bg-card: #161616;
   --bg-card-hover: #1e1e1e;
   --bg-input: #0f0f0f;
   --text-primary: #f0f0f0;
@@ -41,9 +41,8 @@
 }
 
 /* ----- container ----- */
-.container {
-  max-width: 1120px;
-  width: 100%;
+.page {
+  max-width: 1200px;
   margin: 0 auto;
   animation: fadeSlide 0.4s ease;
 }
@@ -53,406 +52,1368 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
-/* ----- headings ----- */
-.page h1 {
-  font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #f7c948, #f5a623, #f7c948);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  margin: 0 0 0.2rem;
+/* ----- loading ----- */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
 }
 
-.page h2 {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 0.6rem;
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--border-color);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
 }
 
-.page h3 {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 0.3rem;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-/* ----- select / inputs ----- */
-.selectWrapper {
-  margin-top: 1.8rem;
-}
-
-.selectWrapper label {
-  display: block;
-  font-weight: 500;
+.loading p {
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-bottom: 0.4rem;
+  font-size: 1.1rem;
 }
 
-.selectWrapper select {
-  width: 100%;
-  padding: 0.9rem 1.2rem;
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  font-size: 1rem;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b6b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.selectWrapper select:hover {
-  border-color: var(--border-light);
-}
-
-.selectWrapper select:focus {
-  outline: none;
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px var(--gold-glow);
-}
-
-.selectWrapper select option {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-/* ----- story info card ----- */
-.storyInfoCard {
-  margin-top: 1.5rem;
-  padding: 1.5rem 1.8rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  transition: var(--transition);
-}
-
-.storyInfoCard:hover {
-  border-color: var(--gold-soft);
-  box-shadow: 0 0 30px var(--gold-glow);
-}
-
-.storyInfoCard h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 0 0.3rem;
-  color: var(--text-primary);
-}
-
-.storyInfoCard p {
-  color: var(--text-secondary);
-  margin: 0.25rem 0;
-  font-size: 0.95rem;
-}
-
-.storyInfoCard .highlight {
+/* ----- typography ----- */
+.eyebrow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   color: var(--gold);
-  font-weight: 600;
-}
-
-.storyInfoCard .badge {
-  display: inline-block;
   background: var(--gold-soft);
-  color: var(--gold);
-  padding: 0.15rem 0.9rem;
+  padding: 0.2rem 0.9rem;
   border-radius: 40px;
-  font-size: 0.8rem;
-  font-weight: 500;
+  display: inline-block;
+  margin-bottom: 0.3rem;
   border: 1px solid var(--gold-glow);
 }
 
-/* ----- analyze button ----- */
-.analyzeBtn {
-  margin-top: 1.2rem;
-  padding: 0.85rem 2.2rem;
-  border-radius: 60px;
-  border: none;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 1.05rem;
+h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0.2rem 0 0.3rem;
   background: linear-gradient(135deg, #f7c948, #f5a623);
-  color: #0a0a0a;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  box-shadow: 0 0 30px var(--gold-glow);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-.analyzeBtn:hover:not(:disabled) {
-  transform: scale(1.03);
-  box-shadow: 0 0 50px var(--gold-glow);
+h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0.3rem 0;
 }
 
-.analyzeBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(0.3);
-  transform: none;
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0.2rem 0;
 }
 
-/* ----- steps ----- */
-.stepsContainer {
-  margin-top: 1.8rem;
-  padding: 1.2rem 1.5rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-}
-
-.stepItem {
+/* ----- selection hero (no club) ----- */
+.selectionHero {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--border-color);
-  transition: var(--transition);
+  gap: 1.5rem;
+  padding: 1.5rem 0 2.5rem;
+  flex-wrap: wrap;
 }
 
-.stepItem:last-child {
-  border-bottom: none;
+.heroBall {
+  font-size: 3.5rem;
+  background: var(--bg-card);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 40px var(--gold-glow);
 }
 
-.stepIcon {
-  width: 24px;
-  text-align: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
-}
-
-.stepText {
+.selectionHero p {
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 1.05rem;
+  max-width: 500px;
+  margin: 0.3rem 0;
 }
 
-.stepText.active {
+.selectionHero strong {
   color: var(--gold);
-  font-weight: 500;
 }
 
-.stepText.completed {
-  color: var(--green);
+/* ----- club selection ----- */
+.clubSelection {
+  margin-top: 1rem;
 }
 
-.stepText.pending {
-  opacity: 0.4;
-}
-
-/* ----- error ----- */
-.errorBox {
-  background: var(--red-glow);
-  border: 1px solid var(--red);
-  color: #ffbdbd;
-  padding: 1rem 1.4rem;
-  border-radius: var(--radius-sm);
-  margin-top: 1.5rem;
-  white-space: pre-wrap;
-  font-family: 'SF Mono', 'JetBrains Mono', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-}
-
-/* ----- report section ----- */
-.reportSection {
-  margin-top: 2.5rem;
-  animation: fadeSlide 0.4s ease;
-}
-
-/* report action buttons */
-.reportActions {
+.selectionToolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 1rem;
   margin-bottom: 1.8rem;
 }
 
-.reportActions button {
-  background: var(--bg-card);
+.searchBox {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  padding: 0.5rem 1.2rem;
   border-radius: 60px;
-  font-size: 0.85rem;
+  padding: 0.3rem 1rem;
+  transition: var(--transition);
+}
+
+.searchBox:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 20px var(--gold-glow);
+}
+
+.searchBox span {
+  color: var(--text-muted);
+  margin-right: 0.6rem;
+}
+
+.searchBox input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 0.7rem 0;
+  outline: none;
+  font-size: 0.95rem;
+}
+
+.filter {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 60px;
+  padding: 0.7rem 1.5rem;
+  font-size: 0.95rem;
   cursor: pointer;
   transition: var(--transition);
-  display: inline-flex;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b6b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1.2rem center;
+  padding-right: 2.8rem;
+}
+
+.filter:hover {
+  border-color: var(--border-light);
+}
+
+.filter:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* ----- club grid ----- */
+.clubGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.clubSelectCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.clubSelectCard:hover {
+  border-color: var(--gold-soft);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+
+.clubCardTop {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.clubLogo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.clubLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.clubCardTop h2 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.clubCardTop span {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.clubCardTop small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.clubDescription {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0.2rem 0;
+  flex: 1;
+}
+
+.clubQuickStats {
+  display: flex;
+  justify-content: space-around;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.clubQuickStats div {
+  text-align: center;
+}
+
+.clubQuickStats span {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.clubQuickStats strong {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.chooseButton {
+  background: var(--gold);
+  color: #0a0a0a;
+  border: none;
+  padding: 0.7rem 1.2rem;
+  border-radius: 60px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: var(--transition);
+  width: 100%;
+}
+
+.chooseButton:hover {
+  background: #f5a623;
+  transform: scale(1.02);
+  box-shadow: 0 0 30px var(--gold-glow);
+}
+
+.noResults {
+  text-align: center;
+  padding: 3rem 0;
+  color: var(--text-secondary);
+}
+
+.noResults span {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+/* ----- modal ----- */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.contractModal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  max-width: 560px;
+  width: 100%;
+  padding: 2rem;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  0% { transform: translateY(30px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.closeButton {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.8rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.closeButton:hover {
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+.modalClub {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  margin-bottom: 1.8rem;
+}
+
+.modalLogo {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.modalLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modalClub span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.modalClub h2 {
+  font-size: 1.3rem;
+  margin: 0.1rem 0;
+}
+
+.modalClub small {
+  color: var(--text-secondary);
+}
+
+.contractTerms {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  margin: 1rem 0;
+}
+
+.contractTerms div {
+  display: flex;
+  flex-direction: column;
+}
+
+.contractTerms span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.contractTerms strong {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.boardMessage {
+  display: flex;
+  gap: 1rem;
+  background: var(--bg-secondary);
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--gold);
+  margin: 1rem 0 1.8rem;
+}
+
+.boardMessage span {
+  font-size: 1.8rem;
+}
+
+.boardMessage p {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.signButton {
+  width: 100%;
+  padding: 0.9rem;
+  border-radius: 60px;
+  border: none;
+  background: var(--gold);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.signButton:hover:not(:disabled) {
+  background: #f5a623;
+  transform: scale(1.02);
+  box-shadow: 0 0 40px var(--gold-glow);
+}
+
+.signButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ----- club header (active club) ----- */
+.clubHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  margin-bottom: 1.8rem;
+}
+
+.clubHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.clubHeaderLogo {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  overflow: hidden;
+  border: 2px solid var(--gold);
+}
+
+.clubHeaderLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.clubHeader h1 {
+  font-size: 1.8rem;
+  margin: 0.1rem 0;
+}
+
+.clubHeader p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.clubHeaderMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.2rem;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.boardConfidence {
+  text-align: right;
+  min-width: 150px;
+}
+
+.boardConfidence span {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.boardConfidence strong {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.confidenceTrack {
+  width: 100%;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 10px;
+  margin: 0.4rem 0;
+  overflow: hidden;
+}
+
+.confidenceBar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--orange), var(--gold), var(--green));
+  transition: width 0.6s ease;
+}
+
+.boardConfidence small {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* ----- management nav ----- */
+.managementNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem;
+}
+
+.managementNav button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 0.6rem 1.2rem;
+  border-radius: 60px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: var(--transition);
+  display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.reportActions button:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-soft);
-  box-shadow: 0 0 20px var(--gold-glow);
+.managementNav button:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
-/* ----- report card ----- */
-.reportCard {
+.managementNav .activeNav {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border: 1px solid var(--gold-glow);
+}
+
+/* ----- banners ----- */
+.warningBanner,
+.dangerBanner {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.8rem;
+  flex-wrap: wrap;
+}
+
+.warningBanner {
+  background: var(--orange-glow);
+  border: 1px solid var(--orange);
+  color: var(--orange);
+}
+
+.dangerBanner {
+  background: var(--red-glow);
+  border: 1px solid var(--red);
+  color: var(--red);
+}
+
+.warningBanner span,
+.dangerBanner span {
+  font-size: 1.6rem;
+}
+
+.warningBanner div,
+.dangerBanner div {
+  flex: 1;
+}
+
+.warningBanner strong,
+.dangerBanner strong {
+  display: block;
+}
+
+.warningBanner p,
+.dangerBanner p {
+  margin: 0.1rem 0;
+  color: var(--text-secondary);
+}
+
+.warningBanner button,
+.dangerBanner button {
+  background: var(--bg-primary);
+  border: 1px solid currentColor;
+  color: currentColor;
+  padding: 0.4rem 1.4rem;
+  border-radius: 60px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.warningBanner button:hover,
+.dangerBanner button:hover {
+  background: currentColor;
+  color: var(--bg-primary);
+}
+
+/* ----- content area ----- */
+.content {
+  margin-top: 1rem;
+}
+
+/* ----- stat grid ----- */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.8rem;
+}
+
+.metricCard,
+.financeCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 1.2rem;
+  text-align: center;
+  transition: var(--transition);
+}
+
+.metricCard:hover,
+.financeCard:hover {
+  border-color: var(--gold-soft);
+  transform: translateY(-2px);
+}
+
+.metricCard span,
+.financeCard span {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metricCard strong,
+.financeCard strong {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+  margin: 0.2rem 0;
+}
+
+.metricCard small,
+.financeCard small {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* ----- two column layout ----- */
+.twoColumn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.8rem;
+}
+
+@media (max-width: 700px) {
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ----- management card ----- */
+.managementCard {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  padding: 1.5rem 1.8rem;
+  padding: 1.5rem;
   margin-bottom: 1.5rem;
   transition: var(--transition);
 }
 
-.reportCard:hover {
+.managementCard:hover {
   border-color: var(--border-light);
 }
 
-.reportCard h2 {
+.cardTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+
+.cardTitle div span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cardTitle div h2 {
+  margin: 0.1rem 0 0;
   font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
+}
+
+.cardTitle > span {
+  font-size: 1.6rem;
+}
+
+/* ----- performance grid ----- */
+.performanceGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.performanceGrid div {
+  padding: 0.4rem;
+}
+
+.performanceGrid strong {
+  font-size: 1.8rem;
+  font-weight: 700;
+  display: block;
+}
+
+.performanceGrid span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.green { color: var(--green); }
+.yellow { color: var(--gold); }
+.red { color: var(--red); }
+
+/* ----- board feeling ----- */
+.boardFeeling {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 1.2rem;
 }
 
-.reportCard h2::before {
-  content: "▸";
-  color: var(--gold);
-  font-weight: 400;
+.boardFace {
+  font-size: 2.8rem;
 }
 
-/* ----- stat rows ----- */
-.statRow {
+.boardFeeling strong {
+  display: block;
+  font-size: 1.1rem;
+}
+
+.boardFeeling p {
+  color: var(--text-secondary);
+  margin: 0.2rem 0 0;
+}
+
+/* ----- objectives ----- */
+.objectives {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.objective {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  background: var(--bg-secondary);
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--gold);
+}
+
+.objectiveIcon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.objectiveBody {
+  flex: 1;
+}
+
+.objectiveTop {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
 
-.statRow:last-child {
-  border-bottom: none;
+.objectiveTop strong {
+  font-size: 0.95rem;
 }
 
-.statRow .label {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.statRow .value {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 1rem;
-}
-
-.statRow .value.gold {
-  color: var(--gold);
-}
-.statRow .value.cyan {
-  color: var(--cyan);
-}
-.statRow .value.green {
-  color: var(--green);
-}
-.statRow .value.purple {
-  color: var(--purple);
-}
-.statRow .value.orange {
-  color: var(--orange);
-}
-
-/* ----- source items ----- */
-.sourceItem {
-  padding: 0.9rem 0;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.sourceItem:last-child {
-  border-bottom: none;
-}
-
-.sourceItem h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 0.2rem;
-}
-
-.sourceItem p {
-  color: var(--text-secondary);
-  margin: 0.2rem 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.sourceItem a {
-  color: var(--cyan);
-  text-decoration: none;
-  word-break: break-all;
+.objectiveTop span {
   font-size: 0.85rem;
+  color: var(--text-secondary);
 }
 
-.sourceItem a:hover {
-  text-decoration: underline;
+.objectiveTrack {
+  height: 5px;
+  background: var(--border-color);
+  border-radius: 10px;
+  margin: 0.4rem 0 0.2rem;
+  overflow: hidden;
+}
+
+.objectiveTrack div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--green));
+  transition: width 0.5s ease;
+}
+
+.objectiveBody small {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.empty {
+  text-align: center;
+  padding: 2rem 0;
+  color: var(--text-muted);
+}
+
+.empty span {
+  font-size: 2.4rem;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+/* ----- board room ----- */
+.boardRoom {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 2rem;
+}
+
+.boardRoomHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.bigConfidence {
+  text-align: center;
+  background: var(--bg-secondary);
+  padding: 0.8rem 1.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gold-glow);
+}
+
+.bigConfidence strong {
+  font-size: 2.4rem;
+  font-weight: 800;
   color: var(--gold);
+  display: block;
 }
 
-/* ----- episode breakdown ----- */
-.episodeItem {
+.bigConfidence span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.boardRules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.boardRules div {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.boardRules span {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.boardRules strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.boardRules p {
+  margin: 0.1rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* ----- squad ----- */
+.squadOverview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
   padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+
+.squadOverview div {
+  text-align: center;
+}
+
+.squadOverview strong {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.squadOverview span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.squadToolbar {
+  margin: 1rem 0;
+}
+
+.squadToolbar input {
+  width: 100%;
+  max-width: 320px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 60px;
+  padding: 0.6rem 1.2rem;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: var(--transition);
+}
+
+.squadToolbar input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 20px var(--gold-glow);
+}
+
+.playerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.playerCard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  transition: var(--transition);
+}
+
+.playerCard:hover {
+  border-color: var(--cyan-glow);
+  box-shadow: 0 0 20px var(--cyan-glow);
+}
+
+.playerAvatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  margin: 0 auto 0.6rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.playerAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.playerMain {
+  text-align: center;
+}
+
+.playerMain h3 {
+  font-size: 1rem;
+  margin: 0.1rem 0;
+}
+
+.playerMain span {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.playerMain small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.playerRating {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.2rem;
+  margin: 0.3rem 0;
+}
+
+.playerRating strong {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.playerRating span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.playerDetails {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem 0.6rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.8rem;
+}
+
+.playerDetails span {
+  color: var(--text-muted);
+}
+
+.playerDetails strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ----- finance ----- */
+.financeNotice {
+  display: flex;
+  gap: 1rem;
+  background: var(--bg-secondary);
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--cyan);
+}
+
+.financeNotice span {
+  font-size: 1.8rem;
+}
+
+.financeNotice strong {
+  display: block;
+}
+
+.financeNotice p {
+  margin: 0.1rem 0 0;
+  color: var(--text-secondary);
+}
+
+/* ----- club details ----- */
+.clubDetailsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 700px) {
+  .clubDetailsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.infoList div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.3rem 0;
   border-bottom: 1px solid var(--border-color);
 }
 
-.episodeItem:last-child {
-  border-bottom: none;
+.infoList span {
+  color: var(--text-muted);
 }
 
-.episodeItem h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--gold);
-  margin: 0 0 0.3rem;
+.infoList strong {
+  color: var(--text-primary);
 }
 
-.episodeItem .statRow {
+.facilityGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 1rem;
+}
+
+.facilityGrid div {
+  display: flex;
+  justify-content: space-between;
   padding: 0.2rem 0;
-  border-bottom: none;
-  font-size: 0.9rem;
 }
 
-.episodeItem .statRow .label {
-  font-size: 0.85rem;
+.facilityGrid span {
+  color: var(--text-muted);
+  text-transform: capitalize;
 }
 
-/* ----- status message inline ----- */
-.statusMessage {
-  padding: 0.6rem 1rem;
+.facilityGrid strong {
+  color: var(--text-primary);
+}
+
+/* ----- kits ----- */
+.kitGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.kitCard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem;
+  text-align: center;
+  transition: var(--transition);
+}
+
+.kitCard:hover {
+  border-color: var(--gold-soft);
+}
+
+.kitCard img,
+.kitCard .kitText,
+.kitCard .kitPlaceholder {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
   border-radius: var(--radius-xs);
-  margin: 0.5rem 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.kitCard .kitText {
   font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.statusMessage.warning {
-  background: var(--orange-glow);
-  color: var(--orange);
-  border: 1px solid var(--orange-glow);
+.kitCard strong {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
-.statusMessage.error {
-  background: var(--red-glow);
+/* ----- contract page ----- */
+.contractPage {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 2rem;
+}
+
+.contractPageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.contractStatus {
+  text-align: right;
+}
+
+.contractStatus span {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.contractStatus strong {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.contractGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.8rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.contractGrid div {
+  display: flex;
+  flex-direction: column;
+}
+
+.contractGrid span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.contractGrid strong {
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+.renewalBox {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  background: var(--bg-secondary);
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--gold);
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.renewalBox span {
+  font-size: 1.8rem;
+}
+
+.renewalBox div {
+  flex: 1;
+}
+
+.renewalBox strong {
+  display: block;
+}
+
+.renewalBox p {
+  margin: 0.1rem 0 0;
+  color: var(--text-secondary);
+}
+
+.renewalBox button {
+  background: var(--gold);
+  border: none;
+  color: #0a0a0a;
+  padding: 0.5rem 1.6rem;
+  border-radius: 60px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.renewalBox button:hover {
+  background: #f5a623;
+  transform: scale(1.02);
+}
+
+.leaveButton {
+  background: transparent;
+  border: 1px solid var(--red);
   color: var(--red);
-  border: 1px solid var(--red-glow);
+  padding: 0.7rem 2rem;
+  border-radius: 60px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 1.5rem;
 }
 
-.statusMessage.success {
-  background: var(--green-glow);
-  color: var(--green);
-  border: 1px solid var(--green-glow);
+.leaveButton:hover:not(:disabled) {
+  background: var(--red);
+  color: #0a0a0a;
+  box-shadow: 0 0 30px var(--red-glow);
+}
+
+.leaveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ----- responsive ----- */
@@ -461,98 +1422,124 @@
     padding: 1rem;
   }
 
-  .page h1 {
-    font-size: 1.6rem;
+  .clubHeader {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
   }
 
-  .storyInfoCard {
-    padding: 1.2rem;
+  .clubHeaderLeft {
+    flex-direction: column;
+    text-align: center;
   }
 
-  .reportCard {
-    padding: 1.2rem;
+  .boardConfidence {
+    text-align: center;
   }
 
-  .reportActions {
-    gap: 0.4rem;
+  .managementNav {
+    justify-content: center;
   }
 
-  .reportActions button {
-    padding: 0.4rem 0.9rem;
+  .managementNav button {
+    padding: 0.4rem 0.8rem;
     font-size: 0.8rem;
   }
 
-  .statRow {
-    flex-wrap: wrap;
-    gap: 0.2rem;
+  .statGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 
-  .analyzeBtn {
-    width: 100%;
-    justify-content: center;
+  .playerGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .contractGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .clubGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .selectionHero {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .contractModal {
+    padding: 1.5rem;
   }
 }
 
 @media (max-width: 480px) {
   .page {
-    padding: 0.8rem;
+    padding: 0.6rem;
   }
 
-  .page h1 {
-    font-size: 1.4rem;
+  h1 {
+    font-size: 1.6rem;
   }
 
-  .page h2 {
-    font-size: 1.1rem;
-  }
-
-  .storyInfoCard {
+  .clubHeader {
     padding: 1rem;
   }
 
-  .reportCard {
-    padding: 0.8rem 1rem;
+  .clubHeaderLogo {
+    width: 56px;
+    height: 56px;
+    font-size: 1.8rem;
   }
 
-  .reportActions {
+  .managementNav button {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .managementNav button span {
+    margin-right: 0.1rem;
+  }
+
+  .statGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metricCard strong,
+  .financeCard strong {
+    font-size: 1.2rem;
+  }
+
+  .performanceGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem;
+  }
+
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+
+  .contractTerms {
+    grid-template-columns: 1fr;
+  }
+
+  .clubDetailsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .facilityGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .kitGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .boardRules {
+    grid-template-columns: 1fr;
+  }
+
+  .squadOverview {
     justify-content: center;
-  }
-
-  .reportActions button span {
-    display: none;
-  }
-
-  .selectWrapper select {
-    padding: 0.8rem 1rem;
-    font-size: 0.95rem;
-  }
-
-  .stepsContainer {
-    padding: 0.8rem 1rem;
-  }
-
-  .stepItem {
-    padding: 0.4rem 0;
-  }
-
-  .stepText {
-    font-size: 0.85rem;
-  }
-
-  .statRow .label {
-    font-size: 0.85rem;
-  }
-
-  .statRow .value {
-    font-size: 0.9rem;
-  }
-
-  .sourceItem h3 {
-    font-size: 0.9rem;
-  }
-
-  .episodeItem h3 {
-    font-size: 0.9rem;
   }
 }
 
@@ -574,24 +1561,3 @@
 .page::-webkit-scrollbar-thumb:hover {
   background: var(--gold);
 }
-
-/* ----- utility ----- */
-.mt-1 { margin-top: 0.5rem; }
-.mt-2 { margin-top: 1rem; }
-.mt-3 { margin-top: 1.5rem; }
-.mb-1 { margin-bottom: 0.5rem; }
-.mb-2 { margin-bottom: 1rem; }
-
-.flex { display: flex; }
-.flex-wrap { flex-wrap: wrap; }
-.gap-1 { gap: 0.5rem; }
-.gap-2 { gap: 1rem; }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-
-.text-gold { color: var(--gold); }
-.text-cyan { color: var(--cyan); }
-.text-green { color: var(--green); }
-.text-purple { color: var(--purple); }
-.text-muted { color: var(--text-muted); }
-.text-secondary { color: var(--text-secondary); }
