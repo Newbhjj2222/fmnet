@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
+
 import {
   collection,
   addDoc,
@@ -13,131 +15,111 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../components/firebase";
-import { useAuth } from "../context/AuthContext";
-import toast from "react-hot-toast";
 
 import styles from "./admin.module.css";
 
 const EMPTY_COUNTRY = {
   name: "",
   code: "",
-  continent: "",
 };
 
 const EMPTY_LEAGUE = {
   name: "",
+  country: "",
   countryId: "",
-  countryName: "",
+  season: "",
   level: 1,
-  logo: "",
+  status: "active",
 };
 
 const EMPTY_CLUB = {
   name: "",
   shortName: "",
+  country: "",
   countryId: "",
-  countryName: "",
+  league: "",
   leagueId: "",
-  leagueName: "",
-  city: "",
   stadium: "",
-  stadiumCapacity: "",
-  logo: "",
+  location: "",
   founded: "",
-  manager: "",
+  budget: 0,
   balance: 0,
-
-  homeKit: "",
-  awayKit: "",
-  thirdKit: "",
-
-  primaryColor: "#2563eb",
-  secondaryColor: "#ffffff",
-
-  transferBudget: 0,
-  wageBudget: 0,
-  debt: 0,
-
+  coach: "",
+  homeKit: "#1d4ed8",
+  awayKit: "#ffffff",
+  thirdKit: "#111827",
   status: "active",
+  description: "",
 };
 
 const EMPTY_PLAYER = {
+  name: "",
   firstName: "",
   lastName: "",
-  clubId: "",
-  clubName: "",
+  nationality: "",
   countryId: "",
-  countryName: "",
-  position: "MID",
-  shirtNumber: "",
-  age: "",
+  clubId: "",
+  position: "MF",
+  shirtNumber: 1,
+  age: 18,
   overall: 60,
-  potential: 70,
   marketValue: 0,
-  wage: 0,
-  contractYears: 3,
-  photo: "",
-
-  pace: 60,
-  shooting: 60,
-  passing: 60,
-  dribbling: 60,
-  defending: 50,
-  physical: 60,
-
+  salary: 0,
+  contractUntil: "",
   status: "active",
 };
 
-export default function Admin() {
-  const { user, userData, loading } = useAuth();
+export default function AdminPage({ serverUser }) {
+  const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("overview");
 
   const [countries, setCountries] = useState([]);
   const [leagues, setLeagues] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [players, setPlayers] = useState([]);
 
+  const [loadingData, setLoadingData] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   const [countryForm, setCountryForm] = useState(EMPTY_COUNTRY);
   const [leagueForm, setLeagueForm] = useState(EMPTY_LEAGUE);
   const [clubForm, setClubForm] = useState(EMPTY_CLUB);
   const [playerForm, setPlayerForm] = useState(EMPTY_PLAYER);
 
-  const [editingClub, setEditingClub] = useState(null);
-  const [editingLeague, setEditingLeague] = useState(null);
   const [editingCountry, setEditingCountry] = useState(null);
+  const [editingLeague, setEditingLeague] = useState(null);
+  const [editingClub, setEditingClub] = useState(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedClub, setSelectedClub] = useState(null);
 
-  /*
-   * ---------------------------------------------------------
-   * ADMIN ACCESS
-   * ---------------------------------------------------------
-   */
-
-  const isAdmin =
-    userData?.role === "admin" ||
-    userData?.isAdmin === true ||
-    user?.email === "admin@newtalentsg.com";
-
-  /*
-   * ---------------------------------------------------------
-   * LOAD DATABASE
-   * ---------------------------------------------------------
-   */
+  const [message, setMessage] = useState({
+    type: "",
+    text: "",
+  });
 
   useEffect(() => {
-    if (!loading && user && isAdmin) {
-      loadDatabase();
+    if (!serverUser || serverUser !== "Navio") {
+      router.replace("/login");
+      return;
     }
-  }, [user, loading, isAdmin]);
 
-  async function loadDatabase() {
+    loadAllData();
+  }, [serverUser]);
+
+  const notify = (type, text) => {
+    setMessage({ type, text });
+
+    setTimeout(() => {
+      setMessage({ type: "", text: "" });
+    }, 3500);
+  };
+
+  const loadAllData = async () => {
     try {
-      setIsLoading(true);
+      setLoadingData(true);
 
       const [
         countriesSnap,
@@ -180,273 +162,327 @@ export default function Admin() {
       );
     } catch (error) {
       console.error(error);
-      toast.error("Failed to load football database.");
+      notify("error", "Failed to load Firestore data.");
     } finally {
-      setIsLoading(false);
+      setLoadingData(false);
     }
-  }
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * COUNTRY
-   * ---------------------------------------------------------
-   */
+  /* =========================================================
+     COUNTRIES
+  ========================================================= */
 
-  async function saveCountry(e) {
+  const saveCountry = async (e) => {
     e.preventDefault();
 
     if (!countryForm.name.trim()) {
-      toast.error("Country name is required.");
+      notify("error", "Country name is required.");
       return;
     }
 
     try {
-      setIsSaving(true);
+      setSaving(true);
 
-      const payload = {
+      const data = {
         name: countryForm.name.trim(),
         code: countryForm.code.trim().toUpperCase(),
-        continent: countryForm.continent.trim(),
         updatedAt: serverTimestamp(),
       };
 
       if (editingCountry) {
-        await updateDoc(
-          doc(db, "countries", editingCountry),
-          payload
+        await updateDoc(doc(db, "countries", editingCountry), data);
+
+        setCountries((prev) =>
+          prev.map((item) =>
+            item.id === editingCountry
+              ? { ...item, ...data }
+              : item
+          )
         );
 
-        toast.success("Country updated.");
+        notify("success", "Country updated successfully.");
       } else {
-        await addDoc(collection(db, "countries"), {
-          ...payload,
+        const ref = await addDoc(collection(db, "countries"), {
+          ...data,
           createdAt: serverTimestamp(),
         });
 
-        toast.success("Country added.");
+        setCountries((prev) => [
+          ...prev,
+          {
+            id: ref.id,
+            ...data,
+          },
+        ]);
+
+        notify("success", "Country added successfully.");
       }
 
       setCountryForm(EMPTY_COUNTRY);
       setEditingCountry(null);
-
-      await loadDatabase();
     } catch (error) {
       console.error(error);
-      toast.error("Could not save country.");
+      notify("error", "Could not save country.");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  }
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * LEAGUE
-   * ---------------------------------------------------------
-   */
+  const deleteCountry = async (id) => {
+    if (!window.confirm("Delete this country?")) return;
 
-  async function saveLeague(e) {
+    try {
+      await deleteDoc(doc(db, "countries", id));
+
+      setCountries((prev) =>
+        prev.filter((item) => item.id !== id)
+      );
+
+      notify("success", "Country deleted.");
+    } catch (error) {
+      console.error(error);
+      notify("error", "Could not delete country.");
+    }
+  };
+
+  /* =========================================================
+     LEAGUES
+  ========================================================= */
+
+  const saveLeague = async (e) => {
     e.preventDefault();
 
     if (!leagueForm.name.trim()) {
-      toast.error("League name is required.");
+      notify("error", "League name is required.");
       return;
     }
 
     try {
-      setIsSaving(true);
+      setSaving(true);
 
-      const country = countries.find(
-        (item) => item.id === leagueForm.countryId
-      );
-
-      const payload = {
+      const data = {
         name: leagueForm.name.trim(),
-        countryId: leagueForm.countryId || "",
-        countryName:
-          country?.name || leagueForm.countryName || "",
+        country: leagueForm.country,
+        countryId: leagueForm.countryId,
+        season: leagueForm.season,
         level: Number(leagueForm.level) || 1,
-        logo: leagueForm.logo.trim(),
+        status: leagueForm.status,
         updatedAt: serverTimestamp(),
       };
 
       if (editingLeague) {
-        await updateDoc(
-          doc(db, "leagues", editingLeague),
-          payload
+        await updateDoc(doc(db, "leagues", editingLeague), data);
+
+        setLeagues((prev) =>
+          prev.map((item) =>
+            item.id === editingLeague
+              ? { ...item, ...data }
+              : item
+          )
         );
 
-        toast.success("League updated.");
+        notify("success", "League updated.");
       } else {
-        await addDoc(collection(db, "leagues"), {
-          ...payload,
+        const ref = await addDoc(collection(db, "leagues"), {
+          ...data,
           createdAt: serverTimestamp(),
         });
 
-        toast.success("League added.");
+        setLeagues((prev) => [
+          ...prev,
+          {
+            id: ref.id,
+            ...data,
+          },
+        ]);
+
+        notify("success", "League added.");
       }
 
       setLeagueForm(EMPTY_LEAGUE);
       setEditingLeague(null);
-
-      await loadDatabase();
     } catch (error) {
       console.error(error);
-      toast.error("Could not save league.");
+      notify("error", "Could not save league.");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  }
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * CLUB
-   * ---------------------------------------------------------
-   */
+  const deleteLeague = async (id) => {
+    if (!window.confirm("Delete this league?")) return;
 
-  async function saveClub(e) {
+    try {
+      await deleteDoc(doc(db, "leagues", id));
+
+      setLeagues((prev) =>
+        prev.filter((item) => item.id !== id)
+      );
+
+      notify("success", "League deleted.");
+    } catch (error) {
+      console.error(error);
+      notify("error", "Could not delete league.");
+    }
+  };
+
+  /* =========================================================
+     CLUBS
+  ========================================================= */
+
+  const saveClub = async (e) => {
     e.preventDefault();
 
     if (!clubForm.name.trim()) {
-      toast.error("Club name is required.");
+      notify("error", "Club name is required.");
       return;
     }
 
     try {
-      setIsSaving(true);
+      setSaving(true);
 
-      const country = countries.find(
-        (item) => item.id === clubForm.countryId
-      );
-
-      const league = leagues.find(
-        (item) => item.id === clubForm.leagueId
-      );
-
-      const payload = {
+      const data = {
         name: clubForm.name.trim(),
         shortName: clubForm.shortName.trim(),
-
+        country: clubForm.country,
         countryId: clubForm.countryId,
-        countryName:
-          country?.name || clubForm.countryName || "",
-
+        league: clubForm.league,
         leagueId: clubForm.leagueId,
-        leagueName:
-          league?.name || clubForm.leagueName || "",
 
-        city: clubForm.city.trim(),
+        stadium: clubForm.stadium,
+        location: clubForm.location,
 
-        stadium: clubForm.stadium.trim(),
+        founded: Number(clubForm.founded) || null,
 
-        stadiumCapacity:
-          Number(clubForm.stadiumCapacity) || 0,
+        budget: Number(clubForm.budget) || 0,
+        balance: Number(clubForm.balance) || 0,
 
-        logo: clubForm.logo.trim(),
+        coach: clubForm.coach,
 
-        founded:
-          Number(clubForm.founded) || null,
-
-        manager: clubForm.manager.trim(),
-
-        balance:
-          Number(clubForm.balance) || 0,
-
-        transferBudget:
-          Number(clubForm.transferBudget) || 0,
-
-        wageBudget:
-          Number(clubForm.wageBudget) || 0,
-
-        debt:
-          Number(clubForm.debt) || 0,
-
-        homeKit: clubForm.homeKit.trim(),
-        awayKit: clubForm.awayKit.trim(),
-        thirdKit: clubForm.thirdKit.trim(),
-
-        primaryColor: clubForm.primaryColor,
-        secondaryColor: clubForm.secondaryColor,
+        kits: {
+          home: clubForm.homeKit,
+          away: clubForm.awayKit,
+          third: clubForm.thirdKit,
+        },
 
         status: clubForm.status,
+        description: clubForm.description,
 
         updatedAt: serverTimestamp(),
       };
 
       if (editingClub) {
-        await updateDoc(
-          doc(db, "clubs", editingClub),
-          payload
+        await updateDoc(doc(db, "clubs", editingClub), data);
+
+        setClubs((prev) =>
+          prev.map((item) =>
+            item.id === editingClub
+              ? { ...item, ...data }
+              : item
+          )
         );
 
-        toast.success("Club updated.");
+        notify("success", "Club updated.");
       } else {
-        await addDoc(collection(db, "clubs"), {
-          ...payload,
-
+        const ref = await addDoc(collection(db, "clubs"), {
+          ...data,
           playersCount: 0,
-          trophies: 0,
-          reputation: 50,
-
           createdAt: serverTimestamp(),
         });
 
-        toast.success("Club created.");
+        setClubs((prev) => [
+          ...prev,
+          {
+            id: ref.id,
+            ...data,
+            playersCount: 0,
+          },
+        ]);
+
+        notify("success", "Club added.");
       }
 
       setClubForm(EMPTY_CLUB);
       setEditingClub(null);
-
-      await loadDatabase();
     } catch (error) {
       console.error(error);
-      toast.error("Could not save club.");
+      notify("error", "Could not save club.");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  }
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * PLAYER
-   * ---------------------------------------------------------
-   */
-
-  async function savePlayer(e) {
-    e.preventDefault();
-
+  const deleteClub = async (id) => {
     if (
-      !playerForm.firstName.trim() ||
-      !playerForm.lastName.trim()
+      !window.confirm(
+        "Delete this club? Players connected to it will not automatically be deleted."
+      )
     ) {
-      toast.error("Player name is required.");
       return;
     }
 
     try {
-      setIsSaving(true);
+      await deleteDoc(doc(db, "clubs", id));
 
-      const club = clubs.find(
-        (item) => item.id === playerForm.clubId
+      setClubs((prev) =>
+        prev.filter((item) => item.id !== id)
       );
 
-      const country = countries.find(
-        (item) => item.id === playerForm.countryId
+      notify("success", "Club deleted.");
+    } catch (error) {
+      console.error(error);
+      notify("error", "Could not delete club.");
+    }
+  };
+
+  /* =========================================================
+     PLAYERS
+  ========================================================= */
+
+  const savePlayer = async (e) => {
+    e.preventDefault();
+
+    if (!playerForm.name.trim()) {
+      notify("error", "Player name is required.");
+      return;
+    }
+
+    if (!playerForm.clubId) {
+      notify("error", "Select a club.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const selectedCountry = countries.find(
+        (country) => country.id === playerForm.countryId
       );
 
-      const payload = {
+      const selectedClub = clubs.find(
+        (club) => club.id === playerForm.clubId
+      );
+
+      const data = {
+        name: playerForm.name.trim(),
+
         firstName: playerForm.firstName.trim(),
         lastName: playerForm.lastName.trim(),
 
-        clubId: playerForm.clubId,
-        clubName: club?.name || "",
+        nationality:
+          selectedCountry?.name ||
+          playerForm.nationality ||
+          "",
 
         countryId: playerForm.countryId,
-        countryName: country?.name || "",
+
+        clubId: playerForm.clubId,
+        clubName: selectedClub?.name || "",
 
         position: playerForm.position,
 
         shirtNumber:
-          Number(playerForm.shirtNumber) || 0,
+          Number(playerForm.shirtNumber) || 1,
 
         age:
           Number(playerForm.age) || 18,
@@ -454,28 +490,17 @@ export default function Admin() {
         overall:
           Number(playerForm.overall) || 60,
 
-        potential:
-          Number(playerForm.potential) || 70,
-
         marketValue:
           Number(playerForm.marketValue) || 0,
 
-        wage:
-          Number(playerForm.wage) || 0,
+        salary:
+          Number(playerForm.salary) || 0,
 
-        contractYears:
-          Number(playerForm.contractYears) || 3,
+        contractUntil:
+          playerForm.contractUntil,
 
-        photo: playerForm.photo.trim(),
-
-        pace: Number(playerForm.pace) || 0,
-        shooting: Number(playerForm.shooting) || 0,
-        passing: Number(playerForm.passing) || 0,
-        dribbling: Number(playerForm.dribbling) || 0,
-        defending: Number(playerForm.defending) || 0,
-        physical: Number(playerForm.physical) || 0,
-
-        status: playerForm.status,
+        status:
+          playerForm.status,
 
         updatedAt: serverTimestamp(),
       };
@@ -483,499 +508,437 @@ export default function Admin() {
       if (editingPlayer) {
         await updateDoc(
           doc(db, "players", editingPlayer),
-          payload
+          data
         );
 
-        toast.success("Player updated.");
-      } else {
-        await addDoc(collection(db, "players"), {
-          ...payload,
-          createdAt: serverTimestamp(),
-        });
+        setPlayers((prev) =>
+          prev.map((item) =>
+            item.id === editingPlayer
+              ? { ...item, ...data }
+              : item
+          )
+        );
 
-        toast.success("Player added.");
+        notify("success", "Player updated.");
+      } else {
+        const ref = await addDoc(
+          collection(db, "players"),
+          {
+            ...data,
+            createdAt: serverTimestamp(),
+          }
+        );
+
+        setPlayers((prev) => [
+          ...prev,
+          {
+            id: ref.id,
+            ...data,
+          },
+        ]);
+
+        notify("success", "Player added.");
       }
 
       setPlayerForm(EMPTY_PLAYER);
       setEditingPlayer(null);
-
-      await loadDatabase();
     } catch (error) {
       console.error(error);
-      toast.error("Could not save player.");
+      notify("error", "Could not save player.");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  }
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * DELETE
-   * ---------------------------------------------------------
-   */
-
-  async function removeItem(collectionName, id) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this item?"
-    );
-
-    if (!confirmed) return;
+  const deletePlayer = async (id) => {
+    if (!window.confirm("Delete this player?")) return;
 
     try {
-      await deleteDoc(doc(db, collectionName, id));
+      await deleteDoc(doc(db, "players", id));
 
-      toast.success("Deleted.");
+      setPlayers((prev) =>
+        prev.filter((item) => item.id !== id)
+      );
 
-      await loadDatabase();
+      notify("success", "Player deleted.");
     } catch (error) {
       console.error(error);
-      toast.error("Could not delete item.");
+      notify("error", "Could not delete player.");
     }
-  }
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * EDIT HELPERS
-   * ---------------------------------------------------------
-   */
+  /* =========================================================
+     EDIT HELPERS
+  ========================================================= */
 
-  function editCountry(item) {
+  const editCountry = (item) => {
+    setEditingCountry(item.id);
+
     setCountryForm({
       name: item.name || "",
       code: item.code || "",
-      continent: item.continent || "",
     });
 
-    setEditingCountry(item.id);
     setActiveTab("countries");
-  }
+  };
 
-  function editLeague(item) {
+  const editLeague = (item) => {
+    setEditingLeague(item.id);
+
     setLeagueForm({
       name: item.name || "",
+      country: item.country || "",
       countryId: item.countryId || "",
-      countryName: item.countryName || "",
+      season: item.season || "",
       level: item.level || 1,
-      logo: item.logo || "",
+      status: item.status || "active",
     });
 
-    setEditingLeague(item.id);
     setActiveTab("leagues");
-  }
+  };
 
-  function editClub(item) {
-    setClubForm({
-      ...EMPTY_CLUB,
-      ...item,
-    });
-
+  const editClub = (item) => {
     setEditingClub(item.id);
-    setActiveTab("clubs");
-  }
 
-  function editPlayer(item) {
-    setPlayerForm({
-      ...EMPTY_PLAYER,
-      ...item,
+    setClubForm({
+      name: item.name || "",
+      shortName: item.shortName || "",
+      country: item.country || "",
+      countryId: item.countryId || "",
+      league: item.league || "",
+      leagueId: item.leagueId || "",
+      stadium: item.stadium || "",
+      location: item.location || "",
+      founded: item.founded || "",
+      budget: item.budget || 0,
+      balance: item.balance || 0,
+      coach: item.coach || "",
+      homeKit: item.kits?.home || "#1d4ed8",
+      awayKit: item.kits?.away || "#ffffff",
+      thirdKit: item.kits?.third || "#111827",
+      status: item.status || "active",
+      description: item.description || "",
     });
 
-    setEditingPlayer(item.id);
-    setActiveTab("players");
-  }
+    setActiveTab("clubs");
+  };
 
-  /*
-   * ---------------------------------------------------------
-   * FILTER
-   * ---------------------------------------------------------
-   */
+  const editPlayer = (item) => {
+    setEditingPlayer(item.id);
+
+    setPlayerForm({
+      name: item.name || "",
+      firstName: item.firstName || "",
+      lastName: item.lastName || "",
+      nationality: item.nationality || "",
+      countryId: item.countryId || "",
+      clubId: item.clubId || "",
+      position: item.position || "MF",
+      shirtNumber: item.shirtNumber || 1,
+      age: item.age || 18,
+      overall: item.overall || 60,
+      marketValue: item.marketValue || 0,
+      salary: item.salary || 0,
+      contractUntil: item.contractUntil || "",
+      status: item.status || "active",
+    });
+
+    setActiveTab("players");
+  };
+
+  /* =========================================================
+     FILTERING
+  ========================================================= */
 
   const filteredClubs = useMemo(() => {
-    const value = search.toLowerCase();
+    const term = search.toLowerCase().trim();
 
-    return clubs.filter(
-      (club) =>
-        club.name?.toLowerCase().includes(value) ||
-        club.countryName?.toLowerCase().includes(value) ||
-        club.leagueName?.toLowerCase().includes(value)
+    if (!term) return clubs;
+
+    return clubs.filter((club) =>
+      [
+        club.name,
+        club.shortName,
+        club.country,
+        club.league,
+        club.stadium,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
     );
   }, [clubs, search]);
 
   const filteredPlayers = useMemo(() => {
-    const value = search.toLowerCase();
+    const term = search.toLowerCase().trim();
+
+    if (!term) return players;
 
     return players.filter((player) =>
-      `${player.firstName} ${player.lastName}`
+      [
+        player.name,
+        player.nationality,
+        player.clubName,
+        player.position,
+      ]
+        .filter(Boolean)
+        .join(" ")
         .toLowerCase()
-        .includes(value)
+        .includes(term)
     );
   }, [players, search]);
 
-  /*
-   * ---------------------------------------------------------
-   * ACCESS
-   * ---------------------------------------------------------
-   */
+  const stats = {
+    countries: countries.length,
+    leagues: leagues.length,
+    clubs: clubs.length,
+    players: players.length,
+  };
 
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner} />
-        <p>Checking administrator access...</p>
-      </div>
-    );
+  if (!serverUser || serverUser !== "Navio") {
+    return null;
   }
-
-  if (!user) {
-    return (
-      <div className={styles.accessDenied}>
-        <div className={styles.accessBox}>
-          <span>🔐</span>
-          <h1>Login Required</h1>
-          <p>You must be logged in as an administrator.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className={styles.accessDenied}>
-        <div className={styles.accessBox}>
-          <span>🚫</span>
-          <h1>Access Denied</h1>
-          <p>You do not have administrator permission.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner} />
-        <p>Loading football database...</p>
-      </div>
-    );
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * RENDER
-   * ---------------------------------------------------------
-   */
 
   return (
     <>
       <Head>
-        <title>Football Admin | New Talents Stories</title>
+        <title>Admin Control Center | Virtual Football Manager</title>
+
         <meta
           name="description"
-          content="Football database administration"
+          content="Football Manager administration control center"
         />
       </Head>
 
       <main className={styles.page}>
 
-        {/* SIDEBAR */}
-
-        <aside className={styles.sidebar}>
-
-          <div className={styles.brand}>
-            <div className={styles.brandIcon}>⚽</div>
-
-            <div>
-              <strong>Football Admin</strong>
-              <small>Control Center</small>
+        <header className={styles.header}>
+          <div>
+            <div className={styles.badge}>
+              ADMIN CONTROL CENTER
             </div>
+
+            <h1>Football Database</h1>
+
+            <p>
+              Manage countries, leagues, clubs and players.
+            </p>
           </div>
 
-          <nav className={styles.nav}>
-
-            <button
-              className={activeTab === "dashboard" ? styles.active : ""}
-              onClick={() => setActiveTab("dashboard")}
-            >
-              <span>📊</span>
-              Dashboard
-            </button>
-
-            <button
-              className={activeTab === "countries" ? styles.active : ""}
-              onClick={() => setActiveTab("countries")}
-            >
-              <span>🌍</span>
-              Countries
-            </button>
-
-            <button
-              className={activeTab === "leagues" ? styles.active : ""}
-              onClick={() => setActiveTab("leagues")}
-            >
-              <span>🏆</span>
-              Leagues
-            </button>
-
-            <button
-              className={activeTab === "clubs" ? styles.active : ""}
-              onClick={() => setActiveTab("clubs")}
-            >
-              <span>🏟️</span>
-              Clubs
-            </button>
-
-            <button
-              className={activeTab === "players" ? styles.active : ""}
-              onClick={() => setActiveTab("players")}
-            >
-              <span>👤</span>
-              Players
-            </button>
-
-          </nav>
-
-        </aside>
-
-        {/* MAIN */}
-
-        <section className={styles.content}>
-
-          <header className={styles.topbar}>
-
+          <div className={styles.adminUser}>
+            <span className={styles.adminDot}></span>
             <div>
-              <h1>
-                {activeTab === "dashboard"
-                  ? "Football Database"
-                  : activeTab.charAt(0).toUpperCase() +
-                    activeTab.slice(1)}
-              </h1>
-
-              <p>
-                Manage your football world from one place.
-              </p>
+              <strong>Navio</strong>
+              <small>Administrator</small>
             </div>
+          </div>
+        </header>
 
-            <div className={styles.adminUser}>
-              <div className={styles.avatar}>
-                {(
-                  userData?.displayName ||
-                  user?.email ||
-                  "A"
-                )
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
+        {message.text && (
+          <div
+            className={`${styles.message} ${
+              message.type === "error"
+                ? styles.error
+                : styles.success
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
 
-              <div>
-                <strong>
-                  {userData?.displayName || "Administrator"}
-                </strong>
-                <small>Administrator</small>
-              </div>
-            </div>
+        <section className={styles.statsGrid}>
 
-          </header>
+          <StatCard
+            icon="🌍"
+            label="Countries"
+            value={stats.countries}
+          />
 
-          {/* DASHBOARD */}
+          <StatCard
+            icon="🏆"
+            label="Leagues"
+            value={stats.leagues}
+          />
 
-          {activeTab === "dashboard" && (
-            <section>
+          <StatCard
+            icon="⚽"
+            label="Clubs"
+            value={stats.clubs}
+          />
 
-              <div className={styles.statGrid}>
+          <StatCard
+            icon="👤"
+            label="Players"
+            value={stats.players}
+          />
 
-                <StatCard
-                  icon="🌍"
-                  title="Countries"
-                  value={countries.length}
-                />
+        </section>
 
-                <StatCard
-                  icon="🏆"
-                  title="Leagues"
-                  value={leagues.length}
-                />
+        <nav className={styles.tabs}>
 
-                <StatCard
-                  icon="🏟️"
-                  title="Clubs"
-                  value={clubs.length}
-                />
+          {[
+            ["overview", "Overview"],
+            ["countries", "Countries"],
+            ["leagues", "Leagues"],
+            ["clubs", "Clubs"],
+            ["players", "Players"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              className={
+                activeTab === id
+                  ? styles.activeTab
+                  : ""
+              }
+              onClick={() => {
+                setActiveTab(id);
+                setSearch("");
+              }}
+            >
+              {label}
+            </button>
+          ))}
 
-                <StatCard
-                  icon="👤"
-                  title="Players"
-                  value={players.length}
-                />
+        </nav>
 
-              </div>
+        {loadingData ? (
+          <div className={styles.loading}>
+            <div className={styles.spinner}></div>
+            <p>Loading football database...</p>
+          </div>
+        ) : (
+          <>
 
-              <div className={styles.dashboardGrid}>
+            {/* =================================================
+                OVERVIEW
+            ================================================= */}
 
-                <div className={styles.panel}>
+            {activeTab === "overview" && (
+              <section className={styles.overview}>
 
-                  <div className={styles.panelHeader}>
-                    <div>
-                      <h2>Recent Clubs</h2>
-                      <p>Latest clubs in database</p>
-                    </div>
-
-                    <button
-                      className={styles.smallButton}
-                      onClick={() => setActiveTab("clubs")}
-                    >
-                      Manage
-                    </button>
-                  </div>
-
-                  <div className={styles.clubList}>
-
-                    {clubs.slice(0, 6).map((club) => (
-                      <div
-                        className={styles.clubRow}
-                        key={club.id}
-                      >
-
-                        <div className={styles.clubLogo}>
-                          {club.logo ? (
-                            <img
-                              src={club.logo}
-                              alt=""
-                            />
-                          ) : (
-                            "⚽"
-                          )}
-                        </div>
-
-                        <div>
-                          <strong>{club.name}</strong>
-
-                          <span>
-                            {club.leagueName ||
-                              "No league"}{" "}
-                            •{" "}
-                            {club.countryName ||
-                              "No country"}
-                          </span>
-                        </div>
-
-                      </div>
-                    ))}
-
-                  </div>
-
-                </div>
-
-                <div className={styles.panel}>
-
-                  <div className={styles.panelHeader}>
-                    <div>
-                      <h2>Database Overview</h2>
-                      <p>Football world statistics</p>
-                    </div>
-                  </div>
-
-                  <div className={styles.overview}>
-
-                    <div>
-                      <span>Clubs / League</span>
-                      <strong>
-                        {leagues.length
-                          ? (
-                              clubs.length /
-                              leagues.length
-                            ).toFixed(1)
-                          : "0"}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Players / Club</span>
-                      <strong>
-                        {clubs.length
-                          ? (
-                              players.length /
-                              clubs.length
-                            ).toFixed(1)
-                          : "0"}
-                      </strong>
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </section>
-          )}
-
-          {/* COUNTRIES */}
-
-          {activeTab === "countries" && (
-            <section>
-
-              <div className={styles.formPanel}>
-
-                <div className={styles.panelHeader}>
+                <div className={styles.heroCard}>
                   <div>
-                    <h2>
-                      {editingCountry
-                        ? "Edit Country"
-                        : "Add Country"}
-                    </h2>
-
+                    <span>DATABASE STATUS</span>
+                    <h2>Football World</h2>
                     <p>
-                      Create countries for your football universe.
+                      Your football universe is ready
+                      to be managed.
+                    </p>
+                  </div>
+
+                  <div className={styles.bigBall}>
+                    ⚽
+                  </div>
+                </div>
+
+                <div className={styles.quickGrid}>
+
+                  <button
+                    onClick={() => setActiveTab("countries")}
+                  >
+                    <span>🌍</span>
+                    <strong>Add Country</strong>
+                    <small>
+                      Create a football country
+                    </small>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("leagues")}
+                  >
+                    <span>🏆</span>
+                    <strong>Add League</strong>
+                    <small>
+                      Create a competition
+                    </small>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("clubs")}
+                  >
+                    <span>⚽</span>
+                    <strong>Add Club</strong>
+                    <small>
+                      Create a football club
+                    </small>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("players")}
+                  >
+                    <span>👤</span>
+                    <strong>Add Player</strong>
+                    <small>
+                      Add player to a club
+                    </small>
+                  </button>
+
+                </div>
+
+              </section>
+            )}
+
+            {/* =================================================
+                COUNTRIES
+            ================================================= */}
+
+            {activeTab === "countries" && (
+              <section className={styles.section}>
+
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <h2>Countries</h2>
+                    <p>
+                      Manage countries available in
+                      your football world.
                     </p>
                   </div>
                 </div>
 
-                <form
-                  onSubmit={saveCountry}
-                  className={styles.formGrid}
-                >
+                <div className={styles.contentGrid}>
 
-                  <Input
-                    label="Country Name"
-                    value={countryForm.name}
-                    onChange={(e) =>
-                      setCountryForm({
-                        ...countryForm,
-                        name: e.target.value,
-                      })
-                    }
-                    required
-                  />
+                  <form
+                    className={styles.formCard}
+                    onSubmit={saveCountry}
+                  >
 
-                  <Input
-                    label="Country Code"
-                    placeholder="RW"
-                    value={countryForm.code}
-                    onChange={(e) =>
-                      setCountryForm({
-                        ...countryForm,
-                        code: e.target.value,
-                      })
-                    }
-                  />
+                    <h3>
+                      {editingCountry
+                        ? "Edit Country"
+                        : "Add Country"}
+                    </h3>
 
-                  <Input
-                    label="Continent"
-                    placeholder="Africa"
-                    value={countryForm.continent}
-                    onChange={(e) =>
-                      setCountryForm({
-                        ...countryForm,
-                        continent: e.target.value,
-                      })
-                    }
-                  />
+                    <FormInput
+                      label="Country Name"
+                      value={countryForm.name}
+                      onChange={(e) =>
+                        setCountryForm({
+                          ...countryForm,
+                          name: e.target.value,
+                        })
+                      }
+                      placeholder="Rwanda"
+                    />
 
-                  <div className={styles.formActions}>
+                    <FormInput
+                      label="Country Code"
+                      value={countryForm.code}
+                      onChange={(e) =>
+                        setCountryForm({
+                          ...countryForm,
+                          code: e.target.value,
+                        })
+                      }
+                      placeholder="RW"
+                      maxLength={3}
+                    />
+
                     <button
                       className={styles.primaryButton}
-                      disabled={isSaving}
+                      disabled={saving}
                     >
-                      {isSaving
+                      {saving
                         ? "Saving..."
                         : editingCountry
                         ? "Update Country"
@@ -988,500 +951,292 @@ export default function Admin() {
                         className={styles.cancelButton}
                         onClick={() => {
                           setEditingCountry(null);
-                          setCountryForm(EMPTY_COUNTRY);
+                          setCountryForm(
+                            EMPTY_COUNTRY
+                          );
                         }}
                       >
                         Cancel
                       </button>
                     )}
+
+                  </form>
+
+                  <div className={styles.listCard}>
+
+                    <div className={styles.listHeader}>
+                      <h3>Countries List</h3>
+                      <span>
+                        {countries.length}
+                      </span>
+                    </div>
+
+                    {countries.length === 0 ? (
+                      <EmptyState text="No countries added yet." />
+                    ) : (
+                      <div className={styles.list}>
+
+                        {countries.map((country) => (
+                          <div
+                            className={styles.listItem}
+                            key={country.id}
+                          >
+                            <div className={styles.itemIcon}>
+                              🌍
+                            </div>
+
+                            <div className={styles.itemMain}>
+                              <strong>
+                                {country.name}
+                              </strong>
+                              <small>
+                                {country.code || "--"}
+                              </small>
+                            </div>
+
+                            <div className={styles.itemActions}>
+                              <button
+                                onClick={() =>
+                                  editCountry(country)
+                                }
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                className={styles.danger}
+                                onClick={() =>
+                                  deleteCountry(
+                                    country.id
+                                  )
+                                }
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                      </div>
+                    )}
+
                   </div>
 
-                </form>
+                </div>
+              </section>
+            )}
 
-              </div>
+            {/* =================================================
+                LEAGUES
+            ================================================= */}
 
-              <DataTable
-                title="Countries"
-                items={countries}
-                columns={[
-                  "name",
-                  "code",
-                  "continent",
-                ]}
-                onEdit={editCountry}
-                onDelete={(item) =>
-                  removeItem("countries", item.id)
-                }
-              />
+            {activeTab === "leagues" && (
+              <section className={styles.section}>
 
-            </section>
-          )}
-
-          {/* LEAGUES */}
-
-          {activeTab === "leagues" && (
-            <section>
-
-              <div className={styles.formPanel}>
-
-                <div className={styles.panelHeader}>
+                <div className={styles.sectionHeader}>
                   <div>
-                    <h2>
-                      {editingLeague
-                        ? "Edit League"
-                        : "Add League"}
-                    </h2>
-
+                    <h2>Leagues</h2>
                     <p>
-                      Manage domestic and international leagues.
+                      Create and manage football
+                      competitions.
                     </p>
                   </div>
                 </div>
 
-                <form
-                  onSubmit={saveLeague}
-                  className={styles.formGrid}
-                >
+                <div className={styles.contentGrid}>
 
-                  <Input
-                    label="League Name"
-                    value={leagueForm.name}
-                    onChange={(e) =>
-                      setLeagueForm({
-                        ...leagueForm,
-                        name: e.target.value,
-                      })
-                    }
-                    required
-                  />
+                  <form
+                    className={styles.formCard}
+                    onSubmit={saveLeague}
+                  >
 
-                  <Select
-                    label="Country"
-                    value={leagueForm.countryId}
-                    onChange={(e) =>
-                      setLeagueForm({
-                        ...leagueForm,
-                        countryId: e.target.value,
-                      })
-                    }
-                    options={countries.map((country) => ({
-                      value: country.id,
-                      label: country.name,
-                    }))}
-                  />
+                    <h3>
+                      {editingLeague
+                        ? "Edit League"
+                        : "Add League"}
+                    </h3>
 
-                  <Input
-                    label="League Level"
-                    type="number"
-                    min="1"
-                    value={leagueForm.level}
-                    onChange={(e) =>
-                      setLeagueForm({
-                        ...leagueForm,
-                        level: e.target.value,
-                      })
-                    }
-                  />
+                    <FormInput
+                      label="League Name"
+                      value={leagueForm.name}
+                      onChange={(e) =>
+                        setLeagueForm({
+                          ...leagueForm,
+                          name: e.target.value,
+                        })
+                      }
+                      placeholder="Rwanda Premier League"
+                    />
 
-                  <Input
-                    label="League Logo URL"
-                    value={leagueForm.logo}
-                    onChange={(e) =>
-                      setLeagueForm({
-                        ...leagueForm,
-                        logo: e.target.value,
-                      })
-                    }
-                  />
+                    <FormSelect
+                      label="Country"
+                      value={leagueForm.countryId}
+                      onChange={(e) => {
+                        const country =
+                          countries.find(
+                            (item) =>
+                              item.id ===
+                              e.target.value
+                          );
 
-                  <div className={styles.formActions}>
+                        setLeagueForm({
+                          ...leagueForm,
+                          countryId:
+                            e.target.value,
+                          country:
+                            country?.name || "",
+                        });
+                      }}
+                    >
+                      <option value="">
+                        Select country
+                      </option>
+
+                      {countries.map((country) => (
+                        <option
+                          key={country.id}
+                          value={country.id}
+                        >
+                          {country.name}
+                        </option>
+                      ))}
+                    </FormSelect>
+
+                    <FormInput
+                      label="Season"
+                      value={leagueForm.season}
+                      onChange={(e) =>
+                        setLeagueForm({
+                          ...leagueForm,
+                          season: e.target.value,
+                        })
+                      }
+                      placeholder="2026/27"
+                    />
+
+                    <FormInput
+                      label="Competition Level"
+                      type="number"
+                      value={leagueForm.level}
+                      onChange={(e) =>
+                        setLeagueForm({
+                          ...leagueForm,
+                          level: e.target.value,
+                        })
+                      }
+                      min="1"
+                    />
+
+                    <FormSelect
+                      label="Status"
+                      value={leagueForm.status}
+                      onChange={(e) =>
+                        setLeagueForm({
+                          ...leagueForm,
+                          status: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="active">
+                        Active
+                      </option>
+                      <option value="inactive">
+                        Inactive
+                      </option>
+                    </FormSelect>
 
                     <button
                       className={styles.primaryButton}
-                      disabled={isSaving}
+                      disabled={saving}
                     >
-                      {isSaving
+                      {saving
                         ? "Saving..."
                         : editingLeague
                         ? "Update League"
                         : "Add League"}
                     </button>
 
-                    {editingLeague && (
-                      <button
-                        type="button"
-                        className={styles.cancelButton}
-                        onClick={() => {
-                          setEditingLeague(null);
-                          setLeagueForm(EMPTY_LEAGUE);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    )}
+                  </form>
+
+                  <div className={styles.listCard}>
+
+                    <div className={styles.listHeader}>
+                      <h3>League List</h3>
+                      <span>
+                        {leagues.length}
+                      </span>
+                    </div>
+
+                    <div className={styles.list}>
+
+                      {leagues.map((league) => (
+                        <div
+                          className={styles.listItem}
+                          key={league.id}
+                        >
+                          <div className={styles.itemIcon}>
+                            🏆
+                          </div>
+
+                          <div className={styles.itemMain}>
+                            <strong>
+                              {league.name}
+                            </strong>
+
+                            <small>
+                              {league.country ||
+                                "No country"}{" "}
+                              •{" "}
+                              {league.season ||
+                                "No season"}
+                            </small>
+                          </div>
+
+                          <div className={styles.itemActions}>
+                            <button
+                              onClick={() =>
+                                editLeague(league)
+                              }
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              className={styles.danger}
+                              onClick={() =>
+                                deleteLeague(
+                                  league.id
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                    </div>
 
                   </div>
 
-                </form>
-
-              </div>
-
-              <DataTable
-                title="Leagues"
-                items={leagues}
-                columns={[
-                  "name",
-                  "countryName",
-                  "level",
-                ]}
-                onEdit={editLeague}
-                onDelete={(item) =>
-                  removeItem("leagues", item.id)
-                }
-              />
-
-            </section>
-          )}
-
-          {/* CLUBS */}
-
-          {activeTab === "clubs" && (
-            <section>
-
-              <div className={styles.formPanel}>
-
-                <div className={styles.panelHeader}>
-                  <div>
-                    <h2>
-                      {editingClub
-                        ? "Edit Club"
-                        : "Create Club"}
-                    </h2>
-
-                    <p>
-                      Configure the complete identity and finances
-                      of a football club.
-                    </p>
-                  </div>
                 </div>
 
-                <form
-                  onSubmit={saveClub}
-                  className={styles.largeForm}
-                >
+              </section>
+            )}
 
-                  <FormSection title="Club Identity">
+            {/* =================================================
+                CLUBS
+            ================================================= */}
 
-                    <Input
-                      label="Club Name"
-                      value={clubForm.name}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          name: e.target.value,
-                        })
-                      }
-                      required
-                    />
+            {activeTab === "clubs" && (
+              <section className={styles.section}>
 
-                    <Input
-                      label="Short Name"
-                      placeholder="APR"
-                      value={clubForm.shortName}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          shortName: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Select
-                      label="Country"
-                      value={clubForm.countryId}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          countryId: e.target.value,
-                        })
-                      }
-                      options={countries.map((country) => ({
-                        value: country.id,
-                        label: country.name,
-                      }))}
-                    />
-
-                    <Select
-                      label="League"
-                      value={clubForm.leagueId}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          leagueId: e.target.value,
-                        })
-                      }
-                      options={leagues.map((league) => ({
-                        value: league.id,
-                        label: league.name,
-                      }))}
-                    />
-
-                    <Input
-                      label="City"
-                      value={clubForm.city}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          city: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Founded"
-                      type="number"
-                      value={clubForm.founded}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          founded: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Club Logo URL"
-                      value={clubForm.logo}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          logo: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Manager"
-                      value={clubForm.manager}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          manager: e.target.value,
-                        })
-                      }
-                    />
-
-                  </FormSection>
-
-                  <FormSection title="Stadium">
-
-                    <Input
-                      label="Stadium Name"
-                      value={clubForm.stadium}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          stadium: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Capacity"
-                      type="number"
-                      value={clubForm.stadiumCapacity}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          stadiumCapacity: e.target.value,
-                        })
-                      }
-                    />
-
-                  </FormSection>
-
-                  <FormSection title="Club Finances">
-
-                    <Input
-                      label="Club Balance"
-                      type="number"
-                      value={clubForm.balance}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          balance: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Transfer Budget"
-                      type="number"
-                      value={clubForm.transferBudget}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          transferBudget: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Wage Budget"
-                      type="number"
-                      value={clubForm.wageBudget}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          wageBudget: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Debt"
-                      type="number"
-                      value={clubForm.debt}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          debt: e.target.value,
-                        })
-                      }
-                    />
-
-                  </FormSection>
-
-                  <FormSection title="Kits & Colors">
-
-                    <Input
-                      label="Home Kit URL"
-                      value={clubForm.homeKit}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          homeKit: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Away Kit URL"
-                      value={clubForm.awayKit}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          awayKit: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Third Kit URL"
-                      value={clubForm.thirdKit}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          thirdKit: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Primary Color"
-                      type="color"
-                      value={clubForm.primaryColor}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          primaryColor: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Secondary Color"
-                      type="color"
-                      value={clubForm.secondaryColor}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          secondaryColor: e.target.value,
-                        })
-                      }
-                    />
-
-                  </FormSection>
-
-                  <FormSection title="Status">
-
-                    <Select
-                      label="Club Status"
-                      value={clubForm.status}
-                      onChange={(e) =>
-                        setClubForm({
-                          ...clubForm,
-                          status: e.target.value,
-                        })
-                      }
-                      options={[
-                        {
-                          value: "active",
-                          label: "Active",
-                        },
-                        {
-                          value: "inactive",
-                          label: "Inactive",
-                        },
-                        {
-                          value: "suspended",
-                          label: "Suspended",
-                        },
-                      ]}
-                    />
-
-                  </FormSection>
-
-                  <div className={styles.formActions}>
-
-                    <button
-                      className={styles.primaryButton}
-                      disabled={isSaving}
-                    >
-                      {isSaving
-                        ? "Saving..."
-                        : editingClub
-                        ? "Update Club"
-                        : "Create Club"}
-                    </button>
-
-                    {editingClub && (
-                      <button
-                        type="button"
-                        className={styles.cancelButton}
-                        onClick={() => {
-                          setEditingClub(null);
-                          setClubForm(EMPTY_CLUB);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    )}
-
-                  </div>
-
-                </form>
-
-              </div>
-
-              <div className={styles.listPanel}>
-
-                <div className={styles.panelHeader}>
-
+                <div className={styles.sectionHeader}>
                   <div>
-                    <h2>Clubs Database</h2>
+                    <h2>Clubs</h2>
                     <p>
-                      {clubs.length} clubs registered
+                      Manage clubs, finances,
+                      stadiums and kits.
                     </p>
                   </div>
 
@@ -1493,427 +1248,416 @@ export default function Admin() {
                       setSearch(e.target.value)
                     }
                   />
-
                 </div>
 
-                <div className={styles.clubCards}>
+                <div className={styles.contentGrid}>
 
-                  {filteredClubs.map((club) => (
-                    <div
-                      className={styles.clubCard}
-                      key={club.id}
-                    >
+                  <form
+                    className={styles.formCard}
+                    onSubmit={saveClub}
+                  >
 
-                      <div className={styles.clubCardLogo}>
+                    <h3>
+                      {editingClub
+                        ? "Edit Club"
+                        : "Add Club"}
+                    </h3>
 
-                        {club.logo ? (
-                          <img
-                            src={club.logo}
-                            alt={club.name}
-                          />
-                        ) : (
-                          "⚽"
-                        )}
-
-                      </div>
-
-                      <div className={styles.clubCardInfo}>
-
-                        <h3>{club.name}</h3>
-
-                        <p>
-                          {club.leagueName ||
-                            "No league"}
-                        </p>
-
-                        <span>
-                          💰{" "}
-                          {Number(
-                            club.balance || 0
-                          ).toLocaleString()}{" "}
-                          RWF
-                        </span>
-
-                      </div>
-
-                      <div className={styles.cardActions}>
-
-                        <button
-                          onClick={() => editClub(club)}
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          className={styles.danger}
-                          onClick={() =>
-                            removeItem(
-                              "clubs",
-                              club.id
-                            )
-                          }
-                        >
-                          Delete
-                        </button>
-
-                      </div>
-
-                    </div>
-                  ))}
-
-                </div>
-
-              </div>
-
-            </section>
-          )}
-
-          {/* PLAYERS */}
-
-          {activeTab === "players" && (
-            <section>
-
-              <div className={styles.formPanel}>
-
-                <div className={styles.panelHeader}>
-                  <div>
-                    <h2>
-                      {editingPlayer
-                        ? "Edit Player"
-                        : "Add Player"}
-                    </h2>
-
-                    <p>
-                      Create and manage football players.
-                    </p>
-                  </div>
-                </div>
-
-                <form
-                  onSubmit={savePlayer}
-                  className={styles.largeForm}
-                >
-
-                  <FormSection title="Player Identity">
-
-                    <Input
-                      label="First Name"
-                      value={playerForm.firstName}
+                    <FormInput
+                      label="Club Name"
+                      value={clubForm.name}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          firstName: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          name: e.target.value,
                         })
                       }
-                      required
+                      placeholder="APR FC"
                     />
 
-                    <Input
-                      label="Last Name"
-                      value={playerForm.lastName}
+                    <FormInput
+                      label="Short Name"
+                      value={clubForm.shortName}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          lastName: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          shortName:
+                            e.target.value,
                         })
                       }
-                      required
+                      placeholder="APR"
                     />
 
-                    <Select
-                      label="Club"
-                      value={playerForm.clubId}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          clubId: e.target.value,
-                        })
-                      }
-                      options={clubs.map((club) => ({
-                        value: club.id,
-                        label: club.name,
-                      }))}
-                    />
-
-                    <Select
+                    <FormSelect
                       label="Country"
-                      value={playerForm.countryId}
+                      value={clubForm.countryId}
+                      onChange={(e) => {
+                        const country =
+                          countries.find(
+                            (item) =>
+                              item.id ===
+                              e.target.value
+                          );
+
+                        setClubForm({
+                          ...clubForm,
+                          countryId:
+                            e.target.value,
+                          country:
+                            country?.name || "",
+                        });
+                      }}
+                    >
+                      <option value="">
+                        Select country
+                      </option>
+
+                      {countries.map((country) => (
+                        <option
+                          key={country.id}
+                          value={country.id}
+                        >
+                          {country.name}
+                        </option>
+                      ))}
+                    </FormSelect>
+
+                    <FormSelect
+                      label="League"
+                      value={clubForm.leagueId}
+                      onChange={(e) => {
+                        const league =
+                          leagues.find(
+                            (item) =>
+                              item.id ===
+                              e.target.value
+                          );
+
+                        setClubForm({
+                          ...clubForm,
+                          leagueId:
+                            e.target.value,
+                          league:
+                            league?.name || "",
+                        });
+                      }}
+                    >
+                      <option value="">
+                        Select league
+                      </option>
+
+                      {leagues.map((league) => (
+                        <option
+                          key={league.id}
+                          value={league.id}
+                        >
+                          {league.name}
+                        </option>
+                      ))}
+                    </FormSelect>
+
+                    <FormInput
+                      label="Stadium"
+                      value={clubForm.stadium}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          countryId: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          stadium:
+                            e.target.value,
                         })
                       }
-                      options={countries.map((country) => ({
-                        value: country.id,
-                        label: country.name,
-                      }))}
+                      placeholder="Amahoro Stadium"
                     />
 
-                    <Select
-                      label="Position"
-                      value={playerForm.position}
+                    <FormInput
+                      label="Location"
+                      value={clubForm.location}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          position: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          location:
+                            e.target.value,
                         })
                       }
-                      options={[
-                        {
-                          value: "GK",
-                          label: "Goalkeeper",
-                        },
-                        {
-                          value: "DEF",
-                          label: "Defender",
-                        },
-                        {
-                          value: "MID",
-                          label: "Midfielder",
-                        },
-                        {
-                          value: "ATT",
-                          label: "Attacker",
-                        },
-                      ]}
+                      placeholder="Kigali, Rwanda"
                     />
 
-                    <Input
-                      label="Shirt Number"
+                    <FormInput
+                      label="Founded"
                       type="number"
-                      value={playerForm.shirtNumber}
+                      value={clubForm.founded}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          shirtNumber: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          founded:
+                            e.target.value,
                         })
                       }
+                      placeholder="1993"
                     />
 
-                    <Input
-                      label="Age"
+                    <FormInput
+                      label="Club Budget"
                       type="number"
-                      value={playerForm.age}
+                      value={clubForm.budget}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          age: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          budget:
+                            e.target.value,
                         })
                       }
                     />
 
-                    <Input
-                      label="Photo URL"
-                      value={playerForm.photo}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          photo: e.target.value,
-                        })
-                      }
-                    />
-
-                  </FormSection>
-
-                  <FormSection title="Player Rating">
-
-                    <Input
-                      label="Overall"
+                    <FormInput
+                      label="Current Balance"
                       type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.overall}
+                      value={clubForm.balance}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          overall: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          balance:
+                            e.target.value,
                         })
                       }
                     />
 
-                    <Input
-                      label="Potential"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.potential}
+                    <FormInput
+                      label="Coach"
+                      value={clubForm.coach}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          potential: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          coach:
+                            e.target.value,
                         })
                       }
                     />
 
-                    <Input
-                      label="Market Value"
-                      type="number"
-                      value={playerForm.marketValue}
+                    <div className={styles.formGroup}>
+                      <label>Home Kit</label>
+
+                      <input
+                        type="color"
+                        value={clubForm.homeKit}
+                        onChange={(e) =>
+                          setClubForm({
+                            ...clubForm,
+                            homeKit:
+                              e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label>Away Kit</label>
+
+                      <input
+                        type="color"
+                        value={clubForm.awayKit}
+                        onChange={(e) =>
+                          setClubForm({
+                            ...clubForm,
+                            awayKit:
+                              e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label>Third Kit</label>
+
+                      <input
+                        type="color"
+                        value={clubForm.thirdKit}
+                        onChange={(e) =>
+                          setClubForm({
+                            ...clubForm,
+                            thirdKit:
+                              e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <FormSelect
+                      label="Status"
+                      value={clubForm.status}
                       onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          marketValue: e.target.value,
+                        setClubForm({
+                          ...clubForm,
+                          status: e.target.value,
                         })
                       }
-                    />
+                    >
+                      <option value="active">
+                        Active
+                      </option>
 
-                    <Input
-                      label="Weekly Wage"
-                      type="number"
-                      value={playerForm.wage}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          wage: e.target.value,
-                        })
-                      }
-                    />
+                      <option value="inactive">
+                        Inactive
+                      </option>
+                    </FormSelect>
 
-                    <Input
-                      label="Contract Years"
-                      type="number"
-                      value={playerForm.contractYears}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          contractYears: e.target.value,
-                        })
-                      }
-                    />
+                    <div className={styles.formGroup}>
+                      <label>Description</label>
 
-                  </FormSection>
-
-                  <FormSection title="Attributes">
-
-                    <Input
-                      label="Pace"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.pace}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          pace: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Shooting"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.shooting}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          shooting: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Passing"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.passing}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          passing: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Dribbling"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.dribbling}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          dribbling: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Defending"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.defending}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          defending: e.target.value,
-                        })
-                      }
-                    />
-
-                    <Input
-                      label="Physical"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={playerForm.physical}
-                      onChange={(e) =>
-                        setPlayerForm({
-                          ...playerForm,
-                          physical: e.target.value,
-                        })
-                      }
-                    />
-
-                  </FormSection>
-
-                  <div className={styles.formActions}>
+                      <textarea
+                        value={
+                          clubForm.description
+                        }
+                        onChange={(e) =>
+                          setClubForm({
+                            ...clubForm,
+                            description:
+                              e.target.value,
+                          })
+                        }
+                        placeholder="Club description..."
+                      />
+                    </div>
 
                     <button
                       className={styles.primaryButton}
-                      disabled={isSaving}
+                      disabled={saving}
                     >
-                      {isSaving
+                      {saving
                         ? "Saving..."
-                        : editingPlayer
-                        ? "Update Player"
-                        : "Add Player"}
+                        : editingClub
+                        ? "Update Club"
+                        : "Add Club"}
                     </button>
 
-                    {editingPlayer && (
-                      <button
-                        type="button"
-                        className={styles.cancelButton}
-                        onClick={() => {
-                          setEditingPlayer(null);
-                          setPlayerForm(
-                            EMPTY_PLAYER
-                          );
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    )}
+                  </form>
+
+                  <div className={styles.listCard}>
+
+                    <div className={styles.listHeader}>
+                      <h3>Club Database</h3>
+                      <span>
+                        {filteredClubs.length}
+                      </span>
+                    </div>
+
+                    <div className={styles.clubList}>
+
+                      {filteredClubs.map((club) => (
+                        <div
+                          className={styles.clubItem}
+                          key={club.id}
+                        >
+
+                          <div
+                            className={
+                              styles.clubBadge
+                            }
+                            style={{
+                              background:
+                                club.kits?.home ||
+                                "#1d4ed8",
+                            }}
+                          >
+                            ⚽
+                          </div>
+
+                          <div
+                            className={
+                              styles.itemMain
+                            }
+                          >
+                            <strong>
+                              {club.name}
+                            </strong>
+
+                            <small>
+                              {club.league ||
+                                "No league"}{" "}
+                              •{" "}
+                              {club.country ||
+                                "No country"}
+                            </small>
+
+                            <small>
+                              💰{" "}
+                              {Number(
+                                club.balance || 0
+                              ).toLocaleString()}{" "}
+                              • 👤{" "}
+                              {
+                                players.filter(
+                                  (p) =>
+                                    p.clubId ===
+                                    club.id
+                                ).length
+                              }{" "}
+                              players
+                            </small>
+                          </div>
+
+                          <div
+                            className={
+                              styles.itemActions
+                            }
+                          >
+                            <button
+                              onClick={() => {
+                                setSelectedClub(
+                                  club
+                                );
+                              }}
+                            >
+                              Details
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                editClub(club)
+                              }
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              className={
+                                styles.danger
+                              }
+                              onClick={() =>
+                                deleteClub(
+                                  club.id
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+
+                        </div>
+                      ))}
+
+                    </div>
 
                   </div>
 
-                </form>
+                </div>
 
-              </div>
+              </section>
+            )}
 
-              <div className={styles.listPanel}>
+            {/* =================================================
+                PLAYERS
+            ================================================= */}
 
-                <div className={styles.panelHeader}>
+            {activeTab === "players" && (
+              <section className={styles.section}>
 
+                <div className={styles.sectionHeader}>
                   <div>
-                    <h2>Players Database</h2>
+                    <h2>Players</h2>
                     <p>
-                      {players.length} players registered
+                      Add and manage players
+                      inside clubs.
                     </p>
                   </div>
 
@@ -1925,251 +1669,776 @@ export default function Admin() {
                       setSearch(e.target.value)
                     }
                   />
+                </div>
+
+                <div className={styles.contentGrid}>
+
+                  <form
+                    className={styles.formCard}
+                    onSubmit={savePlayer}
+                  >
+
+                    <h3>
+                      {editingPlayer
+                        ? "Edit Player"
+                        : "Add Player"}
+                    </h3>
+
+                    <FormInput
+                      label="Player Name"
+                      value={playerForm.name}
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          name: e.target.value,
+                        })
+                      }
+                      placeholder="Jean Bosco"
+                    />
+
+                    <div
+                      className={
+                        styles.twoColumns
+                      }
+                    >
+
+                      <FormInput
+                        label="First Name"
+                        value={
+                          playerForm.firstName
+                        }
+                        onChange={(e) =>
+                          setPlayerForm({
+                            ...playerForm,
+                            firstName:
+                              e.target.value,
+                          })
+                        }
+                      />
+
+                      <FormInput
+                        label="Last Name"
+                        value={
+                          playerForm.lastName
+                        }
+                        onChange={(e) =>
+                          setPlayerForm({
+                            ...playerForm,
+                            lastName:
+                              e.target.value,
+                          })
+                        }
+                      />
+
+                    </div>
+
+                    <FormSelect
+                      label="Nationality"
+                      value={
+                        playerForm.countryId
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          countryId:
+                            e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">
+                        Select country
+                      </option>
+
+                      {countries.map((country) => (
+                        <option
+                          key={country.id}
+                          value={country.id}
+                        >
+                          {country.name}
+                        </option>
+                      ))}
+                    </FormSelect>
+
+                    <FormSelect
+                      label="Club"
+                      value={
+                        playerForm.clubId
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          clubId:
+                            e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">
+                        Select club
+                      </option>
+
+                      {clubs.map((club) => (
+                        <option
+                          key={club.id}
+                          value={club.id}
+                        >
+                          {club.name}
+                        </option>
+                      ))}
+                    </FormSelect>
+
+                    <FormSelect
+                      label="Position"
+                      value={
+                        playerForm.position
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          position:
+                            e.target.value,
+                        })
+                      }
+                    >
+                      <option value="GK">
+                        Goalkeeper
+                      </option>
+
+                      <option value="DF">
+                        Defender
+                      </option>
+
+                      <option value="MF">
+                        Midfielder
+                      </option>
+
+                      <option value="FW">
+                        Forward
+                      </option>
+                    </FormSelect>
+
+                    <div
+                      className={
+                        styles.twoColumns
+                      }
+                    >
+
+                      <FormInput
+                        label="Shirt Number"
+                        type="number"
+                        value={
+                          playerForm.shirtNumber
+                        }
+                        onChange={(e) =>
+                          setPlayerForm({
+                            ...playerForm,
+                            shirtNumber:
+                              e.target.value,
+                          })
+                        }
+                        min="1"
+                        max="99"
+                      />
+
+                      <FormInput
+                        label="Age"
+                        type="number"
+                        value={
+                          playerForm.age
+                        }
+                        onChange={(e) =>
+                          setPlayerForm({
+                            ...playerForm,
+                            age:
+                              e.target.value,
+                          })
+                        }
+                        min="15"
+                        max="50"
+                      />
+
+                    </div>
+
+                    <FormInput
+                      label="Overall Rating"
+                      type="number"
+                      value={
+                        playerForm.overall
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          overall:
+                            e.target.value,
+                        })
+                      }
+                      min="1"
+                      max="99"
+                    />
+
+                    <FormInput
+                      label="Market Value"
+                      type="number"
+                      value={
+                        playerForm.marketValue
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          marketValue:
+                            e.target.value,
+                        })
+                      }
+                    />
+
+                    <FormInput
+                      label="Salary"
+                      type="number"
+                      value={
+                        playerForm.salary
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          salary:
+                            e.target.value,
+                        })
+                      }
+                    />
+
+                    <FormInput
+                      label="Contract Until"
+                      type="date"
+                      value={
+                        playerForm.contractUntil
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          contractUntil:
+                            e.target.value,
+                        })
+                      }
+                    />
+
+                    <FormSelect
+                      label="Status"
+                      value={
+                        playerForm.status
+                      }
+                      onChange={(e) =>
+                        setPlayerForm({
+                          ...playerForm,
+                          status:
+                            e.target.value,
+                        })
+                      }
+                    >
+                      <option value="active">
+                        Active
+                      </option>
+
+                      <option value="injured">
+                        Injured
+                      </option>
+
+                      <option value="loan">
+                        On Loan
+                      </option>
+
+                      <option value="retired">
+                        Retired
+                      </option>
+                    </FormSelect>
+
+                    <button
+                      className={styles.primaryButton}
+                      disabled={saving}
+                    >
+                      {saving
+                        ? "Saving..."
+                        : editingPlayer
+                        ? "Update Player"
+                        : "Add Player"}
+                    </button>
+
+                  </form>
+
+                  <div className={styles.listCard}>
+
+                    <div className={styles.listHeader}>
+                      <h3>Players Database</h3>
+                      <span>
+                        {filteredPlayers.length}
+                      </span>
+                    </div>
+
+                    <div className={styles.list}>
+
+                      {filteredPlayers.map(
+                        (player) => (
+                          <div
+                            className={
+                              styles.listItem
+                            }
+                            key={player.id}
+                          >
+
+                            <div
+                              className={
+                                styles.playerAvatar
+                              }
+                            >
+                              {player.name
+                                ?.charAt(0)
+                                ?.toUpperCase() ||
+                                "P"}
+                            </div>
+
+                            <div
+                              className={
+                                styles.itemMain
+                              }
+                            >
+                              <strong>
+                                {player.name}
+                              </strong>
+
+                              <small>
+                                {player.clubName ||
+                                  "Free Agent"}{" "}
+                                •{" "}
+                                {player.position}
+                              </small>
+
+                              <small>
+                                OVR{" "}
+                                {player.overall ||
+                                  0}{" "}
+                                • #
+                                {player.shirtNumber ||
+                                  0}
+                              </small>
+                            </div>
+
+                            <div
+                              className={
+                                styles.itemActions
+                              }
+                            >
+                              <button
+                                onClick={() =>
+                                  editPlayer(
+                                    player
+                                  )
+                                }
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                className={
+                                  styles.danger
+                                }
+                                onClick={() =>
+                                  deletePlayer(
+                                    player.id
+                                  )
+                                }
+                              >
+                                Delete
+                              </button>
+                            </div>
+
+                          </div>
+                        )
+                      )}
+
+                    </div>
+
+                  </div>
 
                 </div>
 
-                <div className={styles.playersList}>
+              </section>
+            )}
 
-                  {filteredPlayers.map((player) => (
-                    <div
-                      className={styles.playerRow}
-                      key={player.id}
-                    >
+          </>
+        )}
 
-                      <div className={styles.playerPhoto}>
+        {/* =====================================================
+            CLUB DETAILS MODAL
+        ===================================================== */}
 
-                        {player.photo ? (
-                          <img
-                            src={player.photo}
-                            alt=""
-                          />
-                        ) : (
-                          "👤"
-                        )}
+        {selectedClub && (
+          <div
+            className={styles.modalOverlay}
+            onClick={() =>
+              setSelectedClub(null)
+            }
+          >
 
-                      </div>
+            <div
+              className={styles.modal}
+              onClick={(e) =>
+                e.stopPropagation()
+              }
+            >
 
-                      <div className={styles.playerInfo}>
+              <button
+                className={styles.closeButton}
+                onClick={() =>
+                  setSelectedClub(null)
+                }
+              >
+                ×
+              </button>
 
-                        <strong>
-                          {player.firstName}{" "}
-                          {player.lastName}
-                        </strong>
+              <div
+                className={styles.modalClubHeader}
+              >
 
-                        <span>
-                          {player.clubName ||
-                            "Free Agent"}{" "}
-                          •{" "}
-                          {player.position}
-                        </span>
+                <div
+                  className={styles.largeClubBadge}
+                  style={{
+                    background:
+                      selectedClub.kits?.home ||
+                      "#1d4ed8",
+                  }}
+                >
+                  ⚽
+                </div>
 
-                      </div>
+                <div>
+                  <span>CLUB PROFILE</span>
 
-                      <div className={styles.rating}>
-                        {player.overall}
-                      </div>
+                  <h2>
+                    {selectedClub.name}
+                  </h2>
 
-                      <div className={styles.cardActions}>
+                  <p>
+                    {selectedClub.league ||
+                      "No League"}{" "}
+                    •{" "}
+                    {selectedClub.country ||
+                      "No Country"}
+                  </p>
+                </div>
 
-                        <button
-                          onClick={() =>
-                            editPlayer(player)
-                          }
-                        >
-                          Edit
-                        </button>
+              </div>
 
-                        <button
-                          className={styles.danger}
-                          onClick={() =>
-                            removeItem(
-                              "players",
-                              player.id
-                            )
-                          }
-                        >
-                          Delete
-                        </button>
+              <div
+                className={styles.detailGrid}
+              >
 
-                      </div>
+                <Detail
+                  label="Stadium"
+                  value={
+                    selectedClub.stadium ||
+                    "Not specified"
+                  }
+                />
 
-                    </div>
-                  ))}
+                <Detail
+                  label="Location"
+                  value={
+                    selectedClub.location ||
+                    "Not specified"
+                  }
+                />
+
+                <Detail
+                  label="Founded"
+                  value={
+                    selectedClub.founded ||
+                    "Unknown"
+                  }
+                />
+
+                <Detail
+                  label="Coach"
+                  value={
+                    selectedClub.coach ||
+                    "No coach"
+                  }
+                />
+
+                <Detail
+                  label="Budget"
+                  value={`$${Number(
+                    selectedClub.budget ||
+                      0
+                  ).toLocaleString()}`}
+                />
+
+                <Detail
+                  label="Balance"
+                  value={`$${Number(
+                    selectedClub.balance ||
+                      0
+                  ).toLocaleString()}`}
+                />
+
+                <Detail
+                  label="Players"
+                  value={
+                    players.filter(
+                      (player) =>
+                        player.clubId ===
+                        selectedClub.id
+                    ).length
+                  }
+                />
+
+                <Detail
+                  label="Status"
+                  value={
+                    selectedClub.status ||
+                    "active"
+                  }
+                />
+
+              </div>
+
+              <div className={styles.kitSection}>
+                <h3>Club Kits</h3>
+
+                <div className={styles.kits}>
+
+                  <Kit
+                    name="Home"
+                    color={
+                      selectedClub.kits
+                        ?.home
+                    }
+                  />
+
+                  <Kit
+                    name="Away"
+                    color={
+                      selectedClub.kits
+                        ?.away
+                    }
+                  />
+
+                  <Kit
+                    name="Third"
+                    color={
+                      selectedClub.kits
+                        ?.third
+                    }
+                  />
 
                 </div>
 
               </div>
 
-            </section>
-          )}
+              <div
+                className={
+                  styles.squadSection
+                }
+              >
+                <h3>Squad</h3>
 
-        </section>
+                {players.filter(
+                  (player) =>
+                    player.clubId ===
+                    selectedClub.id
+                ).length === 0 ? (
+                  <p
+                    className={
+                      styles.emptyText
+                    }
+                  >
+                    No players registered.
+                  </p>
+                ) : (
+                  <div
+                    className={
+                      styles.squadList
+                    }
+                  >
+                    {players
+                      .filter(
+                        (player) =>
+                          player.clubId ===
+                          selectedClub.id
+                      )
+                      .map((player) => (
+                        <div
+                          key={player.id}
+                          className={
+                            styles.squadPlayer
+                          }
+                        >
+                          <span>
+                            #
+                            {player.shirtNumber}
+                          </span>
+
+                          <strong>
+                            {player.name}
+                          </strong>
+
+                          <small>
+                            {player.position}
+                          </small>
+
+                          <b>
+                            {player.overall}
+                          </b>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
 
       </main>
     </>
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| COMPONENTS
-|--------------------------------------------------------------------------
-*/
+/* =============================================================
+   COMPONENTS
+============================================================= */
 
-function StatCard({ icon, title, value }) {
+function StatCard({ icon, label, value }) {
   return (
     <div className={styles.statCard}>
-      <div className={styles.statIcon}>{icon}</div>
+      <span className={styles.statIcon}>
+        {icon}
+      </span>
 
       <div>
-        <span>{title}</span>
+        <small>{label}</small>
         <strong>{value}</strong>
       </div>
     </div>
   );
 }
 
-function Input({
+function FormInput({
   label,
   type = "text",
   value,
   onChange,
   placeholder,
-  required = false,
-  min,
-  max,
+  ...props
 }) {
   return (
-    <label className={styles.field}>
-      <span>{label}</span>
+    <div className={styles.formGroup}>
+      <label>{label}</label>
 
       <input
         type={type}
-        value={value ?? ""}
+        value={value}
         onChange={onChange}
         placeholder={placeholder}
-        required={required}
-        min={min}
-        max={max}
+        {...props}
       />
-    </label>
+    </div>
   );
 }
 
-function Select({
+function FormSelect({
   label,
   value,
   onChange,
-  options = [],
+  children,
 }) {
   return (
-    <label className={styles.field}>
-      <span>{label}</span>
+    <div className={styles.formGroup}>
+      <label>{label}</label>
 
-      <select value={value ?? ""} onChange={onChange}>
-        <option value="">Select {label}</option>
-
-        {options.map((option) => (
-          <option
-            key={option.value}
-            value={option.value}
-          >
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function FormSection({ title, children }) {
-  return (
-    <div className={styles.formSection}>
-
-      <h3>{title}</h3>
-
-      <div className={styles.formGrid}>
+      <select
+        value={value}
+        onChange={onChange}
+      >
         {children}
-      </div>
-
+      </select>
     </div>
   );
 }
 
-function DataTable({
-  title,
-  items,
-  columns,
-  onEdit,
-  onDelete,
-}) {
+function EmptyState({ text }) {
   return (
-    <div className={styles.listPanel}>
-
-      <div className={styles.panelHeader}>
-        <div>
-          <h2>{title}</h2>
-          <p>{items.length} records</p>
-        </div>
-      </div>
-
-      <div className={styles.tableWrapper}>
-
-        <table className={styles.table}>
-
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column}>
-                  {column}
-                </th>
-              ))}
-
-              <th>Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-
-            {items.map((item) => (
-              <tr key={item.id}>
-
-                {columns.map((column) => (
-                  <td key={column}>
-                    {item[column] ?? "-"}
-                  </td>
-                ))}
-
-                <td>
-                  <div className={styles.tableActions}>
-
-                    <button
-                      onClick={() => onEdit(item)}
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      className={styles.danger}
-                      onClick={() =>
-                        onDelete(item)
-                      }
-                    >
-                      Delete
-                    </button>
-
-                  </div>
-                </td>
-
-              </tr>
-            ))}
-
-          </tbody>
-
-        </table>
-
-      </div>
-
+    <div className={styles.empty}>
+      {text}
     </div>
   );
+}
+
+function Detail({ label, value }) {
+  return (
+    <div className={styles.detail}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Kit({ name, color }) {
+  return (
+    <div className={styles.kit}>
+      <div
+        className={styles.kitShirt}
+        style={{
+          background: color || "#333",
+        }}
+      >
+        👕
+      </div>
+
+      <strong>{name}</strong>
+
+      <small>
+        {color || "Not set"}
+      </small>
+    </div>
+  );
+}
+
+/* =============================================================
+   SSR
+============================================================= */
+
+export async function getServerSideProps({
+  req,
+}) {
+  /*
+   * IMPORTANT:
+   *
+   * Iyi page itegereje ko authentication system yawe
+   * ibika username muri cookie yitwa "username".
+   *
+   * Niba AuthContext yawe ikoresha indi cookie,
+   * hindura aha.
+   */
+
+  const username =
+    req.cookies?.username || "";
+
+  /*
+   * Navio ni admin.
+   */
+
+  if (username !== "Navio") {
+    return {
+      redirect: {
+        destination: "/login",
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: {
+      serverUser: username,
+    },
+  };
 }
