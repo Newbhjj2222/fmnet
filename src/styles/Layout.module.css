@@ -1,23 +1,120 @@
+/* =========================================================
+   LAYOUT CONTAINER
+========================================================= */
+
 .container {
   display: flex;
   min-height: 100vh;
   background: var(--background);
+  padding-top: 64px; /* Offset for fixed header */
 }
 
-/* Sidebar */
-.sidebar {
+/* =========================================================
+   FIXED HEADER
+========================================================= */
+
+.fixedHeader {
   position: fixed;
   top: 0;
   left: 0;
+  right: 0;
+  height: 64px;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.menuButton {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: color 0.3s ease;
+  display: none;
+}
+
+.menuButton:hover {
+  color: var(--primary);
+}
+
+.menuIcon {
+  display: block;
+}
+
+.logo {
+  font-size: 1.25rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.userAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: white;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.avatarImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.userNameInHeader {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+
+.sidebar {
+  position: fixed;
+  top: 64px;
+  left: 0;
   bottom: 0;
   width: 260px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
-  z-index: 1000;
+  z-index: 999;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateX(-100%);
 }
@@ -30,12 +127,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.5rem;
+  padding: 1.25rem 1.25rem 0.75rem;
   border-bottom: 1px solid var(--glass-border);
 }
 
 .sidebarLogo {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 800;
   background: linear-gradient(135deg, var(--primary), var(--secondary));
   -webkit-background-clip: text;
@@ -61,7 +158,7 @@
 
 .nav {
   flex: 1;
-  padding: 1rem 0.75rem;
+  padding: 0.75rem 0.75rem;
   overflow-y: auto;
 }
 
@@ -69,14 +166,14 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
   color: var(--text-secondary);
   text-decoration: none;
   transition: all 0.3s ease;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 500;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
 }
 
 .navItem:hover {
@@ -91,13 +188,14 @@
 }
 
 .navIcon {
-  font-size: 1.25rem;
-  width: 1.75rem;
+  font-size: 1.125rem;
+  width: 1.5rem;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .sidebarFooter {
-  padding: 1rem 0.75rem;
+  padding: 0.75rem 0.75rem;
   border-top: 1px solid var(--glass-border);
 }
 
@@ -108,7 +206,7 @@
 }
 
 .userName {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
   padding: 0 0.5rem;
@@ -136,86 +234,20 @@
   transform: scale(1.02);
 }
 
-/* Mobile Header */
-.mobileHeader {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 64px;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--glass-border);
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 1rem;
-  z-index: 999;
-}
+/* =========================================================
+   OVERLAY
+========================================================= */
 
-.menuButton {
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  transition: color 0.3s ease;
-}
-
-.menuButton:hover {
-  color: var(--primary);
-}
-
-.menuIcon {
-  display: block;
-}
-
-.logo {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.userAvatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: white;
-  overflow: hidden;
-}
-
-.avatarImage {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* Overlay */
 .overlay {
   position: fixed;
-  top: 0;
+  top: 64px;
   left: 0;
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 999;
+  z-index: 998;
   animation: fadeIn 0.3s ease-out;
 }
 
@@ -228,43 +260,48 @@
   }
 }
 
-/* Main Content */
+/* =========================================================
+   MAIN CONTENT
+========================================================= */
+
 .main {
   flex: 1;
   margin-left: 0;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
 }
 
 .content {
   padding: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
-  margin-top: 64px;
 }
 
-/* Desktop Styles */
+/* =========================================================
+   DESKTOP STYLES (1024px and above)
+========================================================= */
+
 @media (min-width: 1024px) {
   .sidebar {
     transform: translateX(0);
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    position: fixed;
+    top: 64px;
+    bottom: 0;
   }
 
   .closeButton {
     display: none !important;
   }
 
+  .menuButton {
+    display: none;
+  }
+
   .main {
     margin-left: 260px;
   }
 
-  .mobileHeader {
-    display: none !important;
-  }
-
   .content {
-    margin-top: 0;
     padding: 2rem;
   }
 
@@ -273,7 +310,10 @@
   }
 }
 
-/* Tablet Styles */
+/* =========================================================
+   TABLET STYLES (768px - 1023px)
+========================================================= */
+
 @media (min-width: 768px) and (max-width: 1023px) {
   .sidebar {
     width: 280px;
@@ -283,61 +323,228 @@
     display: block;
   }
 
+  .menuButton {
+    display: block;
+  }
+
   .content {
     padding: 1.5rem;
   }
-}
 
-/* Mobile Styles */
-@media (max-width: 767px) {
-  .mobileHeader {
-    display: flex;
+  .main {
+    margin-left: 0;
   }
 
-  .content {
-    padding: 1rem;
-    margin-top: 64px;
+  .userNameInHeader {
+    max-width: 100px;
+  }
+}
+
+/* =========================================================
+   MOBILE STYLES (767px and below)
+========================================================= */
+
+@media (max-width: 767px) {
+  .fixedHeader {
+    height: 56px;
+    padding: 0 0.75rem;
+  }
+
+  .container {
+    padding-top: 56px;
   }
 
   .sidebar {
+    top: 56px;
     width: 280px;
+  }
+
+  .overlay {
+    top: 56px;
   }
 
   .closeButton {
     display: block;
   }
+
+  .menuButton {
+    display: block;
+  }
+
+  .logo {
+    font-size: 1.1rem;
+  }
+
+  .content {
+    padding: 0.75rem;
+  }
+
+  .userNameInHeader {
+    display: none;
+  }
+
+  .userAvatar {
+    width: 32px;
+    height: 32px;
+  }
 }
 
-/* Landscape Mobile */
-@media (max-height: 600px) and (orientation: landscape) {
+/* =========================================================
+   SMALL MOBILE (480px and below)
+========================================================= */
+
+@media (max-width: 480px) {
+  .fixedHeader {
+    height: 52px;
+    padding: 0 0.6rem;
+  }
+
+  .container {
+    padding-top: 52px;
+  }
+
   .sidebar {
+    top: 52px;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .overlay {
+    top: 52px;
+  }
+
+  .logo {
+    font-size: 1rem;
+  }
+
+  .content {
+    padding: 0.5rem;
+  }
+
+  .menuButton {
+    font-size: 1.25rem;
+  }
+
+  .headerRight {
+    gap: 0.5rem;
+  }
+}
+
+/* =========================================================
+   VERY SMALL (360px and below)
+========================================================= */
+
+@media (max-width: 360px) {
+  .fixedHeader {
+    height: 48px;
+    padding: 0 0.5rem;
+  }
+
+  .container {
+    padding-top: 48px;
+  }
+
+  .sidebar {
+    top: 48px;
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .overlay {
+    top: 48px;
+  }
+
+  .logo {
+    font-size: 0.95rem;
+  }
+
+  .content {
+    padding: 0.4rem;
+  }
+
+  .userAvatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+}
+
+/* =========================================================
+   LANDSCAPE MOBILE
+========================================================= */
+
+@media (max-height: 600px) and (orientation: landscape) {
+  .fixedHeader {
+    height: 48px;
+    padding: 0 0.75rem;
+  }
+
+  .container {
+    padding-top: 48px;
+  }
+
+  .sidebar {
+    top: 48px;
     padding-top: 0;
   }
 
   .sidebarHeader {
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
   }
 
   .nav {
-    padding: 0.5rem;
+    padding: 0.4rem 0.5rem;
   }
 
   .navItem {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8125rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    border-radius: 7px;
+  }
+
+  .navIcon {
+    font-size: 1rem;
+    width: 1.25rem;
   }
 
   .sidebarFooter {
-    padding: 0.5rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .logoutButton {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
   }
 }
 
-/* Print */
+/* =========================================================
+   TALL SCREENS
+========================================================= */
+
+@media (min-height: 800px) {
+  .navItem {
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+  }
+
+  .sidebarFooter {
+    padding: 1rem 0.75rem;
+  }
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
 @media print {
   .sidebar,
-  .mobileHeader,
+  .fixedHeader,
   .overlay {
     display: none !important;
+  }
+
+  .container {
+    padding-top: 0 !important;
   }
 
   .main {
@@ -345,7 +552,20 @@
   }
 
   .content {
-    margin-top: 0 !important;
     padding: 0 !important;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY / MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .main,
+  .overlay,
+  .fixedHeader {
+    transition: none;
+    animation: none;
   }
 }
