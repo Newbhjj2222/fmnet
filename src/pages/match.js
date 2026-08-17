@@ -18,6 +18,7 @@ import {
   onSnapshot,
   query,
   setDoc,
+  updateDoc,
   where,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -39,162 +40,12 @@ import styles from './match.module.css';
 const MATCH_DURATION = 96;
 const FIRST_HALF_END = 48;
 
+const MAX_SQUAD_SIZE = 25;
 const PLAYERS_ON_PITCH = 11;
 const MAX_SUBSTITUTIONS = 5;
 
-const MATCH_TICK_MS = 1000;
+const MATCH_TICK_MS = 900;
 const TICK_SECONDS = 1;
-
-const DEFAULT_STAMINA = 100;
-const MIN_STAMINA = 5;
-
-const FORMATIONS = {
-  '4-4-2': [
-    { x: 8, y: 50, position: 'GK' },
-    { x: 24, y: 18, position: 'DEF' },
-    { x: 24, y: 39, position: 'DEF' },
-    { x: 24, y: 61, position: 'DEF' },
-    { x: 24, y: 82, position: 'DEF' },
-    { x: 45, y: 18, position: 'MID' },
-    { x: 45, y: 39, position: 'MID' },
-    { x: 45, y: 61, position: 'MID' },
-    { x: 45, y: 82, position: 'MID' },
-    { x: 65, y: 38, position: 'ATT' },
-    { x: 65, y: 62, position: 'ATT' },
-  ],
-  '4-3-3': [
-    { x: 8, y: 50, position: 'GK' },
-    { x: 24, y: 18, position: 'DEF' },
-    { x: 24, y: 39, position: 'DEF' },
-    { x: 24, y: 61, position: 'DEF' },
-    { x: 24, y: 82, position: 'DEF' },
-    { x: 45, y: 25, position: 'MID' },
-    { x: 45, y: 50, position: 'MID' },
-    { x: 45, y: 75, position: 'MID' },
-    { x: 67, y: 20, position: 'ATT' },
-    { x: 70, y: 50, position: 'ATT' },
-    { x: 67, y: 80, position: 'ATT' },
-  ],
-  '4-2-3-1': [
-    { x: 8, y: 50, position: 'GK' },
-    { x: 24, y: 18, position: 'DEF' },
-    { x: 24, y: 39, position: 'DEF' },
-    { x: 24, y: 61, position: 'DEF' },
-    { x: 24, y: 82, position: 'DEF' },
-    { x: 40, y: 35, position: 'MID' },
-    { x: 40, y: 65, position: 'MID' },
-    { x: 58, y: 20, position: 'MID' },
-    { x: 62, y: 50, position: 'MID' },
-    { x: 58, y: 80, position: 'MID' },
-    { x: 73, y: 50, position: 'ATT' },
-  ],
-  '3-5-2': [
-    { x: 8, y: 50, position: 'GK' },
-    { x: 24, y: 25, position: 'DEF' },
-    { x: 24, y: 50, position: 'DEF' },
-    { x: 24, y: 75, position: 'DEF' },
-    { x: 43, y: 12, position: 'MID' },
-    { x: 43, y: 32, position: 'MID' },
-    { x: 43, y: 50, position: 'MID' },
-    { x: 43, y: 68, position: 'MID' },
-    { x: 43, y: 88, position: 'MID' },
-    { x: 67, y: 38, position: 'ATT' },
-    { x: 67, y: 62, position: 'ATT' },
-  ],
-  '5-3-2': [
-    { x: 8, y: 50, position: 'GK' },
-    { x: 22, y: 12, position: 'DEF' },
-    { x: 22, y: 31, position: 'DEF' },
-    { x: 22, y: 50, position: 'DEF' },
-    { x: 22, y: 69, position: 'DEF' },
-    { x: 22, y: 88, position: 'DEF' },
-    { x: 44, y: 25, position: 'MID' },
-    { x: 44, y: 50, position: 'MID' },
-    { x: 44, y: 75, position: 'MID' },
-    { x: 67, y: 38, position: 'ATT' },
-    { x: 67, y: 62, position: 'ATT' },
-  ],
-};
-
-const TACTICS = {
-  balanced: {
-    label: 'Balanced',
-    description: 'Balanced attack and defence',
-    staminaDrain: 1,
-    attackBonus: 0,
-    defenceBonus: 0,
-    possessionBonus: 0,
-  },
-  defensive: {
-    label: 'Defensive',
-    description: 'Protect the goal and stay compact',
-    staminaDrain: 0.75,
-    attackBonus: -2,
-    defenceBonus: 6,
-    possessionBonus: -2,
-  },
-  attacking: {
-    label: 'Attacking',
-    description: 'Push more players forward',
-    staminaDrain: 1.3,
-    attackBonus: 6,
-    defenceBonus: -3,
-    possessionBonus: 2,
-  },
-  'tiki-taka': {
-    label: 'Tiki-Taka',
-    description: 'Short passes and possession',
-    staminaDrain: 1.05,
-    attackBonus: 3,
-    defenceBonus: 1,
-    possessionBonus: 8,
-  },
-  counter: {
-    label: 'Counter Attack',
-    description: 'Absorb pressure and attack quickly',
-    staminaDrain: 1.1,
-    attackBonus: 7,
-    defenceBonus: 3,
-    possessionBonus: -6,
-  },
-  'wing-play': {
-    label: 'Wing Play',
-    description: 'Attack through the wings',
-    staminaDrain: 1.15,
-    attackBonus: 5,
-    defenceBonus: -1,
-    possessionBonus: 1,
-  },
-  'long-ball': {
-    label: 'Long Ball',
-    description: 'Use direct balls behind the defence',
-    staminaDrain: 0.9,
-    attackBonus: 4,
-    defenceBonus: 1,
-    possessionBonus: -5,
-  },
-  gegenpress: {
-    label: 'Gegenpress',
-    description: 'Immediate pressure after losing possession',
-    staminaDrain: 1.55,
-    attackBonus: 5,
-    defenceBonus: 5,
-    possessionBonus: 3,
-  },
-};
-
-const EVENT_TYPES = {
-  GOAL: 'goal',
-  YELLOW: 'yellow',
-  RED: 'red',
-  FOUL: 'foul',
-  CORNER: 'corner',
-  OFFSIDE: 'offside',
-  SAVE: 'save',
-  SHOT: 'shot',
-  SUBSTITUTION: 'substitution',
-  INJURY: 'injury',
-};
 
 /* =========================================================
    SAFE HELPERS
@@ -207,6 +58,43 @@ function safeNumber(value, fallback = 0) {
 
 function normalize(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function getPlayerName(player) {
+  return (
+    player?.name ||
+    player?.fullName ||
+    `${player?.firstName || ''} ${player?.lastName || ''}`.trim() ||
+    'Unknown Player'
+  );
+}
+
+function getPlayerPosition(player) {
+  return (
+    player?.position ||
+    player?.primaryPosition ||
+    player?.role ||
+    'MID'
+  );
+}
+
+function getPlayerOverall(player) {
+  return safeNumber(
+    player?.overall ??
+      player?.rating ??
+      player?.overallRating,
+    60,
+  );
+}
+
+function getPlayerPhoto(player) {
+  return (
+    player?.photo ||
+    player?.photoUrl ||
+    player?.image ||
+    player?.avatar ||
+    null
+  );
 }
 
 function clamp(value, min, max) {
@@ -222,73 +110,12 @@ function randomBetweenSafe(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function distanceBetween(a, b) {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+}
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
-}
-
-function getPlayerId(player) {
-  return player?.id || player?.playerId || player?.uid || null;
-}
-
-function getPlayerName(player) {
-  return (
-    player?.name ||
-    player?.fullName ||
-    `${player?.firstName || ''} ${player?.lastName || ''}`.trim() ||
-    'Unknown Player'
-  );
-}
-
-function getPlayerPosition(player) {
-  return player?.position || player?.primaryPosition || player?.role || 'MID';
-}
-
-function getPlayerOverall(player) {
-  return safeNumber(player?.overall ?? player?.rating ?? player?.overallRating, 60);
-}
-
-function getPlayerPhoto(player) {
-  return player?.photo || player?.photoUrl || player?.image || player?.avatar || null;
-}
-
-function getPlayerStamina(player) {
-  return clamp(
-    safeNumber(player?.stamina ?? player?.fitness ?? player?.energy ?? DEFAULT_STAMINA, DEFAULT_STAMINA),
-    0,
-    100,
-  );
-}
-
-function getLivePlayerRating(player) {
-  const overall = getPlayerOverall(player);
-  const stamina = getPlayerStamina(player);
-
-  let penalty = 0;
-  if (stamina < 20) penalty = 12;
-  else if (stamina < 35) penalty = 8;
-  else if (stamina < 50) penalty = 5;
-  else if (stamina < 70) penalty = 2;
-
-  return Math.max(1, Math.round(overall - penalty));
-}
-
-function normalizePosition(position) {
-  const value = normalize(position);
-
-  if (value.includes('goal') || value === 'gk' || value === 'keeper') return 'GK';
-  if (value.includes('def') || value === 'cb' || value === 'lb' || value === 'rb') return 'DEF';
-  if (value.includes('mid') || value === 'cm' || value === 'dm' || value === 'am') return 'MID';
-  if (
-    value.includes('attack') ||
-    value.includes('forward') ||
-    value.includes('striker') ||
-    value === 'st' ||
-    value === 'cf' ||
-    value === 'lw' ||
-    value === 'rw'
-  )
-    return 'ATT';
-  return 'MID';
 }
 
 /* =========================================================
@@ -307,41 +134,262 @@ function getClubPrimaryColor(club) {
   return club?.primaryColor || club?.colors?.primary || club?.color || '#2563eb';
 }
 
-function getClubStadium(club) {
-  return club?.stadium || club?.stadiumName || club?.homeGround || club?.venue || 'Main Stadium';
+function getClubSecondaryColor(club) {
+  return club?.secondaryColor || club?.colors?.secondary || '#ffffff';
 }
+
+function getClubStadium(club) {
+  return (
+    club?.stadium ||
+    club?.stadiumName ||
+    club?.homeGround ||
+    club?.venue ||
+    'Main Stadium'
+  );
+}
+
+/* =========================================================
+   POSITION
+========================================================= */
+
+function normalizePosition(position) {
+  const value = normalize(position);
+
+  if (
+    value.includes('goal') ||
+    value === 'gk' ||
+    value === 'keeper'
+  ) {
+    return 'GK';
+  }
+
+  if (
+    value.includes('def') ||
+    value === 'cb' ||
+    value === 'lb' ||
+    value === 'rb'
+  ) {
+    return 'DEF';
+  }
+
+  if (
+    value.includes('mid') ||
+    value === 'cm' ||
+    value === 'dm' ||
+    value === 'am'
+  ) {
+    return 'MID';
+  }
+
+  if (
+    value.includes('attack') ||
+    value.includes('forward') ||
+    value.includes('striker') ||
+    value === 'st' ||
+    value === 'cf' ||
+    value === 'lw' ||
+    value === 'rw'
+  ) {
+    return 'ATT';
+  }
+
+  return 'MID';
+}
+
+/* =========================================================
+   FORMATIONS
+========================================================= */
+
+const FORMATIONS = {
+  '4-4-2': {
+    name: '4-4-2',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 18 },
+      { x: 23, y: 39 },
+      { x: 23, y: 61 },
+      { x: 23, y: 82 },
+      { x: 42, y: 20 },
+      { x: 42, y: 42 },
+      { x: 42, y: 58 },
+      { x: 42, y: 80 },
+      { x: 62, y: 36 },
+      { x: 62, y: 64 },
+    ],
+  },
+  '4-3-3': {
+    name: '4-3-3',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 18 },
+      { x: 23, y: 39 },
+      { x: 23, y: 61 },
+      { x: 23, y: 82 },
+      { x: 42, y: 30 },
+      { x: 42, y: 50 },
+      { x: 42, y: 70 },
+      { x: 64, y: 20 },
+      { x: 64, y: 50 },
+      { x: 64, y: 80 },
+    ],
+  },
+  '3-5-2': {
+    name: '3-5-2',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 30 },
+      { x: 23, y: 50 },
+      { x: 23, y: 70 },
+      { x: 42, y: 20 },
+      { x: 42, y: 39 },
+      { x: 42, y: 50 },
+      { x: 42, y: 61 },
+      { x: 42, y: 80 },
+      { x: 64, y: 36 },
+      { x: 64, y: 64 },
+    ],
+  },
+  '5-3-2': {
+    name: '5-3-2',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 20, y: 15 },
+      { x: 20, y: 32 },
+      { x: 20, y: 50 },
+      { x: 20, y: 68 },
+      { x: 20, y: 85 },
+      { x: 42, y: 30 },
+      { x: 42, y: 50 },
+      { x: 42, y: 70 },
+      { x: 64, y: 36 },
+      { x: 64, y: 64 },
+    ],
+  },
+  '4-2-3-1': {
+    name: '4-2-3-1',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 18 },
+      { x: 23, y: 39 },
+      { x: 23, y: 61 },
+      { x: 23, y: 82 },
+      { x: 38, y: 35 },
+      { x: 38, y: 65 },
+      { x: 52, y: 20 },
+      { x: 52, y: 50 },
+      { x: 52, y: 80 },
+      { x: 68, y: 50 },
+    ],
+  },
+};
+
+const TACTICS = {
+  'Tiki-Taka': {
+    name: 'Tiki-Taka',
+    description: 'Short passes, high possession',
+    passChance: 0.6,
+    dribbleChance: 0.2,
+    shootChance: 0.2,
+    pressIntensity: 0.7,
+  },
+  'Counter Attack': {
+    name: 'Counter Attack',
+    description: 'Quick transitions, direct play',
+    passChance: 0.3,
+    dribbleChance: 0.4,
+    shootChance: 0.3,
+    pressIntensity: 0.4,
+  },
+  'High Press': {
+    name: 'High Press',
+    description: 'Aggressive pressing, win ball high',
+    passChance: 0.4,
+    dribbleChance: 0.3,
+    shootChance: 0.3,
+    pressIntensity: 0.9,
+  },
+  'Park the Bus': {
+    name: 'Park the Bus',
+    description: 'Defensive, compact shape',
+    passChance: 0.5,
+    dribbleChance: 0.2,
+    shootChance: 0.3,
+    pressIntensity: 0.2,
+  },
+  'Wing Play': {
+    name: 'Wing Play',
+    description: 'Crosses from wide areas',
+    passChance: 0.4,
+    dribbleChance: 0.35,
+    shootChance: 0.25,
+    pressIntensity: 0.5,
+  },
+};
 
 /* =========================================================
    EVENTS
 ========================================================= */
 
+const EVENT_TYPES = {
+  GOAL: 'goal',
+  YELLOW: 'yellow',
+  RED: 'red',
+  FOUL: 'foul',
+  CORNER: 'corner',
+  OFFSIDE: 'offside',
+  SAVE: 'save',
+  SHOT: 'shot',
+  SUBSTITUTION: 'substitution',
+  INJURY: 'injury',
+};
+
 function eventLabel(event) {
   switch (event?.type) {
-    case EVENT_TYPES.GOAL: return 'GOAL';
-    case EVENT_TYPES.YELLOW: return 'YELLOW CARD';
-    case EVENT_TYPES.RED: return 'RED CARD';
-    case EVENT_TYPES.FOUL: return 'FOUL';
-    case EVENT_TYPES.CORNER: return 'CORNER';
-    case EVENT_TYPES.OFFSIDE: return 'OFFSIDE';
-    case EVENT_TYPES.SAVE: return 'SAVE';
-    case EVENT_TYPES.SHOT: return 'SHOT';
-    case EVENT_TYPES.SUBSTITUTION: return 'SUBSTITUTION';
-    case EVENT_TYPES.INJURY: return 'INJURY';
-    default: return 'MATCH EVENT';
+    case EVENT_TYPES.GOAL:
+      return 'GOAL';
+    case EVENT_TYPES.YELLOW:
+      return 'YELLOW CARD';
+    case EVENT_TYPES.RED:
+      return 'RED CARD';
+    case EVENT_TYPES.FOUL:
+      return 'FOUL';
+    case EVENT_TYPES.CORNER:
+      return 'CORNER';
+    case EVENT_TYPES.OFFSIDE:
+      return 'OFFSIDE';
+    case EVENT_TYPES.SAVE:
+      return 'SAVE';
+    case EVENT_TYPES.SHOT:
+      return 'SHOT';
+    case EVENT_TYPES.SUBSTITUTION:
+      return 'SUBSTITUTION';
+    case EVENT_TYPES.INJURY:
+      return 'INJURY';
+    default:
+      return 'MATCH EVENT';
   }
 }
 
 function eventIcon(event) {
   switch (event?.type) {
-    case EVENT_TYPES.GOAL: return '⚽';
-    case EVENT_TYPES.YELLOW: return '🟨';
-    case EVENT_TYPES.RED: return '🟥';
-    case EVENT_TYPES.CORNER: return '🚩';
-    case EVENT_TYPES.OFFSIDE: return '🚩';
-    case EVENT_TYPES.SAVE: return '🧤';
-    case EVENT_TYPES.SUBSTITUTION: return '🔄';
-    case EVENT_TYPES.INJURY: return '🩹';
-    default: return '•';
+    case EVENT_TYPES.GOAL:
+      return '⚽';
+    case EVENT_TYPES.YELLOW:
+      return '🟨';
+    case EVENT_TYPES.RED:
+      return '🟥';
+    case EVENT_TYPES.CORNER:
+      return '🚩';
+    case EVENT_TYPES.OFFSIDE:
+      return '🚩';
+    case EVENT_TYPES.SAVE:
+      return '🧤';
+    case EVENT_TYPES.SUBSTITUTION:
+      return '🔄';
+    case EVENT_TYPES.INJURY:
+      return '🩹';
+    default:
+      return '•';
   }
 }
 
@@ -364,22 +412,21 @@ function createDefaultStats() {
 }
 
 /* =========================================================
-   PREPARE PLAYER
-========================================================= */
-
-function preparePlayer(player) {
-  return {
-    ...player,
-    stamina: getPlayerStamina(player),
-  };
-}
-
-/* =========================================================
    STARTING XI
 ========================================================= */
 
-function selectStartingXI(squad) {
-  const safeSquad = Array.isArray(squad) ? squad.map(preparePlayer) : [];
+function selectStartingXI(squad, formation = '4-4-2') {
+  const safeSquad = Array.isArray(squad) ? [...squad] : [];
+
+  const formationRequirements = {
+    '4-4-2': { GK: 1, DEF: 4, MID: 4, ATT: 2 },
+    '4-3-3': { GK: 1, DEF: 4, MID: 3, ATT: 3 },
+    '3-5-2': { GK: 1, DEF: 3, MID: 5, ATT: 2 },
+    '5-3-2': { GK: 1, DEF: 5, MID: 3, ATT: 2 },
+    '4-2-3-1': { GK: 1, DEF: 4, MID: 5, ATT: 1 },
+  };
+
+  const requirements = formationRequirements[formation] || formationRequirements['4-4-2'];
 
   const goalkeepers = safeSquad.filter(
     (player) => normalizePosition(getPlayerPosition(player)) === 'GK',
@@ -402,21 +449,20 @@ function selectStartingXI(squad) {
       .sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a))
       .slice(0, count)
       .forEach((player) => {
-        const id = String(getPlayerId(player));
-        if (!used.has(id)) {
-          used.add(id);
+        if (!used.has(player.id)) {
+          used.add(player.id);
           result.push(player);
         }
       });
   }
 
-  addBest(goalkeepers, 1);
-  addBest(defenders, 4);
-  addBest(midfielders, 4);
-  addBest(attackers, 2);
+  addBest(goalkeepers, requirements.GK);
+  addBest(defenders, requirements.DEF);
+  addBest(midfielders, requirements.MID);
+  addBest(attackers, requirements.ATT);
 
   const remaining = safeSquad
-    .filter((player) => !used.has(String(getPlayerId(player))))
+    .filter((player) => !used.has(player.id))
     .sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a));
 
   while (result.length < PLAYERS_ON_PITCH && remaining.length) {
@@ -427,44 +473,11 @@ function selectStartingXI(squad) {
 }
 
 /* =========================================================
-   FORMATION BUILDER
+   PLAYER ID
 ========================================================= */
 
-function buildFormationXI(xi, formationName) {
-  const formation = FORMATIONS[formationName] || FORMATIONS['4-4-2'];
-  const players = Array.isArray(xi) ? [...xi] : [];
-  const result = [];
-  const used = new Set();
-
-  formation.forEach((slot) => {
-    const candidates = players
-      .filter(
-        (player) =>
-          !used.has(String(getPlayerId(player))) &&
-          normalizePosition(getPlayerPosition(player)) === slot.position,
-      )
-      .sort((a, b) => getLivePlayerRating(b) - getLivePlayerRating(a));
-
-    const player = candidates[0];
-
-    if (player) {
-      used.add(String(getPlayerId(player)));
-      result.push({ player, slot });
-    }
-  });
-
-  formation.forEach((slot) => {
-    if (result.some((item) => item.slot === slot)) return;
-
-    const player = players.find((item) => !used.has(String(getPlayerId(item))));
-
-    if (player) {
-      used.add(String(getPlayerId(player)));
-      result.push({ player, slot });
-    }
-  });
-
-  return result;
+function playerId(player) {
+  return player?.id || player?.playerId || player?.uid || null;
 }
 
 /* =========================================================
@@ -475,17 +488,29 @@ async function loadClubPlayers(clubId) {
   if (!clubId) return [];
 
   try {
-    const playersQuery = query(collection(db, 'players'), where('clubId', '==', clubId));
+    const playersQuery = query(
+      collection(db, 'players'),
+      where('clubId', '==', clubId),
+    );
+
     const snapshot = await getDocs(playersQuery);
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+
+    return snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }));
   } catch (error) {
     console.error('clubId player query failed:', error);
   }
 
   try {
     const allSnapshot = await getDocs(collection(db, 'players'));
+
     return allSnapshot.docs
-      .map((item) => ({ id: item.id, ...item.data() }))
+      .map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }))
       .filter((player) => {
         const id = player.clubId || player.currentClub || player.teamId;
         return String(id) === String(clubId);
@@ -497,7 +522,7 @@ async function loadClubPlayers(clubId) {
 }
 
 /* =========================================================
-   GENERATED PLAYERS
+   GENERATE PLAYERS IF SQUAD IS INCOMPLETE
 ========================================================= */
 
 function createGeneratedPlayer(club, position, index) {
@@ -506,25 +531,26 @@ function createGeneratedPlayer(club, position, index) {
       .replace(/[^a-zA-Z0-9 ]/g, '')
       .trim() || 'Club';
 
-  const overall = 55 + ((index * 7 + (String(club?.id || '').length || 0)) % 21);
+  const overall = 55 + ((index * 7 + (club.id?.length || 0)) % 21);
 
   return {
-    id: `gen-${club?.id || 'club'}-${position}-${index}`,
+    id: `gen-${club.id}-${position}-${index}`,
     name: `${baseName} Youth ${index + 1}`,
     position,
     overall,
-    stamina: DEFAULT_STAMINA,
     isGenerated: true,
   };
 }
 
 function generateClubPlayers(club, existingPlayers, targetCount = 16) {
-  const players = Array.isArray(existingPlayers) ? existingPlayers.map(preparePlayer) : [];
+  const players = [...existingPlayers];
   const counts = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
 
   players.forEach((player) => {
-    const position = normalizePosition(getPlayerPosition(player));
-    if (counts[position] !== undefined) counts[position] += 1;
+    const pos = normalizePosition(getPlayerPosition(player));
+    if (counts[pos] !== undefined) {
+      counts[pos] += 1;
+    }
   });
 
   const requiredPositions = [
@@ -536,20 +562,24 @@ function generateClubPlayers(club, existingPlayers, targetCount = 16) {
 
   let generatedIndex = 0;
 
-  requiredPositions.forEach(([position, required]) => {
-    while (counts[position] < required) {
-      const player = createGeneratedPlayer(club, position, generatedIndex);
-      players.push(player);
-      counts[position] += 1;
+  requiredPositions.forEach(([pos, requiredCount]) => {
+    while (counts[pos] < requiredCount) {
+      const newPlayer = createGeneratedPlayer(club, pos, generatedIndex);
+      players.push(newPlayer);
+      counts[pos] += 1;
       generatedIndex += 1;
     }
   });
 
-  const extras = ['MID', 'ATT', 'DEF', 'MID', 'ATT', 'DEF', 'MID', 'GK'];
+  const extraPositions = ['MID', 'ATT', 'DEF', 'MID', 'ATT', 'DEF', 'MID', 'GK'];
 
   while (players.length < targetCount) {
-    const position = extras[(players.length - 11) % extras.length] || 'MID';
-    players.push(createGeneratedPlayer(club, position, generatedIndex));
+    const pos =
+      extraPositions[(players.length - 11) % extraPositions.length] || 'MID';
+
+    const newPlayer = createGeneratedPlayer(club, pos, generatedIndex);
+    players.push(newPlayer);
+    counts[pos] = (counts[pos] || 0) + 1;
     generatedIndex += 1;
   }
 
@@ -557,7 +587,7 @@ function generateClubPlayers(club, existingPlayers, targetCount = 16) {
 }
 
 /* =========================================================
-   LOAD MATCH
+   LOAD MATCH FROM DATABASE
 ========================================================= */
 
 async function loadMatchFromDatabase(matchId) {
@@ -567,75 +597,29 @@ async function loadMatchFromDatabase(matchId) {
   const matchSnapshot = await getDoc(matchRef);
 
   if (matchSnapshot.exists()) {
-    return { id: matchSnapshot.id, ...matchSnapshot.data(), _source: 'matches' };
+    return {
+      id: matchSnapshot.id,
+      ...matchSnapshot.data(),
+      _source: 'matches',
+    };
   }
 
   const fixtureRef = doc(db, 'fixtures', matchId);
   const fixtureSnapshot = await getDoc(fixtureRef);
 
   if (fixtureSnapshot.exists()) {
-    return { id: fixtureSnapshot.id, ...fixtureSnapshot.data(), _source: 'fixtures' };
+    return {
+      id: fixtureSnapshot.id,
+      ...fixtureSnapshot.data(),
+      _source: 'fixtures',
+    };
   }
 
   return null;
 }
 
 /* =========================================================
-   3D LABEL
-========================================================= */
-
-function createPlayerLabel(player, color) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 128;
-
-  const context = canvas.getContext('2d');
-  context.clearRect(0, 0, canvas.width, canvas.height);
-
-  context.fillStyle = 'rgba(0,0,0,0.72)';
-  context.beginPath();
-  context.roundRect(5, 5, 502, 118, 18);
-  context.fill();
-
-  context.font = 'bold 30px Arial';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillStyle = '#ffffff';
-
-  const name = getPlayerName(player).slice(0, 18);
-  const rating = getLivePlayerRating(player);
-  const stamina = Math.round(getPlayerStamina(player));
-
-  context.fillText(`${name}  ${rating}`, 256, 43);
-  context.font = 'bold 23px Arial';
-  context.fillStyle = '#ffffff';
-  context.fillText(`STAMINA ${stamina}%`, 256, 88);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    depthTest: false,
-  });
-
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(4.3, 1.08, 1);
-  sprite.userData = {
-    canvas,
-    context,
-    texture,
-    material,
-    playerId: getPlayerId(player),
-    color,
-  };
-
-  return sprite;
-}
-
-/* =========================================================
-   COMPONENT
+   MATCH PAGE
 ========================================================= */
 
 export default function MatchPage() {
@@ -664,9 +648,11 @@ export default function MatchPage() {
   const [homeStats, setHomeStats] = useState(createDefaultStats());
   const [awayStats, setAwayStats] = useState(createDefaultStats());
 
+  const [mentality, setMentality] = useState('balanced');
   const [formation, setFormation] = useState('4-4-2');
-  const [tactic, setTactic] = useState('balanced');
+  const [tactic, setTactic] = useState('Tiki-Taka');
   const [showTactics, setShowTactics] = useState(false);
+  const [showFormation, setShowFormation] = useState(false);
   const [showSubs, setShowSubs] = useState(false);
   const [showEvents, setShowEvents] = useState(true);
 
@@ -676,15 +662,14 @@ export default function MatchPage() {
   const [halfTimeShown, setHalfTimeShown] = useState(false);
   const [userClubId, setUserClubId] = useState(null);
   const [substitutionsUsed, setSubstitutionsUsed] = useState(0);
-  const [selectedPlayerOut, setSelectedPlayerOut] = useState('');
-  const [selectedPlayerIn, setSelectedPlayerIn] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('home');
+  const [selectedSubIn, setSelectedSubIn] = useState('');
+  const [selectedSubOut, setSelectedSubOut] = useState('');
+  const [playerStamina, setPlayerStamina] = useState({ home: {}, away: {} });
 
-  const playerStateRef = useRef({ home: {}, away: {} });
   const timerRef = useRef(null);
   const processingRef = useRef(false);
 
-  // THREE.JS REFS
+  // Three.js refs
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -692,49 +677,23 @@ export default function MatchPage() {
   const controlsRef = useRef(null);
   const ballMeshRef = useRef(null);
   const playerMeshesRef = useRef({ home: [], away: [] });
-  const playerLabelsRef = useRef({ home: [], away: [] });
   const animationFrameRef = useRef(null);
+  
+  // Match simulation state refs
   const ballPossessionRef = useRef(null);
+  const ballTargetRef = useRef(null);
   const playerTargetsRef = useRef({ home: [], away: [] });
+  const staminaRef = useRef({ home: {}, away: {} });
 
-  /* =======================================================
-     DERIVED
-  ======================================================== */
+  const isHomeUser =
+    String(userClubId || '') === String(homeClub?.id || '');
 
-  const isHomeUser = String(userClubId || '') === String(homeClub?.id || '');
-  const isAwayUser = String(userClubId || '') === String(awayClub?.id || '');
+  const isAwayUser =
+    String(userClubId || '') === String(awayClub?.id || '');
+
   const userIsParticipant = isHomeUser || isAwayUser;
+
   const userTeam = isHomeUser ? 'home' : isAwayUser ? 'away' : null;
-
-  const activeTactic = TACTICS[tactic] || TACTICS.balanced;
-
-  /* =======================================================
-     INITIALIZE PLAYER STATE
-  ======================================================== */
-
-  const initializePlayerState = useCallback((team, players) => {
-    const state = {};
-    players.forEach((player) => {
-      const id = String(getPlayerId(player));
-      state[id] = { stamina: getPlayerStamina(player) };
-    });
-    playerStateRef.current[team] = state;
-  }, []);
-
-  /* =======================================================
-     GET CURRENT PLAYER WITH STAMINA
-  ======================================================== */
-
-  const applyPlayerState = useCallback((players, team) => {
-    return players.map((player) => {
-      const id = String(getPlayerId(player));
-      const state = playerStateRef.current[team]?.[id];
-      return {
-        ...player,
-        stamina: state?.stamina ?? getPlayerStamina(player),
-      };
-    });
-  }, []);
 
   /* =======================================================
      LOAD USER CLUB
@@ -754,9 +713,13 @@ export default function MatchPage() {
 
         const data = snapshot.data();
         const career = data.careerData || {};
-        const clubId = career.currentClub || data.currentClub || data.clubId || null;
 
-        if (!cancelled) setUserClubId(clubId);
+        const clubId =
+          career.currentClub || data.currentClub || data.clubId || null;
+
+        if (!cancelled) {
+          setUserClubId(clubId);
+        }
       } catch (error) {
         console.error('User club error:', error);
       }
@@ -770,7 +733,7 @@ export default function MatchPage() {
   }, [user, loading]);
 
   /* =======================================================
-     APPLY DATABASE STATE
+     APPLY MATCH DATABASE STATE
   ======================================================== */
 
   const applyMatchState = useCallback((data) => {
@@ -782,23 +745,44 @@ export default function MatchPage() {
     setAwayScore(safeNumber(result.awayScore ?? data.awayScore, 0));
     setMatchMinute(safeNumber(data.minute ?? data.matchMinute, 0));
     setEvents(Array.isArray(data.events) ? data.events : []);
-    setHomeStats({ ...createDefaultStats(), ...(data.homeStats || {}) });
-    setAwayStats({ ...createDefaultStats(), ...(data.awayStats || {}) });
+
+    setHomeStats({
+      ...createDefaultStats(),
+      ...(data.homeStats || {}),
+    });
+
+    setAwayStats({
+      ...createDefaultStats(),
+      ...(data.awayStats || {}),
+    });
+
     setSubstitutionsUsed(safeNumber(data.substitutionsUsed, 0));
 
-    if (data.formation) setFormation(FORMATIONS[data.formation] ? data.formation : '4-4-2');
-    if (data.tactic) setTactic(TACTICS[data.tactic] ? data.tactic : 'balanced');
+    if (data.mentality) {
+      setMentality(data.mentality);
+    }
+    if (data.formation) {
+      setFormation(data.formation);
+    }
+    if (data.tactic) {
+      setTactic(data.tactic);
+    }
 
     const status = normalize(data.status);
 
-    if (status === 'finished' || status === 'completed') setMatchStatus('finished');
-    else if (status === 'half-time') setMatchStatus('half-time');
-    else if (status === 'live') setMatchStatus('live');
-    else setMatchStatus('ready');
+    if (status === 'finished' || status === 'completed') {
+      setMatchStatus('finished');
+    } else if (status === 'half-time') {
+      setMatchStatus('half-time');
+    } else if (status === 'live') {
+      setMatchStatus('live');
+    } else {
+      setMatchStatus('ready');
+    }
   }, []);
 
   /* =======================================================
-     LOAD MATCH
+     LOAD MATCH + CLUBS + PLAYERS
   ======================================================== */
 
   useEffect(() => {
@@ -859,44 +843,11 @@ export default function MatchPage() {
         const preparedHome = generateClubPlayers(home, rawHomePlayers);
         const preparedAway = generateClubPlayers(away, rawAwayPlayers);
 
-        initializePlayerState('home', preparedHome);
-        initializePlayerState('away', preparedAway);
-
         setHomeSquad(preparedHome);
         setAwaySquad(preparedAway);
 
-        let startingHome = selectStartingXI(preparedHome);
-        let startingAway = selectStartingXI(preparedAway);
-
-        if (Array.isArray(match.homeXI) && match.homeXI.length) {
-          const saved = match.homeXI
-            .map((id) => preparedHome.find((player) => String(getPlayerId(player)) === String(id)))
-            .filter(Boolean);
-
-          if (saved.length === PLAYERS_ON_PITCH) startingHome = saved;
-        }
-
-        if (Array.isArray(match.awayXI) && match.awayXI.length) {
-          const saved = match.awayXI
-            .map((id) => preparedAway.find((player) => String(getPlayerId(player)) === String(id)))
-            .filter(Boolean);
-
-          if (saved.length === PLAYERS_ON_PITCH) startingAway = saved;
-        }
-
-        if (match.playerStamina) {
-          Object.entries(match.playerStamina).forEach(([team, players]) => {
-            if (!playerStateRef.current[team]) playerStateRef.current[team] = {};
-            Object.entries(players || {}).forEach(([id, stamina]) => {
-              playerStateRef.current[team][id] = {
-                stamina: clamp(safeNumber(stamina, 100), 0, 100),
-              };
-            });
-          });
-        }
-
-        startingHome = applyPlayerState(startingHome, 'home');
-        startingAway = applyPlayerState(startingAway, 'away');
+        const startingHome = selectStartingXI(preparedHome, formation);
+        const startingAway = selectStartingXI(preparedAway, formation);
 
         setHomeXI(startingHome);
         setAwayXI(startingAway);
@@ -905,7 +856,8 @@ export default function MatchPage() {
           preparedHome.filter(
             (player) =>
               !startingHome.some(
-                (starter) => String(getPlayerId(starter)) === String(getPlayerId(player)),
+                (starter) =>
+                  String(playerId(starter)) === String(playerId(player)),
               ),
           ),
         );
@@ -914,15 +866,30 @@ export default function MatchPage() {
           preparedAway.filter(
             (player) =>
               !startingAway.some(
-                (starter) => String(getPlayerId(starter)) === String(getPlayerId(player)),
+                (starter) =>
+                  String(playerId(starter)) === String(playerId(player)),
               ),
           ),
         );
+
+        // Initialize stamina
+        const homeStamina = {};
+        const awayStamina = {};
+        startingHome.forEach((player) => {
+          homeStamina[playerId(player)] = 100;
+        });
+        startingAway.forEach((player) => {
+          awayStamina[playerId(player)] = 100;
+        });
+        staminaRef.current = { home: homeStamina, away: awayStamina };
+        setPlayerStamina({ home: homeStamina, away: awayStamina });
       } catch (error) {
         console.error('Match loading error:', error);
         toast.error('Could not load match');
       } finally {
-        if (!cancelled) setLoadingMatch(false);
+        if (!cancelled) {
+          setLoadingMatch(false);
+        }
       }
     }
 
@@ -931,10 +898,337 @@ export default function MatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [loading, user, matchId, router, applyMatchState, initializePlayerState, applyPlayerState]);
+  }, [loading, user, matchId, router, applyMatchState, formation]);
 
   /* =======================================================
-     SAVE MATCH
+     THREE.JS 3D PITCH SETUP
+  ======================================================== */
+
+  useEffect(() => {
+    if (!mountRef.current || loadingMatch) return;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1120);
+    scene.fog = new THREE.Fog(0x0b1120, 30, 80);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      100,
+    );
+    camera.position.set(0, 25, 30);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    mountRef.current.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0, 0);
+    controls.maxPolarAngle = Math.PI / 2.5;
+    controls.minDistance = 15;
+    controls.maxDistance = 50;
+    controls.update();
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(10, 20, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 60;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
+    scene.add(directionalLight);
+
+    const pitchGeometry = new THREE.PlaneGeometry(30, 20);
+    const pitchMaterial = new THREE.MeshStandardMaterial({
+      color: 0x15803d,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const pitch = new THREE.Mesh(pitchGeometry, pitchMaterial);
+    pitch.rotation.x = -Math.PI / 2;
+    pitch.position.y = 0;
+    pitch.receiveShadow = true;
+    scene.add(pitch);
+
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+
+    const borderGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-15, 0.01, -10),
+      new THREE.Vector3(15, 0.01, -10),
+      new THREE.Vector3(15, 0.01, 10),
+      new THREE.Vector3(-15, 0.01, 10),
+      new THREE.Vector3(-15, 0.01, -10),
+    ]);
+    const borderLine = new THREE.Line(borderGeometry, lineMaterial);
+    scene.add(borderLine);
+
+    const centerLineGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.01, -10),
+      new THREE.Vector3(0, 0.01, 10),
+    ]);
+    const centerLine = new THREE.Line(centerLineGeometry, lineMaterial);
+    scene.add(centerLine);
+
+    const circleGeometry = new THREE.RingGeometry(3, 3.05, 64);
+    const circleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+    });
+    const centerCircle = new THREE.Mesh(circleGeometry, circleMaterial);
+    centerCircle.rotation.x = -Math.PI / 2;
+    centerCircle.position.y = 0.02;
+    scene.add(centerCircle);
+
+    const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+
+    const leftGoal = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.15, 6),
+      goalMaterial,
+    );
+    leftGoal.position.set(-15, 0.08, 0);
+    scene.add(leftGoal);
+
+    const rightGoal = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.15, 6),
+      goalMaterial,
+    );
+    rightGoal.position.set(15, 0.08, 0);
+    scene.add(rightGoal);
+
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 32, 32),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.3,
+        metalness: 0.1,
+      }),
+    );
+    ball.position.set(0, 0.15, 0);
+    ball.castShadow = true;
+    scene.add(ball);
+    ballMeshRef.current = ball;
+
+    const createPlayer = (x, z, color, index) => {
+      const group = new THREE.Group();
+
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.35, 0.6, 16),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.5 }),
+      );
+      body.position.y = 0.3;
+      group.add(body);
+
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffcc99 }),
+      );
+      head.position.y = 0.75;
+      group.add(head);
+
+      group.position.set(x, 0, z);
+      group.castShadow = true;
+      scene.add(group);
+      return group;
+    };
+
+    const formationData = FORMATIONS[formation] || FORMATIONS['4-4-2'];
+    const formationPositions = formationData.positions;
+
+    playerMeshesRef.current.home = formationPositions.map((pos, index) => {
+      const x = ((pos.x - 50) / 50) * 15;
+      const z = ((pos.y - 50) / 50) * 10;
+      return createPlayer(x, z, 0x3b82f6, index);
+    });
+
+    playerMeshesRef.current.away = formationPositions.map((pos, index) => {
+      const x = ((50 - pos.x) / 50) * 15;
+      const z = ((50 - pos.y) / 50) * 10;
+      return createPlayer(x, z, 0xef4444, index);
+    });
+
+    playerTargetsRef.current.home = playerMeshesRef.current.home.map((player) => ({
+      x: player.position.x,
+      z: player.position.z,
+    }));
+
+    playerTargetsRef.current.away = playerMeshesRef.current.away.map((player) => ({
+      x: player.position.x,
+      z: player.position.z,
+    }));
+
+    const animate = () => {
+      animationFrameRef.current = requestAnimationFrame(animate);
+
+      playerMeshesRef.current.home.forEach((player, index) => {
+        const target = playerTargetsRef.current.home[index];
+        if (target) {
+          player.position.x = lerp(player.position.x, target.x, 0.1);
+          player.position.z = lerp(player.position.z, target.z, 0.1);
+        }
+      });
+
+      playerMeshesRef.current.away.forEach((player, index) => {
+        const target = playerTargetsRef.current.away[index];
+        if (target) {
+          player.position.x = lerp(player.position.x, target.x, 0.1);
+          player.position.z = lerp(player.position.z, target.z, 0.1);
+        }
+      });
+
+      if (ballPossessionRef.current && ballMeshRef.current) {
+        const { team, playerIndex } = ballPossessionRef.current;
+        const players = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+        const player = players[playerIndex];
+
+        if (player) {
+          ballMeshRef.current.position.x = player.position.x;
+          ballMeshRef.current.position.z = player.position.z;
+          ballMeshRef.current.position.y = 0.15;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+    rendererRef.current = renderer;
+    controlsRef.current = controls;
+
+    const handleResize = () => {
+      if (!mountRef.current || !camera || !renderer) return;
+      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+      }
+      if (mountRef.current && renderer) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+    };
+  }, [loadingMatch, formation]);
+
+  /* =======================================================
+     SIMULATE PLAYER MOVEMENT
+  ======================================================== */
+
+  const simulatePlayerMovement = useCallback(() => {
+    if (!ballPossessionRef.current) {
+      const team = Math.random() < 0.5 ? 'home' : 'away';
+      const playerIndex = Math.floor(Math.random() * 11);
+      ballPossessionRef.current = { team, playerIndex };
+      return;
+    }
+
+    const { team, playerIndex } = ballPossessionRef.current;
+    const players = team === 'home' ? homeXI : awayXI;
+    const opposingTeam = team === 'home' ? 'away' : 'home';
+
+    const playerMeshes = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+    const opposingMeshes = opposingTeam === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+
+    const currentPlayer = playerMeshes[playerIndex];
+    if (!currentPlayer) return;
+
+    const tacticData = TACTICS[tactic] || TACTICS['Tiki-Taka'];
+
+    const random = Math.random();
+
+    if (random < tacticData.passChance) {
+      const teammateIndex = Math.floor(Math.random() * 11);
+      if (teammateIndex !== playerIndex) {
+        const teammate = playerMeshes[teammateIndex];
+        if (teammate) {
+          ballPossessionRef.current = { team, playerIndex: teammateIndex };
+          playerTargetsRef.current[team][playerIndex] = {
+            x: teammate.position.x,
+            z: teammate.position.z,
+          };
+          return;
+        }
+      }
+    }
+
+    const goalX = team === 'home' ? 14 : -14;
+    const distanceToGoal = Math.abs(currentPlayer.position.x - goalX);
+
+    if (random < tacticData.shootChance && distanceToGoal < 10) {
+      const goalZ = randomBetweenSafe(-2, 2);
+      ballTargetRef.current = { x: goalX, z: goalZ };
+
+      const saveChance = 0.3;
+      if (Math.random() > saveChance) {
+        if (team === 'home') {
+          setHomeScore((prev) => prev + 1);
+        } else {
+          setAwayScore((prev) => prev + 1);
+        }
+        ballPossessionRef.current = null;
+      } else {
+        ballPossessionRef.current = { team: opposingTeam, playerIndex: 0 };
+      }
+      return;
+    }
+
+    const direction = team === 'home' ? 1 : -1;
+    const newX = clamp(currentPlayer.position.x + direction * randomBetweenSafe(1, 3), -14, 14);
+    const newZ = clamp(currentPlayer.position.z + randomBetweenSafe(-2, 2), -9, 9);
+
+    playerTargetsRef.current[team][playerIndex] = { x: newX, z: newZ };
+    ballTargetRef.current = { x: newX, z: newZ };
+
+    opposingMeshes.forEach((opponent, index) => {
+      const targetX = currentPlayer.position.x + (Math.random() - 0.5) * 2;
+      const targetZ = currentPlayer.position.z + (Math.random() - 0.5) * 2;
+      playerTargetsRef.current[opposingTeam][index] = { x: targetX, z: targetZ };
+    });
+
+    if (Math.random() < 0.05) {
+      const opponentIndex = Math.floor(Math.random() * 11);
+      ballPossessionRef.current = { team: opposingTeam, playerIndex: opponentIndex };
+    }
+
+    // Update stamina
+    const staminaHome = staminaRef.current.home;
+    const staminaAway = staminaRef.current.away;
+    const currentPlayerData = players[playerIndex];
+    if (currentPlayerData) {
+      const pid = playerId(currentPlayerData);
+      const stamina = team === 'home' ? staminaHome : staminaAway;
+      if (stamina[pid]) {
+        stamina[pid] = clamp(stamina[pid] - 0.5, 0, 100);
+        setPlayerStamina({ home: staminaHome, away: staminaAway });
+      }
+    }
+  }, [homeXI, awayXI, tactic]);
+
+  /* =======================================================
+     SAVE MATCH STATE
   ======================================================== */
 
   const saveMatchState = useCallback(
@@ -947,28 +1241,14 @@ export default function MatchPage() {
       awayStatsValue,
       statusValue,
       substitutionsValue,
+      mentalityValue,
       formationValue,
       tacticValue,
-      homeXIValue,
-      awayXIValue,
       extra = {},
     }) => {
       if (!matchId) return;
 
       const matchRef = doc(db, 'matches', matchId);
-
-      const playerStamina = {
-        home: playerStateRef.current.home || {},
-        away: playerStateRef.current.away || {},
-      };
-
-      const cleanStamina = { home: {}, away: {} };
-
-      ['home', 'away'].forEach((team) => {
-        Object.entries(playerStamina[team]).forEach(([id, state]) => {
-          cleanStamina[team][id] = clamp(safeNumber(state?.stamina, 100), 0, 100);
-        });
-      });
 
       await setDoc(
         matchRef,
@@ -986,11 +1266,9 @@ export default function MatchPage() {
           homeStats: homeStatsValue || createDefaultStats(),
           awayStats: awayStatsValue || createDefaultStats(),
           substitutionsUsed: safeNumber(substitutionsValue, 0),
+          mentality: mentalityValue || 'balanced',
           formation: formationValue || '4-4-2',
-          tactic: tacticValue || 'balanced',
-          homeXI: Array.isArray(homeXIValue) ? homeXIValue.map(getPlayerId) : [],
-          awayXI: Array.isArray(awayXIValue) ? awayXIValue.map(getPlayerId) : [],
-          playerStamina: cleanStamina,
+          tactic: tacticValue || 'Tiki-Taka',
           updatedAt: serverTimestamp(),
           ...extra,
         },
@@ -1001,364 +1279,7 @@ export default function MatchPage() {
   );
 
   /* =======================================================
-     THREE.JS SCENE
-  ======================================================== */
-
-  useEffect(() => {
-    if (!mountRef.current || loadingMatch || homeXI.length !== 11 || awayXI.length !== 11) {
-      return;
-    }
-
-    const mount = mountRef.current;
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b1120);
-    scene.fog = new THREE.Fog(0x0b1120, 30, 80);
-
-    const width = mount.clientWidth || 800;
-    const height = mount.clientHeight || 500;
-
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(0, 25, 30);
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    mount.appendChild(renderer.domElement);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.target.set(0, 0, 0);
-    controls.maxPolarAngle = Math.PI / 2.5;
-    controls.minDistance = 15;
-    controls.maxDistance = 50;
-    controls.update();
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(10, 20, 10);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
-    scene.add(directionalLight);
-
-    const pitch = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 20),
-      new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8, metalness: 0.1 }),
-    );
-    pitch.rotation.x = -Math.PI / 2;
-    pitch.receiveShadow = true;
-    scene.add(pitch);
-
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-
-    const borderGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-15, 0.01, -10),
-      new THREE.Vector3(15, 0.01, -10),
-      new THREE.Vector3(15, 0.01, 10),
-      new THREE.Vector3(-15, 0.01, 10),
-      new THREE.Vector3(-15, 0.01, -10),
-    ]);
-    scene.add(new THREE.Line(borderGeometry, lineMaterial));
-
-    const centerGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0.01, -10),
-      new THREE.Vector3(0, 0.01, 10),
-    ]);
-    scene.add(new THREE.Line(centerGeometry, lineMaterial));
-
-    const circle = new THREE.Mesh(
-      new THREE.RingGeometry(3, 3.05, 64),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
-    );
-    circle.rotation.x = -Math.PI / 2;
-    circle.position.y = 0.02;
-    scene.add(circle);
-
-    const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-
-    const leftGoal = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 6), goalMaterial);
-    leftGoal.position.set(-15, 0.08, 0);
-    scene.add(leftGoal);
-
-    const rightGoal = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 6), goalMaterial);
-    rightGoal.position.set(15, 0.08, 0);
-    scene.add(rightGoal);
-
-    const ball = new THREE.Mesh(
-      new THREE.SphereGeometry(0.15, 24, 24),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }),
-    );
-    ball.position.set(0, 0.15, 0);
-    ball.castShadow = true;
-    scene.add(ball);
-    ballMeshRef.current = ball;
-
-    function createPlayerMesh(player, x, z, color, index, team) {
-      const mesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.35, 1.2, 16),
-        new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 }),
-      );
-      mesh.position.set(x, 0.6, z);
-      mesh.castShadow = true;
-      mesh.userData = { playerId: getPlayerId(player), team, index };
-      scene.add(mesh);
-
-      const label = createPlayerLabel(player, color);
-      label.position.set(x, 2.1, z);
-      scene.add(label);
-
-      return { mesh, label };
-    }
-
-    const homeFormation = buildFormationXI(homeXI, formation);
-    const awayFormation = buildFormationXI(awayXI, formation);
-
-    const homeObjects = homeFormation.map((item, index) => {
-      const x = ((item.slot.x - 50) / 50) * 15;
-      const z = ((item.slot.y - 50) / 50) * 10;
-      return createPlayerMesh(item.player, x, z, 0x3b82f6, index, 'home');
-    });
-
-    const awayObjects = awayFormation.map((item, index) => {
-      const x = ((50 - item.slot.x) / 50) * 15;
-      const z = ((50 - item.slot.y) / 50) * 10;
-      return createPlayerMesh(item.player, x, z, 0xef4444, index, 'away');
-    });
-
-    playerMeshesRef.current.home = homeObjects.map((item) => item.mesh);
-    playerMeshesRef.current.away = awayObjects.map((item) => item.mesh);
-    playerLabelsRef.current.home = homeObjects.map((item) => item.label);
-    playerLabelsRef.current.away = awayObjects.map((item) => item.label);
-
-    playerTargetsRef.current.home = playerMeshesRef.current.home.map((player) => ({
-      x: player.position.x,
-      z: player.position.z,
-    }));
-
-    playerTargetsRef.current.away = playerMeshesRef.current.away.map((player) => ({
-      x: player.position.x,
-      z: player.position.z,
-    }));
-
-    const animate = () => {
-      animationFrameRef.current = requestAnimationFrame(animate);
-
-      ['home', 'away'].forEach((team) => {
-        const meshes = playerMeshesRef.current[team];
-        const targets = playerTargetsRef.current[team];
-
-        meshes.forEach((player, index) => {
-          const target = targets[index];
-          if (!target) return;
-
-          player.position.x = lerp(player.position.x, target.x, 0.08);
-          player.position.z = lerp(player.position.z, target.z, 0.08);
-
-          const label = playerLabelsRef.current[team][index];
-          if (label) {
-            label.position.x = player.position.x;
-            label.position.z = player.position.z;
-            label.position.y = 2.1;
-          }
-        });
-      });
-
-      if (ballPossessionRef.current && ballMeshRef.current) {
-        const { team, playerIndex } = ballPossessionRef.current;
-        const players = playerMeshesRef.current[team];
-        const player = players[playerIndex];
-
-        if (player) {
-          ballMeshRef.current.position.x = player.position.x;
-          ballMeshRef.current.position.z = player.position.z;
-        }
-      }
-
-      controls.update();
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    sceneRef.current = scene;
-    cameraRef.current = camera;
-    rendererRef.current = renderer;
-    controlsRef.current = controls;
-
-    const handleResize = () => {
-      if (!mountRef.current) return;
-      const newWidth = mountRef.current.clientWidth;
-      const newHeight = mountRef.current.clientHeight;
-      camera.aspect = newWidth / newHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      playerLabelsRef.current.home.forEach((label) => {
-        label.material.map?.dispose();
-        label.material.dispose();
-      });
-      playerLabelsRef.current.away.forEach((label) => {
-        label.material.map?.dispose();
-        label.material.dispose();
-      });
-      renderer.dispose();
-      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
-      playerMeshesRef.current = { home: [], away: [] };
-      playerLabelsRef.current = { home: [], away: [] };
-    };
-  }, [loadingMatch, homeXI, awayXI, formation]);
-
-  /* =======================================================
-     REALTIME LISTENER
-  ======================================================== */
-
-  useEffect(() => {
-    if (!user || !matchId) return;
-
-    const matchRef = doc(db, 'matches', matchId);
-
-    const unsubscribe = onSnapshot(
-      matchRef,
-      (snapshot) => {
-        if (!snapshot.exists()) return;
-        const data = { id: snapshot.id, ...snapshot.data() };
-        setFixture((previous) => ({ ...(previous || {}), ...data }));
-        applyMatchState(data);
-      },
-      (error) => {
-        console.error('Match realtime listener error:', error);
-      },
-    );
-
-    return () => unsubscribe();
-  }, [user, matchId, applyMatchState]);
-
-  /* =======================================================
-     SIMULATE PLAYER MOVEMENT
-  ======================================================== */
-
-  const simulatePlayerMovement = useCallback(() => {
-    if (!ballPossessionRef.current) {
-      const team = Math.random() < 0.5 ? 'home' : 'away';
-      const playerIndex = Math.floor(Math.random() * 11);
-      ballPossessionRef.current = { team, playerIndex };
-      return;
-    }
-
-    const { team, playerIndex } = ballPossessionRef.current;
-    const players = team === 'home' ? homeXI : awayXI;
-
-    if (!players[playerIndex]) {
-      ballPossessionRef.current = null;
-      return;
-    }
-
-    const playerMeshes = playerMeshesRef.current[team];
-    const opponentTeam = team === 'home' ? 'away' : 'home';
-    const opponentMeshes = playerMeshesRef.current[opponentTeam];
-    const currentPlayer = playerMeshes[playerIndex];
-
-    if (!currentPlayer) return;
-
-    const random = Math.random();
-    const goalX = team === 'home' ? 14 : -14;
-
-    if (tactic === 'tiki-taka' && random < 0.55) {
-      const teammates = playerMeshes
-        .map((_, index) => index)
-        .filter((index) => index !== playerIndex);
-      const targetIndex = pick(teammates);
-
-      if (targetIndex !== null) {
-        ballPossessionRef.current = { team, playerIndex: targetIndex };
-        return;
-      }
-    }
-
-    if (random < (tactic === 'long-ball' ? 0.18 : 0.4)) {
-      const targetIndex = Math.floor(Math.random() * 11);
-
-      if (targetIndex !== playerIndex) {
-        ballPossessionRef.current = { team, playerIndex: targetIndex };
-        return;
-      }
-    }
-
-    const distanceToGoal = Math.abs(currentPlayer.position.x - goalX);
-
-    if (distanceToGoal < 9 && random < 0.5) {
-      const stamina = getPlayerStamina(players[playerIndex]);
-      const rating = getLivePlayerRating(players[playerIndex]);
-      const shootingPower = rating / 100;
-
-      const chance = clamp(
-        0.25 + shootingPower * 0.3 + activeTactic.attackBonus / 100 - (100 - stamina) / 400,
-        0.12,
-        0.78,
-      );
-
-      if (Math.random() < chance) {
-        if (team === 'home') setHomeScore((value) => value + 1);
-        else setAwayScore((value) => value + 1);
-
-        const goalEvent = {
-          id: `${Date.now()}-goal-${Math.random()}`,
-          type: EVENT_TYPES.GOAL,
-          team,
-          minute: matchMinute,
-          playerId: getPlayerId(players[playerIndex]),
-          playerName: getPlayerName(players[playerIndex]),
-          detail: `${getPlayerName(players[playerIndex])} scored`,
-          createdAt: new Date().toISOString(),
-        };
-
-        setEvents((previous) => [goalEvent, ...previous]);
-        ballPossessionRef.current = null;
-        return;
-      }
-    }
-
-    const direction = team === 'home' ? 1 : -1;
-    const speedPenalty = getPlayerStamina(players[playerIndex]) < 35 ? 0.5 : 1;
-
-    const newX = clamp(
-      currentPlayer.position.x + direction * randomBetweenSafe(1, 3) * speedPenalty,
-      -14,
-      14,
-    );
-    const newZ = clamp(currentPlayer.position.z + randomBetweenSafe(-2, 2), -9, 9);
-
-    playerTargetsRef.current[team][playerIndex] = { x: newX, z: newZ };
-
-    opponentMeshes.forEach((opponent, index) => {
-      playerTargetsRef.current[opponentTeam][index] = {
-        x: currentPlayer.position.x + (Math.random() - 0.5) * 2,
-        z: currentPlayer.position.z + (Math.random() - 0.5) * 2,
-      };
-    });
-
-    const stealChance = tactic === 'gegenpress' ? 0.12 : 0.05;
-
-    if (Math.random() < stealChance) {
-      const opponentIndex = Math.floor(Math.random() * 11);
-      ballPossessionRef.current = { team: opponentTeam, playerIndex: opponentIndex };
-    }
-  }, [homeXI, awayXI, tactic, activeTactic, matchMinute]);
-
-  /* =======================================================
-     SIMULATE MINUTE
+     SIMULATE ONE MATCH MINUTE
   ======================================================== */
 
   const simulateMinute = useCallback(
@@ -1367,65 +1288,27 @@ export default function MatchPage() {
       processingRef.current = true;
 
       try {
-        for (let i = 0; i < 10; i += 1) {
+        for (let i = 0; i < 10; i++) {
           simulatePlayerMovement();
         }
 
-        ['home', 'away'].forEach((team) => {
-          const players = team === 'home' ? homeXI : awayXI;
-
-          players.forEach((player) => {
-            const id = String(getPlayerId(player));
-            const current = safeNumber(playerStateRef.current[team]?.[id]?.stamina, 100);
-            const position = normalizePosition(getPlayerPosition(player));
-
-            let drain = activeTactic.staminaDrain;
-            if (position === 'MID') drain *= 1.12;
-            if (position === 'ATT') drain *= 1.08;
-            if (position === 'GK') drain *= 0.45;
-            if (tactic === 'gegenpress') drain *= 1.2;
-
-            const next = clamp(current - drain, MIN_STAMINA, 100);
-            playerStateRef.current[team][id] = { stamina: next };
-          });
-        });
-
-        setHomeXI((previous) => applyPlayerState(previous, 'home'));
-        setAwayXI((previous) => applyPlayerState(previous, 'away'));
-
         const homeStrength =
-          homeXI.reduce(
-            (total, player) =>
-              total +
-              getLivePlayerRating({
-                ...player,
-                stamina:
-                  playerStateRef.current.home[String(getPlayerId(player))]?.stamina ??
-                  getPlayerStamina(player),
-              }),
-            0,
-          ) / Math.max(homeXI.length, 1);
+          homeXI.reduce((total, player) => total + getPlayerOverall(player), 0) /
+          Math.max(homeXI.length, 1);
 
         const awayStrength =
-          awayXI.reduce(
-            (total, player) =>
-              total +
-              getLivePlayerRating({
-                ...player,
-                stamina:
-                  playerStateRef.current.away[String(getPlayerId(player))]?.stamina ??
-                  getPlayerStamina(player),
-              }),
-            0,
-          ) / Math.max(awayXI.length, 1);
+          awayXI.reduce((total, player) => total + getPlayerOverall(player), 0) /
+          Math.max(awayXI.length, 1);
 
         const nextHomeStats = { ...homeStats };
         const nextAwayStats = { ...awayStats };
 
         const possessionBase = clamp(
-          50 + (homeStrength - awayStrength) * 0.4 + activeTactic.possessionBonus,
-          25,
-          75,
+          50 +
+            (homeStrength - awayStrength) * 0.4 +
+            (mentality === 'attacking' ? 2 : mentality === 'defensive' ? -2 : 0),
+          30,
+          70,
         );
 
         nextHomeStats.possession = Math.round(possessionBase);
@@ -1433,15 +1316,6 @@ export default function MatchPage() {
 
         nextHomeStats.passes += randomBetweenSafe(4, 15);
         nextAwayStats.passes += randomBetweenSafe(4, 15);
-
-        if (Math.random() < 0.35) nextHomeStats.shots += 1;
-        if (Math.random() < 0.35) nextAwayStats.shots += 1;
-        if (Math.random() < 0.15) nextHomeStats.shotsOnTarget += 1;
-        if (Math.random() < 0.15) nextAwayStats.shotsOnTarget += 1;
-        if (Math.random() < 0.1) nextHomeStats.corners += 1;
-        if (Math.random() < 0.1) nextAwayStats.corners += 1;
-        if (Math.random() < 0.1) nextHomeStats.fouls += 1;
-        if (Math.random() < 0.1) nextAwayStats.fouls += 1;
 
         setHomeStats(nextHomeStats);
         setAwayStats(nextAwayStats);
@@ -1455,10 +1329,9 @@ export default function MatchPage() {
           awayStatsValue: nextAwayStats,
           statusValue: 'live',
           substitutionsValue: substitutionsUsed,
+          mentalityValue: mentality,
           formationValue: formation,
           tacticValue: tactic,
-          homeXIValue: homeXI,
-          awayXIValue: awayXI,
         });
       } catch (error) {
         console.error('Simulation error:', error);
@@ -1469,18 +1342,17 @@ export default function MatchPage() {
     [
       homeXI,
       awayXI,
+      mentality,
+      formation,
+      tactic,
       homeScore,
       awayScore,
       homeStats,
       awayStats,
       events,
       substitutionsUsed,
-      formation,
-      tactic,
-      activeTactic,
-      simulatePlayerMovement,
       saveMatchState,
-      applyPlayerState,
+      simulatePlayerMovement,
     ],
   );
 
@@ -1516,10 +1388,9 @@ export default function MatchPage() {
         awayStatsValue: awayStats,
         statusValue: 'live',
         substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
         formationValue: formation,
         tacticValue: tactic,
-        homeXIValue: homeXI,
-        awayXIValue: awayXI,
       });
 
       setMatchStatus('live');
@@ -1543,17 +1414,19 @@ export default function MatchPage() {
     homeStats,
     awayStats,
     substitutionsUsed,
+    mentality,
     formation,
     tactic,
     saveMatchState,
   ]);
 
   /* =======================================================
-     TIMER - IMINOTA IGENDA NEZA
+     MATCH TIMER
   ======================================================== */
 
   useEffect(() => {
-    if (matchStatus !== 'live' || paused) return;
+    if (matchStatus !== 'live') return;
+    if (paused) return;
 
     timerRef.current = setInterval(() => {
       setMatchMinute((previous) => {
@@ -1586,15 +1459,15 @@ export default function MatchPage() {
   ======================================================== */
 
   useEffect(() => {
-    if (matchStatus !== 'live' || paused || matchMinute <= 0 || matchMinute >= MATCH_DURATION) {
-      return;
-    }
+    if (matchStatus !== 'live') return;
+    if (paused) return;
+    if (matchMinute <= 0 || matchMinute >= MATCH_DURATION) return;
 
     simulateMinute(matchMinute);
   }, [matchMinute, matchStatus, paused, simulateMinute]);
 
   /* =======================================================
-     SECOND HALF
+     HALF TIME
   ======================================================== */
 
   const continueSecondHalf = async () => {
@@ -1610,10 +1483,9 @@ export default function MatchPage() {
         awayStatsValue: awayStats,
         statusValue: 'live',
         substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
         formationValue: formation,
         tacticValue: tactic,
-        homeXIValue: homeXI,
-        awayXIValue: awayXI,
       });
 
       setHalfTimeShown(false);
@@ -1635,6 +1507,11 @@ export default function MatchPage() {
     try {
       setSavingMatch(true);
 
+      const finalResult = {
+        homeScore,
+        awayScore,
+      };
+
       await saveMatchState({
         minute: MATCH_DURATION,
         homeScoreValue: homeScore,
@@ -1644,11 +1521,11 @@ export default function MatchPage() {
         awayStatsValue: awayStats,
         statusValue: 'finished',
         substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
         formationValue: formation,
         tacticValue: tactic,
-        homeXIValue: homeXI,
-        awayXIValue: awayXI,
         extra: {
+          result: finalResult,
           finishedAt: serverTimestamp(),
           playedBy: user?.uid || null,
         },
@@ -1672,13 +1549,16 @@ export default function MatchPage() {
     homeStats,
     awayStats,
     substitutionsUsed,
+    mentality,
     formation,
     tactic,
-    homeXI,
-    awayXI,
     user,
     saveMatchState,
   ]);
+
+  /* =======================================================
+     FINISH AUTOMATICALLY
+  ======================================================== */
 
   useEffect(() => {
     if (matchStatus === 'live' && matchMinute >= MATCH_DURATION) {
@@ -1696,40 +1576,54 @@ export default function MatchPage() {
   };
 
   /* =======================================================
-     FORMATION
+     CHANGE FORMATION
   ======================================================== */
 
   const changeFormation = async (value) => {
-    if (!FORMATIONS[value]) return;
     setFormation(value);
 
-    try {
-      await saveMatchState({
-        minute: matchMinute,
-        homeScoreValue: homeScore,
-        awayScoreValue: awayScore,
-        eventsValue: events,
-        homeStatsValue: homeStats,
-        awayStatsValue: awayStats,
-        statusValue: matchStatus,
-        substitutionsValue: substitutionsUsed,
-        formationValue: value,
-        tacticValue: tactic,
-        homeXIValue: homeXI,
-        awayXIValue: awayXI,
-      });
-    } catch (error) {
-      console.error('Formation save error:', error);
-    }
+    const startingHome = selectStartingXI(homeSquad, value);
+    const startingAway = selectStartingXI(awaySquad, value);
+
+    setHomeXI(startingHome);
+    setAwayXI(startingAway);
+
+    setHomeBench(
+      homeSquad.filter(
+        (player) =>
+          !startingHome.some(
+            (starter) => String(playerId(starter)) === String(playerId(player)),
+          ),
+      ),
+    );
+
+    setAwayBench(
+      awaySquad.filter(
+        (player) =>
+          !startingAway.some(
+            (starter) => String(playerId(starter)) === String(playerId(player)),
+          ),
+      ),
+    );
+
+    toast.success(`Formation changed to ${value}`);
   };
 
   /* =======================================================
-     TACTIC
+     CHANGE TACTIC
   ======================================================== */
 
   const changeTactic = async (value) => {
-    if (!TACTICS[value]) return;
     setTactic(value);
+    toast.success(`Tactic changed to ${value}`);
+  };
+
+  /* =======================================================
+     CHANGE MENTALITY
+  ======================================================== */
+
+  const changeMentality = async (value) => {
+    setMentality(value);
 
     try {
       await saveMatchState({
@@ -1739,15 +1633,14 @@ export default function MatchPage() {
         eventsValue: events,
         homeStatsValue: homeStats,
         awayStatsValue: awayStats,
-        statusValue: matchStatus,
+        statusValue: matchStatus === 'ready' ? 'ready' : matchStatus,
         substitutionsValue: substitutionsUsed,
+        mentalityValue: value,
         formationValue: formation,
-        tacticValue: value,
-        homeXIValue: homeXI,
-        awayXIValue: awayXI,
+        tacticValue: tactic,
       });
     } catch (error) {
-      console.error('Tactic save error:', error);
+      console.error(error);
     }
   };
 
@@ -1763,36 +1656,35 @@ export default function MatchPage() {
       return;
     }
 
-    if (!selectedPlayerOut || !selectedPlayerIn) {
-      toast.error('Select both the player going out and the player coming in.');
+    if (!selectedSubIn || !selectedSubOut) {
+      toast.error('Select player IN and player OUT.');
       return;
     }
 
     const team = userTeam === 'home' ? 'home' : 'away';
+
     const currentXI = team === 'home' ? homeXI : awayXI;
     const bench = team === 'home' ? homeBench : awayBench;
 
-    const playerOut = currentXI.find(
-      (player) => String(getPlayerId(player)) === String(selectedPlayerOut),
-    );
     const playerIn = bench.find(
-      (player) => String(getPlayerId(player)) === String(selectedPlayerIn),
+      (player) => String(playerId(player)) === String(selectedSubIn),
+    );
+    const playerOut = currentXI.find(
+      (player) => String(playerId(player)) === String(selectedSubOut),
     );
 
-    if (!playerOut || !playerIn) {
-      toast.error('Player selection is invalid.');
+    if (!playerIn || !playerOut) {
+      toast.error('Invalid selection.');
       return;
     }
 
     const nextXI = currentXI.map((player) =>
-      String(getPlayerId(player)) === String(getPlayerId(playerOut))
-        ? applyPlayerState([playerIn], team)[0]
-        : player,
+      String(playerId(player)) === String(playerId(playerOut)) ? playerIn : player,
     );
 
     const nextBench = [
       ...bench.filter(
-        (player) => String(getPlayerId(player)) !== String(getPlayerId(playerIn)),
+        (player) => String(playerId(player)) !== String(playerId(playerIn)),
       ),
       playerOut,
     ];
@@ -1804,7 +1696,7 @@ export default function MatchPage() {
       type: EVENT_TYPES.SUBSTITUTION,
       team,
       minute: matchMinute,
-      playerId: getPlayerId(playerIn),
+      playerId: playerId(playerIn),
       playerName: getPlayerName(playerIn),
       detail: `${getPlayerName(playerIn)} replaced ${getPlayerName(playerOut)}`,
       createdAt: new Date().toISOString(),
@@ -1822,8 +1714,8 @@ export default function MatchPage() {
 
     setSubstitutionsUsed(nextSubCount);
     setEvents(nextEvents);
-    setSelectedPlayerOut('');
-    setSelectedPlayerIn('');
+    setSelectedSubIn('');
+    setSelectedSubOut('');
 
     await saveMatchState({
       minute: matchMinute,
@@ -1834,35 +1726,45 @@ export default function MatchPage() {
       awayStatsValue: awayStats,
       statusValue: matchStatus,
       substitutionsValue: nextSubCount,
+      mentalityValue: mentality,
       formationValue: formation,
       tacticValue: tactic,
-      homeXIValue: team === 'home' ? nextXI : homeXI,
-      awayXIValue: team === 'away' ? nextXI : awayXI,
+      extra: {
+        [`${team}XI`]: nextXI.map((player) => playerId(player)),
+      },
     });
 
-    toast.success(`${getPlayerName(playerIn)} is replacing ${getPlayerName(playerOut)}`);
+    toast.success('Substitution made');
   };
 
   /* =======================================================
-     EVENTS
+     DISPLAY EVENTS
   ======================================================== */
 
   const sortedEvents = useMemo(
-    () => [...events].sort((a, b) => safeNumber(b.minute) - safeNumber(a.minute)),
+    () =>
+      [...events].sort(
+        (a, b) => safeNumber(b.minute) - safeNumber(a.minute),
+      ),
     [events],
   );
 
   /* =======================================================
-     STATUS
+     MATCH STATUS LABEL
   ======================================================== */
 
   const statusLabel = useMemo(() => {
     switch (matchStatus) {
-      case 'ready': return 'READY';
-      case 'live': return paused ? 'PAUSED' : 'LIVE';
-      case 'half-time': return 'HALF TIME';
-      case 'finished': return 'FULL TIME';
-      default: return 'LOADING';
+      case 'ready':
+        return 'READY';
+      case 'live':
+        return paused ? 'PAUSED' : 'LIVE';
+      case 'half-time':
+        return 'HALF TIME';
+      case 'finished':
+        return 'FULL TIME';
+      default:
+        return 'LOADING';
     }
   }, [matchStatus, paused]);
 
@@ -1879,10 +1781,12 @@ export default function MatchPage() {
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
   /* =======================================================
-     NOT FOUND
+     MATCH NOT FOUND
   ======================================================== */
 
   if (!fixture || !homeClub || !awayClub) {
@@ -1981,21 +1885,23 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* LATEST SCORE */}
+        {/* FORMATION + TACTIC BAR */}
         <section className={styles.latestScore}>
           <div>
-            <span>LATEST SCORE</span>
-            <strong>
-              {getClubName(homeClub)} {homeScore} - {awayScore}{' '}
-              {getClubName(awayClub)}
-            </strong>
+            <span>FORMATION</span>
+            <strong>{formation}</strong>
           </div>
-          <span>
-            {matchStatus === 'finished' ? 'FINAL RESULT' : `Minute ${matchMinute}`}
-          </span>
+          <div>
+            <span>TACTIC</span>
+            <strong>{tactic}</strong>
+          </div>
+          <div>
+            <span>MENTALITY</span>
+            <strong>{mentality}</strong>
+          </div>
         </section>
 
-        {/* VIEW ONLY */}
+        {/* ACCESS WARNING */}
         {!userIsParticipant && (
           <section className={styles.warning}>
             <strong>View only</strong>
@@ -2039,6 +1945,13 @@ export default function MatchPage() {
 
             <button
               type="button"
+              onClick={() => setShowFormation((previous) => !previous)}
+            >
+              📋 Formation
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowTactics((previous) => !previous)}
             >
               ⚙ Tactics
@@ -2050,51 +1963,6 @@ export default function MatchPage() {
             >
               🔄 Substitutions
             </button>
-          </section>
-        )}
-
-        {/* TACTICS PANEL */}
-        {showTactics && userIsParticipant && (
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <h2>Formation</h2>
-                <small>Current: {formation}</small>
-              </div>
-            </div>
-
-            <div className={styles.mentalityGrid}>
-              {Object.keys(FORMATIONS).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={formation === value ? styles.active : ''}
-                  onClick={() => changeFormation(value)}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-
-            <div className={styles.panelHeader} style={{ marginTop: 20 }}>
-              <div>
-                <h2>Tactics</h2>
-                <small>{activeTactic.description}</small>
-              </div>
-            </div>
-
-            <div className={styles.mentalityGrid}>
-              {Object.entries(TACTICS).map(([key, value]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={tactic === key ? styles.active : ''}
-                  onClick={() => changeTactic(key)}
-                >
-                  {value.label}
-                </button>
-              ))}
-            </div>
           </section>
         )}
 
@@ -2115,207 +1983,127 @@ export default function MatchPage() {
           </section>
         )}
 
+        {/* FORMATION PANEL */}
+        {showFormation && userIsParticipant && (
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2>Formation</h2>
+              <span>{formation}</span>
+            </div>
+            <div className={styles.mentalityGrid}>
+              {Object.keys(FORMATIONS).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={formation === value ? styles.active : ''}
+                  onClick={() => changeFormation(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* TACTICS PANEL */}
+        {showTactics && userIsParticipant && (
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2>Tactics</h2>
+              <span>{tactic}</span>
+            </div>
+            <div className={styles.mentalityGrid}>
+              {Object.keys(TACTICS).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={tactic === value ? styles.active : ''}
+                  onClick={() => changeTactic(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            <div className={styles.panelHeader}>
+              <h2>Mentality</h2>
+            </div>
+            <div className={styles.mentalityGrid}>
+              {['defensive', 'balanced', 'attacking'].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={mentality === value ? styles.active : ''}
+                  onClick={() => changeMentality(value)}
+                >
+                  {value.charAt(0).toUpperCase() + value.slice(1)}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* SUBSTITUTIONS */}
         {showSubs && userIsParticipant && (
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
-              <div>
-                <h2>Substitutions</h2>
-                <small>Choose player OUT and player IN</small>
-              </div>
+              <h2>Substitutions</h2>
               <span>
                 {substitutionsUsed}/{MAX_SUBSTITUTIONS}
               </span>
             </div>
 
-            <select
-              value={selectedTeam}
-              onChange={(event) => {
-                setSelectedTeam(event.target.value);
-                setSelectedPlayerOut('');
-                setSelectedPlayerIn('');
-              }}
-            >
-              <option value="home">{getClubName(homeClub)}</option>
-              <option value="away">{getClubName(awayClub)}</option>
-            </select>
-
-            <div style={{ marginTop: 12 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>
-                Player OUT
-              </label>
+            <div className={styles.subRow}>
+              <label>Player IN (from bench)</label>
               <select
-                value={selectedPlayerOut}
-                onChange={(event) => setSelectedPlayerOut(event.target.value)}
+                value={selectedSubIn}
+                onChange={(event) => setSelectedSubIn(event.target.value)}
               >
-                <option value="">Select player</option>
-                {(selectedTeam === 'home' ? homeXI : awayXI).map((player) => (
+                <option value="">Select player IN</option>
+                {(userTeam === 'home' ? homeBench : awayBench).map((player) => (
                   <option
-                    key={String(getPlayerId(player))}
-                    value={String(getPlayerId(player))}
+                    key={String(playerId(player))}
+                    value={String(playerId(player))}
                   >
-                    {getPlayerName(player)} · OVR {getLivePlayerRating(player)} · STAMINA{' '}
-                    {Math.round(getPlayerStamina(player))}%
+                    {getPlayerName(player)} · OVR {getPlayerOverall(player)}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div style={{ marginTop: 12 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>
-                Player IN
-              </label>
+            <div className={styles.subRow}>
+              <label>Player OUT (from pitch)</label>
               <select
-                value={selectedPlayerIn}
-                onChange={(event) => setSelectedPlayerIn(event.target.value)}
+                value={selectedSubOut}
+                onChange={(event) => setSelectedSubOut(event.target.value)}
               >
-                <option value="">Select player</option>
-                {(selectedTeam === 'home' ? homeBench : awayBench).map((player) => (
+                <option value="">Select player OUT</option>
+                {(userTeam === 'home' ? homeXI : awayXI).map((player) => (
                   <option
-                    key={String(getPlayerId(player))}
-                    value={String(getPlayerId(player))}
+                    key={String(playerId(player))}
+                    value={String(playerId(player))}
                   >
-                    {getPlayerName(player)} · OVR {getLivePlayerRating(player)} · STAMINA{' '}
-                    {Math.round(getPlayerStamina(player))}%
+                    {getPlayerName(player)} · OVR {getPlayerOverall(player)} · STA{' '}
+                    {Math.round(playerStamina[userTeam]?.[playerId(player)] || 100)}%
                   </option>
                 ))}
               </select>
             </div>
-
-            {selectedPlayerOut && selectedPlayerIn && (
-              <div
-                style={{
-                  marginTop: 15,
-                  padding: 12,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.05)',
-                }}
-              >
-                {(() => {
-                  const xi = selectedTeam === 'home' ? homeXI : awayXI;
-                  const bench = selectedTeam === 'home' ? homeBench : awayBench;
-                  const out = xi.find(
-                    (player) =>
-                      String(getPlayerId(player)) === String(selectedPlayerOut),
-                  );
-                  const inPlayer = bench.find(
-                    (player) =>
-                      String(getPlayerId(player)) === String(selectedPlayerIn),
-                  );
-
-                  if (!out || !inPlayer) return null;
-
-                  return (
-                    <div>
-                      <strong>SUBSTITUTION</strong>
-                      <div style={{ marginTop: 8 }}>
-                        🔴 OUT: {getPlayerName(out)} · {getLivePlayerRating(out)} OVR ·{' '}
-                        {Math.round(getPlayerStamina(out))}%
-                      </div>
-                      <div style={{ marginTop: 6 }}>
-                        🟢 IN: {getPlayerName(inPlayer)} · {getLivePlayerRating(inPlayer)} OVR ·{' '}
-                        {Math.round(getPlayerStamina(inPlayer))}%
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
 
             <button
               type="button"
               onClick={makeSubstitution}
               disabled={
                 substitutionsUsed >= MAX_SUBSTITUTIONS ||
-                !selectedPlayerOut ||
-                !selectedPlayerIn
+                !selectedSubIn ||
+                !selectedSubOut
               }
-              style={{ marginTop: 14 }}
             >
-              🔄 Make Substitution
+              Make Substitution
             </button>
           </section>
         )}
 
-        {/* LIVE FATIGUE */}
-        <section className={styles.statsSection}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <span>PLAYER CONDITION</span>
-              <strong>Formation {formation}</strong>
-            </div>
-            <span>{activeTactic.label}</span>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))',
-              gap: 10,
-            }}
-          >
-            {[
-              [homeClub, homeXI, 'home'],
-              [awayClub, awayXI, 'away'],
-            ].map(([club, players, team]) => (
-              <div
-                key={team}
-                style={{
-                  padding: 10,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                }}
-              >
-                <strong>{getClubName(club)}</strong>
-
-                {players.map((player) => {
-                  const stamina = Math.round(getPlayerStamina(player));
-                  const rating = getLivePlayerRating(player);
-
-                  return (
-                    <div key={String(getPlayerId(player))} style={{ marginTop: 9 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: 8,
-                        }}
-                      >
-                        <span>{getPlayerName(player)}</span>
-                        <strong>{rating}</strong>
-                      </div>
-
-                      <div
-                        style={{
-                          height: 5,
-                          marginTop: 4,
-                          borderRadius: 99,
-                          background: 'rgba(255,255,255,0.1)',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${stamina}%`,
-                            height: '100%',
-                            background:
-                              stamina < 30 ? '#ef4444' : stamina < 60 ? '#f59e0b' : '#22c55e',
-                          }}
-                        />
-                      </div>
-
-                      <small>
-                        STAMINA {stamina}% · OVR {rating}
-                      </small>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* MATCH STATS */}
+        {/* STATS */}
         <section className={styles.statsSection}>
           <div className={styles.sectionHeader}>
             <span>MATCH STATISTICS</span>
@@ -2383,68 +2171,92 @@ export default function MatchPage() {
           )}
         </section>
 
-        {/* LINEUPS */}
+        {/* LINEUPS WITH RATINGS AND STAMINA */}
         <section className={styles.lineups}>
-          {[
-            [homeClub, homeXI, 'HOME'],
-            [awayClub, awayXI, 'AWAY'],
-          ].map(([club, players, label]) => (
-            <div key={label} className={styles.lineupCard}>
-              <div className={styles.sectionHeader}>
-                <h2>{getClubName(club)}</h2>
-                <span>{players.length}/11</span>
-              </div>
-
-              <div className={styles.playerList}>
-                {players.map((player) => {
-                  const stamina = Math.round(getPlayerStamina(player));
-                  const rating = getLivePlayerRating(player);
-
-                  return (
-                    <div key={String(getPlayerId(player))} className={styles.player}>
-                      {getPlayerPhoto(player) ? (
-                        <img src={getPlayerPhoto(player)} alt="" />
-                      ) : (
-                        <span>⚽</span>
-                      )}
-
-                      <div style={{ flex: 1 }}>
-                        <strong>{getPlayerName(player)}</strong>
-                        <small>
-                          {normalizePosition(getPlayerPosition(player))} · OVR {rating} ·{' '}
-                          {stamina}%
-                        </small>
-
-                        <div
-                          style={{
-                            height: 4,
-                            marginTop: 4,
-                            background: 'rgba(255,255,255,0.1)',
-                            borderRadius: 99,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${stamina}%`,
-                              height: '100%',
-                              background:
-                                stamina < 30 ? '#ef4444' : stamina < 60 ? '#f59e0b' : '#22c55e',
-                              borderRadius: 99,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <strong>{rating}</strong>
-                    </div>
-                  );
-                })}
-              </div>
+          <div className={styles.lineupCard}>
+            <div className={styles.sectionHeader}>
+              <h2>{getClubName(homeClub)}</h2>
+              <span>{homeXI.length}/11 · {formation}</span>
             </div>
-          ))}
+            <div className={styles.playerList}>
+              {homeXI.map((player) => (
+                <div key={String(playerId(player))} className={styles.player}>
+                  {getPlayerPhoto(player) ? (
+                    <img src={getPlayerPhoto(player)} alt="" />
+                  ) : (
+                    <span>⚽</span>
+                  )}
+                  <div>
+                    <strong>{getPlayerName(player)}</strong>
+                    <small>
+                      {normalizePosition(getPlayerPosition(player))} · OVR{' '}
+                      {getPlayerOverall(player)}
+                    </small>
+                  </div>
+                  <div className={styles.playerMeta}>
+                    <span className={styles.playerRating}>
+                      {getPlayerOverall(player)}
+                    </span>
+                    <span className={styles.staminaBar}>
+                      <span
+                        className={styles.staminaFill}
+                        style={{
+                          width: `${Math.round(playerStamina.home?.[playerId(player)] || 100)}%`,
+                        }}
+                      />
+                    </span>
+                    <small>
+                      {Math.round(playerStamina.home?.[playerId(player)] || 100)}%
+                    </small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.lineupCard}>
+            <div className={styles.sectionHeader}>
+              <h2>{getClubName(awayClub)}</h2>
+              <span>{awayXI.length}/11 · {formation}</span>
+            </div>
+            <div className={styles.playerList}>
+              {awayXI.map((player) => (
+                <div key={String(playerId(player))} className={styles.player}>
+                  {getPlayerPhoto(player) ? (
+                    <img src={getPlayerPhoto(player)} alt="" />
+                  ) : (
+                    <span>⚽</span>
+                  )}
+                  <div>
+                    <strong>{getPlayerName(player)}</strong>
+                    <small>
+                      {normalizePosition(getPlayerPosition(player))} · OVR{' '}
+                      {getPlayerOverall(player)}
+                    </small>
+                  </div>
+                  <div className={styles.playerMeta}>
+                    <span className={styles.playerRating}>
+                      {getPlayerOverall(player)}
+                    </span>
+                    <span className={styles.staminaBar}>
+                      <span
+                        className={styles.staminaFill}
+                        style={{
+                          width: `${Math.round(playerStamina.away?.[playerId(player)] || 100)}%`,
+                        }}
+                      />
+                    </span>
+                    <small>
+                      {Math.round(playerStamina.away?.[playerId(player)] || 100)}%
+                    </small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
-        {/* MATCH INFO */}
+        {/* FOOTER MATCH INFO */}
         <section className={styles.matchInfo}>
           <div>
             <span>STADIUM</span>
@@ -2456,15 +2268,7 @@ export default function MatchPage() {
           </div>
           <div>
             <span>TACTIC</span>
-            <strong>{activeTactic.label}</strong>
-          </div>
-          <div>
-            <span>ROUND</span>
-            <strong>{fixture.round || '-'}</strong>
-          </div>
-          <div>
-            <span>SEASON</span>
-            <strong>{fixture.season || '-'}</strong>
+            <strong>{tactic}</strong>
           </div>
           <div>
             <span>MATCH ID</span>
