@@ -1,6 +1,12 @@
 // pages/fixture.js
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 
@@ -349,7 +355,7 @@ export default function FixturesPage({
     if (!user) return;
 
     const matchesQuery = query(
-      collection(db, 'fixtures'),
+      collection(db, 'matches'),
       where('seasonYear', '==', seasonYear)
     );
 
