@@ -42,9 +42,9 @@ export default function Layout({ children, title = 'Virtual Football Manager Car
     { name: 'League', href: '/league', icon: '📋' },
     { name: 'Transfers', href: '/transfers', icon: '💼' },
     { name: 'Fixtures', href: '/fixtures', icon: '📅' },
-    { name: 'Statistics', href: '/statistics', icon: '📊' },
+    { name: 'training', href: '/training', icon: '📊' },
     { name: 'News', href: '/news', icon: '📰' },
-    { name: 'Profile', href: '/profile', icon: '👤' },
+    
   ];
 
   const isAuthPage = ['/login', '/register', '/forgot-password'].includes(router.pathname);
