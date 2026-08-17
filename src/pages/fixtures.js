@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 
 import toast from 'react-hot-toast';
 
-import styles from './fixtures.module.css';
+import styles from './fixture.module.css';
 
 
 /* =========================================================
