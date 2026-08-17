@@ -1,16 +1,25 @@
-// pages/match.js
+// src/pages/match.js
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 
 import {
+  arrayUnion,
   collection,
   doc,
   getDoc,
   getDocs,
-  serverTimestamp,
+  query,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 
 import { db } from '../components/firebase';
@@ -20,76 +29,28 @@ import toast from 'react-hot-toast';
 
 import styles from './match.module.css';
 
+
 /* =========================================================
-   MATCH CONFIGURATION
+   CONSTANTS
 ========================================================= */
 
 const MATCH_DURATION = 20;
-const HALF_DURATION = 10;
-const TICK_MS = 1000;
+
+const FIRST_HALF_END = 10;
+
+const MAX_SQUAD_SIZE = 25;
+
+const PLAYERS_ON_PITCH = 11;
 
 const MAX_SUBSTITUTIONS = 5;
-const MAX_SUB_WINDOWS = 3;
 
-const FORMATIONS = {
-  '4-4-2': {
-    GK: 1,
-    DEF: 4,
-    MID: 4,
-    ATT: 2,
-  },
+const MATCH_TICK_MS = 1000;
 
-  '4-3-3': {
-    GK: 1,
-    DEF: 4,
-    MID: 3,
-    ATT: 3,
-  },
+const TICK_SECONDS = 1;
 
-  '4-2-3-1': {
-    GK: 1,
-    DEF: 4,
-    MID: 5,
-    ATT: 1,
-  },
-
-  '3-5-2': {
-    GK: 1,
-    DEF: 3,
-    MID: 5,
-    ATT: 2,
-  },
-
-  '5-3-2': {
-    GK: 1,
-    DEF: 5,
-    MID: 3,
-    ATT: 2,
-  },
-};
-
-const TACTICS = [
-  'balanced',
-  'attacking',
-  'defensive',
-  'counter',
-  'possession',
-];
-
-const TEMPOS = [
-  'slow',
-  'normal',
-  'fast',
-];
-
-const PRESSING = [
-  'low',
-  'medium',
-  'high',
-];
 
 /* =========================================================
-   HELPERS
+   SAFE HELPERS
 ========================================================= */
 
 function safeNumber(value, fallback = 0) {
@@ -100,54 +61,27 @@ function safeNumber(value, fallback = 0) {
     : fallback;
 }
 
+
 function normalize(value) {
   return String(value || '')
     .trim()
     .toLowerCase();
 }
 
-function clamp(value, min, max) {
-  return Math.max(
-    min,
-    Math.min(max, value)
-  );
-}
 
-function random(min = 0, max = 1) {
+function getPlayerName(player) {
   return (
-    Math.random() *
-      (max - min) +
-    min
+    player?.name ||
+    player?.fullName ||
+    `${player?.firstName || ''} ${
+      player?.lastName || ''
+    }`.trim() ||
+    'Unknown Player'
   );
 }
 
-function randomInt(min, max) {
-  return Math.floor(
-    random(min, max + 1)
-  );
-}
 
-function money(value) {
-  return new Intl.NumberFormat(
-    'en-US',
-    {
-      maximumFractionDigits: 0,
-    }
-  ).format(
-    safeNumber(value)
-  );
-}
-
-function getOverall(player) {
-  return safeNumber(
-    player?.overall ??
-      player?.rating ??
-      player?.overallRating,
-    60
-  );
-}
-
-function getPosition(player) {
+function getPlayerPosition(player) {
   return (
     player?.position ||
     player?.primaryPosition ||
@@ -156,152 +90,190 @@ function getPosition(player) {
   );
 }
 
-function getName(player, index) {
-  return (
-    player?.name ||
-    player?.fullName ||
-    `${getPosition(player)} Player ${
-      index + 1
-    }`
+
+function getPlayerOverall(player) {
+  return safeNumber(
+    player?.overall ??
+      player?.rating ??
+      player?.overallRating,
+    60
   );
 }
 
-function getClubName(club) {
+
+function getPlayerAge(player) {
+  if (player?.age) {
+    return safeNumber(player.age, 0);
+  }
+
+  if (player?.dateOfBirth) {
+    const dob = new Date(
+      player.dateOfBirth
+    );
+
+    if (!Number.isNaN(dob.getTime())) {
+      const now = new Date();
+
+      let age =
+        now.getFullYear() -
+        dob.getFullYear();
+
+      const month =
+        now.getMonth() -
+        dob.getMonth();
+
+      if (
+        month < 0 ||
+        (
+          month === 0 &&
+          now.getDate() <
+            dob.getDate()
+        )
+      ) {
+        age--;
+      }
+
+      return age;
+    }
+  }
+
+  return 0;
+}
+
+
+function randomBetween(min, max) {
+  return Math.floor(
+    Math.random() * (max - min + 1)
+  ) + min;
+}
+
+
+function clamp(value, min, max) {
+  return Math.max(
+    min,
+    Math.min(max, value)
+  );
+}
+
+
+function pick(array) {
+  if (!array?.length) {
+    return null;
+  }
+
+  return array[
+    Math.floor(
+      Math.random() * array.length
+    )
+  ];
+}
+
+
+/* =========================================================
+   CLUB HELPERS
+========================================================= */
+
+function getClubName(club, fallback) {
   return (
     club?.name ||
     club?.clubName ||
+    fallback ||
     'Unknown Club'
   );
 }
 
-function getClubColor(club, fallback) {
+
+function getClubLogo(club) {
+  return (
+    club?.logo ||
+    club?.logoUrl ||
+    club?.image ||
+    null
+  );
+}
+
+
+function getClubPrimaryColor(club) {
   return (
     club?.primaryColor ||
+    club?.colors?.primary ||
     club?.color ||
-    club?.kitColor ||
-    fallback
+    '#2563eb'
   );
 }
 
-function getSecondColor(club, fallback) {
+
+function getClubSecondaryColor(club) {
   return (
     club?.secondaryColor ||
-    club?.accentColor ||
-    club?.kitSecondaryColor ||
-    fallback
+    club?.colors?.secondary ||
+    '#ffffff'
   );
 }
 
-function timestampDate(value) {
-  if (!value) return null;
 
-  if (
-    typeof value?.toDate ===
-    'function'
-  ) {
-    return value.toDate();
-  }
-
-  const date = new Date(value);
-
-  return Number.isNaN(
-    date.getTime()
-  )
-    ? null
-    : date;
-}
-
-function getKickoff(fixture) {
+function getClubStadium(club) {
   return (
-    fixture?.kickoff ||
-    fixture?.dateTime ||
-    fixture?.matchDate ||
-    fixture?.scheduledAt ||
-    null
+    club?.stadium ||
+    club?.stadiumName ||
+    club?.homeGround ||
+    'Main Stadium'
   );
 }
 
-function getTeamId(fixture, side) {
-  if (side === 'home') {
-    return (
-      fixture?.homeClubId ||
-      fixture?.homeTeamId ||
-      fixture?.home?.id ||
-      null
-    );
-  }
 
-  return (
-    fixture?.awayClubId ||
-    fixture?.awayTeamId ||
-    fixture?.away?.id ||
-    null
+function getClubCapacity(club) {
+  return safeNumber(
+    club?.stadiumCapacity ??
+      club?.capacity ??
+      club?.stadium?.capacity,
+    30000
   );
 }
 
-function getTeamName(fixture, side) {
-  if (side === 'home') {
-    return (
-      fixture?.homeClubName ||
-      fixture?.homeTeamName ||
-      fixture?.home?.name ||
-      'Home'
-    );
-  }
-
-  return (
-    fixture?.awayClubName ||
-    fixture?.awayTeamName ||
-    fixture?.away?.name ||
-    'Away'
-  );
-}
 
 /* =========================================================
-   POSITION HELPERS
+   POSITION NORMALIZATION
 ========================================================= */
 
-function positionGroup(player) {
-  const position = normalize(
-    getPosition(player)
-  );
+function normalizePosition(position) {
+  const value =
+    normalize(position);
 
   if (
-    position.includes('goal') ||
-    position === 'gk' ||
-    position === 'keeper'
+    value.includes('goal') ||
+    value === 'gk' ||
+    value === 'keeper'
   ) {
     return 'GK';
   }
 
   if (
-    position.includes('def') ||
-    position === 'cb' ||
-    position === 'lb' ||
-    position === 'rb' ||
-    position === 'lwb' ||
-    position === 'rwb'
+    value.includes('def') ||
+    value === 'cb' ||
+    value === 'lb' ||
+    value === 'rb'
   ) {
     return 'DEF';
   }
 
   if (
-    position.includes('mid') ||
-    position === 'cm' ||
-    position === 'dm' ||
-    position === 'am' ||
-    position === 'lm' ||
-    position === 'rm'
+    value.includes('mid') ||
+    value === 'cm' ||
+    value === 'dm' ||
+    value === 'am'
   ) {
     return 'MID';
   }
 
   if (
-    position.includes('wing') ||
-    position.includes('forward') ||
-    position.includes('striker') ||
-    position === 'st' ||
-    position === 'cf'
+    value.includes('attack') ||
+    value.includes('forward') ||
+    value.includes('striker') ||
+    value === 'st' ||
+    value === 'cf' ||
+    value === 'lw' ||
+    value === 'rw'
   ) {
     return 'ATT';
   }
@@ -309,1063 +281,499 @@ function positionGroup(player) {
   return 'MID';
 }
 
+
 /* =========================================================
-   TEMPORARY SQUAD GENERATOR
-   These players are NEVER written to Firestore.
+   TEMPORARY PLAYER GENERATOR
 ========================================================= */
 
 function generateTemporaryPlayer(
-  teamName,
-  index,
-  preferredGroup
+  club,
+  index
 ) {
+  const positions = [
+    'GK',
+    'DEF',
+    'DEF',
+    'DEF',
+    'DEF',
+    'MID',
+    'MID',
+    'MID',
+    'MID',
+    'ATT',
+    'ATT',
+  ];
+
+  const position =
+    positions[
+      index % positions.length
+    ];
+
   const base =
-    preferredGroup === 'GK'
-      ? randomInt(58, 75)
-      : randomInt(55, 74);
+    randomBetween(58, 74);
 
   return {
-    id: `temporary-${Date.now()}-${Math.random()
+    id: `temporary-${club?.id || 'club'}-${Date.now()}-${index}-${Math.random()
       .toString(36)
-      .slice(2)}-${index}`,
+      .slice(2, 7)}`,
 
-    name: `${teamName} Academy ${index + 1}`,
+    name: `Generated Player ${index + 1}`,
 
-    fullName: `${teamName} Academy ${index + 1}`,
+    fullName: `Generated Player ${index + 1}`,
 
-    position:
-      preferredGroup === 'GK'
-        ? 'GK'
-        : preferredGroup === 'DEF'
-        ? 'DEF'
-        : preferredGroup === 'ATT'
-        ? 'ST'
-        : 'CM',
+    position,
+
+    primaryPosition:
+      position,
 
     overall: base,
 
-    age: randomInt(18, 25),
+    rating: base,
 
-    nationality: 'Generated',
+    age: randomBetween(18, 32),
 
-    photo: null,
+    nationality:
+      club?.country ||
+      'International',
 
     temporary: true,
 
-    teamName,
+    clubId:
+      club?.id || null,
 
-    fitness: randomInt(80, 100),
+    clubName:
+      getClubName(
+        club,
+        'Club'
+      ),
 
-    morale: randomInt(65, 90),
-
-    pace: randomInt(50, 85),
-
-    passing: randomInt(50, 85),
-
-    shooting: randomInt(45, 85),
-
-    defending: randomInt(45, 85),
+    photo: null,
   };
 }
 
-function normalizeSquad(
-  players,
-  teamName
+
+function generateTemporarySquad(
+  club,
+  count
 ) {
-  const source = Array.isArray(players)
-    ? [...players]
-    : [];
-
-  const groups = {
-    GK: [],
-    DEF: [],
-    MID: [],
-    ATT: [],
-  };
-
-  source.forEach((player) => {
-    groups[positionGroup(player)].push(
-      player
-    );
-  });
-
-  const target = {
-    GK: 3,
-    DEF: 7,
-    MID: 7,
-    ATT: 5,
-  };
-
-  let counter = 0;
-
-  Object.entries(target).forEach(
-    ([group, count]) => {
-      while (
-        groups[group].length <
-        count
-      ) {
-        groups[group].push(
-          generateTemporaryPlayer(
-            teamName,
-            counter++,
-            group
-          )
-        );
-      }
-    }
+  return Array.from(
+    {
+      length: count,
+    },
+    (_, index) =>
+      generateTemporaryPlayer(
+        club,
+        index
+      )
   );
+}
+
+
+/* =========================================================
+   SQUAD PREPARATION
+========================================================= */
+
+function prepareSquad(
+  players,
+  club
+) {
+  const safePlayers =
+    Array.isArray(players)
+      ? [...players]
+      : [];
+
+  if (
+    safePlayers.length >=
+    MAX_SQUAD_SIZE
+  ) {
+    return safePlayers.slice(
+      0,
+      MAX_SQUAD_SIZE
+    );
+  }
+
+  const generated =
+    generateTemporarySquad(
+      club,
+      MAX_SQUAD_SIZE -
+        safePlayers.length
+    );
 
   return [
-    ...groups.GK,
-    ...groups.DEF,
-    ...groups.MID,
-    ...groups.ATT,
-  ].slice(0, 25);
+    ...safePlayers,
+    ...generated,
+  ];
 }
+
 
 /* =========================================================
    STARTING XI
 ========================================================= */
 
-function buildStartingXI(
-  squad,
-  formation
+function selectStartingXI(
+  squad
 ) {
-  const config =
-    FORMATIONS[formation] ||
-    FORMATIONS['4-3-3'];
+  const goalkeepers =
+    squad.filter(
+      (player) =>
+        normalizePosition(
+          getPlayerPosition(player)
+        ) === 'GK'
+    );
 
-  const remaining = [...squad];
+  const defenders =
+    squad.filter(
+      (player) =>
+        normalizePosition(
+          getPlayerPosition(player)
+        ) === 'DEF'
+    );
+
+  const midfielders =
+    squad.filter(
+      (player) =>
+        normalizePosition(
+          getPlayerPosition(player)
+        ) === 'MID'
+    );
+
+  const attackers =
+    squad.filter(
+      (player) =>
+        normalizePosition(
+          getPlayerPosition(player)
+        ) === 'ATT'
+    );
+
+  const used = new Set();
 
   const result = [];
 
-  const groups = {
-    GK: [],
-    DEF: [],
-    MID: [],
-    ATT: [],
-  };
-
-  remaining.forEach((player) => {
-    groups[positionGroup(player)].push(
-      player
+  function addBest(list, count) {
+    const sorted = [
+      ...list,
+    ].sort(
+      (a, b) =>
+        getPlayerOverall(b) -
+        getPlayerOverall(a)
     );
-  });
 
-  Object.entries(config).forEach(
-    ([group, amount]) => {
-      for (
-        let index = 0;
-        index < amount;
-        index++
-      ) {
+    sorted
+      .slice(0, count)
+      .forEach((player) => {
         if (
-          groups[group].length
+          !used.has(player.id)
         ) {
-          result.push(
-            groups[group].shift()
-          );
+          used.add(player.id);
+          result.push(player);
         }
-      }
-    }
-  );
+      });
+  }
+
+  addBest(goalkeepers, 1);
+
+  addBest(defenders, 4);
+
+  addBest(midfielders, 4);
+
+  addBest(attackers, 2);
+
+  const remaining =
+    squad
+      .filter(
+        (player) =>
+          !used.has(player.id)
+      )
+      .sort(
+        (a, b) =>
+          getPlayerOverall(b) -
+          getPlayerOverall(a)
+      );
 
   while (
-    result.length < 11 &&
+    result.length <
+    PLAYERS_ON_PITCH &&
     remaining.length
   ) {
-    const player =
-      remaining.find(
-        (item) =>
-          !result.some(
-            (selected) =>
-              selected.id === item.id
-          )
-      );
-
-    if (!player) break;
-
-    result.push(player);
+    result.push(
+      remaining.shift()
+    );
   }
 
-  return result.slice(0, 11);
+  return result.slice(
+    0,
+    PLAYERS_ON_PITCH
+  );
 }
 
-/* =========================================================
-   INITIAL PLAYER STATE
-========================================================= */
-
-function createPlayerState(
-  player
-) {
-  return {
-    ...player,
-
-    matchRating: 6.5,
-
-    fitness: clamp(
-      safeNumber(
-        player?.fitness,
-        100
-      ),
-      0,
-      100
-    ),
-
-    yellow: false,
-
-    red: false,
-
-    goals: 0,
-
-    assists: 0,
-
-    shots: 0,
-
-    shotsOnTarget: 0,
-
-    passes: 0,
-
-    successfulPasses: 0,
-
-    fouls: 0,
-
-    saves: 0,
-
-    minutes: 0,
-  };
-}
 
 /* =========================================================
-   ENGINE
+   FORMATION POSITIONS
 ========================================================= */
 
-function createInitialEngine(
-  homePlayers,
-  awayPlayers,
-  homeFormation,
-  awayFormation
-) {
-  const homeXI =
-    buildStartingXI(
-      homePlayers,
-      homeFormation
-    ).map(createPlayerState);
-
-  const awayXI =
-    buildStartingXI(
-      awayPlayers,
-      awayFormation
-    ).map(createPlayerState);
-
-  return {
-    minute: 0,
-
-    second: 0,
-
-    phase: 'first-half',
-
-    running: false,
-
-    finished: false,
-
-    homeScore: 0,
-
-    awayScore: 0,
-
-    possession: 50,
-
-    homeStats: {
-      shots: 0,
-      shotsOnTarget: 0,
-      corners: 0,
-      fouls: 0,
-      offsides: 0,
-      yellow: 0,
-      red: 0,
-      passes: 0,
-      successfulPasses: 0,
-      possession: 50,
+const FORMATION_POSITIONS = {
+  balanced: [
+    {
+      x: 8,
+      y: 50,
     },
-
-    awayStats: {
-      shots: 0,
-      shotsOnTarget: 0,
-      corners: 0,
-      fouls: 0,
-      offsides: 0,
-      yellow: 0,
-      red: 0,
-      passes: 0,
-      successfulPasses: 0,
-      possession: 50,
+    {
+      x: 23,
+      y: 18,
     },
-
-    homeXI,
-
-    awayXI,
-
-    homeBench:
-      homePlayers
-        .filter(
-          (player) =>
-            !homeXI.some(
-              (item) =>
-                item.id === player.id
-            )
-        )
-        .map(createPlayerState),
-
-    awayBench:
-      awayPlayers
-        .filter(
-          (player) =>
-            !awayXI.some(
-              (item) =>
-                item.id === player.id
-            )
-        )
-        .map(createPlayerState),
-
-    events: [],
-
-    substitutions: {
-      home: 0,
-      away: 0,
+    {
+      x: 23,
+      y: 39,
     },
-
-    substitutionWindows: {
-      home: 0,
-      away: 0,
+    {
+      x: 23,
+      y: 61,
     },
+    {
+      x: 23,
+      y: 82,
+    },
+    {
+      x: 42,
+      y: 20,
+    },
+    {
+      x: 42,
+      y: 42,
+    },
+    {
+      x: 42,
+      y: 58,
+    },
+    {
+      x: 42,
+      y: 80,
+    },
+    {
+      x: 62,
+      y: 36,
+    },
+    {
+      x: 62,
+      y: 64,
+    },
+  ],
 
-    lastEvent: null,
-  };
-}
+  attacking: [
+    {
+      x: 8,
+      y: 50,
+    },
+    {
+      x: 22,
+      y: 18,
+    },
+    {
+      x: 22,
+      y: 40,
+    },
+    {
+      x: 22,
+      y: 60,
+    },
+    {
+      x: 22,
+      y: 82,
+    },
+    {
+      x: 40,
+      y: 20,
+    },
+    {
+      x: 40,
+      y: 50,
+    },
+    {
+      x: 40,
+      y: 80,
+    },
+    {
+      x: 59,
+      y: 20,
+    },
+    {
+      x: 64,
+      y: 50,
+    },
+    {
+      x: 59,
+      y: 80,
+    },
+  ],
+
+  defensive: [
+    {
+      x: 8,
+      y: 50,
+    },
+    {
+      x: 20,
+      y: 18,
+    },
+    {
+      x: 20,
+      y: 39,
+    },
+    {
+      x: 20,
+      y: 61,
+    },
+    {
+      x: 20,
+      y: 82,
+    },
+    {
+      x: 38,
+      y: 20,
+    },
+    {
+      x: 38,
+      y: 42,
+    },
+    {
+      x: 38,
+      y: 58,
+    },
+    {
+      x: 38,
+      y: 80,
+    },
+    {
+      x: 52,
+      y: 38,
+    },
+    {
+      x: 52,
+      y: 62,
+    },
+  ],
+};
+
 
 /* =========================================================
-   MATCH EVENTS
+   EVENT TYPES
 ========================================================= */
 
-function eventText(event) {
-  switch (event.type) {
-    case 'goal':
-      return `⚽ GOAL! ${event.playerName}`;
+const EVENT_TYPES = {
+  GOAL: 'goal',
+  YELLOW: 'yellow',
+  RED: 'red',
+  FOUL: 'foul',
+  CORNER: 'corner',
+  OFFSIDE: 'offside',
+  SAVE: 'save',
+  SHOT: 'shot',
+  SUBSTITUTION: 'substitution',
+  INJURY: 'injury',
+};
 
-    case 'shot':
-      return `🎯 ${event.playerName} takes a shot`;
 
-    case 'save':
-      return `🧤 ${event.playerName} makes a save`;
+/* =========================================================
+   EVENT LABEL
+========================================================= */
 
-    case 'corner':
-      return `🚩 Corner kick`;
+function eventLabel(event) {
+  switch (event?.type) {
+    case EVENT_TYPES.GOAL:
+      return 'GOAL';
 
-    case 'yellow':
-      return `🟨 Yellow card: ${event.playerName}`;
+    case EVENT_TYPES.YELLOW:
+      return 'YELLOW CARD';
 
-    case 'red':
-      return `🟥 Red card: ${event.playerName}`;
+    case EVENT_TYPES.RED:
+      return 'RED CARD';
 
-    case 'foul':
-      return `⚠️ Foul by ${event.playerName}`;
+    case EVENT_TYPES.FOUL:
+      return 'FOUL';
 
-    case 'offside':
-      return `🚩 Offside: ${event.playerName}`;
+    case EVENT_TYPES.CORNER:
+      return 'CORNER';
 
-    case 'substitution':
-      return `🔄 ${event.playerOut} replaced by ${event.playerIn}`;
+    case EVENT_TYPES.OFFSIDE:
+      return 'OFFSIDE';
 
-    case 'halftime':
-      return '⏸ Half time';
+    case EVENT_TYPES.SAVE:
+      return 'SAVE';
 
-    case 'fulltime':
-      return '🏁 Full time';
+    case EVENT_TYPES.SHOT:
+      return 'SHOT';
+
+    case EVENT_TYPES.SUBSTITUTION:
+      return 'SUBSTITUTION';
+
+    case EVENT_TYPES.INJURY:
+      return 'INJURY';
 
     default:
-      return event.description || 'Match event';
+      return 'MATCH EVENT';
   }
 }
 
+
 /* =========================================================
-   SIMULATION
+   EVENT ICON
 ========================================================= */
 
-function simulateTick(
-  engine,
-  tactics
-) {
-  const next = {
-    ...engine,
+function eventIcon(event) {
+  switch (event?.type) {
+    case EVENT_TYPES.GOAL:
+      return '⚽';
 
-    homeStats: {
-      ...engine.homeStats,
-    },
+    case EVENT_TYPES.YELLOW:
+      return '🟨';
 
-    awayStats: {
-      ...engine.awayStats,
-    },
+    case EVENT_TYPES.RED:
+      return '🟥';
 
-    homeXI:
-      engine.homeXI.map(
-        (player) => ({
-          ...player,
-        })
-      ),
+    case EVENT_TYPES.CORNER:
+      return '🚩';
 
-    awayXI:
-      engine.awayXI.map(
-        (player) => ({
-          ...player,
-        })
-      ),
+    case EVENT_TYPES.OFFSIDE:
+      return '🚩';
 
-    events: [...engine.events],
+    case EVENT_TYPES.SAVE:
+      return '🧤';
 
-    substitutions: {
-      ...engine.substitutions,
-    },
+    case EVENT_TYPES.SUBSTITUTION:
+      return '🔄';
 
-    substitutionWindows: {
-      ...engine.substitutionWindows,
-    },
-  };
+    case EVENT_TYPES.INJURY:
+      return '🩹';
 
-  next.second += 1;
-
-  if (
-    next.second >= 60
-  ) {
-    next.minute +=
-      Math.floor(
-        next.second / 60
-      );
-
-    next.second %= 60;
+    default:
+      return '•';
   }
-
-  if (
-    next.minute >=
-    MATCH_DURATION
-  ) {
-    next.finished = true;
-    next.running = false;
-    next.phase = 'full-time';
-
-    next.events.push({
-      id: `event-${Date.now()}`,
-
-      minute:
-        MATCH_DURATION,
-
-      type: 'fulltime',
-
-      description:
-        'Full time',
-    });
-
-    next.lastEvent =
-      'Full time';
-
-    return next;
-  }
-
-  if (
-    next.minute ===
-      HALF_DURATION &&
-    next.phase ===
-      'first-half'
-  ) {
-    next.phase = 'second-half';
-
-    next.events.push({
-      id: `event-${Date.now()}`,
-
-      minute: HALF_DURATION,
-
-      type: 'halftime',
-
-      description:
-        'Half time',
-    });
-
-    next.lastEvent =
-      'Half time';
-
-    return next;
-  }
-
-  const homeTactic =
-    tactics.home;
-
-  const awayTactic =
-    tactics.away;
-
-  const homeStrength =
-    next.homeXI.reduce(
-      (sum, player) =>
-        sum +
-        getOverall(player) *
-          (player.fitness / 100),
-      0
-    ) /
-    Math.max(
-      1,
-      next.homeXI.length
-    );
-
-  const awayStrength =
-    next.awayXI.reduce(
-      (sum, player) =>
-        sum +
-        getOverall(player) *
-          (player.fitness / 100),
-      0
-    ) /
-    Math.max(
-      1,
-      next.awayXI.length
-    );
-
-  let homeChance =
-    0.22;
-
-  let awayChance =
-    0.22;
-
-  if (
-    homeTactic ===
-    'attacking'
-  ) {
-    homeChance += 0.12;
-  }
-
-  if (
-    awayTactic ===
-    'attacking'
-  ) {
-    awayChance += 0.12;
-  }
-
-  if (
-    homeTactic ===
-    'defensive'
-  ) {
-    homeChance -= 0.06;
-  }
-
-  if (
-    awayTactic ===
-    'defensive'
-  ) {
-    awayChance -= 0.06;
-  }
-
-  homeChance +=
-    (homeStrength -
-      awayStrength) *
-    0.004;
-
-  awayChance +=
-    (awayStrength -
-      homeStrength) *
-    0.004;
-
-  const total =
-    homeChance +
-    awayChance;
-
-  const possessionBase =
-    50 +
-    (homeStrength -
-      awayStrength) *
-      0.7;
-
-  next.possession =
-    clamp(
-      possessionBase,
-      35,
-      65
-    );
-
-  next.homeStats.possession =
-    Math.round(
-      next.possession
-    );
-
-  next.awayStats.possession =
-    100 -
-    next.homeStats.possession;
-
-  const eventRoll =
-    random();
-
-  const isHome =
-    random() <
-    next.possession / 100;
-
-  const team =
-    isHome
-      ? 'home'
-      : 'away';
-
-  const teamPlayers =
-    isHome
-      ? next.homeXI
-      : next.awayXI;
-
-  const stats =
-    isHome
-      ? next.homeStats
-      : next.awayStats;
-
-  const activePlayers =
-    teamPlayers.filter(
-      (player) =>
-        !player.red
-    );
-
-  if (
-    !activePlayers.length
-  ) {
-    return next;
-  }
-
-  const player =
-    activePlayers[
-      randomInt(
-        0,
-        activePlayers.length - 1
-      )
-    ];
-
-  /* PASS */
-
-  stats.passes += randomInt(1, 4);
-
-  stats.successfulPasses +=
-    randomInt(
-      1,
-      stats.passes
-    );
-
-  player.passes +=
-    randomInt(1, 3);
-
-  player.successfulPasses +=
-    randomInt(1, 3);
-
-  /* FATIGUE */
-
-  player.fitness = clamp(
-    player.fitness -
-      random(
-        0.04,
-        0.14
-      ),
-    0,
-    100
-  );
-
-  player.minutes =
-    Math.max(
-      player.minutes,
-      next.minute
-    );
-
-  /* EVENT */
-
-  if (
-    eventRoll <
-    homeChance *
-      0.28
-  ) {
-    stats.shots += 1;
-
-    player.shots += 1;
-
-    const onTarget =
-      random() <
-      0.38 +
-        getOverall(player) /
-          500;
-
-    if (onTarget) {
-      stats.shotsOnTarget +=
-        1;
-
-      player.shotsOnTarget +=
-        1;
-
-      const keeper =
-        (
-          isHome
-            ? next.awayXI
-            : next.homeXI
-        ).find(
-          (item) =>
-            positionGroup(item) ===
-            'GK'
-        );
-
-      const goalChance =
-        0.08 +
-        getOverall(player) /
-          1200;
-
-      if (
-        random() <
-        goalChance
-      ) {
-        if (isHome) {
-          next.homeScore +=
-            1;
-        } else {
-          next.awayScore +=
-            1;
-        }
-
-        player.goals += 1;
-
-        player.matchRating +=
-          0.65;
-
-        if (keeper) {
-          keeper.matchRating -=
-            0.25;
-        }
-
-        const event = {
-          id: `goal-${Date.now()}-${Math.random()}`,
-
-          minute:
-            next.minute,
-
-          type: 'goal',
-
-          team,
-
-          playerId:
-            player.id,
-
-          playerName:
-            getName(
-              player,
-              0
-            ),
-
-          scoreHome:
-            next.homeScore,
-
-          scoreAway:
-            next.awayScore,
-
-          description:
-            `${getName(
-              player,
-              0
-            )} scored`,
-        };
-
-        next.events.push(event);
-
-        next.lastEvent =
-          eventText(event);
-
-        return next;
-      }
-
-      if (keeper) {
-        keeper.saves += 1;
-        keeper.matchRating +=
-          0.08;
-
-        stats.shotsOnTarget +=
-          0;
-
-        const event = {
-          id: `save-${Date.now()}`,
-
-          minute:
-            next.minute,
-
-          type: 'save',
-
-          team:
-            isHome
-              ? 'away'
-              : 'home',
-
-          playerName:
-            getName(
-              keeper,
-              0
-            ),
-
-          description:
-            'Goalkeeper save',
-        };
-
-        next.events.push(event);
-
-        next.lastEvent =
-          eventText(event);
-
-        return next;
-      }
-
-      const event = {
-        id: `shot-${Date.now()}`,
-
-        minute:
-          next.minute,
-
-        type: 'shot',
-
-        team,
-
-        playerName:
-          getName(
-            player,
-            0
-          ),
-
-        description:
-          'Shot on target',
-      };
-
-      next.events.push(event);
-
-      next.lastEvent =
-        eventText(event);
-
-      return next;
-    }
-
-    const event = {
-      id: `shot-${Date.now()}`,
-
-      minute:
-        next.minute,
-
-      type: 'shot',
-
-      team,
-
-      playerName:
-        getName(
-          player,
-          0
-        ),
-
-      description:
-        'Shot missed',
-    };
-
-    next.events.push(event);
-
-    next.lastEvent =
-      eventText(event);
-
-    return next;
-  }
-
-  /* CORNER */
-
-  if (
-    eventRoll <
-    0.13
-  ) {
-    stats.corners += 1;
-
-    const event = {
-      id: `corner-${Date.now()}`,
-
-      minute:
-        next.minute,
-
-      type: 'corner',
-
-      team,
-
-      description:
-        'Corner kick',
-    };
-
-    next.events.push(event);
-
-    next.lastEvent =
-      eventText(event);
-
-    return next;
-  }
-
-  /* FOUL */
-
-  if (
-    eventRoll <
-    0.22
-  ) {
-    stats.fouls += 1;
-
-    player.fouls += 1;
-
-    const cardChance =
-      random();
-
-    if (
-      cardChance <
-      0.12 &&
-      !player.yellow
-    ) {
-      player.yellow = true;
-
-      stats.yellow += 1;
-
-      const event = {
-        id: `yellow-${Date.now()}`,
-
-        minute:
-          next.minute,
-
-        type: 'yellow',
-
-        team,
-
-        playerName:
-          getName(
-            player,
-            0
-          ),
-
-        description:
-          'Yellow card',
-      };
-
-      next.events.push(event);
-
-      next.lastEvent =
-        eventText(event);
-
-      return next;
-    }
-
-    if (
-      cardChance <
-        0.015 &&
-      player.yellow
-    ) {
-      player.red = true;
-
-      stats.red += 1;
-
-      const event = {
-        id: `red-${Date.now()}`,
-
-        minute:
-          next.minute,
-
-        type: 'red',
-
-        team,
-
-        playerName:
-          getName(
-            player,
-            0
-          ),
-
-        description:
-          'Second yellow / red card',
-      };
-
-      next.events.push(event);
-
-      next.lastEvent =
-        eventText(event);
-
-      return next;
-    }
-
-    const event = {
-      id: `foul-${Date.now()}`,
-
-      minute:
-        next.minute,
-
-      type: 'foul',
-
-      team,
-
-      playerName:
-        getName(
-          player,
-          0
-        ),
-
-      description:
-        'Foul committed',
-    };
-
-    next.events.push(event);
-
-    next.lastEvent =
-      eventText(event);
-
-    return next;
-  }
-
-  /* OFFSIDE */
-
-  if (
-    eventRoll <
-    0.27
-  ) {
-    stats.offsides += 1;
-
-    const event = {
-      id: `offside-${Date.now()}`,
-
-      minute:
-        next.minute,
-
-      type: 'offside',
-
-      team,
-
-      playerName:
-        getName(
-          player,
-          0
-        ),
-
-      description:
-        'Offside',
-    };
-
-    next.events.push(event);
-
-    next.lastEvent =
-      eventText(event);
-
-    return next;
-  }
-
-  return next;
 }
 
+
 /* =========================================================
-   PAGE
+   COMPONENT
 ========================================================= */
 
 export default function MatchPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
   const {
     user,
-    userData,
     loading,
   } = useAuth();
+
+  const matchId =
+    typeof router.query.id ===
+    'string'
+      ? router.query.id
+      : null;
+
+
+  /* =======================================================
+     STATE
+  ======================================================= */
 
   const [fixture, setFixture] =
     useState(null);
@@ -1376,103 +784,195 @@ export default function MatchPage() {
   const [awayClub, setAwayClub] =
     useState(null);
 
+  const [homeSquad, setHomeSquad] =
+    useState([]);
+
+  const [awaySquad, setAwaySquad] =
+    useState([]);
+
+  const [homeXI, setHomeXI] =
+    useState([]);
+
+  const [awayXI, setAwayXI] =
+    useState([]);
+
+  const [homeBench, setHomeBench] =
+    useState([]);
+
+  const [awayBench, setAwayBench] =
+    useState([]);
+
+  const [homeScore, setHomeScore] =
+    useState(0);
+
+  const [awayScore, setAwayScore] =
+    useState(0);
+
+  const [matchMinute, setMatchMinute] =
+    useState(0);
+
+  const [matchStatus, setMatchStatus] =
+    useState('loading');
+
+  const [events, setEvents] =
+    useState([]);
+
+  const [homeStats, setHomeStats] =
+    useState({
+      shots: 0,
+      shotsOnTarget: 0,
+      possession: 50,
+      passes: 0,
+      fouls: 0,
+      corners: 0,
+      offsides: 0,
+      yellow: 0,
+      red: 0,
+    });
+
+  const [awayStats, setAwayStats] =
+    useState({
+      shots: 0,
+      shotsOnTarget: 0,
+      possession: 50,
+      passes: 0,
+      fouls: 0,
+      corners: 0,
+      offsides: 0,
+      yellow: 0,
+      red: 0,
+    });
+
+  const [mentality, setMentality] =
+    useState('balanced');
+
+  const [selectedSubPlayer, setSelectedSubPlayer] =
+    useState('');
+
+  const [showTactics, setShowTactics] =
+    useState(false);
+
+  const [showSubs, setShowSubs] =
+    useState(false);
+
+  const [showEvents, setShowEvents] =
+    useState(true);
+
   const [loadingMatch, setLoadingMatch] =
     useState(true);
 
-  const [error, setError] =
-    useState('');
-
-  const [engine, setEngine] =
-    useState(null);
-
-  const [started, setStarted] =
+  const [savingMatch, setSavingMatch] =
     useState(false);
 
   const [paused, setPaused] =
     useState(false);
 
-  const [saving, setSaving] =
+  const [halfTimeShown, setHalfTimeShown] =
     useState(false);
 
-  const [homeFormation, setHomeFormation] =
-    useState('4-3-3');
-
-  const [awayFormation] =
-    useState('4-3-3');
-
-  const [homeTactic, setHomeTactic] =
-    useState('balanced');
-
-  const [tempo, setTempo] =
-    useState('normal');
-
-  const [pressing, setPressing] =
-    useState('medium');
-
-  const [selectedPlayer, setSelectedPlayer] =
+  const [userClubId, setUserClubId] =
     useState(null);
 
-  const [showTactics, setShowTactics] =
-    useState(false);
+  const [substitutionsUsed, setSubstitutionsUsed] =
+    useState(0);
 
-  const [showSquad, setShowSquad] =
-    useState(false);
+  const [selectedTeam, setSelectedTeam] =
+    useState('home');
 
-  const [currentTime, setCurrentTime] =
-    useState(Date.now());
-
-  const engineRef =
+  const timerRef =
     useRef(null);
+
+  const processedSeconds =
+    useRef(new Set());
+
+
+  /* =======================================================
+     DETERMINE USER CLUB
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      loading ||
+      !user
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadUserClub() {
+      try {
+        const userRef =
+          doc(
+            db,
+            'users',
+            user.uid
+          );
+
+        const snapshot =
+          await getDoc(userRef);
+
+        if (
+          !snapshot.exists()
+        ) {
+          return;
+        }
+
+        const data =
+          snapshot.data();
+
+        const career =
+          data.careerData ||
+          {};
+
+        const clubId =
+          career.currentClub ||
+          data.currentClub ||
+          data.clubId ||
+          null;
+
+        if (!cancelled) {
+          setUserClubId(
+            clubId
+          );
+        }
+      } catch (error) {
+        console.error(
+          'User club error:',
+          error
+        );
+      }
+    }
+
+    loadUserClub();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    loading,
+  ]);
+
 
   /* =======================================================
      LOAD MATCH
   ======================================================= */
 
   useEffect(() => {
-    if (!router.isReady) return;
-
-    if (!loading && !user) {
-      router.replace('/login');
+    if (
+      loading ||
+      !user ||
+      !matchId
+    ) {
       return;
     }
 
-    if (!user) return;
+    let cancelled = false;
 
-    const matchId =
-      router.query.id ||
-      router.query.matchId;
-
-    if (!matchId) {
-      setError(
-        'No match was specified.'
-      );
-
-      setLoadingMatch(false);
-
-      return;
-    }
-
-    loadMatch(
-      String(matchId)
-    );
-  }, [
-    router.isReady,
-    router.query.id,
-    router.query.matchId,
-    user,
-    loading,
-  ]);
-
-  /* =======================================================
-     LOAD FIXTURE + CLUBS + PLAYERS
-  ======================================================= */
-
-  const loadMatch =
-    async (matchId) => {
+    async function loadMatch() {
       try {
         setLoadingMatch(true);
-
-        setError('');
 
         const fixtureRef =
           doc(
@@ -1489,8 +989,12 @@ export default function MatchPage() {
         if (
           !fixtureSnapshot.exists()
         ) {
-          setError(
-            'This fixture does not exist.'
+          toast.error(
+            'Match not found'
+          );
+
+          router.push(
+            '/fixtures'
           );
 
           return;
@@ -1499,43 +1003,33 @@ export default function MatchPage() {
         const fixtureData = {
           id:
             fixtureSnapshot.id,
-
           ...fixtureSnapshot.data(),
         };
 
-        const kickoff =
-          timestampDate(
-            getKickoff(
-              fixtureData
-            )
-          );
-
-        if (!kickoff) {
-          setError(
-            'This match has no valid kickoff time.'
-          );
-
+        if (cancelled) {
           return;
         }
 
+        setFixture(
+          fixtureData
+        );
+
         const homeId =
-          getTeamId(
-            fixtureData,
-            'home'
-          );
+          fixtureData.homeClubId ||
+          fixtureData.homeTeamId ||
+          fixtureData.homeId;
 
         const awayId =
-          getTeamId(
-            fixtureData,
-            'away'
-          );
+          fixtureData.awayClubId ||
+          fixtureData.awayTeamId ||
+          fixtureData.awayId;
 
         if (
           !homeId ||
           !awayId
         ) {
-          setError(
-            'The fixture has incomplete team information.'
+          toast.error(
+            'Invalid fixture'
           );
 
           return;
@@ -1552,7 +1046,6 @@ export default function MatchPage() {
               homeId
             )
           ),
-
           getDoc(
             doc(
               db,
@@ -1562,37 +1055,34 @@ export default function MatchPage() {
           ),
         ]);
 
-        const homeData =
-          homeSnapshot.exists()
-            ? {
-                id:
-                  homeSnapshot.id,
-                ...homeSnapshot.data(),
-              }
-            : {
-                id: homeId,
-                name:
-                  getTeamName(
-                    fixtureData,
-                    'home'
-                  ),
-              };
+        const home = homeSnapshot.exists()
+          ? {
+              id:
+                homeSnapshot.id,
+              ...homeSnapshot.data(),
+            }
+          : {
+              id: homeId,
+              name:
+                fixtureData.homeClubName ||
+                'Home',
+            };
 
-        const awayData =
-          awaySnapshot.exists()
-            ? {
-                id:
-                  awaySnapshot.id,
-                ...awaySnapshot.data(),
-              }
-            : {
-                id: awayId,
-                name:
-                  getTeamName(
-                    fixtureData,
-                    'away'
-                  ),
-              };
+        const away = awaySnapshot.exists()
+          ? {
+              id:
+                awaySnapshot.id,
+              ...awaySnapshot.data(),
+            }
+          : {
+              id: awayId,
+              name:
+                fixtureData.awayClubName ||
+                'Away',
+            };
+
+        setHomeClub(home);
+        setAwayClub(away);
 
         const playersSnapshot =
           await getDocs(
@@ -1607,7 +1097,6 @@ export default function MatchPage() {
             (playerDoc) => ({
               id:
                 playerDoc.id,
-
               ...playerDoc.data(),
             })
           );
@@ -1615,566 +1104,1262 @@ export default function MatchPage() {
         const homePlayers =
           allPlayers.filter(
             (player) =>
-              player.clubId ===
-                homeId ||
-              player.currentClub ===
-                homeId ||
-              player.teamId ===
-                homeId
+              String(
+                player.clubId ||
+                player.currentClub ||
+                player.teamId ||
+                ''
+              ) ===
+              String(homeId)
           );
 
         const awayPlayers =
           allPlayers.filter(
             (player) =>
-              player.clubId ===
-                awayId ||
-              player.currentClub ===
-                awayId ||
-              player.teamId ===
-                awayId
+              String(
+                player.clubId ||
+                player.currentClub ||
+                player.teamId ||
+                ''
+              ) ===
+              String(awayId)
           );
 
-        const normalizedHome =
-          normalizeSquad(
+        const preparedHome =
+          prepareSquad(
             homePlayers,
-            getClubName(
-              homeData
-            )
+            home
           );
 
-        const normalizedAway =
-          normalizeSquad(
+        const preparedAway =
+          prepareSquad(
             awayPlayers,
-            getClubName(
-              awayData
-            )
+            away
           );
 
-        const initial =
-          createInitialEngine(
-            normalizedHome,
-            normalizedAway,
-            '4-3-3',
-            '4-3-3'
+        const startingHome =
+          selectStartingXI(
+            preparedHome
           );
 
-        setFixture(
-          fixtureData
+        const startingAway =
+          selectStartingXI(
+            preparedAway
+          );
+
+        setHomeSquad(
+          preparedHome
         );
 
-        setHomeClub(
-          homeData
+        setAwaySquad(
+          preparedAway
         );
 
-        setAwayClub(
-          awayData
+        setHomeXI(
+          startingHome
         );
 
-        setEngine(initial);
+        setAwayXI(
+          startingAway
+        );
 
-        engineRef.current =
-          initial;
-      } catch (loadError) {
+        setHomeBench(
+          preparedHome.filter(
+            (player) =>
+              !startingHome.some(
+                (starter) =>
+                  starter.id ===
+                  player.id
+              )
+          )
+        );
+
+        setAwayBench(
+          preparedAway.filter(
+            (player) =>
+              !startingAway.some(
+                (starter) =>
+                  starter.id ===
+                  player.id
+              )
+          )
+        );
+
+        /*
+         * A finished fixture cannot be played again.
+         */
+        if (
+          normalize(
+            fixtureData.status
+          ) === 'finished' ||
+          normalize(
+            fixtureData.status
+          ) === 'completed'
+        ) {
+          setMatchStatus(
+            'finished'
+          );
+        } else {
+          setMatchStatus(
+            'ready'
+          );
+        }
+      } catch (error) {
         console.error(
           'Match loading error:',
-          loadError
+          error
         );
 
-        setError(
-          'Unable to load this match.'
+        toast.error(
+          'Could not load match'
         );
       } finally {
-        setLoadingMatch(false);
+        if (!cancelled) {
+          setLoadingMatch(
+            false
+          );
+        }
       }
+    }
+
+    loadMatch();
+
+    return () => {
+      cancelled = true;
     };
+  }, [
+    loading,
+    user,
+    matchId,
+    router,
+  ]);
+
 
   /* =======================================================
-     CLOCK
+     USER TEAM
   ======================================================= */
 
-  useEffect(() => {
-    const interval =
-      setInterval(() => {
-        setCurrentTime(
-          Date.now()
-        );
-      }, 1000);
-
-    return () =>
-      clearInterval(interval);
-  }, []);
-
-  const kickoff =
-    useMemo(
-      () =>
-        timestampDate(
-          getKickoff(
-            fixture
-          )
-        ),
-
-      [fixture]
+  const isHomeUser =
+    Boolean(
+      userClubId &&
+      homeClub?.id &&
+      String(userClubId) ===
+        String(homeClub.id)
     );
 
-  const kickoffReached =
-    kickoff &&
-    currentTime >=
-      kickoff.getTime();
+  const isAwayUser =
+    Boolean(
+      userClubId &&
+      awayClub?.id &&
+      String(userClubId) ===
+        String(awayClub.id)
+    );
+
+  const userIsPlaying =
+    isHomeUser ||
+    isAwayUser;
+
+
+  /* =======================================================
+     ACTIVE USER TEAM
+  ======================================================= */
+
+  const userTeam =
+    isHomeUser
+      ? 'home'
+      : isAwayUser
+      ? 'away'
+      : null;
+
 
   /* =======================================================
      START MATCH
   ======================================================= */
 
   const startMatch =
-    () => {
-      if (!fixture) return;
-
-      if (!kickoffReached) {
-        toast.error(
-          'Kickoff time has not arrived yet.'
-        );
-
+    useCallback(() => {
+      if (
+        matchStatus !==
+        'ready'
+      ) {
         return;
       }
 
       if (
-        fixture.status ===
-        'completed'
+        !userIsPlaying
       ) {
         toast.error(
-          'This match has already been completed.'
+          'You are not managing either team in this match.'
         );
 
         return;
       }
 
-      setStarted(true);
+      setMatchStatus(
+        'live'
+      );
 
       setPaused(false);
 
-      setEngine(
-        (previous) => {
-          const next = {
-            ...previous,
-            running: true,
-          };
-
-          engineRef.current =
-            next;
-
-          return next;
-        }
+      toast.success(
+        'Kick-off!'
       );
-    };
+    }, [
+      matchStatus,
+      userIsPlaying,
+    ]);
+
 
   /* =======================================================
-     PAUSE
+     ADD EVENT
   ======================================================= */
 
-  const togglePause =
-    () => {
-      setPaused(
-        (previous) =>
-          !previous
-      );
-    };
+  const addEvent =
+    useCallback(
+      ({
+        type,
+        team,
+        player,
+        text,
+      }) => {
+        const event = {
+          id:
+            `${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2)}`,
+
+          minute:
+            Math.max(
+              1,
+              matchMinute
+            ),
+
+          type,
+
+          team,
+
+          playerId:
+            player?.id ||
+            null,
+
+          playerName:
+            player
+              ? getPlayerName(
+                  player
+                )
+              : null,
+
+          text:
+            text ||
+            `${eventLabel({
+              type,
+            })}`,
+        };
+
+        setEvents(
+          (previous) => [
+            event,
+            ...previous,
+          ]
+        );
+      },
+      [matchMinute]
+    );
+
 
   /* =======================================================
-     SIMULATION LOOP
+     UPDATE STATS
+  ======================================================= */
+
+  const incrementTeamStat =
+    useCallback(
+      (team, stat) => {
+        if (
+          team === 'home'
+        ) {
+          setHomeStats(
+            (previous) => ({
+              ...previous,
+              [stat]:
+                safeNumber(
+                  previous[stat]
+                ) + 1,
+            })
+          );
+        } else {
+          setAwayStats(
+            (previous) => ({
+              ...previous,
+              [stat]:
+                safeNumber(
+                  previous[stat]
+                ) + 1,
+            })
+          );
+        }
+      },
+      []
+    );
+
+
+  /* =======================================================
+     CALCULATE TEAM STRENGTH
+  ======================================================= */
+
+  const calculateStrength =
+    useCallback(
+      (team) => {
+        const players =
+          team === 'home'
+            ? homeXI
+            : awayXI;
+
+        if (!players.length) {
+          return 60;
+        }
+
+        const average =
+          players.reduce(
+            (sum, player) =>
+              sum +
+              getPlayerOverall(
+                player
+              ),
+            0
+          ) /
+          players.length;
+
+        let tacticalBonus =
+          0;
+
+        if (
+          mentality ===
+          'attacking'
+        ) {
+          tacticalBonus =
+            team === userTeam
+              ? 4
+              : 0;
+        }
+
+        if (
+          mentality ===
+          'defensive'
+        ) {
+          tacticalBonus =
+            team === userTeam
+              ? 2
+              : 0;
+        }
+
+        return (
+          average +
+          tacticalBonus
+        );
+      },
+      [
+        homeXI,
+        awayXI,
+        mentality,
+        userTeam,
+      ]);
+
+
+  /* =======================================================
+     SIMULATE FOOTBALL EVENT
+  ======================================================= */
+
+  const simulateEvent =
+    useCallback(() => {
+      if (
+        matchStatus !==
+          'live' ||
+        paused
+      ) {
+        return;
+      }
+
+      const second =
+        matchMinute;
+
+      if (
+        processedSeconds.current.has(
+          second
+        )
+      ) {
+        return;
+      }
+
+      processedSeconds.current.add(
+        second
+      );
+
+      const homeStrength =
+        calculateStrength(
+          'home'
+        );
+
+      const awayStrength =
+        calculateStrength(
+          'away'
+        );
+
+      const totalStrength =
+        homeStrength +
+        awayStrength;
+
+      const homePossession =
+        clamp(
+          Math.round(
+            50 +
+              (
+                homeStrength -
+                awayStrength
+              ) *
+                0.35
+          ),
+          35,
+          65
+        );
+
+      setHomeStats(
+        (previous) => ({
+          ...previous,
+          possession:
+            homePossession,
+        })
+      );
+
+      setAwayStats(
+        (previous) => ({
+          ...previous,
+          possession:
+            100 -
+            homePossession,
+        })
+      );
+
+      const attackingTeam =
+        Math.random() <
+        homePossession / 100
+          ? 'home'
+          : 'away';
+
+      const attackingPlayers =
+        attackingTeam === 'home'
+          ? homeXI
+          : awayXI;
+
+      const defendingPlayers =
+        attackingTeam === 'home'
+          ? awayXI
+          : homeXI;
+
+      const attacker =
+        pick(
+          attackingPlayers
+        );
+
+      const defender =
+        pick(
+          defendingPlayers
+        );
+
+      if (!attacker) {
+        return;
+      }
+
+      /*
+       * Passes happen frequently.
+       */
+      if (
+        Math.random() <
+        0.45
+      ) {
+        incrementTeamStat(
+          attackingTeam,
+          'passes'
+        );
+
+        return;
+      }
+
+      /*
+       * Foul.
+       */
+      if (
+        Math.random() <
+        0.09
+      ) {
+        incrementTeamStat(
+          attackingTeam ===
+            'home'
+            ? 'away'
+            : 'home',
+          'fouls'
+        );
+
+        addEvent({
+          type:
+            EVENT_TYPES.FOUL,
+
+          team:
+            attackingTeam ===
+            'home'
+              ? 'away'
+              : 'home',
+
+          player:
+            defender,
+
+          text:
+            `${getPlayerName(
+              defender
+            )} commits a foul.`,
+        });
+
+        /*
+         * Yellow card.
+         */
+        if (
+          Math.random() <
+          0.16
+        ) {
+          incrementTeamStat(
+            attackingTeam ===
+              'home'
+              ? 'away'
+              : 'home',
+            'yellow'
+          );
+
+          addEvent({
+            type:
+              EVENT_TYPES.YELLOW,
+
+            team:
+              attackingTeam ===
+              'home'
+                ? 'away'
+                : 'home',
+
+            player:
+              defender,
+
+            text:
+              `${getPlayerName(
+                defender
+              )} is shown a yellow card.`,
+          });
+        }
+
+        return;
+      }
+
+      /*
+       * Offside.
+       */
+      if (
+        Math.random() <
+        0.045
+      ) {
+        incrementTeamStat(
+          attackingTeam,
+          'offsides'
+        );
+
+        addEvent({
+          type:
+            EVENT_TYPES.OFFSIDE,
+
+          team:
+            attackingTeam,
+
+          player:
+            attacker,
+
+          text:
+            `${getPlayerName(
+              attacker
+            )} is caught offside.`,
+        });
+
+        return;
+      }
+
+      /*
+       * Corner.
+       */
+      if (
+        Math.random() <
+        0.065
+      ) {
+        incrementTeamStat(
+          attackingTeam,
+          'corners'
+        );
+
+        addEvent({
+          type:
+            EVENT_TYPES.CORNER,
+
+          team:
+            attackingTeam,
+
+          player:
+            attacker,
+
+          text:
+            `${getPlayerName(
+              attacker
+            )} wins a corner.`,
+        });
+
+        return;
+      }
+
+      /*
+       * Shot.
+       */
+      if (
+        Math.random() <
+        0.24
+      ) {
+        incrementTeamStat(
+          attackingTeam,
+          'shots'
+        );
+
+        const attackStrength =
+          attackingTeam ===
+          'home'
+            ? homeStrength
+            : awayStrength;
+
+        const defenseStrength =
+          attackingTeam ===
+          'home'
+            ? awayStrength
+            : homeStrength;
+
+        const shotQuality =
+          clamp(
+            0.08 +
+              (
+                attackStrength -
+                defenseStrength
+              ) *
+                0.012 +
+              (
+                getPlayerOverall(
+                  attacker
+                ) -
+                60
+              ) *
+                0.004,
+            0.03,
+            0.38
+          );
+
+        if (
+          Math.random() <
+          shotQuality
+        ) {
+          incrementTeamStat(
+            attackingTeam,
+            'shotsOnTarget'
+          );
+
+          /*
+           * Goal.
+           */
+          const goalChance =
+            clamp(
+              0.15 +
+                (
+                  getPlayerOverall(
+                    attacker
+                  ) -
+                  60
+                ) *
+                  0.008,
+              0.08,
+              0.32
+            );
+
+          if (
+            Math.random() <
+            goalChance
+          ) {
+            if (
+              attackingTeam ===
+              'home'
+            ) {
+              setHomeScore(
+                (score) =>
+                  score + 1
+              );
+            } else {
+              setAwayScore(
+                (score) =>
+                  score + 1
+              );
+            }
+
+            addEvent({
+              type:
+                EVENT_TYPES.GOAL,
+
+              team:
+                attackingTeam,
+
+              player:
+                attacker,
+
+              text:
+                `${getPlayerName(
+                  attacker
+                )} scores!`,
+            });
+
+            return;
+          }
+
+          /*
+           * Save.
+           */
+          addEvent({
+            type:
+              EVENT_TYPES.SAVE,
+
+            team:
+              attackingTeam ===
+              'home'
+                ? 'away'
+                : 'home',
+
+            player:
+              defender,
+
+            text:
+              `${getPlayerName(
+                defender
+              )}'s side survives the shot.`,
+          });
+
+          return;
+        }
+
+        addEvent({
+          type:
+            EVENT_TYPES.SHOT,
+
+          team:
+            attackingTeam,
+
+          player:
+            attacker,
+
+          text:
+            `${getPlayerName(
+              attacker
+            )} takes a shot.`,
+        });
+      }
+    }, [
+      matchStatus,
+      paused,
+      matchMinute,
+      calculateStrength,
+      homeXI,
+      awayXI,
+      mentality,
+      userTeam,
+      incrementTeamStat,
+      addEvent,
+    ]);
+
+
+  /* =======================================================
+     MATCH CLOCK
   ======================================================= */
 
   useEffect(() => {
     if (
-      !started ||
-      paused ||
-      !engine ||
-      engine.finished
+      matchStatus !==
+        'live' ||
+      paused
     ) {
-      return undefined;
+      return;
     }
 
-    const interval =
+    timerRef.current =
       setInterval(() => {
-        setEngine(
-          (previous) => {
-            if (
-              !previous ||
-              previous.finished
-            ) {
-              return previous;
-            }
-
+        setMatchMinute(
+          (minute) => {
             const next =
-              simulateTick(
-                previous,
-                {
-                  home:
-                    homeTactic,
+              minute + 1;
 
-                  away:
-                    'balanced',
-                }
-              );
-
-            engineRef.current =
-              next;
-
-            if (
-              next.finished
-            ) {
-              setStarted(
-                false
-              );
-            }
-
-            return next;
+            return Math.min(
+              next,
+              MATCH_DURATION
+            );
           }
         );
-      }, TICK_MS);
+      }, MATCH_TICK_MS);
 
-    return () =>
-      clearInterval(interval);
+    return () => {
+      if (
+        timerRef.current
+      ) {
+        clearInterval(
+          timerRef.current
+        );
+      }
+    };
   }, [
-    started,
+    matchStatus,
     paused,
-    engine,
-    homeTactic,
-    tempo,
-    pressing,
   ]);
 
+
   /* =======================================================
-     SUBSTITUTION
+     SIMULATE EVENT ON CLOCK
   ======================================================= */
 
-  const substitute =
-    (team, playerOutId, playerInId) => {
-      setEngine(
-        (previous) => {
-          if (!previous) {
-            return previous;
-          }
+  useEffect(() => {
+    if (
+      matchStatus !==
+      'live'
+    ) {
+      return;
+    }
 
-          const used =
-            previous.substitutions[
-              team
-            ];
+    simulateEvent();
+  }, [
+    matchMinute,
+    matchStatus,
+    simulateEvent,
+  ]);
 
-          if (
-            used >=
-            MAX_SUBSTITUTIONS
-          ) {
-            toast.error(
-              'Maximum substitutions reached.'
-            );
 
-            return previous;
-          }
+  /* =======================================================
+     HALF TIME
+  ======================================================= */
 
-          const startersKey =
-            team === 'home'
-              ? 'homeXI'
-              : 'awayXI';
+  useEffect(() => {
+    if (
+      matchMinute ===
+        FIRST_HALF_END &&
+      matchStatus ===
+        'live' &&
+      !halfTimeShown
+    ) {
+      setPaused(true);
 
-          const benchKey =
-            team === 'home'
-              ? 'homeBench'
-              : 'awayBench';
+      setHalfTimeShown(
+        true
+      );
 
-          const starters = [
-            ...previous[
-              startersKey
-            ],
-          ];
+      addEvent({
+        type:
+          EVENT_TYPES.SUBSTITUTION,
 
-          const bench = [
-            ...previous[
-              benchKey
-            ],
-          ];
+        team:
+          userTeam ||
+          'home',
 
-          const outIndex =
-            starters.findIndex(
-              (player) =>
-                player.id ===
-                playerOutId
-            );
+        text:
+          'Half-time. The players head to the dressing room.',
+      });
 
-          const inIndex =
-            bench.findIndex(
-              (player) =>
-                player.id ===
-                playerInId
-            );
-
-          if (
-            outIndex < 0 ||
-            inIndex < 0
-          ) {
-            return previous;
-          }
-
-          const playerOut =
-            starters[
-              outIndex
-            ];
-
-          const playerIn =
-            bench[
-              inIndex
-            ];
-
-          starters[
-            outIndex
-          ] = {
-            ...playerIn,
-
-            minutes:
-              previous.minute,
-          };
-
-          bench[
-            inIndex
-          ] = playerOut;
-
-          const next = {
-            ...previous,
-
-            [startersKey]:
-              starters,
-
-            [benchKey]:
-              bench,
-
-            substitutions: {
-              ...previous.substitutions,
-
-              [team]:
-                used + 1,
-            },
-
-            events: [
-              ...previous.events,
-
-              {
-                id: `sub-${Date.now()}`,
-
-                minute:
-                  previous.minute,
-
-                type:
-                  'substitution',
-
-                team,
-
-                playerOut:
-                  getName(
-                    playerOut,
-                    0
-                  ),
-
-                playerIn:
-                  getName(
-                    playerIn,
-                    0
-                  ),
-              },
-            ],
-
-            lastEvent:
-              `${getName(
-                playerOut,
-                0
-              )} replaced by ${getName(
-                playerIn,
-                0
-              )}`,
-          };
-
-          engineRef.current =
-            next;
-
-          toast.success(
-            'Substitution made'
-          );
-
-          return next;
+      toast(
+        'Half-time',
+        {
+          icon: '⏱️',
         }
       );
-    };
+    }
+  }, [
+    matchMinute,
+    matchStatus,
+    halfTimeShown,
+    addEvent,
+    userTeam,
+  ]);
+
 
   /* =======================================================
-     CHANGE FORMATION
+     RESUME AFTER HALF TIME
   ======================================================= */
 
-  const changeFormation =
-    (formation) => {
-      setHomeFormation(
-        formation
-      );
+  const resumeSecondHalf =
+    () => {
+      if (
+        matchMinute !==
+        FIRST_HALF_END
+      ) {
+        return;
+      }
 
-      toast.success(
-        `Formation changed to ${formation}`
-      );
+      setPaused(false);
     };
 
+
   /* =======================================================
-     COMPLETE MATCH
+     FINISH MATCH
   ======================================================= */
 
-  const completeMatch =
+  const finishMatch =
     useCallback(
-      async (finalEngine) => {
+      async () => {
         if (
-          !fixture ||
-          !finalEngine ||
-          saving
+          matchStatus ===
+          'finished'
         ) {
           return;
         }
 
+        setMatchStatus(
+          'finished'
+        );
+
+        setPaused(true);
+
+        if (
+          timerRef.current
+        ) {
+          clearInterval(
+            timerRef.current
+          );
+        }
+
+        /*
+         * Save only actual match result.
+         * Temporary generated players are NOT saved.
+         */
         try {
-          setSaving(true);
+          setSavingMatch(
+            true
+          );
 
-          const result = {
-            homeScore:
-              finalEngine.homeScore,
-
-            awayScore:
-              finalEngine.awayScore,
-
-            homeStats:
-              finalEngine.homeStats,
-
-            awayStats:
-              finalEngine.awayStats,
-
-            events:
-              finalEngine.events,
-
-            homeFormation,
-
-            awayFormation,
-
-            completedAt:
-              new Date().toISOString(),
-
-            duration:
-              MATCH_DURATION,
-          };
-
-          await updateDoc(
+          const fixtureRef =
             doc(
               db,
               'fixtures',
-              fixture.id
-            ),
+              matchId
+            );
+
+          await updateDoc(
+            fixtureRef,
             {
               status:
-                'completed',
+                'finished',
 
-              result,
+              result: {
+                homeScore,
+                awayScore,
+              },
 
-              homeScore:
-                finalEngine.homeScore,
+              homeScore,
+              awayScore,
 
-              awayScore:
-                finalEngine.awayScore,
+              finishedAt:
+                new Date().toISOString(),
 
-              completedAt:
-                serverTimestamp(),
+              matchStatistics: {
+                home:
+                  homeStats,
 
-              updatedAt:
-                serverTimestamp(),
+                away:
+                  awayStats,
+              },
+
+              events:
+                events.map(
+                  (event) => ({
+                    ...event,
+                  })
+                ),
             }
           );
 
-          setFixture(
-            (previous) => ({
-              ...previous,
-
-              status:
-                'completed',
-
-              result,
-
-              homeScore:
-                finalEngine.homeScore,
-
-              awayScore:
-                finalEngine.awayScore,
-            })
-          );
-
           toast.success(
-            'Match completed'
+            'Full-time. Match result saved.'
           );
         } catch (error) {
           console.error(
-            'Match completion error:',
+            'Match save error:',
             error
           );
 
           toast.error(
-            'Could not save match result'
+            'Match finished, but result could not be saved.'
           );
         } finally {
-          setSaving(false);
+          setSavingMatch(
+            false
+          );
         }
       },
       [
-        fixture,
-        saving,
-        homeFormation,
-        awayFormation,
-      ]
-    );
+        matchStatus,
+        matchId,
+        homeScore,
+        awayScore,
+        homeStats,
+        awayStats,
+        events,
+      ]);
+
+
+  /* =======================================================
+     FINISH WHEN CLOCK REACHES 20
+  ======================================================= */
 
   useEffect(() => {
     if (
-      engine?.finished &&
-      fixture?.status !==
-        'completed'
+      matchMinute >=
+        MATCH_DURATION &&
+      matchStatus ===
+        'live'
     ) {
-      completeMatch(
-        engine
-      );
+      finishMatch();
     }
   }, [
-    engine,
-    fixture,
-    completeMatch,
+    matchMinute,
+    matchStatus,
+    finishMatch,
   ]);
 
+
   /* =======================================================
-     RESULT
+     SUBSTITUTE USER PLAYER
   ======================================================= */
 
-  const resultLabel =
-    useMemo(() => {
-      if (!engine) return '';
-
+  const substitutePlayer =
+    () => {
       if (
-        engine.homeScore >
-        engine.awayScore
+        substitutionsUsed >=
+        MAX_SUBSTITUTIONS
       ) {
-        return 'HOME WIN';
+        toast.error(
+          'Maximum substitutions reached.'
+        );
+
+        return;
       }
 
       if (
-        engine.awayScore >
-        engine.homeScore
+        !selectedSubPlayer
       ) {
-        return 'AWAY WIN';
+        toast.error(
+          'Select a substitute.'
+        );
+
+        return;
       }
 
-      return 'DRAW';
-    }, [
-      engine,
-    ]);
+      const team =
+        userTeam;
+
+      if (!team) {
+        return;
+      }
+
+      const isHome =
+        team === 'home';
+
+      const currentXI =
+        isHome
+          ? homeXI
+          : awayXI;
+
+      const bench =
+        isHome
+          ? homeBench
+          : awayBench;
+
+      const playerOut =
+        currentXI[0];
+
+      const playerIn =
+        bench.find(
+          (player) =>
+            String(
+              player.id
+            ) ===
+            String(
+              selectedSubPlayer
+            )
+        );
+
+      if (
+        !playerOut ||
+        !playerIn
+      ) {
+        toast.error(
+          'Could not complete substitution.'
+        );
+
+        return;
+      }
+
+      const nextXI =
+        currentXI.map(
+          (player, index) =>
+            index === 0
+              ? playerIn
+              : player
+        );
+
+      const nextBench =
+        [
+          ...bench.filter(
+            (player) =>
+              player.id !==
+              playerIn.id
+          ),
+          playerOut,
+        ];
+
+      if (isHome) {
+        setHomeXI(
+          nextXI
+        );
+
+        setHomeBench(
+          nextBench
+        );
+      } else {
+        setAwayXI(
+          nextXI
+        );
+
+        setAwayBench(
+          nextBench
+        );
+      }
+
+      setSubstitutionsUsed(
+        (value) =>
+          value + 1
+      );
+
+      addEvent({
+        type:
+          EVENT_TYPES.SUBSTITUTION,
+
+        team,
+
+        player:
+          playerIn,
+
+        text:
+          `${getPlayerName(
+            playerIn
+          )} comes on.`,
+      });
+
+      setSelectedSubPlayer(
+        ''
+      );
+
+      toast.success(
+        'Substitution made.'
+      );
+    };
+
 
   /* =======================================================
-     LOADING
+     CHANGE MENTALITY
+  ======================================================= */
+
+  const changeMentality =
+    (value) => {
+      setMentality(
+        value
+      );
+
+      addEvent({
+        type:
+          EVENT_TYPES.SUBSTITUTION,
+
+        team:
+          userTeam ||
+          'home',
+
+        text:
+          `Tactical mentality changed to ${value}.`,
+      });
+    };
+
+
+  /* =======================================================
+     PITCH PLAYERS
+  ======================================================= */
+
+  const homePositions =
+    FORMATION_POSITIONS[
+      mentality
+    ] ||
+    FORMATION_POSITIONS
+      .balanced;
+
+  const awayPositions =
+    homePositions.map(
+      (position) => ({
+        x:
+          100 -
+          position.x,
+
+        y:
+          position.y,
+      })
+    );
+
+
+  /* =======================================================
+     STADIUM
+  ======================================================= */
+
+  const stadiumCapacity =
+    getClubCapacity(
+      homeClub
+    );
+
+  const crowd =
+    Math.round(
+      stadiumCapacity *
+        0.7
+    );
+
+
+  /* =======================================================
+     SCORE DISPLAY
+  ======================================================= */
+
+  const scoreText =
+    `${homeScore} - ${awayScore}`;
+
+
+  /* =======================================================
+     CURRENT EVENTS
+  ======================================================= */
+
+  const recentEvents =
+    useMemo(
+      () =>
+        events.slice(
+          0,
+          12
+        ),
+      [events]
+    );
+
+
+  /* =======================================================
+     LOADING SCREEN
   ======================================================= */
 
   if (
@@ -2182,125 +2367,82 @@ export default function MatchPage() {
     loadingMatch
   ) {
     return (
-      <div
-        className={
-          styles.loading
-        }
-      >
-        <div
-          className={
-            styles.loader
-          }
-        />
-
-        <p>
-          Preparing stadium...
-        </p>
-      </div>
-    );
-  }
-
-  /* =======================================================
-     ERROR
-  ======================================================= */
-
-  if (error) {
-    return (
       <>
         <Head>
           <title>
-            Match unavailable
+            Loading Match
           </title>
         </Head>
 
         <main
           className={
-            styles.errorPage
+            styles.loadingPage
           }
         >
           <div
             className={
-              styles.errorIcon
+              styles.loadingBall
             }
           >
             ⚽
           </div>
 
           <h1>
-            Match unavailable
+            Preparing Match
           </h1>
 
           <p>
-            {error}
+            Loading stadium, squads
+            and match officials...
           </p>
-
-          <button
-            type="button"
-            onClick={() =>
-              router.push(
-                '/fixtures'
-              )
-            }
-          >
-            Back to Fixtures
-          </button>
         </main>
       </>
     );
   }
 
-  if (
-    !fixture ||
-    !engine
-  ) {
-    return null;
-  }
 
   /* =======================================================
-     TEAM VISUALS
+     NO FIXTURE
   ======================================================= */
 
-  const homePrimary =
-    getClubColor(
-      homeClub,
-      '#2563eb'
+  if (
+    !fixture ||
+    !homeClub ||
+    !awayClub
+  ) {
+    return (
+      <main
+        className={
+          styles.errorPage
+        }
+      >
+        <h1>
+          Match unavailable
+        </h1>
+
+        <p>
+          This fixture could not be
+          loaded.
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            router.push(
+              '/fixtures'
+            )
+          }
+        >
+          Back to Fixtures
+        </button>
+      </main>
     );
+  }
 
-  const homeSecondary =
-    getSecondColor(
-      homeClub,
-      '#ffffff'
-    );
 
-  const awayPrimary =
-    getClubColor(
-      awayClub,
-      '#ef4444'
-    );
-
-  const awaySecondary =
-    getSecondColor(
-      awayClub,
-      '#ffffff'
-    );
-
-  const clock =
-    `${String(
-      engine.minute
-    ).padStart(
-      2,
-      '0'
-    )}:${String(
-      engine.second
-    ).padStart(
-      2,
-      '0'
-    )}`;
-
-  const currentEvent =
-    engine.events[
-      engine.events.length - 1
-    ];
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <>
@@ -2329,211 +2471,7 @@ export default function MatchPage() {
       >
 
         {/* =================================================
-            SKY
-        ================================================= */}
-
-        <div
-          className={
-            styles.sky
-          }
-        >
-          <div
-            className={
-              styles.cloud cloudOne
-            }
-          />
-
-          <div
-            className={
-              styles.cloud cloudTwo
-            }
-          />
-
-          <div
-            className={
-              styles.cloud cloudThree
-            }
-          />
-        </div>
-
-
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
-        <header
-          className={
-            styles.topBar
-          }
-        >
-          <button
-            type="button"
-            onClick={() =>
-              router.push(
-                '/fixtures'
-              )
-            }
-          >
-            ← Fixtures
-          </button>
-
-          <div
-            className={
-              styles.competition
-            }
-          >
-            <strong>
-              {fixture.leagueName ||
-                fixture.competitionName ||
-                'Football Match'}
-            </strong>
-
-            <span>
-              {fixture.stadium ||
-                fixture.venue ||
-                'Main Stadium'}
-            </span>
-          </div>
-
-          <div
-            className={
-              styles.liveIndicator
-            }
-          >
-            {engine.finished
-              ? 'FINAL'
-              : started
-              ? '● LIVE'
-              : 'READY'}
-          </div>
-        </header>
-
-
-        {/* =================================================
-            SCOREBOARD
-        ================================================= */}
-
-        <section
-          className={
-            styles.scoreboard
-          }
-        >
-
-          <div
-            className={
-              styles.teamScore
-            }
-          >
-            <div
-              className={
-                styles.clubBadge
-              }
-              style={{
-                background:
-                  homePrimary,
-              }}
-            >
-              {homeClub?.logo ? (
-                <img
-                  src={
-                    homeClub.logo
-                  }
-                  alt=""
-                />
-              ) : (
-                '⚽'
-              )}
-            </div>
-
-            <strong>
-              {getClubName(
-                homeClub
-              )}
-            </strong>
-          </div>
-
-
-          <div
-            className={
-              styles.scoreCenter
-            }
-          >
-            <div
-              className={
-                styles.matchClock
-              }
-            >
-              {clock}
-            </div>
-
-            <div
-              className={
-                styles.score
-              }
-            >
-              <strong>
-                {engine.homeScore}
-              </strong>
-
-              <span>
-                -
-              </span>
-
-              <strong>
-                {engine.awayScore}
-              </strong>
-            </div>
-
-            <small>
-              {engine.phase ===
-              'first-half'
-                ? '1ST HALF'
-                : engine.phase ===
-                  'second-half'
-                ? '2ND HALF'
-                : 'FULL TIME'}
-            </small>
-          </div>
-
-
-          <div
-            className={
-              styles.teamScore
-            }
-          >
-            <div
-              className={
-                styles.clubBadge
-              }
-              style={{
-                background:
-                  awayPrimary,
-              }}
-            >
-              {awayClub?.logo ? (
-                <img
-                  src={
-                    awayClub.logo
-                  }
-                  alt=""
-                />
-              ) : (
-                '⚽'
-              )}
-            </div>
-
-            <strong>
-              {getClubName(
-                awayClub
-              )}
-            </strong>
-          </div>
-
-        </section>
-
-
-        {/* =================================================
-            3D STADIUM
+            STADIUM SKY
         ================================================= */}
 
         <section
@@ -2544,1026 +2482,1148 @@ export default function MatchPage() {
 
           <div
             className={
-              styles.stadiumRoof
-            }
-          />
-
-          <div
-            className={
-              styles.stands
+              styles.sky
             }
           >
-            <div />
-            <div />
-            <div />
-            <div />
+            <div
+              className={`${styles.cloud} ${styles.cloudOne}`}
+            />
+
+            <div
+              className={`${styles.cloud} ${styles.cloudTwo}`}
+            />
+
+            <div
+              className={`${styles.cloud} ${styles.cloudThree}`}
+            />
           </div>
 
 
+          {/* =================================================
+              STADIUM LIGHTS
+          ================================================= */}
+
           <div
             className={
-              styles.pitch3d
+              styles.stadiumLights
             }
           >
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
 
+
+          {/* =================================================
+              CROWD
+          ================================================= */}
+
+          <div
+            className={
+              styles.crowd
+            }
+          >
             <div
               className={
-                styles.pitchLine
-              }
-            />
-
-            <div
-              className={
-                styles.centerCircle
-              }
-            />
-
-            <div
-              className={
-                styles.centerSpot
-              }
-            />
-
-            <div
-              className={
-                styles.penaltyBoxLeft
-              }
-            />
-
-            <div
-              className={
-                styles.penaltyBoxRight
-              }
-            />
-
-            <div
-              className={
-                styles.goalLeft
-              }
-            />
-
-            <div
-              className={
-                styles.goalRight
-              }
-            />
-
-
-            {/* HOME PLAYERS */}
-
-            <div
-              className={
-                styles.homePlayers
+                styles.crowdLayer
               }
             >
-              {engine.homeXI.map(
-                (
-                  player,
-                  index
-                ) => (
-                  <div
-                    key={
-                      player.id
-                    }
-                    className={`${styles.pitchPlayer} ${
-                      player.red
-                        ? styles.sentOff
-                        : ''
-                    }`}
-                    style={{
-                      '--x':
-                        `${
-                          12 +
-                          (index %
-                            5) *
-                            18
-                        }%`,
-
-                      '--y':
-                        `${
-                          18 +
-                          Math.floor(
-                            index /
-                              5
-                          ) *
-                            22
-                        }%`,
-
-                      '--kit':
-                        homePrimary,
-
-                      '--kit2':
-                        homeSecondary,
-                    }}
-                    onClick={() =>
-                      setSelectedPlayer(
-                        player
+              {Array.from(
+                {
+                  length:
+                    Math.min(
+                      120,
+                      Math.max(
+                        40,
+                        Math.round(
+                          crowd /
+                            800
+                        )
                       )
+                    ),
+                },
+                (_, index) => (
+                  <span
+                    key={
+                      index
                     }
+                    style={{
+                      animationDelay: `${
+                        (
+                          index %
+                          12
+                        ) *
+                        0.08
+                      }s`,
+                    }}
                   >
-                    <span
-                      className={
-                        styles.playerHead
-                      }
-                    />
-
-                    <span
-                      className={
-                        styles.playerBody
-                      }
-                    />
-
-                    <small>
-                      {getName(
-                        player,
-                        index
-                      ).slice(
-                        0,
-                        10
-                      )}
-                    </small>
-                  </div>
+                    ●
+                  </span>
                 )
               )}
             </div>
+          </div>
 
 
-            {/* AWAY PLAYERS */}
+          {/* =================================================
+              SCOREBOARD
+          ================================================= */}
+
+          <div
+            className={
+              styles.scoreboard
+            }
+          >
 
             <div
               className={
-                styles.awayPlayers
+                styles.scoreTeam
               }
             >
-              {engine.awayXI.map(
-                (
-                  player,
-                  index
-                ) => (
-                  <div
-                    key={
-                      player.id
-                    }
-                    className={`${styles.pitchPlayer} ${
-                      player.red
-                        ? styles.sentOff
-                        : ''
-                    }`}
-                    style={{
-                      '--x':
-                        `${
-                          58 +
-                          (index %
-                            5) *
-                            8
-                        }%`,
-
-                      '--y':
-                        `${
-                          18 +
-                          Math.floor(
-                            index /
-                              5
-                          ) *
-                            22
-                        }%`,
-
-                      '--kit':
-                        awayPrimary,
-
-                      '--kit2':
-                        awaySecondary,
-                    }}
-                    onClick={() =>
-                      setSelectedPlayer(
-                        player
-                      )
-                    }
-                  >
-                    <span
-                      className={
-                        styles.playerHead
-                      }
-                    />
-
-                    <span
-                      className={
-                        styles.playerBody
-                      }
-                    />
-
-                    <small>
-                      {getName(
-                        player,
-                        index
-                      ).slice(
-                        0,
-                        10
-                      )}
-                    </small>
-                  </div>
-                )
+              {getClubLogo(
+                homeClub
+              ) ? (
+                <img
+                  src={getClubLogo(
+                    homeClub
+                  )}
+                  alt=""
+                />
+              ) : (
+                <span>
+                  ⚽
+                </span>
               )}
+
+              <strong>
+                {getClubName(
+                  homeClub
+                )}
+              </strong>
             </div>
 
 
             <div
               className={
-                styles.ball
+                styles.scoreCenter
               }
             >
-              ⚽
-            </div>
+              <span
+                className={
+                  styles.matchStatus
+                }
+              >
+                {matchStatus ===
+                'live'
+                  ? 'LIVE'
+                  : matchStatus ===
+                    'finished'
+                  ? 'FULL TIME'
+                  : matchStatus ===
+                    'ready'
+                  ? 'READY'
+                  : 'MATCH'}
+              </span>
 
-          </div>
+              <strong
+                className={
+                  styles.score
+                }
+              >
+                {scoreText}
+              </strong>
 
-        </section>
-
-
-        {/* =================================================
-            MATCH CONTROLS
-        ================================================= */}
-
-        <section
-          className={
-            styles.controlPanel
-          }
-        >
-
-          {!started &&
-            !engine.finished && (
-            <button
-              type="button"
-              className={
-                styles.playButton
-              }
-              disabled={
-                !kickoffReached
-              }
-              onClick={
-                startMatch
-              }
-            >
-              ▶ PLAY MATCH
-            </button>
-          )}
-
-
-          {started &&
-            !engine.finished && (
-            <button
-              type="button"
-              onClick={
-                togglePause
-              }
-            >
-              {paused
-                ? '▶ Resume'
-                : 'Ⅱ Pause'}
-            </button>
-          )}
-
-
-          <button
-            type="button"
-            onClick={() =>
-              setShowTactics(
-                (value) =>
-                  !value
-              )
-            }
-          >
-            ⚙ Tactics
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              setShowSquad(
-                (value) =>
-                  !value
-              )
-            }
-          >
-            👥 Squad
-          </button>
-
-          <div
-            className={
-              styles.managerStatus
-            }
-          >
-            <span>
-              Tactic
-            </span>
-
-            <strong>
-              {homeTactic}
-            </strong>
-
-            <span>
-              Pressing
-            </span>
-
-            <strong>
-              {pressing}
-            </strong>
-          </div>
-
-        </section>
-
-
-        {/* =================================================
-            TACTICS
-        ================================================= */}
-
-        {showTactics && (
-          <section
-            className={
-              styles.tacticsPanel
-            }
-          >
-
-            <div>
-              <label>
-                Formation
-
-                <select
-                  value={
-                    homeFormation
-                  }
-                  onChange={(event) =>
-                    changeFormation(
-                      event.target.value
-                    )
-                  }
-                >
-                  {Object.keys(
-                    FORMATIONS
-                  ).map(
-                    (formation) => (
-                      <option
-                        key={
-                          formation
-                        }
-                        value={
-                          formation
-                        }
-                      >
-                        {formation}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            </div>
-
-
-            <div>
-              <label>
-                Tactic
-
-                <select
-                  value={
-                    homeTactic
-                  }
-                  onChange={(event) =>
-                    setHomeTactic(
-                      event.target.value
-                    )
-                  }
-                >
-                  {TACTICS.map(
-                    (tactic) => (
-                      <option
-                        key={tactic}
-                        value={tactic}
-                      >
-                        {tactic}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            </div>
-
-
-            <div>
-              <label>
-                Tempo
-
-                <select
-                  value={tempo}
-                  onChange={(event) =>
-                    setTempo(
-                      event.target.value
-                    )
-                  }
-                >
-                  {TEMPOS.map(
-                    (item) => (
-                      <option
-                        key={item}
-                        value={item}
-                      >
-                        {item}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            </div>
-
-
-            <div>
-              <label>
-                Pressing
-
-                <select
-                  value={
-                    pressing
-                  }
-                  onChange={(event) =>
-                    setPressing(
-                      event.target.value
-                    )
-                  }
-                >
-                  {PRESSING.map(
-                    (item) => (
-                      <option
-                        key={item}
-                        value={item}
-                      >
-                        {item}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            </div>
-
-          </section>
-        )}
-
-
-        {/* =================================================
-            EVENT + STATS
-        ================================================= */}
-
-        <section
-          className={
-            styles.bottomGrid
-          }
-        >
-
-          <div
-            className={
-              styles.eventPanel
-            }
-          >
-            <div
-              className={
-                styles.panelHeader
-              }
-            >
-              <h2>
-                Match Events
-              </h2>
-
-              <span>
-                {engine.events.length}
+              <span
+                className={
+                  styles.clock
+                }
+              >
+                {matchMinute}'
               </span>
             </div>
 
+
             <div
               className={
-                styles.eventList
+                styles.scoreTeam
               }
             >
-              {engine.events
-                .slice()
-                .reverse()
-                .slice(0, 20)
-                .map(
-                  (event) => (
+              {getClubLogo(
+                awayClub
+              ) ? (
+                <img
+                  src={getClubLogo(
+                    awayClub
+                  )}
+                  alt=""
+                />
+              ) : (
+                <span>
+                  ⚽
+                </span>
+              )}
+
+              <strong>
+                {getClubName(
+                  awayClub
+                )}
+              </strong>
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              PITCH
+          ================================================= */}
+
+          <div
+            className={
+              styles.pitchScene
+            }
+          >
+
+            <div
+              className={
+                styles.pitch3d
+              }
+            >
+
+              <div
+                className={
+                  styles.pitchGrass
+                }
+              />
+
+              <div
+                className={
+                  styles.centerLine
+                }
+              />
+
+              <div
+                className={
+                  styles.centerCircle
+                }
+              />
+
+              <div
+                className={
+                  styles.centerSpot
+                }
+              />
+
+              <div
+                className={
+                  styles.homePenalty
+                }
+              />
+
+              <div
+                className={
+                  styles.awayPenalty
+                }
+              />
+
+              <div
+                className={
+                  styles.homeGoal
+                }
+              />
+
+              <div
+                className={
+                  styles.awayGoal
+                }
+              />
+
+
+              {/* HOME PLAYERS */}
+
+              {homeXI.map(
+                (
+                  player,
+                  index
+                ) => {
+                  const position =
+                    homePositions[
+                      index
+                    ] ||
+                    homePositions[
+                      0
+                    ];
+
+                  return (
                     <div
                       key={
-                        event.id
+                        player.id
                       }
-                      className={
-                        styles.event
-                      }
+                      className={`${styles.pitchPlayer} ${styles.homePlayer}`}
+                      style={{
+                        left: `${position.x}%`,
+                        top: `${position.y}%`,
+                      }}
                     >
-                      <time>
-                        {event.minute}'
-                      </time>
+                      <div
+                        className={
+                          styles.playerShadow
+                        }
+                      />
 
-                      <span>
-                        {eventText(
-                          event
-                        )}
-                      </span>
+                      <div
+                        className={
+                          styles.playerModel
+                        }
+                        style={{
+                          '--jersey': getClubPrimaryColor(
+                            homeClub
+                          ),
+
+                          '--secondary': getClubSecondaryColor(
+                            homeClub
+                          ),
+                        }}
+                      >
+                        <span>
+                          {index +
+                            1}
+                        </span>
+                      </div>
+
+                      <small>
+                        {getPlayerName(
+                          player
+                        ).split(
+                          ' '
+                        )[0]}
+                      </small>
                     </div>
-                  )
-                )}
-
-              {!engine.events.length && (
-                <p
-                  className={
-                    styles.emptyEvents
-                  }
-                >
-                  Match events will
-                  appear here.
-                </p>
+                  );
+                }
               )}
+
+
+              {/* AWAY PLAYERS */}
+
+              {awayXI.map(
+                (
+                  player,
+                  index
+                ) => {
+                  const position =
+                    awayPositions[
+                      index
+                    ] ||
+                    awayPositions[
+                      0
+                    ];
+
+                  return (
+                    <div
+                      key={
+                        player.id
+                      }
+                      className={`${styles.pitchPlayer} ${styles.awayPlayer}`}
+                      style={{
+                        left: `${position.x}%`,
+                        top: `${position.y}%`,
+                      }}
+                    >
+                      <div
+                        className={
+                          styles.playerShadow
+                        }
+                      />
+
+                      <div
+                        className={
+                          styles.playerModel
+                        }
+                        style={{
+                          '--jersey': getClubPrimaryColor(
+                            awayClub
+                          ),
+
+                          '--secondary': getClubSecondaryColor(
+                            awayClub
+                          ),
+                        }}
+                      >
+                        <span>
+                          {index +
+                            1}
+                        </span>
+                      </div>
+
+                      <small>
+                        {getPlayerName(
+                          player
+                        ).split(
+                          ' '
+                        )[0]}
+                      </small>
+                    </div>
+                  );
+                }
+              )}
+
+
+              {/* BALL */}
+
+              <div
+                className={
+                  styles.ball
+                }
+              >
+                ⚽
+              </div>
+
             </div>
           </div>
 
 
+          {/* =================================================
+              STADIUM INFORMATION
+          ================================================= */}
+
           <div
+            className={
+              styles.stadiumInfo
+            }
+          >
+            <span>
+              🏟️{' '}
+              {getClubStadium(
+                homeClub
+              )}
+            </span>
+
+            <span>
+              👥{' '}
+              {crowd.toLocaleString()}{' '}
+              fans
+            </span>
+
+            <span>
+              ☁️ Matchday
+            </span>
+          </div>
+
+        </section>
+
+
+        {/* =================================================
+            CONTROL AREA
+        ================================================= */}
+
+        <section
+          className={
+            styles.controlArea
+          }
+        >
+
+          {/* =================================================
+              MATCH CONTROLS
+          ================================================= */}
+
+          <div
+            className={
+              styles.controlPanel
+            }
+          >
+
+            <div
+              className={
+                styles.controlHeader
+              }
+            >
+              <div>
+                <span>
+                  MATCH CONTROL
+                </span>
+
+                <h2>
+                  {matchStatus ===
+                  'live'
+                    ? 'Live Match'
+                    : matchStatus ===
+                      'finished'
+                    ? 'Match Finished'
+                    : 'Ready for Kick-off'}
+                </h2>
+              </div>
+
+              <div
+                className={
+                  styles.minuteBadge
+                }
+              >
+                {matchMinute}'
+              </div>
+            </div>
+
+
+            <div
+              className={
+                styles.controlButtons
+              }
+            >
+
+              {matchStatus ===
+                'ready' && (
+                <button
+                  type="button"
+                  className={
+                    styles.playButton
+                  }
+                  onClick={
+                    startMatch
+                  }
+                >
+                  ▶ Play Match
+                </button>
+              )}
+
+
+              {matchStatus ===
+                'live' && (
+                <button
+                  type="button"
+                  className={
+                    styles.pauseButton
+                  }
+                  onClick={() =>
+                    setPaused(
+                      (value) =>
+                        !value
+                    )
+                  }
+                >
+                  {paused
+                    ? '▶ Resume'
+                    : 'Ⅱ Pause'}
+                </button>
+              )}
+
+
+              {matchMinute ===
+                FIRST_HALF_END &&
+                matchStatus ===
+                  'live' &&
+                paused && (
+                  <button
+                    type="button"
+                    className={
+                      styles.playButton
+                    }
+                    onClick={
+                      resumeSecondHalf
+                    }
+                  >
+                    ▶ Start 2nd Half
+                  </button>
+                )}
+
+
+              {matchStatus ===
+                'finished' && (
+                <button
+                  type="button"
+                  className={
+                    styles.secondaryButton
+                  }
+                  onClick={() =>
+                    router.push(
+                      '/fixtures'
+                    )
+                  }
+                >
+                  Back to Fixtures
+                </button>
+              )}
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              TACTICS
+          ================================================= */}
+
+          {userIsPlaying && (
+            <section
+              className={
+                styles.tacticsPanel
+              }
+            >
+
+              <button
+                type="button"
+                className={
+                  styles.panelToggle
+                }
+                onClick={() =>
+                  setShowTactics(
+                    (value) =>
+                      !value
+                  )
+                }
+              >
+                <span>
+                  🧠 Tactics
+                </span>
+
+                <strong>
+                  {showTactics
+                    ? '−'
+                    : '+'}
+                </strong>
+              </button>
+
+
+              {showTactics && (
+                <div
+                  className={
+                    styles.tacticsContent
+                  }
+                >
+
+                  <div
+                    className={
+                      styles.tacticGroup
+                    }
+                  >
+                    <span>
+                      Mentality
+                    </span>
+
+                    <div
+                      className={
+                        styles.tacticButtons
+                      }
+                    >
+
+                      <button
+                        type="button"
+                        className={
+                          mentality ===
+                          'defensive'
+                            ? styles.selectedTactic
+                            : ''
+                        }
+                        onClick={() =>
+                          changeMentality(
+                            'defensive'
+                          )
+                        }
+                      >
+                        🛡️ Defensive
+                      </button>
+
+                      <button
+                        type="button"
+                        className={
+                          mentality ===
+                          'balanced'
+                            ? styles.selectedTactic
+                            : ''
+                        }
+                        onClick={() =>
+                          changeMentality(
+                            'balanced'
+                          )
+                        }
+                      >
+                        ⚖️ Balanced
+                      </button>
+
+                      <button
+                        type="button"
+                        className={
+                          mentality ===
+                          'attacking'
+                            ? styles.selectedTactic
+                            : ''
+                        }
+                        onClick={() =>
+                          changeMentality(
+                            'attacking'
+                          )
+                        }
+                      >
+                        ⚔️ Attacking
+                      </button>
+
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+            </section>
+          )}
+
+
+          {/* =================================================
+              SUBSTITUTIONS
+          ================================================= */}
+
+          {userIsPlaying && (
+            <section
+              className={
+                styles.tacticsPanel
+              }
+            >
+
+              <button
+                type="button"
+                className={
+                  styles.panelToggle
+                }
+                onClick={() =>
+                  setShowSubs(
+                    (value) =>
+                      !value
+                  )
+                }
+              >
+                <span>
+                  🔄 Substitutions
+                </span>
+
+                <strong>
+                  {substitutionsUsed}/
+                  {MAX_SUBSTITUTIONS}
+                </strong>
+              </button>
+
+
+              {showSubs && (
+                <div
+                  className={
+                    styles.substitutionContent
+                  }
+                >
+
+                  <select
+                    value={
+                      selectedSubPlayer
+                    }
+                    onChange={(event) =>
+                      setSelectedSubPlayer(
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      Select substitute
+                    </option>
+
+                    {(isHomeUser
+                      ? homeBench
+                      : awayBench
+                    ).map(
+                      (player) => (
+                        <option
+                          key={
+                            player.id
+                          }
+                          value={
+                            player.id
+                          }
+                        >
+                          {getPlayerName(
+                            player
+                          )}{' '}
+                          ·{' '}
+                          {getPlayerPosition(
+                            player
+                          )}{' '}
+                          · OVR{' '}
+                          {getPlayerOverall(
+                            player
+                          )}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+
+                  <button
+                    type="button"
+                    className={
+                      styles.primaryAction
+                    }
+                    disabled={
+                      matchStatus !==
+                        'live' ||
+                      substitutionsUsed >=
+                        MAX_SUBSTITUTIONS
+                    }
+                    onClick={
+                      substitutePlayer
+                    }
+                  >
+                    Make Substitution
+                  </button>
+
+                </div>
+              )}
+
+            </section>
+          )}
+
+
+          {/* =================================================
+              STATS
+          ================================================= */}
+
+          <section
             className={
               styles.statsPanel
             }
           >
-            <div
-              className={
-                styles.panelHeader
-              }
-            >
-              <h2>
-                Match Stats
-              </h2>
-            </div>
-
-            <StatRow
-              label="Possession"
-              home={
-                engine.homeStats
-                  .possession
-              }
-              away={
-                engine.awayStats
-                  .possession
-              }
-              suffix="%"
-            />
-
-            <StatRow
-              label="Shots"
-              home={
-                engine.homeStats
-                  .shots
-              }
-              away={
-                engine.awayStats
-                  .shots
-              }
-            />
-
-            <StatRow
-              label="Shots on target"
-              home={
-                engine.homeStats
-                  .shotsOnTarget
-              }
-              away={
-                engine.awayStats
-                  .shotsOnTarget
-              }
-            />
-
-            <StatRow
-              label="Corners"
-              home={
-                engine.homeStats
-                  .corners
-              }
-              away={
-                engine.awayStats
-                  .corners
-              }
-            />
-
-            <StatRow
-              label="Fouls"
-              home={
-                engine.homeStats
-                  .fouls
-              }
-              away={
-                engine.awayStats
-                  .fouls
-              }
-            />
-
-            <StatRow
-              label="Offsides"
-              home={
-                engine.homeStats
-                  .offsides
-              }
-              away={
-                engine.awayStats
-                  .offsides
-              }
-            />
-
-            <StatRow
-              label="Yellow cards"
-              home={
-                engine.homeStats
-                  .yellow
-              }
-              away={
-                engine.awayStats
-                  .yellow
-              }
-            />
-
-            <StatRow
-              label="Red cards"
-              home={
-                engine.homeStats
-                  .red
-              }
-              away={
-                engine.awayStats
-                  .red
-              }
-            />
-          </div>
-
-        </section>
-
-
-        {/* =================================================
-            SQUAD PANEL
-        ================================================= */}
-
-        {showSquad && (
-          <section
-            className={
-              styles.squadPanel
-            }
-          >
 
             <div
               className={
-                styles.panelHeader
+                styles.statsTitle
               }
             >
-              <h2>
-                Substitutions
-              </h2>
-
               <span>
-                {
-                  engine.substitutions
-                    .home
-                }/{MAX_SUBSTITUTIONS}
+                📊 MATCH STATISTICS
               </span>
             </div>
 
-            <div
-              className={
-                styles.substitutionGrid
-              }
-            >
-
-              <div>
-                <h3>
-                  Starting XI
-                </h3>
-
-                {engine.homeXI.map(
-                  (player) => (
-                    <button
-                      type="button"
-                      key={
-                        player.id
-                      }
-                      className={
-                        selectedPlayer?.id ===
-                        player.id
-                          ? styles.selectedPlayer
-                          : ''
-                      }
-                      onClick={() =>
-                        setSelectedPlayer(
-                          player
-                        )
-                      }
-                    >
-                      <span>
-                        {getName(
-                          player,
-                          0
-                        )}
-                      </span>
-
-                      <small>
-                        {positionGroup(
-                          player
-                        )}{' '}
-                        •{' '}
-                        {Math.round(
-                          player.fitness
-                        )}%
-                      </small>
-                    </button>
-                  )
-                )}
-              </div>
-
-
-              <div>
-                <h3>
-                  Bench
-                </h3>
-
-                {engine.homeBench.map(
-                  (player) => (
-                    <button
-                      type="button"
-                      key={
-                        player.id
-                      }
-                      onClick={() => {
-                        if (
-                          !selectedPlayer
-                        ) {
-                          setSelectedPlayer(
-                            player
-                          );
-
-                          return;
-                        }
-
-                        if (
-                          selectedPlayer.id ===
-                          player.id
-                        ) {
-                          return;
-                        }
-
-                        substitute(
-                          'home',
-                          selectedPlayer.id,
-                          player.id
-                        );
-
-                        setSelectedPlayer(
-                          null
-                        );
-                      }}
-                    >
-                      <span>
-                        {getName(
-                          player,
-                          0
-                        )}
-                      </span>
-
-                      <small>
-                        {positionGroup(
-                          player
-                        )}
-                      </small>
-                    </button>
-                  )
-                )}
-              </div>
-
-            </div>
-          </section>
-        )}
-
-
-        {/* =================================================
-            SELECTED PLAYER
-        ================================================= */}
-
-        {selectedPlayer && (
-          <aside
-            className={
-              styles.playerInspector
-            }
-          >
-
-            <button
-              type="button"
-              className={
-                styles.closeInspector
-              }
-              onClick={() =>
-                setSelectedPlayer(
-                  null
-                )
-              }
-            >
-              ×
-            </button>
 
             <div
               className={
-                styles.inspectorAvatar
-              }
-              style={{
-                background:
-                  selectedPlayer.temporary
-                    ? '#475569'
-                    : homePrimary,
-              }}
-            >
-              {selectedPlayer.photo ? (
-                <img
-                  src={
-                    selectedPlayer.photo
-                  }
-                  alt=""
-                />
-              ) : (
-                getName(
-                  selectedPlayer,
-                  0
-                )
-                  .charAt(0)
-                  .toUpperCase()
-              )}
-            </div>
-
-            <h2>
-              {getName(
-                selectedPlayer,
-                0
-              )}
-            </h2>
-
-            <span>
-              {positionGroup(
-                selectedPlayer
-              )}
-            </span>
-
-            <div
-              className={
-                styles.playerMetrics
+                styles.statsGrid
               }
             >
-              <div>
-                <small>
-                  OVR
-                </small>
 
-                <strong>
-                  {Math.round(
-                    getOverall(
-                      selectedPlayer
-                    )
-                  )}
-                </strong>
-              </div>
-
-              <div>
-                <small>
-                  FITNESS
-                </small>
-
-                <strong>
-                  {Math.round(
-                    selectedPlayer.fitness
-                  )}
-                  %
-                </strong>
-              </div>
-
-              <div>
-                <small>
-                  RATING
-                </small>
-
-                <strong>
-                  {selectedPlayer.matchRating.toFixed(
-                    1
-                  )}
-                </strong>
-              </div>
-            </div>
-
-            {selectedPlayer.temporary && (
-              <small
+              <div
                 className={
-                  styles.temporaryBadge
+                  styles.statRow
                 }
               >
-                Temporary match player
-              </small>
-            )}
+                <strong>
+                  {homeStats.shots}
+                </strong>
 
-          </aside>
-        )}
+                <span>
+                  Shots
+                </span>
 
-
-        {/* =================================================
-            LAST EVENT
-        ================================================= */}
-
-        {engine.lastEvent && (
-          <div
-            className={
-              styles.liveEvent
-            }
-          >
-            {engine.lastEvent}
-          </div>
-        )}
+                <strong>
+                  {awayStats.shots}
+                </strong>
+              </div>
 
 
-        {/* =================================================
-            FULL TIME
-        ================================================= */}
+              <div
+                className={
+                  styles.statRow
+                }
+              >
+                <strong>
+                  {
+                    homeStats.shotsOnTarget
+                  }
+                </strong>
 
-        {engine.finished && (
+                <span>
+                  Shots on target
+                </span>
+
+                <strong>
+                  {
+                    awayStats.shotsOnTarget
+                  }
+                </strong>
+              </div>
+
+
+              <div
+                className={
+                  styles.statRow
+                }
+              >
+                <strong>
+                  {
+                    homeStats.possession
+                  }%
+                </strong>
+
+                <span>
+                  Possession
+                </span>
+
+                <strong>
+                  {
+                    awayStats.possession
+                  }%
+                </strong>
+              </div>
+
+
+              <div
+                className={
+                  styles.statRow
+                }
+              >
+                <strong>
+                  {
+                    homeStats.passes
+                  }
+                </strong>
+
+                <span>
+                  Passes
+                </span>
+
+                <strong>
+                  {
+                    awayStats.passes
+                  }
+                </strong>
+              </div>
+
+
+              <div
+                className={
+                  styles.statRow
+                }
+              >
+                <strong>
+                  {
+                    homeStats.fouls
+                  }
+                </strong>
+
+                <span>
+                  Fouls
+                </span>
+
+                <strong>
+                  {
+                    awayStats.fouls
+                  }
+                </strong>
+              </div>
+
+
+              <div
+                className={
+                  styles.statRow
+                }
+              >
+                <strong>
+                  {
+                    homeStats.corners
+                  }
+                </strong>
+
+                <span>
+                  Corners
+                </span>
+
+                <strong>
+                  {
+                    awayStats.corners
+                  }
+                </strong>
+              </div>
+
+
+              <div
+                className={
+                  styles.statRow
+                }
+              >
+                <strong>
+                  {
+                    homeStats.yellow
+                  }
+                </strong>
+
+                <span>
+                  Yellow cards
+                </span>
+
+                <strong>
+                  {
+                    awayStats.yellow
+                  }
+                </strong>
+              </div>
+
+            </div>
+
+          </section>
+
+
+          {/* =================================================
+              EVENTS
+          ================================================= */}
+
           <section
             className={
-              styles.fullTime
+              styles.eventsPanel
             }
           >
-
-            <span>
-              FULL TIME
-            </span>
-
-            <h2>
-              {engine.homeScore}
-              {' - '}
-              {engine.awayScore}
-            </h2>
-
-            <p>
-              {getClubName(
-                homeClub
-              )}{' '}
-              vs{' '}
-              {getClubName(
-                awayClub
-              )}
-            </p>
-
-            <strong>
-              {resultLabel}
-            </strong>
 
             <button
               type="button"
+              className={
+                styles.eventsHeader
+              }
               onClick={() =>
-                router.push(
-                  '/fixtures'
+                setShowEvents(
+                  (value) =>
+                    !value
                 )
               }
             >
-              Back to Fixtures
+              <span>
+                📋 Match Events
+              </span>
+
+              <strong>
+                {events.length}
+              </strong>
             </button>
 
+
+            {showEvents && (
+              <div
+                className={
+                  styles.eventsList
+                }
+              >
+
+                {recentEvents.length >
+                0 ? (
+                  recentEvents.map(
+                    (event) => (
+                      <article
+                        key={
+                          event.id
+                        }
+                        className={
+                          styles.event
+                        }
+                      >
+
+                        <time>
+                          {event.minute}'
+                        </time>
+
+                        <span
+                          className={
+                            styles.eventIcon
+                          }
+                        >
+                          {eventIcon(
+                            event
+                          )}
+                        </span>
+
+                        <div>
+                          <strong>
+                            {eventLabel(
+                              event
+                            )}
+                          </strong>
+
+                          <p>
+                            {event.text}
+                          </p>
+                        </div>
+
+                      </article>
+                    )
+                  )
+                ) : (
+                  <div
+                    className={
+                      styles.noEvents
+                    }
+                  >
+                    No match events yet.
+                  </div>
+                )}
+
+              </div>
+            )}
+
           </section>
-        )}
+
+
+          {/* =================================================
+              MATCH INFORMATION
+          ================================================= */}
+
+          <section
+            className={
+              styles.matchInfo
+            }
+          >
+
+            <div>
+              <span>
+                LEAGUE
+              </span>
+
+              <strong>
+                {fixture.leagueName ||
+                  fixture.league ||
+                  'League Match'}
+              </strong>
+            </div>
+
+
+            <div>
+              <span>
+                STADIUM
+              </span>
+
+              <strong>
+                {getClubStadium(
+                  homeClub
+                )}
+              </strong>
+            </div>
+
+
+            <div>
+              <span>
+                CAPACITY
+              </span>
+
+              <strong>
+                {stadiumCapacity.toLocaleString()}
+              </strong>
+            </div>
+
+
+            <div>
+              <span>
+                MATCH LENGTH
+              </span>
+
+              <strong>
+                {MATCH_DURATION}{' '}
+                minutes
+              </strong>
+            </div>
+
+          </section>
+
+        </section>
 
       </main>
     </>
-  );
-}
-
-/* =========================================================
-   STAT ROW
-========================================================= */
-
-function StatRow({
-  label,
-  home,
-  away,
-  suffix = '',
-}) {
-  return (
-    <div
-      className={
-        styles.statRow
-      }
-    >
-      <strong>
-        {home}
-        {suffix}
-      </strong>
-
-      <span>
-        {label}
-      </span>
-
-      <strong>
-        {away}
-        {suffix}
-      </strong>
-    </div>
   );
 }
