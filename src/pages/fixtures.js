@@ -7,6 +7,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -472,7 +473,9 @@ export default function FixturesPage({
 
   const [leagues] = useState(initialLeagues);
   const [clubs] = useState(initialClubs);
-  const [savedMatches, setSavedMatches] = useState(initialMatches);
+
+  // Fixtures ziva muri database (realtime)
+  const [dbMatches, setDbMatches] = useState(initialMatches);
 
   const [careerData, setCareerData] = useState(null);
   const [currentClub, setCurrentClub] = useState(null);
@@ -489,7 +492,7 @@ export default function FixturesPage({
   const [saving, setSaving] = useState(false);
 
   /* =======================================================
-     REAL-TIME CLOCK
+     REAL-TIME CLOCK (every 30 seconds)
   ======================================================== */
 
   useEffect(() => {
@@ -547,6 +550,32 @@ export default function FixturesPage({
   };
 
   /* =======================================================
+     REALTIME FIXTURES FROM DATABASE
+  ======================================================== */
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'matches'),
+      (snapshot) => {
+        const matches = snapshot.docs.map((docItem) => ({
+          id: docItem.id,
+          ...docItem.data(),
+        }));
+
+        setDbMatches(matches);
+      },
+      (error) => {
+        console.error('Fixtures live listener error:', error);
+        toast.error('Live fixtures disconnected');
+      },
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  /* =======================================================
      GAME DATE
   ======================================================== */
 
@@ -576,7 +605,7 @@ export default function FixturesPage({
   }, [currentClub]);
 
   /* =======================================================
-     GENERATED FIXTURES
+     GENERATED FIXTURES (fallback)
   ======================================================== */
 
   const generatedFixtures = useMemo(() => {
@@ -600,28 +629,31 @@ export default function FixturesPage({
   }, [leagues, clubs, currentClub, seasonYear]);
 
   /* =======================================================
-     MERGE SAVED RESULTS
+     MERGE DATABASE + GENERATED
+     Database matches are source of truth for saved data.
+     If DB has full fixtures, they override generated ones.
   ======================================================== */
 
   const allFixtures = useMemo(() => {
-    const savedMap = new Map();
+    const fixtureMap = new Map();
 
-    savedMatches.forEach((match) => {
-      savedMap.set(match.id, match);
+    // 1. Injiza generated fixtures (fallback)
+    generatedFixtures.forEach((fixture) => {
+      fixtureMap.set(fixture.id, fixture);
     });
 
-    return generatedFixtures.map((fixture) => {
-      const saved = savedMap.get(fixture.id);
-
-      if (!saved) return fixture;
-
-      return {
-        ...fixture,
-        ...saved,
-        result: saved.result || fixture.result,
-      };
+    // 2. Injiza database fixtures (zisimbura generated)
+    dbMatches.forEach((match) => {
+      const existing = fixtureMap.get(match.id);
+      fixtureMap.set(match.id, {
+        ...(existing || {}),
+        ...match,
+        result: match.result || existing?.result || null,
+      });
     });
-  }, [generatedFixtures, savedMatches]);
+
+    return Array.from(fixtureMap.values());
+  }, [generatedFixtures, dbMatches]);
 
   /* =======================================================
      CUSTOM FRIENDLIES (from careerData)
