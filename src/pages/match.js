@@ -109,6 +109,14 @@ function randomBetweenSafe(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function distanceBetween(a, b) {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
 /* =========================================================
    CLUB HELPERS
 ========================================================= */
@@ -571,6 +579,11 @@ export default function MatchPage() {
   const ballMeshRef = useRef(null);
   const playerMeshesRef = useRef({ home: [], away: [] });
   const animationFrameRef = useRef(null);
+  
+  // Match simulation state refs
+  const ballPossessionRef = useRef(null); // { team: 'home'|'away', playerIndex: number }
+  const ballTargetRef = useRef(null); // { x, z }
+  const playerTargetsRef = useRef({ home: [], away: [] });
 
   /* =======================================================
      DERIVED
@@ -846,7 +859,6 @@ export default function MatchPage() {
     // Pitch lines
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
 
-    // Border lines
     const borderGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-15, 0.01, -10),
       new THREE.Vector3(15, 0.01, -10),
@@ -857,7 +869,6 @@ export default function MatchPage() {
     const borderLine = new THREE.Line(borderGeometry, lineMaterial);
     scene.add(borderLine);
 
-    // Center line
     const centerLineGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0.01, -10),
       new THREE.Vector3(0, 0.01, 10),
@@ -865,7 +876,6 @@ export default function MatchPage() {
     const centerLine = new THREE.Line(centerLineGeometry, lineMaterial);
     scene.add(centerLine);
 
-    // Center circle
     const circleGeometry = new THREE.RingGeometry(3, 3.05, 64);
     const circleMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -879,13 +889,11 @@ export default function MatchPage() {
     // Goals
     const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
-    // Left goal
     const leftGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
     const leftGoal = new THREE.Mesh(leftGoalGeometry, goalMaterial);
     leftGoal.position.set(-15, 0.08, 0);
     scene.add(leftGoal);
 
-    // Right goal
     const rightGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
     const rightGoal = new THREE.Mesh(rightGoalGeometry, goalMaterial);
     rightGoal.position.set(15, 0.08, 0);
@@ -920,24 +928,65 @@ export default function MatchPage() {
       return player;
     };
 
-    // Home players (left side)
-    const homeFormation = FORMATION_POSITIONS.balanced;
+    const homeFormation = FORMATION_POSITIONS[mentality] || FORMATION_POSITIONS.balanced;
+
     playerMeshesRef.current.home = homeFormation.map((pos, index) => {
       const x = (pos.x - 50) / 50 * 15;
       const z = (pos.y - 50) / 50 * 10;
       return createPlayer(x, z, 0x3b82f6, index);
     });
 
-    // Away players (right side)
     playerMeshesRef.current.away = homeFormation.map((pos, index) => {
       const x = (50 - pos.x) / 50 * 15;
       const z = (50 - pos.y) / 50 * 10;
       return createPlayer(x, z, 0xef4444, index);
     });
 
+    // Initialize player targets
+    playerTargetsRef.current.home = playerMeshesRef.current.home.map((player) => ({
+      x: player.position.x,
+      z: player.position.z,
+    }));
+
+    playerTargetsRef.current.away = playerMeshesRef.current.away.map((player) => ({
+      x: player.position.x,
+      z: player.position.z,
+    }));
+
     // Animation loop
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
+      
+      // Smooth player movement
+      playerMeshesRef.current.home.forEach((player, index) => {
+        const target = playerTargetsRef.current.home[index];
+        if (target) {
+          player.position.x = lerp(player.position.x, target.x, 0.1);
+          player.position.z = lerp(player.position.z, target.z, 0.1);
+        }
+      });
+
+      playerMeshesRef.current.away.forEach((player, index) => {
+        const target = playerTargetsRef.current.away[index];
+        if (target) {
+          player.position.x = lerp(player.position.x, target.x, 0.1);
+          player.position.z = lerp(player.position.z, target.z, 0.1);
+        }
+      });
+
+      // Ball follows possession
+      if (ballPossessionRef.current && ballMeshRef.current) {
+        const { team, playerIndex } = ballPossessionRef.current;
+        const players = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+        const player = players[playerIndex];
+        
+        if (player) {
+          ballMeshRef.current.position.x = player.position.x;
+          ballMeshRef.current.position.z = player.position.z;
+          ballMeshRef.current.position.y = 0.15;
+        }
+      }
+
       controls.update();
       renderer.render(scene, camera);
     };
@@ -971,49 +1020,110 @@ export default function MatchPage() {
         mountRef.current.removeChild(renderer.domElement);
       }
     };
-  }, [loadingMatch]);
+  }, [loadingMatch, mentality]);
 
   /* =======================================================
-     UPDATE BALL POSITION IN 3D
+     SIMULATE PLAYER MOVEMENT AND BALL POSSESSION
   ======================================================== */
 
-  useEffect(() => {
-    if (!ballMeshRef.current) return;
-
-    // Animate ball based on match minute
-    const animateBall = () => {
-      const ball = ballMeshRef.current;
-      if (!ball) return;
-
-      // Simple random movement for ball
-      const targetX = randomBetweenSafe(-12, 12);
-      const targetZ = randomBetweenSafe(-8, 8);
-
-      const startX = ball.position.x;
-      const startZ = ball.position.z;
-      const startTime = Date.now();
-      const duration = 500;
-
-      const updateBall = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = progress * (2 - progress); // easeOut
-
-        ball.position.x = startX + (targetX - startX) * eased;
-        ball.position.z = startZ + (targetZ - startZ) * eased;
-
-        if (progress < 1) {
-          requestAnimationFrame(updateBall);
-        }
-      };
-
-      updateBall();
-    };
-
-    if (matchStatus === 'live' && !paused) {
-      animateBall();
+  const simulatePlayerMovement = useCallback(() => {
+    if (!ballPossessionRef.current) {
+      // Give ball to a random player
+      const team = Math.random() < 0.5 ? 'home' : 'away';
+      const playerIndex = Math.floor(Math.random() * 11);
+      ballPossessionRef.current = { team, playerIndex };
+      return;
     }
-  }, [matchMinute, matchStatus, paused]);
+
+    const { team, playerIndex } = ballPossessionRef.current;
+    const players = team === 'home' ? homeXI : awayXI;
+    const opposingTeam = team === 'home' ? 'away' : 'home';
+    const opposingPlayers = opposingTeam === 'home' ? homeXI : awayXI;
+
+    // Calculate possession player's current position
+    const playerMeshes = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+    const opposingMeshes = opposingTeam === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+    
+    const currentPlayer = playerMeshes[playerIndex];
+    if (!currentPlayer) return;
+
+    // Decide: pass, shoot, or dribble
+    const random = Math.random();
+
+    // 30% chance to pass to teammate
+    if (random < 0.3) {
+      const teammateIndex = Math.floor(Math.random() * 11);
+      if (teammateIndex !== playerIndex) {
+        const teammate = playerMeshes[teammateIndex];
+        if (teammate) {
+          // Pass ball to teammate
+          ballPossessionRef.current = { team, playerIndex: teammateIndex };
+          
+          // Move current player towards teammate
+          playerTargetsRef.current[team][playerIndex] = {
+            x: teammate.position.x,
+            z: teammate.position.z,
+          };
+          
+          return;
+        }
+      }
+    }
+
+    // 20% chance to shoot if close to goal
+    const goalX = team === 'home' ? 14 : -14;
+    const distanceToGoal = Math.abs(currentPlayer.position.x - goalX);
+    
+    if (random < 0.5 && distanceToGoal < 10) {
+      // Shoot!
+      const goalZ = randomBetweenSafe(-2, 2);
+      ballTargetRef.current = { x: goalX, z: goalZ };
+      
+      // Check if goal
+      const saveChance = 0.3;
+      if (Math.random() > saveChance) {
+        // GOAL!
+        if (team === 'home') {
+          setHomeScore((prev) => prev + 1);
+        } else {
+          setAwayScore((prev) => prev + 1);
+        }
+        
+        // Reset possession
+        ballPossessionRef.current = null;
+      } else {
+        // Save by goalkeeper
+        const gkIndex = 0;
+        ballPossessionRef.current = { team: opposingTeam, playerIndex: gkIndex };
+      }
+      
+      return;
+    }
+
+    // Dribble towards opponent goal
+    const direction = team === 'home' ? 1 : -1;
+    const newX = clamp(currentPlayer.position.x + direction * randomBetweenSafe(1, 3), -14, 14);
+    const newZ = clamp(currentPlayer.position.z + randomBetweenSafe(-2, 2), -9, 9);
+    
+    playerTargetsRef.current[team][playerIndex] = { x: newX, z: newZ };
+    
+    // Move ball with player
+    ballTargetRef.current = { x: newX, z: newZ };
+
+    // Defending players move towards ball carrier
+    opposingMeshes.forEach((opponent, index) => {
+      const targetX = currentPlayer.position.x + (Math.random() - 0.5) * 2;
+      const targetZ = currentPlayer.position.z + (Math.random() - 0.5) * 2;
+      playerTargetsRef.current[opposingTeam][index] = { x: targetX, z: targetZ };
+    });
+
+    // Check if opponent steals ball
+    const stealChance = 0.05;
+    if (Math.random() < stealChance) {
+      const opponentIndex = Math.floor(Math.random() * 11);
+      ballPossessionRef.current = { team: opposingTeam, playerIndex: opponentIndex };
+    }
+  }, [homeXI, awayXI]);
 
   /* =======================================================
      REALTIME MATCH LISTENER
@@ -1106,6 +1216,11 @@ export default function MatchPage() {
       processingRef.current = true;
 
       try {
+        // Run player movement simulation multiple times per minute
+        for (let i = 0; i < 10; i++) {
+          simulatePlayerMovement();
+        }
+
         const homeStrength =
           homeXI.reduce((total, player) => total + getPlayerOverall(player), 0) /
           Math.max(homeXI.length, 1);
@@ -1113,142 +1228,6 @@ export default function MatchPage() {
         const awayStrength =
           awayXI.reduce((total, player) => total + getPlayerOverall(player), 0) /
           Math.max(awayXI.length, 1);
-
-        const homeMentalityBonus =
-          mentality === 'attacking' ? 4 : mentality === 'defensive' ? -3 : 0;
-
-        const homeChance = clamp(
-          8 + (homeStrength - awayStrength) * 0.18 + homeMentalityBonus,
-          2,
-          22,
-        );
-
-        const awayChance = clamp(
-          7 + (awayStrength - homeStrength) * 0.18,
-          2,
-          20,
-        );
-
-        const random = Math.random() * 100;
-
-        let event = null;
-        let scoringTeam = null;
-
-        if (random < homeChance * 0.08) {
-          scoringTeam = 'home';
-
-          const player =
-            pick(
-              homeXI.filter(
-                (p) =>
-                  normalizePosition(getPlayerPosition(p)) === 'ATT' ||
-                  normalizePosition(getPlayerPosition(p)) === 'MID',
-              ),
-            ) || pick(homeXI);
-
-          event = {
-            id: `${Date.now()}-${minute}-goal-home`,
-            type: EVENT_TYPES.GOAL,
-            team: 'home',
-            minute,
-            playerId: playerId(player),
-            playerName: getPlayerName(player),
-            detail: `${getPlayerName(player)} scored`,
-            createdAt: new Date().toISOString(),
-          };
-
-          // Move ball to right goal
-          if (ballMeshRef.current) {
-            ballMeshRef.current.position.set(14.5, 0.15, 0);
-          }
-        } else if (random < (homeChance + awayChance) * 0.08) {
-          scoringTeam = 'away';
-
-          const player =
-            pick(
-              awayXI.filter(
-                (p) =>
-                  normalizePosition(getPlayerPosition(p)) === 'ATT' ||
-                  normalizePosition(getPlayerPosition(p)) === 'MID',
-              ),
-            ) || pick(awayXI);
-
-          event = {
-            id: `${Date.now()}-${minute}-goal-away`,
-            type: EVENT_TYPES.GOAL,
-            team: 'away',
-            minute,
-            playerId: playerId(player),
-            playerName: getPlayerName(player),
-            detail: `${getPlayerName(player)} scored`,
-            createdAt: new Date().toISOString(),
-          };
-
-          // Move ball to left goal
-          if (ballMeshRef.current) {
-            ballMeshRef.current.position.set(-14.5, 0.15, 0);
-          }
-        } else {
-          const eventRandom = Math.random() * 100;
-
-          if (eventRandom < 14) {
-            const team = Math.random() < 0.5 ? 'home' : 'away';
-            const lineup = team === 'home' ? homeXI : awayXI;
-            const player = pick(lineup);
-
-            event = {
-              id: `${Date.now()}-${minute}-shot`,
-              type: EVENT_TYPES.SHOT,
-              team,
-              minute,
-              playerId: playerId(player),
-              playerName: getPlayerName(player),
-              detail: 'Shot attempt',
-              createdAt: new Date().toISOString(),
-            };
-          } else if (eventRandom < 19) {
-            const team = Math.random() < 0.5 ? 'home' : 'away';
-            const lineup = team === 'home' ? homeXI : awayXI;
-            const player = pick(lineup);
-
-            event = {
-              id: `${Date.now()}-${minute}-foul`,
-              type: EVENT_TYPES.FOUL,
-              team,
-              minute,
-              playerId: playerId(player),
-              playerName: getPlayerName(player),
-              detail: 'Foul committed',
-              createdAt: new Date().toISOString(),
-            };
-          } else if (eventRandom < 22) {
-            const team = Math.random() < 0.5 ? 'home' : 'away';
-            const lineup = team === 'home' ? homeXI : awayXI;
-            const player = pick(lineup);
-
-            event = {
-              id: `${Date.now()}-${minute}-yellow`,
-              type: EVENT_TYPES.YELLOW,
-              team,
-              minute,
-              playerId: playerId(player),
-              playerName: getPlayerName(player),
-              detail: 'Yellow card',
-              createdAt: new Date().toISOString(),
-            };
-          } else if (eventRandom < 27) {
-            const team = Math.random() < 0.5 ? 'home' : 'away';
-
-            event = {
-              id: `${Date.now()}-${minute}-corner`,
-              type: EVENT_TYPES.CORNER,
-              team,
-              minute,
-              detail: 'Corner kick',
-              createdAt: new Date().toISOString(),
-            };
-          }
-        }
 
         const nextHomeStats = { ...homeStats };
         const nextAwayStats = { ...awayStats };
@@ -1267,75 +1246,14 @@ export default function MatchPage() {
         nextHomeStats.passes += randomBetweenSafe(4, 15);
         nextAwayStats.passes += randomBetweenSafe(4, 15);
 
-        if (event) {
-          if (event.type === EVENT_TYPES.SHOT) {
-            if (event.team === 'home') {
-              nextHomeStats.shots += 1;
-              if (Math.random() < 0.38) nextHomeStats.shotsOnTarget += 1;
-            } else {
-              nextAwayStats.shots += 1;
-              if (Math.random() < 0.38) nextAwayStats.shotsOnTarget += 1;
-            }
-          }
-
-          if (event.type === EVENT_TYPES.GOAL) {
-            if (event.team === 'home') {
-              nextHomeStats.shots += 1;
-              nextHomeStats.shotsOnTarget += 1;
-            } else {
-              nextAwayStats.shots += 1;
-              nextAwayStats.shotsOnTarget += 1;
-            }
-          }
-
-          if (event.type === EVENT_TYPES.FOUL) {
-            if (event.team === 'home') nextHomeStats.fouls += 1;
-            else nextAwayStats.fouls += 1;
-          }
-
-          if (event.type === EVENT_TYPES.YELLOW) {
-            if (event.team === 'home') nextHomeStats.yellow += 1;
-            else nextAwayStats.yellow += 1;
-          }
-
-          if (event.type === EVENT_TYPES.RED) {
-            if (event.team === 'home') nextHomeStats.red += 1;
-            else nextAwayStats.red += 1;
-          }
-
-          if (event.type === EVENT_TYPES.CORNER) {
-            if (event.team === 'home') nextHomeStats.corners += 1;
-            else nextAwayStats.corners += 1;
-          }
-
-          if (event.type === EVENT_TYPES.OFFSIDE) {
-            if (event.team === 'home') nextHomeStats.offsides += 1;
-            else nextAwayStats.offsides += 1;
-          }
-        }
-
-        let nextHomeScore = homeScore;
-        let nextAwayScore = awayScore;
-
-        if (scoringTeam === 'home') nextHomeScore += 1;
-        if (scoringTeam === 'away') nextAwayScore += 1;
-
-        const nextEvents = event ? [event, ...events] : events;
-
-        setHomeScore(nextHomeScore);
-        setAwayScore(nextAwayScore);
         setHomeStats(nextHomeStats);
         setAwayStats(nextAwayStats);
 
-        if (event) {
-          setEvents(nextEvents);
-        }
-
         await saveMatchState({
           minute,
-          homeScoreValue: nextHomeScore,
-          awayScoreValue: nextAwayScore,
-          eventsValue: nextEvents,
+          homeScoreValue: homeScore,
+          awayScoreValue: awayScore,
+          eventsValue: events,
           homeStatsValue: nextHomeStats,
           awayStatsValue: nextAwayStats,
           statusValue: 'live',
@@ -1359,6 +1277,7 @@ export default function MatchPage() {
       events,
       substitutionsUsed,
       saveMatchState,
+      simulatePlayerMovement,
     ],
   );
 
