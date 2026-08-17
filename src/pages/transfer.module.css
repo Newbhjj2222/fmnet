@@ -1,0 +1,2362 @@
+/* =========================================================
+   TRANSFER CENTRE
+   transfer.module.css
+   Responsive: Desktop / Tablet / Mobile / Small screens
+========================================================= */
+
+/* =========================================================
+   ROOT PAGE
+========================================================= */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 24px;
+  color: #e8edf5;
+
+  background:
+    radial-gradient(
+      circle at 15% 0%,
+      rgba(37, 99, 235, 0.12),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(16, 185, 129, 0.08),
+      transparent 30%
+    ),
+    #07101c;
+
+  overflow-x: hidden;
+}
+
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+
+.page button,
+.page input,
+.page select,
+.page textarea {
+  font: inherit;
+}
+
+.page button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  background: #07101c;
+  color: #cbd5e1;
+
+  padding: 20px;
+  text-align: center;
+}
+
+.loading p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 38px;
+  height: 38px;
+
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.header {
+  width: 100%;
+  max-width: 1500px;
+
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 24px;
+
+  padding: 22px;
+
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 18px;
+
+  background: rgba(13, 24, 40, 0.82);
+
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.22);
+
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.headerIdentity {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 15px;
+}
+
+.clubLogo {
+  width: 58px;
+  height: 58px;
+
+  flex: 0 0 58px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #16263d,
+      #0c1728
+    );
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  font-size: 25px;
+}
+
+.clubLogo img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.eyebrow {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #60a5fa;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.14em;
+}
+
+.header h1 {
+  margin: 0;
+
+  color: #f8fafc;
+
+  font-size: clamp(20px, 2.4vw, 30px);
+  line-height: 1.1;
+
+  font-weight: 800;
+}
+
+.header p {
+  margin: 7px 0 0;
+
+  color: #94a3b8;
+
+  font-size: 13px;
+}
+
+.headerBudgets {
+  display: flex;
+  align-items: stretch;
+
+  flex-shrink: 0;
+
+  gap: 10px;
+}
+
+.headerBudgets > div {
+  min-width: 145px;
+
+  padding: 12px 15px;
+
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.headerBudgets span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.1em;
+}
+
+.headerBudgets strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #f8fafc;
+
+  font-size: 15px;
+}
+
+
+/* =========================================================
+   SUMMARY / STATS
+========================================================= */
+
+.stats {
+  width: 100%;
+  max-width: 1500px;
+
+  margin: 0 auto 20px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+.statCard {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 17px;
+
+  border-radius: 15px;
+
+  background: rgba(13, 24, 40, 0.75);
+
+  border: 1px solid rgba(148, 163, 184, 0.1);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+
+  border-color:
+    rgba(96, 165, 250, 0.3);
+}
+
+.statCard > span {
+  width: 42px;
+  height: 42px;
+
+  flex: 0 0 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background: rgba(59, 130, 246, 0.1);
+
+  font-size: 18px;
+}
+
+.statCard small {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.1em;
+}
+
+.statCard strong {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #f8fafc;
+
+  font-size: 20px;
+}
+
+.statCard p {
+  margin: 2px 0 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   TABS / NAVIGATION
+========================================================= */
+
+.tabs {
+  width: 100%;
+  max-width: 1500px;
+
+  margin: 0 auto 18px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+
+  padding: 6px;
+
+  overflow-x: auto;
+
+  border-radius: 14px;
+
+  background: rgba(13, 24, 40, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs button {
+  min-height: 40px;
+
+  flex: 0 0 auto;
+
+  padding: 0 16px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: transparent;
+
+  color: #8190a5;
+
+  cursor: pointer;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.tabs button:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tabs .activeTab {
+  color: #f8fafc;
+
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #1d4ed8
+    );
+
+  box-shadow:
+    0 5px 15px rgba(37, 99, 235, 0.22);
+}
+
+
+/* =========================================================
+   FILTERS
+========================================================= */
+
+.filters {
+  width: 100%;
+  max-width: 1500px;
+
+  margin: 0 auto 15px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(220px, 1.5fr)
+    repeat(3, minmax(130px, 0.6fr));
+
+  gap: 9px;
+}
+
+.search {
+  min-width: 0;
+
+  height: 43px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 0 12px;
+
+  border-radius: 11px;
+
+  background: rgba(13, 24, 40, 0.82);
+
+  border: 1px solid rgba(148, 163, 184, 0.1);
+
+  color: #64748b;
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+
+  color: #e2e8f0;
+
+  font-size: 12px;
+}
+
+.search input::placeholder {
+  color: #526176;
+}
+
+.filters select {
+  width: 100%;
+  min-width: 0;
+
+  height: 43px;
+
+  padding: 0 11px;
+
+  border-radius: 11px;
+
+  border: 1px solid rgba(148, 163, 184, 0.1);
+
+  background: #0d1828;
+  color: #b8c3d1;
+
+  outline: none;
+
+  cursor: pointer;
+
+  font-size: 11px;
+}
+
+.filters select:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+
+/* =========================================================
+   MAIN CARDS
+========================================================= */
+
+.tableCard,
+.scouting,
+.contracts,
+.requestsSection,
+.activitySection {
+  width: 100%;
+  max-width: 1500px;
+
+  margin: 0 auto 20px;
+
+  overflow: hidden;
+
+  border-radius: 17px;
+
+  background: rgba(13, 24, 40, 0.8);
+
+  border: 1px solid rgba(148, 163, 184, 0.1);
+
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+.tableHeader {
+  min-height: 74px;
+
+  padding: 17px 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  border-bottom:
+    1px solid rgba(148, 163, 184, 0.08);
+}
+
+.tableHeader span,
+.sectionHeading > div > span {
+  color: #60a5fa;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.12em;
+}
+
+.tableHeader h2,
+.sectionHeading h2 {
+  margin: 4px 0 0;
+
+  color: #f1f5f9;
+
+  font-size: 18px;
+}
+
+.tableHeader > strong {
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.tableWrapper {
+  width: 100%;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+}
+
+.playersTable {
+  width: 100%;
+
+  min-width: 920px;
+
+  border-collapse: collapse;
+
+  text-align: left;
+}
+
+.playersTable th {
+  padding: 11px 15px;
+
+  background: rgba(255, 255, 255, 0.018);
+
+  color: #607087;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.07em;
+
+  text-transform: uppercase;
+
+  white-space: nowrap;
+}
+
+.playersTable td {
+  padding: 12px 15px;
+
+  border-top:
+    1px solid rgba(148, 163, 184, 0.055);
+
+  color: #aeb9c8;
+
+  font-size: 11px;
+
+  white-space: nowrap;
+}
+
+.playersTable tbody tr {
+  transition:
+    background 0.18s ease;
+}
+
+.playersTable tbody tr:hover {
+  background: rgba(59, 130, 246, 0.035);
+}
+
+.playerCell {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  min-width: 170px;
+}
+
+.playerAvatar {
+  width: 37px;
+  height: 37px;
+
+  flex: 0 0 37px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 10px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1e3a5f,
+      #102238
+    );
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  color: #bfdbfe;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.playerAvatar img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.playerCell strong {
+  display: block;
+
+  color: #e8edf5;
+
+  font-size: 12px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playerCell small {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #5f6f83;
+
+  font-size: 9px;
+}
+
+.position {
+  display: inline-flex;
+
+  padding: 4px 7px;
+
+  border-radius: 6px;
+
+  color: #9db7d6;
+
+  background: rgba(59, 130, 246, 0.07);
+
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.overall {
+  color: #f8fafc;
+
+  font-size: 14px;
+}
+
+.clubName {
+  display: inline-block;
+
+  max-width: 130px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  color: #8fa0b5;
+}
+
+.status {
+  display: inline-flex;
+
+  align-items: center;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.available {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.listed {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.11);
+}
+
+.loan {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.11);
+}
+
+.unavailable {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.free {
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+
+/* =========================================================
+   ACTION BUTTONS
+========================================================= */
+
+.actions {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+}
+
+.actions button,
+.modalActions button,
+.scoutCard button,
+.primaryButton {
+  min-height: 31px;
+
+  padding: 0 9px;
+
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 7px;
+
+  background: rgba(255, 255, 255, 0.045);
+
+  color: #cbd5e1;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  white-space: nowrap;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.actions button:hover,
+.modalActions button:hover,
+.scoutCard button:hover,
+.primaryButton:hover {
+  transform: translateY(-1px);
+
+  background: rgba(59, 130, 246, 0.13);
+
+  border-color:
+    rgba(59, 130, 246, 0.3);
+}
+
+.buyAction {
+  color: #93c5fd !important;
+
+  background:
+    rgba(37, 99, 235, 0.1) !important;
+
+  border-color:
+    rgba(37, 99, 235, 0.2) !important;
+}
+
+.loanAction {
+  color: #fcd34d !important;
+
+  background:
+    rgba(245, 158, 11, 0.08) !important;
+}
+
+.dangerAction {
+  color: #fca5a5 !important;
+
+  background:
+    rgba(239, 68, 68, 0.08) !important;
+
+  border-color:
+    rgba(239, 68, 68, 0.15) !important;
+}
+
+.noPlayers {
+  padding: 45px 20px !important;
+
+  text-align: center;
+
+  color: #526176 !important;
+}
+
+
+/* =========================================================
+   SCOUTING
+========================================================= */
+
+.scouting {
+  padding: 20px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  margin-bottom: 18px;
+}
+
+.sectionHeading p {
+  margin: 7px 0 0;
+
+  color: #65758a;
+
+  font-size: 11px;
+}
+
+.scoutIcon {
+  width: 42px;
+  height: 42px;
+
+  flex: 0 0 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background:
+    rgba(37, 99, 235, 0.1);
+
+  font-size: 18px;
+}
+
+.scoutGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+.scoutCard {
+  min-width: 0;
+
+  padding: 15px;
+
+  border-radius: 13px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  border:
+    1px solid rgba(148, 163, 184, 0.08);
+}
+
+.scoutTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.largeAvatar {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1e3a5f,
+      #0c1728
+    );
+
+  color: #bfdbfe;
+
+  font-weight: 800;
+}
+
+.largeAvatar img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.scoutTop > div:last-child {
+  text-align: right;
+}
+
+.scoutTop span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.scoutTop strong {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #60a5fa;
+
+  font-size: 19px;
+}
+
+.scoutCard h3 {
+  margin: 13px 0 3px;
+
+  color: #e5edf7;
+
+  font-size: 14px;
+}
+
+.scoutCard > p {
+  margin: 0;
+
+  color: #697a90;
+
+  font-size: 10px;
+}
+
+.scoutStats {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 5px;
+
+  margin: 13px 0;
+}
+
+.scoutStats div {
+  min-width: 0;
+
+  padding: 7px;
+
+  border-radius: 7px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+.scoutStats span {
+  display: block;
+
+  color: #59697e;
+
+  font-size: 7px;
+}
+
+.scoutStats strong {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #cbd5e1;
+
+  font-size: 9px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoutReason {
+  margin-bottom: 11px;
+
+  padding: 8px;
+
+  border-radius: 7px;
+
+  background:
+    rgba(34, 197, 94, 0.05);
+
+  color: #7fa991;
+
+  font-size: 9px;
+}
+
+.scoutCard button {
+  width: 100%;
+}
+
+
+/* =========================================================
+   CONTRACTS
+========================================================= */
+
+.contractList {
+  width: 100%;
+}
+
+.contractRow {
+  min-height: 68px;
+
+  display: grid;
+
+  grid-template-columns:
+    1.6fr 1fr 1fr;
+
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 12px 20px;
+
+  border-top:
+    1px solid rgba(148, 163, 184, 0.055);
+}
+
+.contractRow > div {
+  min-width: 0;
+}
+
+.contractRow strong {
+  display: block;
+
+  color: #dbe4ef;
+
+  font-size: 11px;
+}
+
+.contractRow span,
+.contractRow small {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #607087;
+
+  font-size: 9px;
+}
+
+.contractWarning {
+  color: #fbbf24 !important;
+}
+
+
+/* =========================================================
+   MODALS
+========================================================= */
+
+.modalOverlay {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 18px;
+
+  background:
+    rgba(2, 6, 23, 0.76);
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  overflow-y: auto;
+}
+
+.playerModal,
+.negotiationModal {
+  position: relative;
+
+  width: min(100%, 520px);
+
+  max-height:
+    calc(100vh - 36px);
+  max-height:
+    calc(100dvh - 36px);
+
+  overflow-y: auto;
+
+  padding: 23px;
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #101d2f,
+      #0b1625
+    );
+
+  border:
+    1px solid rgba(148, 163, 184, 0.13);
+
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5);
+
+  animation:
+    modalIn 0.2s ease-out;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.close {
+  position: absolute;
+
+  top: 12px;
+  right: 12px;
+
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 8px;
+
+  background:
+    rgba(255, 255, 255, 0.05);
+
+  color: #94a3b8;
+
+  cursor: pointer;
+
+  font-size: 21px;
+}
+
+.close:hover {
+  background:
+    rgba(239, 68, 68, 0.1);
+
+  color: #fca5a5;
+}
+
+
+/* =========================================================
+   PLAYER MODAL
+========================================================= */
+
+.modalPlayerHeader {
+  display: flex;
+  align-items: center;
+
+  gap: 13px;
+
+  padding-right: 35px;
+
+  margin-bottom: 20px;
+}
+
+.modalAvatar {
+  width: 62px;
+  height: 62px;
+
+  flex: 0 0 62px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1e3a5f,
+      #0c1728
+    );
+
+  color: #bfdbfe;
+
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.modalAvatar img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.modalPlayerHeader span {
+  color: #60a5fa;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  text-transform: uppercase;
+}
+
+.modalPlayerHeader h2 {
+  margin: 3px 0;
+
+  color: #f1f5f9;
+
+  font-size: 20px;
+}
+
+.modalPlayerHeader p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+.detailsGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 7px;
+
+  margin-bottom: 18px;
+}
+
+.detailsGrid div {
+  min-width: 0;
+
+  padding: 10px;
+
+  border-radius: 9px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.04);
+}
+
+.detailsGrid span {
+  display: block;
+
+  color: #5f6f83;
+
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.detailsGrid strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #dce6f2;
+
+  font-size: 10px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modalActions {
+  display: flex;
+
+  gap: 7px;
+}
+
+.modalActions button {
+  flex: 1;
+}
+
+
+/* =========================================================
+   NEGOTIATION
+========================================================= */
+
+.negotiationModal {
+  width: min(100%, 430px);
+}
+
+.negotiationModal h2 {
+  margin: 6px 0 3px;
+
+  color: #f1f5f9;
+
+  font-size: 20px;
+}
+
+.negotiationModal > p {
+  margin: 0 0 18px;
+
+  color: #6d7d91;
+
+  font-size: 11px;
+}
+
+.negotiationSummary {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 7px;
+
+  margin-bottom: 18px;
+}
+
+.negotiationSummary div {
+  padding: 11px;
+
+  border-radius: 9px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+.negotiationSummary span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 8px;
+}
+
+.negotiationSummary strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #e2e8f0;
+
+  font-size: 13px;
+}
+
+.negotiationModal label {
+  display: block;
+
+  margin-bottom: 14px;
+
+  color: #9eacbe;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.moneyInput {
+  height: 44px;
+
+  display: flex;
+  align-items: center;
+
+  margin-top: 6px;
+
+  border-radius: 9px;
+
+  background: #081321;
+
+  border:
+    1px solid rgba(148, 163, 184, 0.12);
+
+  overflow: hidden;
+}
+
+.moneyInput span {
+  padding: 0 11px;
+
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+.moneyInput input {
+  width: 100%;
+  height: 100%;
+
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+
+  color: #f1f5f9;
+
+  font-size: 13px;
+}
+
+.negotiationModal select {
+  width: 100%;
+
+  height: 44px;
+
+  margin-top: 6px;
+
+  padding: 0 11px;
+
+  border-radius: 9px;
+
+  border:
+    1px solid rgba(148, 163, 184, 0.12);
+
+  background: #081321;
+
+  color: #d5deea;
+
+  outline: none;
+
+  font-size: 11px;
+}
+
+.negotiationHint {
+  margin: 4px 0 15px;
+
+  padding: 10px;
+
+  border-radius: 9px;
+
+  background:
+    rgba(59, 130, 246, 0.06);
+
+  border:
+    1px solid rgba(59, 130, 246, 0.08);
+
+  color: #7890ac;
+
+  font-size: 9px;
+
+  line-height: 1.5;
+}
+
+.primaryButton {
+  width: 100%;
+
+  min-height: 43px;
+
+  border: 0 !important;
+
+  color: white !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #1d4ed8
+    ) !important;
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+
+  transform: none !important;
+}
+
+
+/* =========================================================
+   EMPTY PAGE
+========================================================= */
+
+.emptyPage {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 25px;
+
+  text-align: center;
+
+  color: #e2e8f0;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(37, 99, 235, 0.1),
+      transparent 45%
+    ),
+    #07101c;
+}
+
+.emptyIcon {
+  width: 70px;
+  height: 70px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 15px;
+
+  border-radius: 20px;
+
+  background:
+    rgba(59, 130, 246, 0.08);
+
+  font-size: 30px;
+}
+
+.emptyPage h1 {
+  margin: 0;
+
+  font-size: 24px;
+}
+
+.emptyPage p {
+  max-width: 420px;
+
+  margin: 9px 0 18px;
+
+  color: #718096;
+
+  font-size: 12px;
+
+  line-height: 1.6;
+}
+
+.emptyPage button {
+  min-height: 42px;
+
+  padding: 0 17px;
+
+  border: 0;
+  border-radius: 9px;
+
+  color: white;
+
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #1d4ed8
+    );
+
+  cursor: pointer;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   SCROLLBARS
+========================================================= */
+
+.page ::-webkit-scrollbar,
+.playerModal::-webkit-scrollbar,
+.negotiationModal::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.page ::-webkit-scrollbar-track,
+.playerModal::-webkit-scrollbar-track,
+.negotiationModal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page ::-webkit-scrollbar-thumb,
+.playerModal::-webkit-scrollbar-thumb,
+.negotiationModal::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+
+  background:
+    rgba(100, 116, 139, 0.35);
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 1100px) {
+
+  .page {
+    padding: 18px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .headerBudgets {
+    width: 100%;
+  }
+
+  .headerBudgets > div {
+    flex: 1;
+  }
+
+  .stats {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .filters {
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .search {
+    grid-column: 1 / -1;
+  }
+
+  .scoutGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 700px) {
+
+  .page {
+    padding: 11px;
+  }
+
+  .header {
+    padding: 15px;
+
+    border-radius: 14px;
+
+    margin-bottom: 11px;
+  }
+
+  .clubLogo {
+    width: 46px;
+    height: 46px;
+
+    flex-basis: 46px;
+
+    border-radius: 11px;
+
+    font-size: 20px;
+  }
+
+  .headerIdentity {
+    width: 100%;
+  }
+
+  .header h1 {
+    font-size: 19px;
+  }
+
+  .header p {
+    font-size: 11px;
+  }
+
+  .headerBudgets {
+    display: grid;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 7px;
+  }
+
+  .headerBudgets > div {
+    min-width: 0;
+
+    padding: 9px 10px;
+  }
+
+  .headerBudgets strong {
+    font-size: 12px;
+  }
+
+  .stats {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 7px;
+
+    margin-bottom: 11px;
+  }
+
+  .statCard {
+    padding: 11px;
+
+    gap: 8px;
+
+    border-radius: 11px;
+  }
+
+  .statCard > span {
+    width: 34px;
+    height: 34px;
+
+    flex-basis: 34px;
+
+    border-radius: 9px;
+
+    font-size: 15px;
+  }
+
+  .statCard strong {
+    font-size: 16px;
+  }
+
+  .statCard p {
+    font-size: 9px;
+  }
+
+  .tabs {
+    margin-bottom: 11px;
+
+    border-radius: 10px;
+  }
+
+  .tabs button {
+    min-height: 36px;
+
+    padding: 0 11px;
+
+    font-size: 10px;
+  }
+
+  .filters {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 6px;
+
+    margin-bottom: 10px;
+  }
+
+  .search {
+    grid-column: 1 / -1;
+
+    height: 39px;
+  }
+
+  .filters select {
+    height: 39px;
+
+    font-size: 10px;
+  }
+
+  .tableCard {
+    border-radius: 13px;
+
+    margin-bottom: 12px;
+  }
+
+  .tableHeader {
+    min-height: 60px;
+
+    padding: 13px;
+  }
+
+  .tableHeader h2,
+  .sectionHeading h2 {
+    font-size: 15px;
+  }
+
+  .tableHeader > strong {
+    font-size: 9px;
+  }
+
+  .scouting {
+    padding: 13px;
+
+    border-radius: 13px;
+  }
+
+  .scoutGrid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .contractRow {
+    grid-template-columns:
+      1.4fr 1fr 0.8fr;
+
+    gap: 8px;
+
+    padding: 10px 13px;
+  }
+
+  .contractRow strong {
+    font-size: 10px;
+  }
+
+  .modalOverlay {
+    align-items: flex-end;
+
+    padding: 0;
+  }
+
+  .playerModal,
+  .negotiationModal {
+    width: 100%;
+
+    max-height:
+      92vh;
+    max-height:
+      92dvh;
+
+    border-radius:
+      18px 18px 0 0;
+
+    padding: 18px;
+
+    animation:
+      mobileModalIn 0.2s ease-out;
+  }
+
+  @keyframes mobileModalIn {
+    from {
+      transform: translateY(100%);
+    }
+
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .detailsGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .modalActions {
+    flex-direction: column;
+  }
+
+  .modalActions button {
+    width: 100%;
+
+    min-height: 40px;
+  }
+
+}
+
+
+/* =========================================================
+   SMALL PHONES
+========================================================= */
+
+@media (max-width: 430px) {
+
+  .page {
+    padding: 8px;
+  }
+
+  .header {
+    padding: 12px;
+
+    border-radius: 12px;
+  }
+
+  .headerIdentity {
+    gap: 9px;
+  }
+
+  .clubLogo {
+    width: 40px;
+    height: 40px;
+
+    flex-basis: 40px;
+
+    border-radius: 9px;
+
+    font-size: 17px;
+  }
+
+  .eyebrow {
+    font-size: 8px;
+
+    letter-spacing: 0.1em;
+  }
+
+  .header h1 {
+    font-size: 16px;
+  }
+
+  .header p {
+    margin-top: 4px;
+
+    font-size: 9px;
+  }
+
+  .headerBudgets {
+    gap: 5px;
+  }
+
+  .headerBudgets > div {
+    padding: 8px;
+  }
+
+  .headerBudgets span {
+    font-size: 7px;
+  }
+
+  .headerBudgets strong {
+    margin-top: 3px;
+
+    font-size: 10px;
+  }
+
+  .stats {
+    gap: 5px;
+  }
+
+  .statCard {
+    padding: 9px;
+
+    gap: 6px;
+  }
+
+  .statCard > span {
+    width: 28px;
+    height: 28px;
+
+    flex-basis: 28px;
+
+    font-size: 12px;
+  }
+
+  .statCard small {
+    font-size: 7px;
+  }
+
+  .statCard strong {
+    font-size: 14px;
+  }
+
+  .statCard p {
+    display: none;
+  }
+
+  .tabs {
+    gap: 3px;
+
+    padding: 4px;
+  }
+
+  .tabs button {
+    min-height: 33px;
+
+    padding: 0 8px;
+
+    font-size: 8px;
+  }
+
+  .filters {
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .search {
+    height: 37px;
+  }
+
+  .filters select {
+    height: 37px;
+
+    padding: 0 7px;
+
+    font-size: 8px;
+  }
+
+  .tableHeader {
+    padding: 11px;
+  }
+
+  .tableHeader h2,
+  .sectionHeading h2 {
+    font-size: 13px;
+  }
+
+  .tableHeader span,
+  .sectionHeading > div > span {
+    font-size: 7px;
+  }
+
+  .tableHeader > strong {
+    font-size: 8px;
+  }
+
+  .scouting {
+    padding: 10px;
+  }
+
+  .sectionHeading {
+    margin-bottom: 12px;
+  }
+
+  .sectionHeading p {
+    font-size: 9px;
+  }
+
+  .scoutCard {
+    padding: 11px;
+  }
+
+  .scoutCard h3 {
+    font-size: 12px;
+  }
+
+  .scoutStats {
+    gap: 4px;
+  }
+
+  .scoutStats div {
+    padding: 6px;
+  }
+
+  .scoutReason {
+    font-size: 8px;
+  }
+
+  .contractRow {
+    grid-template-columns:
+      1.2fr 1fr 0.8fr;
+
+    padding: 9px 10px;
+
+    gap: 5px;
+  }
+
+  .contractRow strong {
+    font-size: 9px;
+  }
+
+  .contractRow span,
+  .contractRow small {
+    font-size: 7px;
+  }
+
+  .modalPlayerHeader {
+    gap: 9px;
+  }
+
+  .modalAvatar {
+    width: 50px;
+    height: 50px;
+
+    flex-basis: 50px;
+
+    border-radius: 11px;
+
+    font-size: 16px;
+  }
+
+  .modalPlayerHeader h2 {
+    font-size: 16px;
+  }
+
+  .detailsGrid {
+    gap: 5px;
+  }
+
+  .detailsGrid div {
+    padding: 8px;
+  }
+
+  .detailsGrid strong {
+    font-size: 9px;
+  }
+
+  .negotiationModal {
+    padding: 15px;
+  }
+
+  .negotiationModal h2 {
+    font-size: 17px;
+  }
+
+  .negotiationSummary strong {
+    font-size: 11px;
+  }
+
+}
+
+
+/* =========================================================
+   VERY SMALL SCREENS
+   320px - 360px
+========================================================= */
+
+@media (max-width: 360px) {
+
+  .page {
+    padding: 6px;
+  }
+
+  .header {
+    padding: 10px;
+
+    border-radius: 10px;
+  }
+
+  .header h1 {
+    font-size: 14px;
+  }
+
+  .header p {
+    font-size: 8px;
+  }
+
+  .headerBudgets {
+    grid-template-columns: 1fr;
+  }
+
+  .headerBudgets > div {
+    width: 100%;
+  }
+
+  .stats {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .statCard {
+    min-height: 58px;
+
+    padding: 7px;
+  }
+
+  .statCard > span {
+    display: none;
+  }
+
+  .statCard strong {
+    font-size: 13px;
+  }
+
+  .tabs button {
+    min-height: 30px;
+
+    padding: 0 7px;
+
+    font-size: 7px;
+  }
+
+  .filters {
+    grid-template-columns:
+      1fr;
+  }
+
+  .search {
+    grid-column: auto;
+  }
+
+  .filters select {
+    height: 35px;
+
+    font-size: 8px;
+  }
+
+  .tableHeader {
+    flex-direction: column;
+    align-items: flex-start;
+
+    gap: 3px;
+  }
+
+  .sectionHeading {
+    flex-direction: column;
+  }
+
+  .scoutIcon {
+    display: none;
+  }
+
+  .contractRow {
+    grid-template-columns:
+      1fr 1fr;
+
+    padding: 9px;
+  }
+
+  .contractRow > div:last-child {
+    grid-column: 1 / -1;
+
+    padding-top: 5px;
+
+    border-top:
+      1px solid rgba(148, 163, 184, 0.06);
+  }
+
+  .detailsGrid {
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .modalOverlay {
+    padding: 0;
+  }
+
+  .playerModal,
+  .negotiationModal {
+    padding: 14px;
+
+    border-radius:
+      15px 15px 0 0;
+  }
+
+  .close {
+    width: 29px;
+    height: 29px;
+
+    top: 9px;
+    right: 9px;
+  }
+
+}
+
+
+/* =========================================================
+   ACCESSIBILITY / REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .spinner,
+  .playerModal,
+  .negotiationModal,
+  .statCard,
+  .actions button,
+  .modalActions button,
+  .scoutCard button,
+  .primaryButton {
+    animation: none !important;
+    transition: none !important;
+  }
+
+}
+
+
+/* =========================================================
+   TOUCH DEVICES
+========================================================= */
+
+@media (hover: none) {
+
+  .statCard:hover {
+    transform: none;
+  }
+
+  .actions button:hover,
+  .modalActions button:hover,
+  .scoutCard button:hover,
+  .primaryButton:hover {
+    transform: none;
+  }
+
+}
+
+
+/* =========================================================
+   LANDSCAPE SMALL PHONES
+========================================================= */
+
+@media (max-height: 500px) and (orientation: landscape) {
+
+  .modalOverlay {
+    align-items: flex-start;
+
+    padding: 8px;
+  }
+
+  .playerModal,
+  .negotiationModal {
+    max-height:
+      calc(100dvh - 16px);
+
+    border-radius: 14px;
+  }
+
+}
