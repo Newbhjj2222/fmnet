@@ -1,0 +1,1087 @@
+.page {
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(59, 130, 246, 0.12),
+      transparent 30%
+    ),
+    #080b12;
+  color: #e5e7eb;
+}
+
+.header {
+  max-width: 1250px;
+  margin: 0 auto 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.headerIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.clubLogo {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111827;
+  border: 1px solid #1f2937;
+  overflow: hidden;
+  font-size: 30px;
+}
+
+.clubLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.eyebrow {
+  display: block;
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  margin-bottom: 4px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.header p {
+  margin: 4px 0 0;
+  color: #9ca3af;
+}
+
+.gameDate {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  text-align: right;
+}
+
+.gameDate span {
+  display: block;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.gameDate strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.gameDate small {
+  display: block;
+  margin-top: 4px;
+  color: #60a5fa;
+}
+
+/* =========================================================
+   GENERATOR
+========================================================= */
+
+.generatorCard {
+  max-width: 1250px;
+  margin: 0 auto 18px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid #1e3a5f;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(30, 58, 95, 0.55),
+      rgba(17, 24, 39, 0.9)
+    );
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.generatorCard span {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+}
+
+.generatorCard h2 {
+  margin: 5px 0;
+  font-size: 25px;
+}
+
+.generatorCard p {
+  margin: 0;
+  color: #9ca3af;
+}
+
+.generatorCard small {
+  display: block;
+  margin-top: 7px;
+  color: #6ee7b7;
+}
+
+.generateButton {
+  border: 0;
+  border-radius: 12px;
+  padding: 13px 18px;
+  background: #2563eb;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.generateButton:hover {
+  background: #1d4ed8;
+}
+
+.generateButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   NEXT MATCH
+========================================================= */
+
+.nextMatchCard {
+  max-width: 1250px;
+  margin: 0 auto 22px;
+  padding: 24px;
+  border-radius: 20px;
+  background: #101722;
+  border: 1px solid #1f2937;
+}
+
+.nextMatchTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+}
+
+.nextMatchTop span {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+}
+
+.nextMatchTop h2 {
+  margin: 5px 0 0;
+  font-size: 21px;
+}
+
+.liveDate {
+  color: #9ca3af;
+}
+
+.nextMatchBody {
+  margin: 28px 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 20px;
+}
+
+.nextTeam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.nextTeam strong {
+  max-width: 180px;
+}
+
+.nextTeam span {
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.teamLogo {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #111827;
+  border: 1px solid #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 27px;
+}
+
+.teamLogo img {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+}
+
+.nextVs {
+  text-align: center;
+}
+
+.nextVs strong {
+  display: block;
+  font-size: 20px;
+}
+
+.nextVs span {
+  display: block;
+  margin-top: 5px;
+  color: #60a5fa;
+  font-size: 13px;
+}
+
+.nextMatchActions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.advanceButton,
+.playButton {
+  border: 0;
+  border-radius: 11px;
+  padding: 12px 18px;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.advanceButton {
+  background: #374151;
+}
+
+.playButton {
+  background: #16a34a;
+}
+
+.advanceButton:disabled {
+  opacity: 0.5;
+}
+
+.noNextMatch {
+  padding: 35px;
+  text-align: center;
+  color: #6b7280;
+}
+
+/* =========================================================
+   CONTROLS
+========================================================= */
+
+.controls {
+  max-width: 1250px;
+  margin: 0 auto 20px;
+  padding: 14px;
+  background: #0f141d;
+  border: 1px solid #1f2937;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.viewTabs {
+  display: flex;
+  gap: 5px;
+  background: #090d14;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.viewTabs button,
+.controls select,
+.controls input,
+.clearButton {
+  min-height: 40px;
+  border: 1px solid #273244;
+  background: #111827;
+  color: #d1d5db;
+  border-radius: 9px;
+  padding: 0 12px;
+}
+
+.viewTabs button {
+  border: 0;
+  cursor: pointer;
+}
+
+.viewTabs .active {
+  background: #2563eb;
+  color: white;
+}
+
+.controls select,
+.controls input {
+  outline: none;
+}
+
+.clearButton {
+  cursor: pointer;
+}
+
+/* =========================================================
+   TRANSFER
+========================================================= */
+
+.transferBar {
+  max-width: 1250px;
+  margin: 0 auto 22px;
+  display: grid;
+  grid-template-columns:
+    repeat(3, 1fr);
+  gap: 12px;
+}
+
+.transferBar > div {
+  padding: 16px;
+  border-radius: 14px;
+  background: #101722;
+  border: 1px solid #1f2937;
+}
+
+.transferBar span {
+  display: block;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.transferBar strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.openStatus {
+  color: #4ade80;
+}
+
+.closedStatus {
+  color: #f87171;
+}
+
+/* =========================================================
+   CALENDAR
+========================================================= */
+
+.calendarCard {
+  max-width: 1250px;
+  margin: 0 auto 24px;
+  padding: 20px;
+  background: #101722;
+  border: 1px solid #1f2937;
+  border-radius: 18px;
+}
+
+.calendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.calendarHeader h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.calendarHeader button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #273244;
+  background: #111827;
+  color: #d1d5db;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 23px;
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(7, 1fr);
+  gap: 6px;
+}
+
+.weekday {
+  padding: 8px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.emptyDay {
+  min-height: 72px;
+}
+
+.calendarDay {
+  min-height: 72px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: #0c1119;
+  color: #d1d5db;
+  cursor: pointer;
+  text-align: left;
+}
+
+.calendarDay:hover {
+  border-color: #3b82f6;
+}
+
+.calendarDay strong {
+  display: block;
+}
+
+.calendarDay.today {
+  border-color: #2563eb;
+  background: #101d33;
+}
+
+.matchDot,
+.myMatchDot,
+.finishedMatchDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin: 8px 3px 0 0;
+  background: #6b7280;
+}
+
+.myMatchDot {
+  background: #3b82f6;
+}
+
+.finishedMatchDot {
+  background: #22c55e;
+}
+
+/* =========================================================
+   FIXTURE LIST
+========================================================= */
+
+.fixtureSection,
+.leaguesSection {
+  max-width: 1250px;
+  margin: 0 auto 26px;
+}
+
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.sectionHeading span {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+}
+
+.sectionHeading h2 {
+  margin: 4px 0 0;
+}
+
+.fixtureList {
+  display: grid;
+  gap: 10px;
+}
+
+.fixtureCard {
+  display: grid;
+  grid-template-columns:
+    80px
+    180px
+    1fr
+    160px
+    150px;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  border-radius: 15px;
+  background: #101722;
+  border: 1px solid #1f2937;
+}
+
+.fixtureCard.myFixture {
+  border-color: #254d83;
+}
+
+.fixtureDate {
+  text-align: center;
+}
+
+.fixtureDate strong {
+  display: block;
+  font-size: 22px;
+}
+
+.fixtureDate span {
+  display: block;
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.fixtureDate small {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+}
+
+.fixtureCompetition span {
+  display: block;
+  color: #60a5fa;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.fixtureCompetition strong {
+  display: block;
+  margin-top: 5px;
+}
+
+.fixtureCompetition small {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+}
+
+.fixtureTeams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.fixtureTeams > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fixtureTeams > div:last-child {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.fixtureTeams img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.fixtureTeams > div > span {
+  font-size: 22px;
+}
+
+.vs {
+  min-width: 50px;
+  text-align: center;
+  color: #9ca3af;
+  font-weight: 900;
+}
+
+.fixtureVenue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9ca3af;
+}
+
+.fixtureVenue small {
+  display: block;
+  color: #6b7280;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.fixtureVenue strong {
+  display: block;
+  margin-top: 2px;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+.fixtureAction {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.result {
+  text-align: right;
+}
+
+.result span {
+  display: block;
+  color: #6b7280;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.result strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.finished,
+.waiting,
+.liveBadge,
+.missed {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+}
+
+.finished {
+  color: #4ade80;
+}
+
+.waiting {
+  color: #60a5fa;
+}
+
+.liveBadge {
+  color: #facc15;
+}
+
+.missed {
+  color: #f87171;
+}
+
+.playButtonSmall {
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: #16a34a;
+  color: white;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.noFixtures {
+  padding: 60px 20px;
+  text-align: center;
+  border: 1px dashed #374151;
+  border-radius: 15px;
+  color: #6b7280;
+}
+
+.noFixtures span {
+  display: block;
+  font-size: 32px;
+}
+
+.noFixtures h3 {
+  margin: 10px 0 5px;
+  color: #d1d5db;
+}
+
+/* =========================================================
+   FRIENDLY
+========================================================= */
+
+.friendlySection {
+  max-width: 1250px;
+  margin: 0 auto 14px;
+  padding: 20px;
+  border-radius: 16px;
+  background: #101722;
+  border: 1px solid #1f2937;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.friendlySection span {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.friendlySection h2 {
+  margin: 5px 0;
+}
+
+.friendlySection p {
+  margin: 0;
+  color: #9ca3af;
+}
+
+.friendlySection button,
+.friendlyForm button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: #2563eb;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.friendlyForm {
+  max-width: 1250px;
+  margin: 0 auto 25px;
+  padding: 18px;
+  border-radius: 15px;
+  background: #0f141d;
+  border: 1px solid #1f2937;
+  display: flex;
+  align-items: end;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.friendlyForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.friendlyForm select {
+  min-width: 220px;
+  height: 42px;
+  border-radius: 9px;
+  border: 1px solid #273244;
+  background: #111827;
+  color: #d1d5db;
+  padding: 0 10px;
+}
+
+.friendlyDate {
+  padding: 11px 14px;
+  border-radius: 9px;
+  background: #111827;
+  color: #9ca3af;
+}
+
+.friendlyDate strong {
+  color: #d1d5db;
+}
+
+/* =========================================================
+   LEAGUES
+========================================================= */
+
+.leagueGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.leagueCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 15px;
+  border-radius: 14px;
+  background: #101722;
+  border: 1px solid #1f2937;
+  color: #d1d5db;
+  cursor: pointer;
+}
+
+.leagueCard:hover {
+  border-color: #3b82f6;
+}
+
+.leagueCard.myLeague {
+  border-color: #2563eb;
+}
+
+.leagueIcon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #111827;
+  font-size: 22px;
+}
+
+.leagueIcon img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+.leagueCard span {
+  display: block;
+  color: #6b7280;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.leagueCard strong {
+  display: block;
+  margin-top: 3px;
+}
+
+.leagueCard small {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+}
+
+.leagueCard b {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  color: #60a5fa;
+  font-size: 7px;
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading {
+  min-height: 100vh;
+  background: #080b12;
+  color: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.spinner {
+  width: 35px;
+  height: 35px;
+  border: 3px solid #1f2937;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   EMPTY
+========================================================= */
+
+.emptyPage {
+  min-height: 100vh;
+  background: #080b12;
+  color: #d1d5db;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 60px;
+}
+
+.emptyPage h1 {
+  margin: 15px 0 5px;
+}
+
+.emptyPage p {
+  color: #6b7280;
+}
+
+.emptyPage button {
+  margin-top: 15px;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 18px;
+  background: #2563eb;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1000px) {
+  .fixtureCard {
+    grid-template-columns:
+      70px
+      150px
+      1fr
+      130px;
+  }
+
+  .fixtureVenue {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 14px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gameDate {
+    width: 100%;
+    text-align: left;
+  }
+
+  .generatorCard {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .generateButton {
+    width: 100%;
+  }
+
+  .nextMatchBody {
+    gap: 8px;
+  }
+
+  .nextTeam strong {
+    font-size: 12px;
+  }
+
+  .teamLogo {
+    width: 52px;
+    height: 52px;
+  }
+
+  .transferBar {
+    grid-template-columns: 1fr;
+  }
+
+  .fixtureCard {
+    grid-template-columns:
+      55px
+      1fr;
+    gap: 12px;
+  }
+
+  .fixtureCompetition {
+    grid-column: 2;
+  }
+
+  .fixtureTeams {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .fixtureVenue {
+    display: flex;
+    grid-column: 1 / -1;
+    order: 4;
+  }
+
+  .fixtureAction {
+    grid-column: 1 / -1;
+    order: 5;
+    justify-content: flex-start;
+  }
+
+  .calendarGrid {
+    gap: 3px;
+  }
+
+  .calendarDay {
+    min-height: 58px;
+    padding: 5px;
+  }
+
+  .friendlySection {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .friendlySection button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: 26px;
+  }
+
+  .nextMatchCard {
+    padding: 16px;
+  }
+
+  .nextMatchBody {
+    grid-template-columns:
+      1fr
+      auto
+      1fr;
+  }
+
+  .calendarDay {
+    min-height: 48px;
+    font-size: 11px;
+  }
+
+  .weekday {
+    font-size: 8px;
+  }
+
+  .fixtureTeams > div {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .fixtureTeams > div:last-child {
+    flex-direction: column;
+    text-align: center;
+  }
+}
