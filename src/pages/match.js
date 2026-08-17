@@ -32,7 +32,6 @@ import styles from './match.module.css';
 const MATCH_DURATION_MINUTES = 20;
 const FIRST_HALF_END = 10;
 
-const MAX_SQUAD_SIZE = 25;
 const PLAYERS_ON_PITCH = 11;
 const MAX_SUBSTITUTIONS = 5;
 
@@ -207,34 +206,18 @@ const FORMATIONS = {
 
 const EVENT_TYPES = {
   GOAL: 'goal',
-  YELLOW: 'yellow',
-  RED: 'red',
-  FOUL: 'foul',
-  CORNER: 'corner',
-  OFFSIDE: 'offside',
   SAVE: 'save',
   SHOT: 'shot',
-  SUBSTITUTION: 'substitution',
-  INJURY: 'injury',
   PASS: 'pass',
-  TACKLE: 'tackle',
   KICKOFF: 'kickoff',
 };
 
 function eventLabel(event) {
   switch (event?.type) {
     case EVENT_TYPES.GOAL: return 'GOAL';
-    case EVENT_TYPES.YELLOW: return 'YELLOW CARD';
-    case EVENT_TYPES.RED: return 'RED CARD';
-    case EVENT_TYPES.FOUL: return 'FOUL';
-    case EVENT_TYPES.CORNER: return 'CORNER';
-    case EVENT_TYPES.OFFSIDE: return 'OFFSIDE';
     case EVENT_TYPES.SAVE: return 'SAVE';
     case EVENT_TYPES.SHOT: return 'SHOT';
-    case EVENT_TYPES.SUBSTITUTION: return 'SUBSTITUTION';
-    case EVENT_TYPES.INJURY: return 'INJURY';
     case EVENT_TYPES.PASS: return 'PASS';
-    case EVENT_TYPES.TACKLE: return 'TACKLE';
     case EVENT_TYPES.KICKOFF: return 'KICKOFF';
     default: return 'MATCH EVENT';
   }
@@ -243,16 +226,9 @@ function eventLabel(event) {
 function eventIcon(event) {
   switch (event?.type) {
     case EVENT_TYPES.GOAL: return '⚽';
-    case EVENT_TYPES.YELLOW: return '🟨';
-    case EVENT_TYPES.RED: return '🟥';
-    case EVENT_TYPES.CORNER: return '🚩';
-    case EVENT_TYPES.OFFSIDE: return '🚩';
     case EVENT_TYPES.SAVE: return '🧤';
     case EVENT_TYPES.SHOT: return '💥';
-    case EVENT_TYPES.SUBSTITUTION: return '🔄';
-    case EVENT_TYPES.INJURY: return '🩹';
     case EVENT_TYPES.PASS: return '🦶';
-    case EVENT_TYPES.TACKLE: return '⚡';
     case EVENT_TYPES.KICKOFF: return '🟢';
     default: return '•';
   }
@@ -274,8 +250,7 @@ function createDefaultStats() {
 
 function selectStartingXI(squad, formation = '4-4-2') {
   const safeSquad = Array.isArray(squad) ? [...squad] : [];
-  const formationPositions = FORMATIONS[formation] || FORMATIONS['4-4-2'];
-  
+
   const formationRequirements = {
     '4-4-2': { GK: 1, DEF: 4, MID: 4, ATT: 2 },
     '4-3-3': { GK: 1, DEF: 4, MID: 3, ATT: 3 },
@@ -283,7 +258,7 @@ function selectStartingXI(squad, formation = '4-4-2') {
     '5-3-2': { GK: 1, DEF: 5, MID: 3, ATT: 2 },
     '4-2-3-1': { GK: 1, DEF: 4, MID: 5, ATT: 1 },
   };
-  
+
   const requirements = formationRequirements[formation] || formationRequirements['4-4-2'];
 
   const goalkeepers = safeSquad.filter(
@@ -478,7 +453,6 @@ export default function MatchPage() {
   const [showEvents, setShowEvents] = useState(true);
   const [showFormation, setShowFormation] = useState(false);
 
-  const [loadingMatch, setLoadingMatch] = useState(false);
   const [savingMatch, setSavingMatch] = useState(false);
   const [paused, setPaused] = useState(false);
   const [halfTimeShown, setHalfTimeShown] = useState(false);
@@ -556,7 +530,7 @@ export default function MatchPage() {
   }, [user, loading]);
 
   /* =======================================================
-     LOAD MATCH + CLUBS + PLAYERS
+     LOAD MATCH DATA
   ======================================================== */
 
   useEffect(() => {
@@ -564,10 +538,8 @@ export default function MatchPage() {
 
     let cancelled = false;
 
-    async function loadMatch() {
+    async function loadMatchData() {
       try {
-        setLoadingMatch(true);
-
         const match = await loadMatchFromDatabase(matchId);
 
         if (!match) {
@@ -643,7 +615,7 @@ export default function MatchPage() {
           ),
         );
 
-        // Initialize engine state
+        // Initialize state
         const initialMinute = safeNumber(match.minute ?? match.matchMinute, 0);
         const initialStatus = match.status || 'ready';
 
@@ -669,7 +641,6 @@ export default function MatchPage() {
         setMentality(mentalityRef.current);
         setFormation(formationRef.current);
 
-        // Initialize ball possession
         ballStateRef.current = {
           mode: 'possessed',
           team: 'home',
@@ -681,14 +652,10 @@ export default function MatchPage() {
       } catch (error) {
         console.error('Match loading error:', error);
         toast.error('Could not load match');
-      } finally {
-        if (!cancelled) {
-          setLoadingMatch(false);
-        }
       }
     }
 
-    loadMatch();
+    loadMatchData();
 
     return () => {
       cancelled = true;
@@ -696,11 +663,11 @@ export default function MatchPage() {
   }, [loading, user, matchId, router]);
 
   /* =======================================================
-     THREE.JS 3D PITCH SETUP
+     THREE.JS SCENE SETUP
   ======================================================== */
 
   useEffect(() => {
-    if (loadingMatch || !mountRef.current || sceneInitializedRef.current) return;
+    if (!mountRef.current || sceneInitializedRef.current) return;
     if (!homeXI.length || !awayXI.length) return;
 
     sceneInitializedRef.current = true;
@@ -721,7 +688,6 @@ export default function MatchPage() {
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mountRef.current.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -733,31 +699,21 @@ export default function MatchPage() {
     controls.maxDistance = 50;
     controls.update();
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 60;
-    directionalLight.shadow.camera.left = -30;
-    directionalLight.shadow.camera.right = 30;
-    directionalLight.shadow.camera.top = 30;
-    directionalLight.shadow.camera.bottom = -30;
     scene.add(directionalLight);
 
     const pitchGeometry = new THREE.PlaneGeometry(PITCH_WIDTH, PITCH_HEIGHT);
     const pitchMaterial = new THREE.MeshStandardMaterial({
       color: 0x15803d,
       roughness: 0.8,
-      metalness: 0.1,
     });
     const pitch = new THREE.Mesh(pitchGeometry, pitchMaterial);
     pitch.rotation.x = -Math.PI / 2;
-    pitch.position.y = 0;
     pitch.receiveShadow = true;
     scene.add(pitch);
 
@@ -770,15 +726,13 @@ export default function MatchPage() {
       new THREE.Vector3(-PITCH_WIDTH / 2, 0.01, PITCH_HEIGHT / 2),
       new THREE.Vector3(-PITCH_WIDTH / 2, 0.01, -PITCH_HEIGHT / 2),
     ]);
-    const borderLine = new THREE.Line(borderGeometry, lineMaterial);
-    scene.add(borderLine);
+    scene.add(new THREE.Line(borderGeometry, lineMaterial));
 
     const centerLineGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0.01, -PITCH_HEIGHT / 2),
       new THREE.Vector3(0, 0.01, PITCH_HEIGHT / 2),
     ]);
-    const centerLine = new THREE.Line(centerLineGeometry, lineMaterial);
-    scene.add(centerLine);
+    scene.add(new THREE.Line(centerLineGeometry, lineMaterial));
 
     const circleGeometry = new THREE.RingGeometry(3, 3.05, 64);
     const circleMaterial = new THREE.MeshBasicMaterial({
@@ -792,23 +746,24 @@ export default function MatchPage() {
 
     const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
-    const leftGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, GOAL_WIDTH);
-    const leftGoal = new THREE.Mesh(leftGoalGeometry, goalMaterial);
+    const leftGoal = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.15, GOAL_WIDTH),
+      goalMaterial,
+    );
     leftGoal.position.set(-PITCH_WIDTH / 2, 0.08, 0);
     scene.add(leftGoal);
 
-    const rightGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, GOAL_WIDTH);
-    const rightGoal = new THREE.Mesh(rightGoalGeometry, goalMaterial);
+    const rightGoal = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.15, GOAL_WIDTH),
+      goalMaterial,
+    );
     rightGoal.position.set(PITCH_WIDTH / 2, 0.08, 0);
     scene.add(rightGoal);
 
-    const ballGeometry = new THREE.SphereGeometry(BALL_SIZE, 32, 32);
-    const ballMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.3,
-      metalness: 0.1,
-    });
-    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(BALL_SIZE, 32, 32),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }),
+    );
     ball.position.set(0, BALL_SIZE, 0);
     ball.castShadow = true;
     scene.add(ball);
@@ -823,22 +778,22 @@ export default function MatchPage() {
     const createPlayerMesh = (x, z, color) => {
       const group = new THREE.Group();
 
-      const bodyGeometry = new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, 0.6, 16);
-      const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
-      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, 0.6, 16),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.5 }),
+      );
       body.position.y = 0.3;
       group.add(body);
 
-      const headGeometry = new THREE.SphereGeometry(0.15, 16, 16);
-      const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
-      const head = new THREE.Mesh(headGeometry, headMaterial);
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffcc99 }),
+      );
       head.position.y = 0.75;
       group.add(head);
 
       group.position.set(x, 0, z);
-      group.castShadow = true;
       scene.add(group);
-
       return group;
     };
 
@@ -867,8 +822,8 @@ export default function MatchPage() {
       stamina: 100,
       hasBall: false,
       target: {
-        x: playerMeshesRef.current.home[index].position.x,
-        z: playerMeshesRef.current.home[index].position.z,
+        x: playerMeshesRef.current.home[index]?.position.x || 0,
+        z: playerMeshesRef.current.home[index]?.position.z || 0,
       },
       decisionCooldown: 0,
     }));
@@ -884,8 +839,8 @@ export default function MatchPage() {
       stamina: 100,
       hasBall: false,
       target: {
-        x: playerMeshesRef.current.away[index].position.x,
-        z: playerMeshesRef.current.away[index].position.z,
+        x: playerMeshesRef.current.away[index]?.position.x || 0,
+        z: playerMeshesRef.current.away[index]?.position.z || 0,
       },
       decisionCooldown: 0,
     }));
@@ -922,8 +877,7 @@ export default function MatchPage() {
       }
 
       updatePlayersState(delta);
-      updateBallState(delta);
-      updateStats();
+      updateBall(delta);
 
       const currentTime = performance.now() / 1000;
       if (currentTime - lastFirestoreSaveRef.current > FIREBASE_SAVE_INTERVAL) {
@@ -954,15 +908,12 @@ export default function MatchPage() {
 
       homePlayers.forEach((player, index) => {
         if (player.hasBall) return;
-
         const mesh = playerMeshesRef.current.home[index];
         if (!mesh) return;
-
         const formationPositions = FORMATIONS[formationRef.current] || FORMATIONS['4-4-2'];
         const formationPos = formationPositions[index] || formationPositions[0];
         const targetX = ((formationPos.x - 50) / 50) * PITCH_WIDTH;
         const targetZ = ((formationPos.y - 50) / 50) * PITCH_HEIGHT;
-
         if (player.position === 'GK') {
           player.target = { x: -PITCH_WIDTH / 2 + 1, z: mesh.position.z };
         } else {
@@ -972,15 +923,12 @@ export default function MatchPage() {
 
       awayPlayers.forEach((player, index) => {
         if (player.hasBall) return;
-
         const mesh = playerMeshesRef.current.away[index];
         if (!mesh) return;
-
         const formationPositions = FORMATIONS[formationRef.current] || FORMATIONS['4-4-2'];
         const formationPos = formationPositions[index] || formationPositions[0];
         const targetX = ((50 - formationPos.x) / 50) * PITCH_WIDTH;
         const targetZ = ((50 - formationPos.y) / 50) * PITCH_HEIGHT;
-
         if (player.position === 'GK') {
           player.target = { x: PITCH_WIDTH / 2 - 1, z: mesh.position.z };
         } else {
@@ -1000,7 +948,6 @@ export default function MatchPage() {
             team === 'home'
               ? playerMeshesRef.current.home[playerIndex]
               : playerMeshesRef.current.away[playerIndex];
-
           if (!mesh) return;
 
           const direction = team === 'home' ? 1 : -1;
@@ -1008,7 +955,6 @@ export default function MatchPage() {
 
           if (player.decisionCooldown <= 0) {
             player.decisionCooldown = DECISION_INTERVAL;
-
             const random = Math.random();
 
             if (random < 0.3) {
@@ -1032,18 +978,13 @@ export default function MatchPage() {
                   team === 'home'
                     ? playerMeshesRef.current.home[bestTeammate.index]
                     : playerMeshesRef.current.away[bestTeammate.index];
-
                 ballStateRef.current = {
                   mode: 'passing',
                   team,
                   fromIndex: playerIndex,
                   toIndex: bestTeammate.index,
                   from: { x: mesh.position.x, y: 0, z: mesh.position.z },
-                  to: {
-                    x: teammateMesh.position.x,
-                    y: 0,
-                    z: teammateMesh.position.z,
-                  },
+                  to: { x: teammateMesh.position.x, y: 0, z: teammateMesh.position.z },
                   progress: 0,
                 };
                 player.hasBall = false;
@@ -1056,11 +997,7 @@ export default function MatchPage() {
                   team,
                   fromIndex: playerIndex,
                   from: { x: mesh.position.x, y: 0, z: mesh.position.z },
-                  to: {
-                    x: goalX,
-                    y: 0,
-                    z: randomBetween(-2, 2),
-                  },
+                  to: { x: goalX, y: 0, z: randomBetween(-2, 2) },
                   progress: 0,
                 };
                 player.hasBall = false;
@@ -1078,7 +1015,6 @@ export default function MatchPage() {
       } else if (ballState && ballState.mode === 'passing') {
         ballState.progress += PASS_SPEED * delta;
         if (ballState.progress >= 1) {
-          ballState.progress = 1;
           ballStateRef.current = {
             mode: 'possessed',
             team: ballState.team,
@@ -1088,8 +1024,6 @@ export default function MatchPage() {
       } else if (ballState && ballState.mode === 'shot') {
         ballState.progress += SHOT_SPEED * delta;
         if (ballState.progress >= 1) {
-          ballState.progress = 1;
-
           const isGoal = Math.random() < 0.4;
           if (isGoal) {
             if (ballState.team === 'home') {
@@ -1144,7 +1078,6 @@ export default function MatchPage() {
           ballState.team === 'home'
             ? playersStateRef.current.home[5]
             : playersStateRef.current.away[5];
-
         if (player) {
           ballStateRef.current = {
             mode: 'possessed',
@@ -1155,7 +1088,7 @@ export default function MatchPage() {
       }
     };
 
-    const updateBall = (delta) => {
+    const updateBall = () => {
       const ball = ballMeshRef.current;
       const ballState = ballStateRef.current;
       if (!ball || !ballState) return;
@@ -1166,63 +1099,23 @@ export default function MatchPage() {
           team === 'home'
             ? playerMeshesRef.current.home[playerIndex]
             : playerMeshesRef.current.away[playerIndex];
-
         if (mesh) {
           ball.position.x = mesh.position.x;
           ball.position.z = mesh.position.z;
           ball.position.y = BALL_SIZE;
         }
       } else if (ballState.mode === 'passing' || ballState.mode === 'shot') {
-        const from = ballState.from;
-        const to = ballState.to;
         const progress = ballState.progress;
-
-        ball.position.x = lerp(from.x, to.x, progress);
-        ball.position.z = lerp(from.z, to.z, progress);
+        ball.position.x = lerp(ballState.from.x, ballState.to.x, progress);
+        ball.position.z = lerp(ballState.from.z, ballState.to.z, progress);
         ball.position.y = BALL_SIZE + Math.sin(progress * Math.PI) * 0.5;
-      }
-    };
-
-    const updateStats = () => {
-      const ballState = ballStateRef.current;
-      if (!ballState) return;
-
-      if (ballState.mode === 'possessed') {
-        const possessionTeam = ballState.team;
-        const homePossession = homeStatsRef.current.possession;
-        const awayPossession = awayStatsRef.current.possession;
-
-        if (possessionTeam === 'home') {
-          homeStatsRef.current = {
-            ...homeStatsRef.current,
-            possession: clamp(homePossession + 0.1, 30, 70),
-          };
-          awayStatsRef.current = {
-            ...awayStatsRef.current,
-            possession: clamp(100 - homeStatsRef.current.possession, 30, 70),
-          };
-        } else {
-          awayStatsRef.current = {
-            ...awayStatsRef.current,
-            possession: clamp(awayPossession + 0.1, 30, 70),
-          };
-          homeStatsRef.current = {
-            ...homeStatsRef.current,
-            possession: clamp(100 - awayStatsRef.current.possession, 30, 70),
-          };
-        }
-
-        setHomeStats(homeStatsRef.current);
-        setAwayStats(awayStatsRef.current);
       }
     };
 
     const saveMatchStateToFirestore = async () => {
       if (!matchId) return;
-
       try {
         const matchRef = doc(db, 'matches', matchId);
-
         await setDoc(
           matchRef,
           {
@@ -1253,14 +1146,12 @@ export default function MatchPage() {
 
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
-
       const delta = threeClockRef.current.getDelta();
-
       updateMatchEngine(delta);
 
       playerMeshesRef.current.home.forEach((mesh, index) => {
         const state = playersStateRef.current.home[index];
-        if (state) {
+        if (state && mesh) {
           mesh.position.x = lerp(mesh.position.x, state.target.x, 0.1);
           mesh.position.z = lerp(mesh.position.z, state.target.z, 0.1);
         }
@@ -1268,14 +1159,13 @@ export default function MatchPage() {
 
       playerMeshesRef.current.away.forEach((mesh, index) => {
         const state = playersStateRef.current.away[index];
-        if (state) {
+        if (state && mesh) {
           mesh.position.x = lerp(mesh.position.x, state.target.x, 0.1);
           mesh.position.z = lerp(mesh.position.z, state.target.z, 0.1);
         }
       });
 
-      updateBall(delta);
-
+      updateBall();
       controls.update();
       renderer.render(scene, camera);
     };
@@ -1303,7 +1193,7 @@ export default function MatchPage() {
         mountRef.current.removeChild(renderer.domElement);
       }
     };
-  }, [loadingMatch, homeXI, awayXI, matchId, substitutionsUsed]);
+  }, [homeXI, awayXI]);
 
   /* =======================================================
      REALTIME MATCH LISTENER
@@ -1487,14 +1377,13 @@ export default function MatchPage() {
   const changeFormation = async (value) => {
     formationRef.current = value;
     setFormation(value);
-    
-    // Update lineups based on new formation
+
     const startingHome = selectStartingXI(homeSquad, value);
     const startingAway = selectStartingXI(awaySquad, value);
-    
+
     setHomeXI(startingHome);
     setAwayXI(startingAway);
-    
+
     setHomeBench(
       homeSquad.filter(
         (player) =>
@@ -1545,7 +1434,6 @@ export default function MatchPage() {
     }
 
     const playerOut = pick(currentXI);
-
     if (!playerOut) return;
 
     const nextXI = currentXI.map((player) =>
@@ -1586,7 +1474,6 @@ export default function MatchPage() {
     setSubstitutionsUsed(nextSubCount);
     setEvents(nextEvents);
     setSelectedSubPlayer('');
-
     toast.success('Substitution made');
   };
 
@@ -1595,10 +1482,7 @@ export default function MatchPage() {
   ======================================================== */
 
   const sortedEvents = useMemo(
-    () =>
-      [...events].sort(
-        (a, b) => safeNumber(b.minute) - safeNumber(a.minute),
-      ),
+    () => [...events].sort((a, b) => safeNumber(b.minute) - safeNumber(a.minute)),
     [events],
   );
 
@@ -1608,28 +1492,23 @@ export default function MatchPage() {
 
   const statusLabel = useMemo(() => {
     switch (matchStatus) {
-      case 'ready':
-        return 'READY';
-      case 'live':
-        return paused ? 'PAUSED' : 'LIVE';
-      case 'half-time':
-        return 'HALF TIME';
-      case 'finished':
-        return 'FULL TIME';
-      default:
-        return 'LOADING';
+      case 'ready': return 'READY';
+      case 'live': return paused ? 'PAUSED' : 'LIVE';
+      case 'half-time': return 'HALF TIME';
+      case 'finished': return 'FULL TIME';
+      default: return 'LOADING';
     }
   }, [matchStatus, paused]);
 
   /* =======================================================
-     LOADING
+     RENDER
   ======================================================== */
 
-  if (loading || loadingMatch) {
+  if (loading) {
     return (
       <main className={styles.loading}>
         <div className={styles.spinner} />
-        <p>Loading match...</p>
+        <p>Loading...</p>
       </main>
     );
   }
@@ -1648,10 +1527,6 @@ export default function MatchPage() {
       </main>
     );
   }
-
-  /* =======================================================
-     RENDER
-  ======================================================== */
 
   return (
     <>
@@ -1732,31 +1607,6 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* LATEST SCORE */}
-        <section className={styles.latestScore}>
-          <div>
-            <span>LATEST SCORE</span>
-            <strong>
-              {getClubName(homeClub)} {homeScore} - {awayScore}{' '}
-              {getClubName(awayClub)}
-            </strong>
-          </div>
-          <span>
-            {matchStatus === 'finished' ? 'FINAL RESULT' : `Minute ${matchMinute}`}
-          </span>
-        </section>
-
-        {/* ACCESS WARNING */}
-        {!userIsParticipant && (
-          <section className={styles.warning}>
-            <strong>View only</strong>
-            <p>
-              Your current club is not participating in this match. You can view
-              the latest score and events, but you cannot play it.
-            </p>
-          </section>
-        )}
-
         {/* CONTROLS */}
         {userIsParticipant && (
           <section className={styles.controls}>
@@ -1828,7 +1678,7 @@ export default function MatchPage() {
           </section>
         )}
 
-        {/* FORMATION SELECTION */}
+        {/* FORMATION */}
         {showFormation && userIsParticipant && (
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
@@ -1922,11 +1772,6 @@ export default function MatchPage() {
             ['Shots', homeStats.shots, awayStats.shots],
             ['Shots on Target', homeStats.shotsOnTarget, awayStats.shotsOnTarget],
             ['Passes', homeStats.passes, awayStats.passes],
-            ['Fouls', homeStats.fouls, awayStats.fouls],
-            ['Corners', homeStats.corners, awayStats.corners],
-            ['Offsides', homeStats.offsides, awayStats.offsides],
-            ['Yellow Cards', homeStats.yellow, awayStats.yellow],
-            ['Red Cards', homeStats.red, awayStats.red],
           ].map((row) => (
             <div key={row[0]} className={styles.statRow}>
               <strong>{row[1]}</strong>
@@ -2035,7 +1880,7 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* FOOTER MATCH INFO */}
+        {/* MATCH INFO */}
         <section className={styles.matchInfo}>
           <div>
             <span>STADIUM</span>
