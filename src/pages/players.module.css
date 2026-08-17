@@ -1,6 +1,7 @@
 /* ============================================================
    PLAYERS.MODULE.CSS
    Dark theme · Responsive · Touch-friendly
+   All styles use class selectors only
    Optimized for very small screens (320px+)
    Disabled zoom & text selection for better UI control
 ============================================================ */
@@ -56,9 +57,9 @@
 }
 
 /* Allow text selection in inputs and textareas */
-input,
-textarea,
-[contenteditable="true"] {
+.page .inputField,
+.page .textAreaField,
+.page .contentEditable {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -81,7 +82,7 @@ textarea,
 /* ============================================================
    LOADING
 ============================================================ */
-.loading {
+.page .loadingContainer {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -90,13 +91,13 @@ textarea,
   gap: 1.5rem;
   text-align: center;
 }
-.loading p {
+.page .loadingText {
   color: var(--text-secondary);
   font-size: 1.1rem;
   letter-spacing: 0.3px;
 }
 
-.spinner {
+.page .spinner {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -113,7 +114,7 @@ textarea,
 /* ============================================================
    EMPTY STATE (no club)
 ============================================================ */
-.emptyPage {
+.page .emptyPage {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -123,21 +124,21 @@ textarea,
   gap: 1rem;
   padding: 1rem;
 }
-.emptyIcon {
+.page .emptyIcon {
   font-size: 4.5rem;
   filter: drop-shadow(0 0 32px var(--accent-yellow-glow));
 }
-.emptyPage h1 {
+.page .emptyTitle {
   font-size: 2rem;
   font-weight: 800;
   margin: 0.2rem 0;
 }
-.emptyPage p {
+.page .emptyDescription {
   color: var(--text-secondary);
   font-size: 1.05rem;
   max-width: 400px;
 }
-.emptyPage button {
+.page .emptyButton {
   background: var(--accent-blue);
   border: none;
   border-radius: 40px;
@@ -149,7 +150,7 @@ textarea,
   transition: background var(--transition), transform var(--transition);
   min-height: 44px;
 }
-.emptyPage button:hover {
+.page .emptyButton:hover {
   background: #3a7be0;
   transform: scale(1.03);
 }
@@ -157,7 +158,7 @@ textarea,
 /* ============================================================
    HEADER
 ============================================================ */
-.header {
+.page .header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -170,14 +171,14 @@ textarea,
   gap: 1rem;
 }
 
-.headerIdentity {
+.page .headerIdentity {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex: 1 1 200px;
 }
 
-.clubLogo {
+.page .clubLogo {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -190,13 +191,13 @@ textarea,
   border: 1px solid var(--border-color);
   flex-shrink: 0;
 }
-.clubLogo img {
+.page .clubLogo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.eyebrow {
+.page .eyebrow {
   display: inline-block;
   font-size: 0.6rem;
   font-weight: 700;
@@ -209,36 +210,36 @@ textarea,
   margin-bottom: 0.2rem;
 }
 
-.headerIdentity h1 {
+.page .headerTitle {
   font-size: 1.5rem;
   font-weight: 800;
   margin: 0 0 0.1rem;
 }
-.headerIdentity p {
+.page .headerSubtitle {
   color: var(--text-secondary);
   margin: 0;
   font-weight: 500;
   font-size: 0.9rem;
 }
 
-.headerBudgets {
+.page .headerBudgets {
   display: flex;
   gap: 1.5rem;
   flex-wrap: wrap;
   flex: 1 1 auto;
   justify-content: flex-end;
 }
-.headerBudgets > div {
+.page .budgetItem {
   text-align: right;
 }
-.headerBudgets span {
+.page .budgetLabel {
   display: block;
   font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--text-muted);
 }
-.headerBudgets strong {
+.page .budgetValue {
   font-size: 1.2rem;
   font-weight: 800;
   color: var(--accent-green);
@@ -247,14 +248,14 @@ textarea,
 /* ============================================================
    STATS ROW
 ============================================================ */
-.stats {
+.page .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.8rem;
   margin-bottom: 1.5rem;
 }
 
-.statCard {
+.page .statCard {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -264,27 +265,27 @@ textarea,
   border: 1px solid var(--border-color);
   transition: background var(--transition);
 }
-.statCard:hover {
+.page .statCard:hover {
   background: var(--bg-card-hover);
 }
-.statCard > span {
+.page .statIcon {
   font-size: 1.6rem;
   line-height: 1;
   flex-shrink: 0;
 }
-.statCard div small {
+.page .statLabel {
   display: block;
   font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--text-muted);
 }
-.statCard div strong {
+.page .statNumber {
   display: block;
   font-size: 1.3rem;
   font-weight: 800;
 }
-.statCard div p {
+.page .statDescription {
   margin: 0;
   font-size: 0.65rem;
   color: var(--text-secondary);
@@ -293,7 +294,7 @@ textarea,
 /* ============================================================
    TABS
 ============================================================ */
-.tabs {
+.page .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
@@ -303,7 +304,7 @@ textarea,
   border: 1px solid var(--border-color);
   margin-bottom: 1.5rem;
 }
-.tabs button {
+.page .tabButton {
   background: transparent;
   border: none;
   padding: 0.5rem 1rem;
@@ -320,11 +321,11 @@ textarea,
   min-height: 40px;
   white-space: nowrap;
 }
-.tabs button:hover {
+.page .tabButton:hover {
   background: var(--bg-card);
   color: var(--text-primary);
 }
-.tabs button.activeTab {
+.page .tabButtonActive {
   background: var(--accent-blue);
   color: #fff;
   box-shadow: 0 0 16px var(--accent-blue-glow);
@@ -333,7 +334,7 @@ textarea,
 /* ============================================================
    FILTERS
 ============================================================ */
-.filters {
+.page .filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -345,7 +346,7 @@ textarea,
   margin-bottom: 1.5rem;
 }
 
-.search {
+.page .searchBox {
   flex: 1 1 180px;
   display: flex;
   align-items: center;
@@ -356,15 +357,15 @@ textarea,
   border: 1px solid var(--border-color);
   transition: border var(--transition), box-shadow var(--transition);
 }
-.search:focus-within {
+.page .searchBox:focus-within {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 3px var(--accent-blue-glow);
 }
-.search span {
+.page .searchIcon {
   font-size: 0.9rem;
   opacity: 0.6;
 }
-.search input {
+.page .searchInput {
   background: transparent;
   border: none;
   outline: none;
@@ -375,11 +376,11 @@ textarea,
   font-family: inherit;
   min-height: 40px;
 }
-.search input::placeholder {
+.page .searchInput::placeholder {
   color: var(--text-muted);
 }
 
-.filters select {
+.page .filterSelect {
   background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
@@ -393,11 +394,11 @@ textarea,
   min-width: 110px;
   min-height: 40px;
 }
-.filters select:focus {
+.page .filterSelect:focus {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 3px var(--accent-blue-glow);
 }
-.filters select option {
+.page .filterOption {
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -405,7 +406,7 @@ textarea,
 /* ============================================================
    TABLE CARD (player list)
 ============================================================ */
-.tableCard {
+.page .tableCard {
   background: var(--bg-card);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -413,7 +414,7 @@ textarea,
   margin-bottom: 1.5rem;
 }
 
-.tableHeader {
+.page .tableHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -422,19 +423,19 @@ textarea,
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-.tableHeader div span {
+.page .tableHeaderLabel {
   display: block;
   font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
 }
-.tableHeader div h2 {
+.page .tableHeaderTitle {
   font-size: 1.1rem;
   font-weight: 700;
   margin: 0.1rem 0 0;
 }
-.tableHeader strong {
+.page .tableCount {
   font-size: 0.85rem;
   color: var(--text-secondary);
   background: var(--bg-input);
@@ -442,23 +443,23 @@ textarea,
   border-radius: 40px;
 }
 
-.tableWrapper {
+.page .tableWrapper {
   overflow-x: auto;
   padding: 0 0.2rem 0.2rem;
   -webkit-overflow-scrolling: touch;
 }
 
-.playersTable {
+.page .playersTable {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
-  min-width: 600px; /* forces horizontal scroll on small screens if needed */
+  min-width: 600px;
 }
-.playersTable thead {
+.page .tableHead {
   background: var(--bg-input);
   border-bottom: 1px solid var(--border-color);
 }
-.playersTable th {
+.page .tableHeaderCell {
   padding: 0.6rem 0.6rem;
   text-align: left;
   font-size: 0.65rem;
@@ -467,21 +468,21 @@ textarea,
   color: var(--text-muted);
   white-space: nowrap;
 }
-.playersTable td {
+.page .tableRowCell {
   padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
 }
-.playersTable tr:hover td {
+.page .tableRow:hover .tableRowCell {
   background: var(--bg-card-hover);
 }
 
-.playerCell {
+.page .playerCell {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-.playerAvatar {
+.page .playerAvatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -496,21 +497,21 @@ textarea,
   flex-shrink: 0;
   border: 1px solid var(--border-color);
 }
-.playerAvatar img {
+.page .playerAvatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.playerCell div strong {
+.page .playerName {
   display: block;
   font-size: 0.85rem;
 }
-.playerCell div small {
+.page .playerNationality {
   font-size: 0.6rem;
   color: var(--text-muted);
 }
 
-.position {
+.page .positionBadge {
   font-weight: 500;
   color: var(--accent-blue);
   background: rgba(79, 140, 255, 0.1);
@@ -520,18 +521,18 @@ textarea,
   display: inline-block;
 }
 
-.overall {
+.page .overallRating {
   font-size: 0.95rem;
   font-weight: 800;
   color: var(--accent-yellow);
 }
 
-.clubName {
+.page .clubNameText {
   color: var(--text-secondary);
   font-size: 0.75rem;
 }
 
-.status {
+.page .statusBadge {
   display: inline-block;
   font-size: 0.6rem;
   font-weight: 700;
@@ -541,33 +542,33 @@ textarea,
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
-.status.available {
+.page .statusAvailable {
   background: rgba(46, 204, 113, 0.15);
   color: var(--accent-green);
 }
-.status.listed {
+.page .statusListed {
   background: rgba(241, 196, 15, 0.15);
   color: var(--accent-yellow);
 }
-.status.loan {
+.page .statusLoan {
   background: rgba(79, 140, 255, 0.15);
   color: var(--accent-blue);
 }
-.status.unavailable {
+.page .statusUnavailable {
   background: rgba(231, 76, 60, 0.15);
   color: var(--accent-red);
 }
-.status.free {
+.page .statusFree {
   background: rgba(155, 89, 182, 0.15);
   color: var(--accent-purple);
 }
 
-.actions {
+.page .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
 }
-.actions button {
+.page .actionButton {
   background: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: 20px;
@@ -580,37 +581,37 @@ textarea,
   white-space: nowrap;
   min-height: 28px;
 }
-.actions button:hover {
+.page .actionButton:hover {
   background: var(--accent-blue);
   color: #fff;
   border-color: var(--accent-blue);
 }
-.actions .dangerAction {
+.page .actionDanger {
   color: var(--accent-red);
   border-color: var(--accent-red);
 }
-.actions .dangerAction:hover {
+.page .actionDanger:hover {
   background: var(--accent-red);
   color: #fff;
 }
-.actions .loanAction {
+.page .actionLoan {
   color: var(--accent-blue);
   border-color: var(--accent-blue);
 }
-.actions .loanAction:hover {
+.page .actionLoan:hover {
   background: var(--accent-blue);
   color: #fff;
 }
-.actions .buyAction {
+.page .actionBuy {
   color: var(--accent-green);
   border-color: var(--accent-green);
 }
-.actions .buyAction:hover {
+.page .actionBuy:hover {
   background: var(--accent-green);
   color: #fff;
 }
 
-.noPlayers {
+.page .noPlayers {
   text-align: center;
   padding: 2rem !important;
   color: var(--text-muted);
@@ -620,7 +621,7 @@ textarea,
 /* ============================================================
    SCOUTING
 ============================================================ */
-.scouting {
+.page .scouting {
   background: var(--bg-card);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -628,61 +629,61 @@ textarea,
   margin-bottom: 1.5rem;
 }
 
-.sectionHeading {
+.page .sectionHeading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 1.2rem;
   gap: 1rem;
 }
-.sectionHeading div span {
+.page .sectionLabel {
   display: block;
   font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
 }
-.sectionHeading div h2 {
+.page .sectionTitle {
   font-size: 1.2rem;
   font-weight: 800;
   margin: 0.1rem 0 0.2rem;
 }
-.sectionHeading div p {
+.page .sectionDescription {
   color: var(--text-secondary);
   margin: 0;
   font-size: 0.85rem;
 }
-.scoutIcon {
+.page .sectionIcon {
   font-size: 2.4rem;
   opacity: 0.7;
   flex-shrink: 0;
 }
 
-.scoutGrid {
+.page .scoutGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
 }
 
-.scoutCard {
+.page .scoutCard {
   background: var(--bg-input);
   border-radius: var(--radius-md);
   padding: 1rem 1rem 0.8rem;
   border: 1px solid var(--border-color);
   transition: transform var(--transition), box-shadow var(--transition);
 }
-.scoutCard:hover {
+.page .scoutCard:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.scoutTop {
+.page .scoutTop {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.4rem;
 }
-.largeAvatar {
+.page .largeAvatar {
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -695,39 +696,39 @@ textarea,
   overflow: hidden;
   border: 1px solid var(--border-color);
 }
-.largeAvatar img {
+.page .largeAvatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.scoutTop div {
+.page .scoutScoreWrap {
   text-align: right;
 }
-.scoutTop div span {
+.page .scoutScoreLabel {
   display: block;
   font-size: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
 }
-.scoutTop div strong {
+.page .scoutScoreValue {
   font-size: 1.4rem;
   font-weight: 800;
   color: var(--accent-yellow);
 }
 
-.scoutCard h3 {
+.page .scoutName {
   font-size: 0.95rem;
   font-weight: 700;
   margin: 0.2rem 0 0.1rem;
 }
-.scoutCard > p {
+.page .scoutPosition {
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin: 0 0 0.5rem;
 }
 
-.scoutStats {
+.page .scoutStats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.2rem;
@@ -736,22 +737,22 @@ textarea,
   padding: 0.4rem 0.2rem;
   margin-bottom: 0.5rem;
 }
-.scoutStats > div {
+.page .scoutStatItem {
   text-align: center;
 }
-.scoutStats span {
+.page .scoutStatLabel {
   display: block;
   font-size: 0.5rem;
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.scoutStats strong {
+.page .scoutStatValue {
   display: block;
   font-size: 0.75rem;
   font-weight: 700;
 }
 
-.scoutReason {
+.page .scoutReason {
   font-size: 0.65rem;
   color: var(--text-secondary);
   background: var(--bg-secondary);
@@ -761,7 +762,7 @@ textarea,
   margin-bottom: 0.6rem;
 }
 
-.scoutCard button {
+.page .scoutButton {
   width: 100%;
   background: var(--accent-blue);
   border: none;
@@ -774,7 +775,7 @@ textarea,
   transition: background var(--transition), transform var(--transition);
   min-height: 40px;
 }
-.scoutCard button:hover {
+.page .scoutButton:hover {
   background: #3a7be0;
   transform: scale(1.02);
 }
@@ -782,14 +783,14 @@ textarea,
 /* ============================================================
    CONTRACT MONITOR
 ============================================================ */
-.contractList {
+.page .contractList {
   padding: 0.5rem 1rem 1.2rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
 
-.contractRow {
+.page .contractRow {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr;
   align-items: center;
@@ -799,34 +800,34 @@ textarea,
   border: 1px solid var(--border-color);
   gap: 0.3rem;
 }
-.contractRow > div:first-child {
+.page .contractPlayer {
   display: flex;
   flex-direction: column;
 }
-.contractRow > div:first-child strong {
+.page .contractPlayerName {
   font-size: 0.85rem;
 }
-.contractRow > div:first-child span {
+.page .contractPlayerPosition {
   font-size: 0.65rem;
   color: var(--text-muted);
 }
-.contractRow small {
+.page .contractLabel {
   display: block;
   font-size: 0.55rem;
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.contractRow strong {
+.page .contractValue {
   font-size: 0.8rem;
 }
-.contractWarning {
+.page .contractWarning {
   color: var(--accent-red) !important;
 }
 
 /* ============================================================
    MODAL OVERLAY
 ============================================================ */
-.modalOverlay {
+.page .modalOverlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
@@ -851,7 +852,7 @@ textarea,
 }
 
 /* ----- Player Detail Modal ----- */
-.playerModal {
+.page .playerModal {
   background: var(--bg-modal);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -865,7 +866,7 @@ textarea,
   overflow-y: auto;
 }
 
-.close {
+.page .closeButton {
   position: absolute;
   top: 0.4rem;
   right: 0.8rem;
@@ -878,18 +879,18 @@ textarea,
   transition: color var(--transition), transform var(--transition);
   padding: 0.2rem 0.5rem;
 }
-.close:hover {
+.page .closeButton:hover {
   color: var(--text-primary);
   transform: rotate(90deg);
 }
 
-.modalPlayerHeader {
+.page .modalPlayerHeader {
   display: flex;
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.2rem;
 }
-.modalAvatar {
+.page .modalAvatar {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -903,30 +904,30 @@ textarea,
   border: 1px solid var(--border-color);
   flex-shrink: 0;
 }
-.modalAvatar img {
+.page .modalAvatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.modalPlayerHeader div span {
+.page .modalPlayerPosition {
   display: block;
   font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--accent-blue);
 }
-.modalPlayerHeader div h2 {
+.page .modalPlayerName {
   font-size: 1.2rem;
   font-weight: 800;
   margin: 0.1rem 0 0.2rem;
 }
-.modalPlayerHeader div p {
+.page .modalPlayerClub {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
-.detailsGrid {
+.page .detailsGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem 0.8rem;
@@ -936,24 +937,27 @@ textarea,
   border: 1px solid var(--border-color);
   margin-bottom: 1.2rem;
 }
-.detailsGrid div span {
+.page .detailItem {
+  display: block;
+}
+.page .detailLabel {
   display: block;
   font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   color: var(--text-muted);
 }
-.detailsGrid div strong {
+.page .detailValue {
   font-size: 0.9rem;
   font-weight: 700;
 }
 
-.modalActions {
+.page .modalActions {
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
 }
-.modalActions button {
+.page .modalActionButton {
   flex: 1;
   background: var(--accent-blue);
   border: none;
@@ -968,21 +972,21 @@ textarea,
   min-height: 44px;
   font-size: 0.85rem;
 }
-.modalActions button:hover {
+.page .modalActionButton:hover {
   background: #3a7be0;
 }
-.modalActions .loanAction {
+.page .modalActionLoan {
   background: transparent;
   border: 1px solid var(--accent-blue);
   color: var(--accent-blue);
 }
-.modalActions .loanAction:hover {
+.page .modalActionLoan:hover {
   background: var(--accent-blue);
   color: #fff;
 }
 
 /* ----- Negotiation / Loan Modal ----- */
-.negotiationModal {
+.page .negotiationModal {
   background: var(--bg-modal);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -994,22 +998,22 @@ textarea,
   animation: slideUp 0.3s ease;
 }
 
-.negotiationModal .eyebrow {
+.page .negotiationEyebrow {
   font-size: 0.55rem;
   margin-bottom: 0.3rem;
 }
-.negotiationModal h2 {
+.page .negotiationTitle {
   font-size: 1.2rem;
   font-weight: 800;
   margin: 0.2rem 0 0.1rem;
 }
-.negotiationModal > p {
+.page .negotiationSubtitle {
   color: var(--text-secondary);
   font-size: 0.8rem;
   margin: 0 0 1rem;
 }
 
-.negotiationSummary {
+.page .negotiationSummary {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
@@ -1019,25 +1023,25 @@ textarea,
   border: 1px solid var(--border-color);
   margin-bottom: 1rem;
 }
-.negotiationSummary div span {
+.page .summaryLabel {
   display: block;
   font-size: 0.5rem;
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.negotiationSummary div strong {
+.page .summaryValue {
   font-size: 0.9rem;
   font-weight: 700;
 }
 
-.negotiationModal label {
+.page .negotiationLabel {
   display: block;
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 0.6rem;
 }
-.negotiationModal label select {
+.page .negotiationSelect {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
@@ -1051,11 +1055,11 @@ textarea,
   transition: border var(--transition);
   min-height: 40px;
 }
-.negotiationModal label select:focus {
+.page .negotiationSelect:focus {
   border-color: var(--accent-blue);
 }
 
-.moneyInput {
+.page .moneyInput {
   display: flex;
   align-items: center;
   background: var(--bg-input);
@@ -1065,16 +1069,16 @@ textarea,
   margin-top: 0.2rem;
   transition: border var(--transition);
 }
-.moneyInput:focus-within {
+.page .moneyInput:focus-within {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 3px var(--accent-blue-glow);
 }
-.moneyInput span {
+.page .moneySymbol {
   font-weight: 700;
   color: var(--text-muted);
   margin-right: 0.2rem;
 }
-.moneyInput input {
+.page .moneyInputField {
   background: transparent;
   border: none;
   outline: none;
@@ -1085,16 +1089,16 @@ textarea,
   font-family: inherit;
   min-height: 40px;
 }
-.moneyInput input::-webkit-outer-spin-button,
-.moneyInput input::-webkit-inner-spin-button {
+.page .moneyInputField::-webkit-outer-spin-button,
+.page .moneyInputField::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-.moneyInput input[type='number'] {
+.page .moneyInputField[type='number'] {
   -moz-appearance: textfield;
 }
 
-.negotiationHint {
+.page .negotiationHint {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
@@ -1107,7 +1111,7 @@ textarea,
   margin-bottom: 1rem;
 }
 
-.primaryButton {
+.page .primaryButton {
   width: 100%;
   background: var(--accent-green);
   border: none;
@@ -1121,12 +1125,12 @@ textarea,
   font-family: inherit;
   min-height: 44px;
 }
-.primaryButton:hover:not(:disabled) {
+.page .primaryButton:hover:not(:disabled) {
   background: #27ae60;
   transform: scale(1.02);
   box-shadow: 0 0 24px var(--accent-green-glow);
 }
-.primaryButton:disabled {
+.page .primaryButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1137,36 +1141,36 @@ textarea,
 
 /* --- Tablets and small laptops --- */
 @media (max-width: 860px) {
-  .header {
+  .page .header {
     flex-direction: column;
     align-items: stretch;
   }
-  .headerIdentity {
+  .page .headerIdentity {
     justify-content: center;
   }
-  .headerBudgets {
+  .page .headerBudgets {
     justify-content: center;
     gap: 1.5rem;
   }
-  .headerBudgets > div {
+  .page .budgetItem {
     text-align: center;
   }
-  .stats {
+  .page .stats {
     grid-template-columns: repeat(2, 1fr);
   }
-  .playersTable th,
-  .playersTable td {
+  .page .tableHeaderCell,
+  .page .tableRowCell {
     padding: 0.4rem 0.3rem;
     font-size: 0.7rem;
   }
-  .playersTable th:last-child,
-  .playersTable td:last-child {
+  .page .tableHeaderCell:last-child,
+  .page .tableRowCell:last-child {
     min-width: 80px;
   }
-  .playerCell div strong {
+  .page .playerName {
     font-size: 0.75rem;
   }
-  .contractRow {
+  .page .contractRow {
     grid-template-columns: 1fr 1fr 1fr;
   }
 }
@@ -1176,167 +1180,172 @@ textarea,
   .page {
     padding: 0.8rem 0.6rem 2.5rem;
   }
-  .header {
+  .page .header {
     padding: 1rem 0.8rem;
   }
-  .clubLogo {
+  .page .clubLogo {
     width: 44px;
     height: 44px;
     font-size: 1.2rem;
   }
-  .headerIdentity h1 {
+  .page .headerTitle {
     font-size: 1.2rem;
   }
-  .headerBudgets strong {
+  .page .budgetValue {
     font-size: 1rem;
   }
-  .stats {
+  .page .stats {
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
-  .statCard {
+  .page .statCard {
     padding: 0.6rem 0.8rem;
   }
-  .statCard div strong {
+  .page .statNumber {
     font-size: 1.1rem;
   }
-  .tabs {
+  .page .tabs {
     justify-content: center;
     padding: 0.2rem 0.3rem;
   }
-  .tabs button {
+  .page .tabButton {
     font-size: 0.7rem;
     padding: 0.3rem 0.7rem;
     min-height: 34px;
   }
-  .filters {
+  .page .filters {
     flex-direction: column;
     align-items: stretch;
     padding: 0.6rem;
   }
-  .filters select {
+  .page .filterSelect {
     min-width: unset;
     width: 100%;
   }
-  .tableHeader {
+  .page .tableHeader {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.3rem;
     padding: 0.8rem 1rem;
   }
-  .tableHeader div h2 {
+  .page .tableHeaderTitle {
     font-size: 1rem;
   }
-  .playersTable {
+  .page .playersTable {
     font-size: 0.65rem;
     min-width: 480px;
   }
-  .playersTable th,
-  .playersTable td {
+  .page .tableHeaderCell,
+  .page .tableRowCell {
     padding: 0.3rem 0.25rem;
   }
-  .playersTable td:first-child {
+  .page .tableRowCell:first-child {
     min-width: 80px;
   }
-  .playersTable td:nth-child(4),
-  .playersTable td:nth-child(5),
-  .playersTable td:nth-child(6) {
+  .page .tableRowCell:nth-child(4),
+  .page .tableRowCell:nth-child(5),
+  .page .tableRowCell:nth-child(6) {
     display: none;
   }
-  .actions button {
+  .page .tableHeaderCell:nth-child(4),
+  .page .tableHeaderCell:nth-child(5),
+  .page .tableHeaderCell:nth-child(6) {
+    display: none;
+  }
+  .page .actionButton {
     font-size: 0.55rem;
     padding: 0.1rem 0.4rem;
     min-height: 24px;
   }
-  .scoutGrid {
+  .page .scoutGrid {
     grid-template-columns: 1fr 1fr;
   }
-  .scoutCard {
+  .page .scoutCard {
     padding: 0.8rem;
   }
-  .contractRow {
+  .page .contractRow {
     grid-template-columns: 1fr 1fr;
     gap: 0.2rem 0.5rem;
     padding: 0.4rem 0.6rem;
   }
-  .contractRow > div:first-child {
+  .page .contractPlayer {
     grid-column: 1 / -1;
   }
-  .detailsGrid {
+  .page .detailsGrid {
     grid-template-columns: 1fr 1fr;
   }
-  .modalActions {
+  .page .modalActions {
     flex-direction: column;
   }
-  .modalActions button {
+  .page .modalActionButton {
     min-width: unset;
   }
-  .negotiationModal {
+  .page .negotiationModal {
     padding: 1.2rem;
   }
-  .playerModal {
+  .page .playerModal {
     padding: 1.2rem;
   }
 }
 
 /* --- Small phones (<= 420px) --- */
 @media (max-width: 420px) {
-  .stats {
+  .page .stats {
     grid-template-columns: 1fr;
   }
-  .playersTable td:nth-child(3),
-  .playersTable th:nth-child(3) {
-    display: none; /* hide Age */
+  .page .tableRowCell:nth-child(3),
+  .page .tableHeaderCell:nth-child(3) {
+    display: none;
   }
-  .playersTable td:nth-child(7),
-  .playersTable th:nth-child(7) {
-    display: none; /* hide Asking Price */
+  .page .tableRowCell:nth-child(7),
+  .page .tableHeaderCell:nth-child(7) {
+    display: none;
   }
-  .headerBudgets {
+  .page .headerBudgets {
     flex-direction: column;
     gap: 0.3rem;
   }
-  .scoutGrid {
+  .page .scoutGrid {
     grid-template-columns: 1fr;
   }
-  .scoutCard button {
+  .page .scoutButton {
     font-size: 0.75rem;
     min-height: 38px;
   }
-  .contractRow {
+  .page .contractRow {
     grid-template-columns: 1fr;
     gap: 0.1rem;
   }
-  .contractRow > div:first-child {
+  .page .contractPlayer {
     grid-column: 1;
   }
-  .contractRow > div {
+  .page .contractRow .contractItem {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .contractRow small {
+  .page .contractLabel {
     display: inline;
     margin-right: 0.3rem;
   }
-  .playerModal {
+  .page .playerModal {
     padding: 1rem;
     max-width: 100%;
     margin: 0.5rem;
   }
-  .negotiationModal {
+  .page .negotiationModal {
     padding: 1rem;
     max-width: 100%;
     margin: 0.5rem;
   }
-  .modalPlayerHeader {
+  .page .modalPlayerHeader {
     flex-direction: column;
     text-align: center;
   }
-  .detailsGrid {
+  .page .detailsGrid {
     grid-template-columns: 1fr;
   }
-  .modalActions button {
+  .page .modalActionButton {
     min-height: 40px;
     font-size: 0.8rem;
   }
@@ -1347,72 +1356,72 @@ textarea,
   .page {
     padding: 0.5rem 0.4rem 2rem;
   }
-  .header {
+  .page .header {
     padding: 0.8rem 0.5rem;
   }
-  .clubLogo {
+  .page .clubLogo {
     width: 36px;
     height: 36px;
     font-size: 1rem;
   }
-  .headerIdentity h1 {
+  .page .headerTitle {
     font-size: 1rem;
   }
-  .headerBudgets strong {
+  .page .budgetValue {
     font-size: 0.9rem;
   }
-  .statCard {
+  .page .statCard {
     padding: 0.4rem 0.6rem;
   }
-  .statCard > span {
+  .page .statIcon {
     font-size: 1.2rem;
   }
-  .statCard div strong {
+  .page .statNumber {
     font-size: 0.9rem;
   }
-  .tabs button {
+  .page .tabButton {
     font-size: 0.6rem;
     padding: 0.2rem 0.5rem;
     min-height: 30px;
   }
-  .playersTable {
+  .page .playersTable {
     font-size: 0.55rem;
     min-width: 360px;
   }
-  .playersTable th,
-  .playersTable td {
+  .page .tableHeaderCell,
+  .page .tableRowCell {
     padding: 0.2rem 0.15rem;
   }
-  .playersTable td:first-child {
+  .page .tableRowCell:first-child {
     min-width: 60px;
   }
-  .playerCell div strong {
+  .page .playerName {
     font-size: 0.65rem;
   }
-  .playerCell div small {
+  .page .playerNationality {
     font-size: 0.5rem;
   }
-  .actions button {
+  .page .actionButton {
     font-size: 0.5rem;
     padding: 0.05rem 0.3rem;
     min-height: 20px;
   }
-  .scoutCard {
+  .page .scoutCard {
     padding: 0.6rem;
   }
-  .scoutCard h3 {
+  .page .scoutName {
     font-size: 0.8rem;
   }
-  .scoutCard button {
+  .page .scoutButton {
     font-size: 0.7rem;
     min-height: 34px;
   }
-  .primaryButton {
+  .page .primaryButton {
     font-size: 0.8rem;
     padding: 0.5rem;
     min-height: 38px;
   }
-  .close {
+  .page .closeButton {
     font-size: 1.5rem;
     top: 0.2rem;
     right: 0.5rem;
