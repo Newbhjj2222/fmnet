@@ -1690,128 +1690,69 @@ export default function FixturesPage({
      ADVANCE DAY
 ======================================================= */
 
-  const advanceDay =
-    async () => {
-      if (
-        !user ||
-        saving
-      ) {
-        return;
+  const advanceGameTime = async () => {
+  if (!user || saving) return;
+
+  const current = parseDate(
+    careerData?.currentDate
+  ) || new Date();
+
+  const upcomingMatches = myFixtures
+    .map((fixture) => ({
+      fixture,
+      date: parseDate(fixture.date),
+    }))
+    .filter(
+      ({ date }) =>
+        date && date > current
+    )
+    .sort(
+      (a, b) =>
+        a.date.getTime() -
+        b.date.getTime()
+    );
+
+  const nextMatchEvent =
+    upcomingMatches[0]?.date || null;
+
+  let nextTime;
+
+  if (nextMatchEvent) {
+    nextTime = nextMatchEvent;
+  } else {
+    nextTime = new Date(current);
+    nextTime.setHours(23, 59, 0, 0);
+  }
+
+  try {
+    setSaving(true);
+
+    await updateDoc(
+      doc(db, 'users', user.uid),
+      {
+        'careerData.currentDate':
+          nextTime.toISOString(),
+
+        'careerData.updatedAt':
+          serverTimestamp(),
       }
+    );
 
-      const current =
-        startOfDay(
-          gameDate
-        );
+    setCareerData((previous) => ({
+      ...previous,
+      currentDate:
+        nextTime.toISOString(),
+    }));
+  } catch (error) {
+    console.error(error);
 
-      const next =
-        addDays(
-          current,
-          1
-        );
-
-      /*
-       * IMPORTANT:
-       * Do not allow the user to skip
-       * an active match.
-       */
-
-      const blockingMatch =
-        myFixtures.find(
-          (fixture) => {
-            const state =
-              getMatchState(
-                fixture,
-                current
-              );
-
-            if (
-              state !==
-              'upcoming'
-            ) {
-              return false;
-            }
-
-            const date =
-              parseDate(
-                fixture.date
-              );
-
-            if (!date) {
-              return false;
-            }
-
-            return (
-              isoDate(date) ===
-              isoDate(next)
-            );
-          }
-        );
-
-      if (
-        blockingMatch
-      ) {
-        toast.error(
-          'You have a match tomorrow. You cannot skip it.'
-        );
-
-        return;
-      }
-
-      try {
-        setSaving(
-          true
-        );
-
-        const userRef =
-          doc(
-            db,
-            'users',
-            user.uid
-          );
-
-        await updateDoc(
-          userRef,
-          {
-            'careerData.currentDate':
-              next.toISOString(),
-
-            'careerData.updatedAt':
-              serverTimestamp(),
-          }
-        );
-
-        setCareerData(
-          (previous) => ({
-            ...previous,
-            currentDate:
-              next.toISOString(),
-          })
-        );
-
-        setNow(
-          new Date()
-        );
-
-        toast.success(
-          `Advanced to ${formatDate(next)}`
-        );
-      } catch (error) {
-        console.error(
-          error
-        );
-
-        toast.error(
-          'Could not advance the day'
-        );
-      } finally {
-        setSaving(
-          false
-        );
-      }
-    };
-
-
+    toast.error(
+      'Could not advance game time'
+    );
+  } finally {
+    setSaving(false);
+  }
+};
   /* =======================================================
      PLAY MATCH
 ======================================================= */
