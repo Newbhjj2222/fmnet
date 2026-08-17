@@ -22,6 +22,9 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+
 import { db } from '../components/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -556,12 +559,18 @@ export default function MatchPage() {
   const [selectedSubPlayer, setSelectedSubPlayer] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('home');
 
-  // Animation state for 3D pitch
-  const [ballPosition, setBallPosition] = useState({ x: 50, y: 50 });
-  const [playerPositions, setPlayerPositions] = useState({ home: [], away: [] });
-
   const timerRef = useRef(null);
   const processingRef = useRef(false);
+
+  // Three.js refs
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const controlsRef = useRef(null);
+  const ballMeshRef = useRef(null);
+  const playerMeshesRef = useRef({ home: [], away: [] });
+  const animationFrameRef = useRef(null);
 
   /* =======================================================
      DERIVED
@@ -747,23 +756,6 @@ export default function MatchPage() {
               ),
           ),
         );
-
-        // Initialize player positions for 3D pitch
-        const formation = FORMATION_POSITIONS[mentality] || FORMATION_POSITIONS.balanced;
-        
-        const homePositions = formation.map((pos, index) => ({
-          x: pos.x,
-          y: pos.y,
-          player: startingHome[index] || null,
-        }));
-
-        const awayPositions = formation.map((pos, index) => ({
-          x: 100 - pos.x,
-          y: 100 - pos.y,
-          player: startingAway[index] || null,
-        }));
-
-        setPlayerPositions({ home: homePositions, away: awayPositions });
       } catch (error) {
         console.error('Match loading error:', error);
         toast.error('Could not load match');
@@ -780,6 +772,248 @@ export default function MatchPage() {
       cancelled = true;
     };
   }, [loading, user, matchId, router, applyMatchState]);
+
+  /* =======================================================
+     THREE.JS 3D PITCH SETUP
+  ======================================================== */
+
+  useEffect(() => {
+    if (!mountRef.current || loadingMatch) return;
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1120);
+    scene.fog = new THREE.Fog(0x0b1120, 30, 80);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      100,
+    );
+    camera.position.set(0, 25, 30);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0, 0);
+    controls.maxPolarAngle = Math.PI / 2.5;
+    controls.minDistance = 15;
+    controls.maxDistance = 50;
+    controls.update();
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(10, 20, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 60;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
+    scene.add(directionalLight);
+
+    // Pitch (grass)
+    const pitchGeometry = new THREE.PlaneGeometry(30, 20);
+    const pitchMaterial = new THREE.MeshStandardMaterial({
+      color: 0x15803d,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const pitch = new THREE.Mesh(pitchGeometry, pitchMaterial);
+    pitch.rotation.x = -Math.PI / 2;
+    pitch.position.y = 0;
+    pitch.receiveShadow = true;
+    scene.add(pitch);
+
+    // Pitch lines
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
+
+    // Border lines
+    const borderGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-15, 0.01, -10),
+      new THREE.Vector3(15, 0.01, -10),
+      new THREE.Vector3(15, 0.01, 10),
+      new THREE.Vector3(-15, 0.01, 10),
+      new THREE.Vector3(-15, 0.01, -10),
+    ]);
+    const borderLine = new THREE.Line(borderGeometry, lineMaterial);
+    scene.add(borderLine);
+
+    // Center line
+    const centerLineGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.01, -10),
+      new THREE.Vector3(0, 0.01, 10),
+    ]);
+    const centerLine = new THREE.Line(centerLineGeometry, lineMaterial);
+    scene.add(centerLine);
+
+    // Center circle
+    const circleGeometry = new THREE.RingGeometry(3, 3.05, 64);
+    const circleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+    });
+    const centerCircle = new THREE.Mesh(circleGeometry, circleMaterial);
+    centerCircle.rotation.x = -Math.PI / 2;
+    centerCircle.position.y = 0.02;
+    scene.add(centerCircle);
+
+    // Goals
+    const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+
+    // Left goal
+    const leftGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
+    const leftGoal = new THREE.Mesh(leftGoalGeometry, goalMaterial);
+    leftGoal.position.set(-15, 0.08, 0);
+    scene.add(leftGoal);
+
+    // Right goal
+    const rightGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
+    const rightGoal = new THREE.Mesh(rightGoalGeometry, goalMaterial);
+    rightGoal.position.set(15, 0.08, 0);
+    scene.add(rightGoal);
+
+    // Ball
+    const ballGeometry = new THREE.SphereGeometry(0.15, 32, 32);
+    const ballMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.3,
+      metalness: 0.1,
+    });
+    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    ball.position.set(0, 0.15, 0);
+    ball.castShadow = true;
+    scene.add(ball);
+    ballMeshRef.current = ball;
+
+    // Create players
+    const createPlayer = (x, z, color, index) => {
+      const playerGeometry = new THREE.CylinderGeometry(0.3, 0.35, 1.2, 16);
+      const playerMaterial = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.5,
+        metalness: 0.2,
+      });
+      const player = new THREE.Mesh(playerGeometry, playerMaterial);
+      player.position.set(x, 0.6, z);
+      player.castShadow = true;
+      player.userData = { originalX: x, originalZ: z, index };
+      scene.add(player);
+      return player;
+    };
+
+    // Home players (left side)
+    const homeFormation = FORMATION_POSITIONS.balanced;
+    playerMeshesRef.current.home = homeFormation.map((pos, index) => {
+      const x = (pos.x - 50) / 50 * 15;
+      const z = (pos.y - 50) / 50 * 10;
+      return createPlayer(x, z, 0x3b82f6, index);
+    });
+
+    // Away players (right side)
+    playerMeshesRef.current.away = homeFormation.map((pos, index) => {
+      const x = (50 - pos.x) / 50 * 15;
+      const z = (50 - pos.y) / 50 * 10;
+      return createPlayer(x, z, 0xef4444, index);
+    });
+
+    // Animation loop
+    const animate = () => {
+      animationFrameRef.current = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Store refs
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+    rendererRef.current = renderer;
+    controlsRef.current = controls;
+
+    // Handle resize
+    const handleResize = () => {
+      if (!mountRef.current || !camera || !renderer) return;
+      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+      }
+      if (mountRef.current && renderer) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+    };
+  }, [loadingMatch]);
+
+  /* =======================================================
+     UPDATE BALL POSITION IN 3D
+  ======================================================== */
+
+  useEffect(() => {
+    if (!ballMeshRef.current) return;
+
+    // Animate ball based on match minute
+    const animateBall = () => {
+      const ball = ballMeshRef.current;
+      if (!ball) return;
+
+      // Simple random movement for ball
+      const targetX = randomBetweenSafe(-12, 12);
+      const targetZ = randomBetweenSafe(-8, 8);
+
+      const startX = ball.position.x;
+      const startZ = ball.position.z;
+      const startTime = Date.now();
+      const duration = 500;
+
+      const updateBall = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = progress * (2 - progress); // easeOut
+
+        ball.position.x = startX + (targetX - startX) * eased;
+        ball.position.z = startZ + (targetZ - startZ) * eased;
+
+        if (progress < 1) {
+          requestAnimationFrame(updateBall);
+        }
+      };
+
+      updateBall();
+    };
+
+    if (matchStatus === 'live' && !paused) {
+      animateBall();
+    }
+  }, [matchMinute, matchStatus, paused]);
 
   /* =======================================================
      REALTIME MATCH LISTENER
@@ -923,8 +1157,10 @@ export default function MatchPage() {
             createdAt: new Date().toISOString(),
           };
 
-          // Animate ball to goal
-          setBallPosition({ x: 90, y: 50 });
+          // Move ball to right goal
+          if (ballMeshRef.current) {
+            ballMeshRef.current.position.set(14.5, 0.15, 0);
+          }
         } else if (random < (homeChance + awayChance) * 0.08) {
           scoringTeam = 'away';
 
@@ -948,8 +1184,10 @@ export default function MatchPage() {
             createdAt: new Date().toISOString(),
           };
 
-          // Animate ball to goal
-          setBallPosition({ x: 10, y: 50 });
+          // Move ball to left goal
+          if (ballMeshRef.current) {
+            ballMeshRef.current.position.set(-14.5, 0.15, 0);
+          }
         } else {
           const eventRandom = Math.random() * 100;
 
@@ -968,12 +1206,6 @@ export default function MatchPage() {
               detail: 'Shot attempt',
               createdAt: new Date().toISOString(),
             };
-
-            // Animate ball randomly
-            setBallPosition({
-              x: randomBetweenSafe(20, 80),
-              y: randomBetweenSafe(20, 80),
-            });
           } else if (eventRandom < 19) {
             const team = Math.random() < 0.5 ? 'home' : 'away';
             const lineup = team === 'home' ? homeXI : awayXI;
@@ -1015,12 +1247,6 @@ export default function MatchPage() {
               detail: 'Corner kick',
               createdAt: new Date().toISOString(),
             };
-
-            // Ball goes to corner
-            setBallPosition({
-              x: team === 'home' ? 10 : 90,
-              y: Math.random() < 0.5 ? 10 : 90,
-            });
           }
         }
 
@@ -1220,12 +1446,6 @@ export default function MatchPage() {
 
         return next;
       });
-
-      // Update ball position for animation
-      setBallPosition((prev) => ({
-        x: clamp(prev.x + randomBetweenSafe(-15, 15), 5, 95),
-        y: clamp(prev.y + randomBetweenSafe(-15, 15), 5, 95),
-      }));
     }, MATCH_TICK_MS);
 
     return () => {
@@ -1571,58 +1791,7 @@ export default function MatchPage() {
         </header>
 
         {/* 3D PITCH */}
-        <section className={styles.pitchContainer}>
-          <div className={styles.pitch}>
-            {/* Center line */}
-            <div className={styles.centerLine} />
-            <div className={styles.centerCircle} />
-            
-            {/* Goals */}
-            <div className={styles.goalLeft} />
-            <div className={styles.goalRight} />
-
-            {/* Home Players */}
-            {playerPositions.home.map((pos, index) => (
-              <div
-                key={`home-${index}`}
-                className={`${styles.pitchPlayer} ${styles.homePlayer}`}
-                style={{
-                  left: `${pos.x}%`,
-                  top: `${pos.y}%`,
-                  backgroundColor: getClubPrimaryColor(homeClub),
-                }}
-                title={pos.player ? getPlayerName(pos.player) : ''}
-              >
-                {pos.player?.number || index + 1}
-              </div>
-            ))}
-
-            {/* Away Players */}
-            {playerPositions.away.map((pos, index) => (
-              <div
-                key={`away-${index}`}
-                className={`${styles.pitchPlayer} ${styles.awayPlayer}`}
-                style={{
-                  left: `${pos.x}%`,
-                  top: `${pos.y}%`,
-                  backgroundColor: getClubPrimaryColor(awayClub),
-                }}
-                title={pos.player ? getPlayerName(pos.player) : ''}
-              >
-                {pos.player?.number || index + 1}
-              </div>
-            ))}
-
-            {/* Ball */}
-            <div
-              className={styles.ball}
-              style={{
-                left: `${ballPosition.x}%`,
-                top: `${ballPosition.y}%`,
-              }}
-            />
-          </div>
-        </section>
+        <div ref={mountRef} className={styles.threeContainer} />
 
         {/* SCOREBOARD */}
         <section
@@ -1667,7 +1836,6 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* REST OF THE COMPONENT REMAINS THE SAME */}
         {/* LATEST SCORE */}
         <section className={styles.latestScore}>
           <div>
