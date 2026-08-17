@@ -2619,4 +2619,287 @@ export default function FixturesPage({
                   friendlyOpponent
                 }
                 onChange={(event) =>
-                  setFriendly
+                  setFriendlyOpponent(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="">
+                  Select opponent
+                </option>
+
+                {clubs
+                  .filter(
+                    (club) =>
+                      club.id !==
+                      currentClub.id
+                  )
+                  .map(
+                    (club) => (
+                      <option
+                        key={
+                          club.id
+                        }
+                        value={
+                          club.id
+                        }
+                      >
+                        {getClubName(
+                          club
+                        )}
+                      </option>
+                    )
+                  )}
+              </select>
+            </label>
+
+            <div
+              className={
+                styles.friendlyDate
+              }
+            >
+              Proposed date{' '}
+              <strong>
+                {formatDate(
+                  addDays(
+                    gameDate,
+                    3
+                  )
+                )}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              disabled={
+                saving ||
+                !friendlyOpponent
+              }
+              onClick={
+                createFriendly
+              }
+            >
+              {saving
+                ? 'Scheduling...'
+                : 'Confirm Friendly'}
+            </button>
+          </section>
+        )}
+
+        {/* =================================================
+            LEAGUES
+        ================================================= */}
+
+        <section
+          className={
+            styles.leaguesSection
+          }
+        >
+          <div
+            className={
+              styles.sectionHeading
+            }
+          >
+            <div>
+              <span>
+                COMPETITIONS
+              </span>
+
+              <h2>
+                Leagues
+              </h2>
+            </div>
+          </div>
+
+          <div
+            className={
+              styles.leagueGrid
+            }
+          >
+            {leagues.map(
+              (league) => {
+                const teams =
+                  getLeagueTeams(
+                    league,
+                    clubs
+                  );
+
+                const isMyLeague =
+                  userLeagueIds.includes(
+                    league.id
+                  );
+
+                return (
+                  <button
+                    type="button"
+                    key={
+                      league.id
+                    }
+                    className={`${styles.leagueCard} ${
+                      isMyLeague
+                        ? styles.myLeague
+                        : ''
+                    }`}
+                    onClick={() => {
+                      setSelectedLeague(
+                        league.id
+                      );
+
+                      setActiveView(
+                        'all'
+                      );
+                    }}
+                  >
+                    <div
+                      className={
+                        styles.leagueIcon
+                      }
+                    >
+                      {league.logo ? (
+                        <img
+                          src={
+                            league.logo
+                          }
+                          alt=""
+                        />
+                      ) : (
+                        '🏆'
+                      )}
+                    </div>
+
+                    <div>
+                      <span>
+                        {getLeagueCountry(
+                          league
+                        )}
+                      </span>
+
+                      <strong>
+                        {getLeagueName(
+                          league
+                        )}
+                      </strong>
+
+                      <small>
+                        {
+                          teams.length
+                        }{' '}
+                        teams
+                      </small>
+                    </div>
+
+                    {isMyLeague && (
+                      <b>
+                        YOUR LEAGUE
+                      </b>
+                    )}
+                  </button>
+                );
+              }
+            )}
+          </div>
+        </section>
+      </main>
+    </>
+  );
+}
+
+/* =========================================================
+   SSR
+========================================================= */
+
+export async function getServerSideProps() {
+  try {
+    /*
+     * IMPORTANT:
+     *
+     * We deliberately DO NOT load matches here.
+     *
+     * Matches are loaded only on the client through
+     * Firestore onSnapshot().
+     *
+     * This prevents old SSR data from appearing after
+     * matches have been deleted from Firestore.
+     */
+
+    const [
+      leaguesSnapshot,
+      clubsSnapshot,
+    ] = await Promise.all([
+      getDocs(
+        collection(
+          db,
+          'leagues'
+        )
+      ),
+
+      getDocs(
+        collection(
+          db,
+          'clubs'
+        )
+      ),
+    ]);
+
+    const leagues =
+      leaguesSnapshot.docs
+        .slice(
+          0,
+          MAX_LEAGUES
+        )
+        .map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          })
+        );
+
+    const clubs =
+      clubsSnapshot.docs
+        .slice(
+          0,
+          MAX_CLUBS
+        )
+        .map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          })
+        );
+
+    return {
+      props: {
+        /*
+         * ONLY leagues and clubs.
+         *
+         * NO initialMatches.
+         */
+        initialLeagues:
+          JSON.parse(
+            JSON.stringify(
+              leagues
+            )
+          ),
+
+        initialClubs:
+          JSON.parse(
+            JSON.stringify(
+              clubs
+            )
+          ),
+      },
+    };
+  } catch (error) {
+    console.error(
+      'Fixtures SSR error:',
+      error
+    );
+
+    return {
+      props: {
+        initialLeagues: [],
+        initialClubs: [],
+      },
+    };
+  }
+}
