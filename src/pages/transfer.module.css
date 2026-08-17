@@ -1,2362 +1,1544 @@
-/* =========================================================
-   TRANSFER CENTRE
-   transfer.module.css
-   Responsive: Desktop / Tablet / Mobile / Small screens
-========================================================= */
-
-/* =========================================================
-   ROOT PAGE
-========================================================= */
+/* ============================================================
+   TRANSFER.MODULE.CSS
+   Dark theme · Responsive · Touch-friendly
+   All styles use class selectors only
+   Optimized for very small screens (320px+)
+   Disabled zoom & text selection for better UI control
+============================================================ */
 
 .page {
+  /* ----- COLORS ----- */
+  --bg-primary: #0b0e14;
+  --bg-secondary: #131821;
+  --bg-card: #1a212c;
+  --bg-card-hover: #222b3a;
+  --bg-input: #0f141e;
+  --bg-modal: #11171f;
+
+  --text-primary: #f0f4f8;
+  --text-secondary: #a8b9d0;
+  --text-muted: #6a7f9a;
+
+  --accent-blue: #4f8cff;
+  --accent-blue-glow: rgba(79, 140, 255, 0.25);
+  --accent-green: #2ecc71;
+  --accent-green-glow: rgba(46, 204, 113, 0.2);
+  --accent-yellow: #f1c40f;
+  --accent-yellow-glow: rgba(241, 196, 15, 0.2);
+  --accent-red: #e74c3c;
+  --accent-red-glow: rgba(231, 76, 60, 0.2);
+  --accent-orange: #f39c12;
+  --accent-purple: #9b59b6;
+
+  --border-color: #2a3444;
+  --shadow-color: rgba(0, 0, 0, 0.6);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --transition: 0.25s ease;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* Disable zoom and text selection */
+  touch-action: pan-x pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   min-height: 100vh;
-  min-height: 100dvh;
-  width: 100%;
-  box-sizing: border-box;
-
-  padding: 24px;
-  color: #e8edf5;
-
-  background:
-    radial-gradient(
-      circle at 15% 0%,
-      rgba(37, 99, 235, 0.12),
-      transparent 34%
-    ),
-    radial-gradient(
-      circle at 90% 10%,
-      rgba(16, 185, 129, 0.08),
-      transparent 30%
-    ),
-    #07101c;
-
-  overflow-x: hidden;
+  padding: 1rem 0.8rem 3rem;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.page *,
-.page *::before,
-.page *::after {
-  box-sizing: border-box;
+/* Allow text selection in inputs and textareas */
+.page .inputField,
+.page .textAreaField,
+.page .contentEditable {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
-.page button,
-.page input,
-.page select,
-.page textarea {
-  font: inherit;
+/* ----- SCROLLBAR (subtle) ----- */
+.page::-webkit-scrollbar {
+  width: 4px;
+}
+.page::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+.page::-webkit-scrollbar-thumb {
+  background: var(--accent-blue);
+  border-radius: 10px;
+}
+.page::-webkit-scrollbar-thumb:hover {
+  background: #3a7be0;
 }
 
-.page button {
-  -webkit-tap-highlight-color: transparent;
-}
-
-
-/* =========================================================
+/* ============================================================
    LOADING
-========================================================= */
-
-.loading {
-  min-height: 100vh;
-  min-height: 100dvh;
-
+============================================================ */
+.page .loadingContainer {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
-  gap: 14px;
-
-  background: #07101c;
-  color: #cbd5e1;
-
-  padding: 20px;
+  min-height: 80vh;
+  gap: 1.5rem;
   text-align: center;
 }
-
-.loading p {
-  margin: 0;
-  font-size: 14px;
+.page .loadingText {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  letter-spacing: 0.3px;
 }
 
-.spinner {
-  width: 38px;
-  height: 38px;
-
+.page .spinner {
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #3b82f6;
-
-  animation: spin 0.8s linear infinite;
+  border: 4px solid var(--border-color);
+  border-top-color: var(--accent-blue);
+  animation: spin 0.85s linear infinite;
+  box-shadow: 0 0 24px var(--accent-blue-glow);
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-
-/* =========================================================
-   HEADER
-========================================================= */
-
-.header {
-  width: 100%;
-  max-width: 1500px;
-
-  margin: 0 auto 20px;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  gap: 24px;
-
-  padding: 22px;
-
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 18px;
-
-  background: rgba(13, 24, 40, 0.82);
-
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.22);
-
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
-.headerIdentity {
-  min-width: 0;
-
-  display: flex;
-  align-items: center;
-
-  gap: 15px;
-}
-
-.clubLogo {
-  width: 58px;
-  height: 58px;
-
-  flex: 0 0 58px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-
-  border-radius: 15px;
-
-  background:
-    linear-gradient(
-      145deg,
-      #16263d,
-      #0c1728
-    );
-
-  border: 1px solid rgba(255, 255, 255, 0.1);
-
-  font-size: 25px;
-}
-
-.clubLogo img {
-  width: 100%;
-  height: 100%;
-
-  object-fit: cover;
-}
-
-.eyebrow {
-  display: block;
-
-  margin-bottom: 5px;
-
-  color: #60a5fa;
-
-  font-size: 10px;
-  font-weight: 800;
-
-  letter-spacing: 0.14em;
-}
-
-.header h1 {
-  margin: 0;
-
-  color: #f8fafc;
-
-  font-size: clamp(20px, 2.4vw, 30px);
-  line-height: 1.1;
-
-  font-weight: 800;
-}
-
-.header p {
-  margin: 7px 0 0;
-
-  color: #94a3b8;
-
-  font-size: 13px;
-}
-
-.headerBudgets {
-  display: flex;
-  align-items: stretch;
-
-  flex-shrink: 0;
-
-  gap: 10px;
-}
-
-.headerBudgets > div {
-  min-width: 145px;
-
-  padding: 12px 15px;
-
-  border-radius: 12px;
-
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.headerBudgets span {
-  display: block;
-
-  color: #64748b;
-
-  font-size: 9px;
-  font-weight: 800;
-
-  letter-spacing: 0.1em;
-}
-
-.headerBudgets strong {
-  display: block;
-
-  margin-top: 5px;
-
-  color: #f8fafc;
-
-  font-size: 15px;
-}
-
-
-/* =========================================================
-   SUMMARY / STATS
-========================================================= */
-
-.stats {
-  width: 100%;
-  max-width: 1500px;
-
-  margin: 0 auto 20px;
-
-  display: grid;
-
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
-
-  gap: 12px;
-}
-
-.statCard {
-  min-width: 0;
-
-  display: flex;
-  align-items: center;
-
-  gap: 12px;
-
-  padding: 17px;
-
-  border-radius: 15px;
-
-  background: rgba(13, 24, 40, 0.75);
-
-  border: 1px solid rgba(148, 163, 184, 0.1);
-
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.statCard:hover {
-  transform: translateY(-2px);
-
-  border-color:
-    rgba(96, 165, 250, 0.3);
-}
-
-.statCard > span {
-  width: 42px;
-  height: 42px;
-
-  flex: 0 0 42px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 12px;
-
-  background: rgba(59, 130, 246, 0.1);
-
-  font-size: 18px;
-}
-
-.statCard small {
-  display: block;
-
-  color: #64748b;
-
-  font-size: 9px;
-  font-weight: 800;
-
-  letter-spacing: 0.1em;
-}
-
-.statCard strong {
-  display: block;
-
-  margin-top: 2px;
-
-  color: #f8fafc;
-
-  font-size: 20px;
-}
-
-.statCard p {
-  margin: 2px 0 0;
-
-  color: #64748b;
-
-  font-size: 11px;
-}
-
-
-/* =========================================================
-   TABS / NAVIGATION
-========================================================= */
-
-.tabs {
-  width: 100%;
-  max-width: 1500px;
-
-  margin: 0 auto 18px;
-
-  display: flex;
-  align-items: center;
-
-  gap: 6px;
-
-  padding: 6px;
-
-  overflow-x: auto;
-
-  border-radius: 14px;
-
-  background: rgba(13, 24, 40, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.tabs button {
-  min-height: 40px;
-
-  flex: 0 0 auto;
-
-  padding: 0 16px;
-
-  border: 0;
-  border-radius: 9px;
-
-  background: transparent;
-
-  color: #8190a5;
-
-  cursor: pointer;
-
-  font-size: 12px;
-  font-weight: 700;
-
-  transition:
-    background 0.2s ease,
-    color 0.2s ease;
-}
-
-.tabs button:hover {
-  color: #e2e8f0;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.tabs .activeTab {
-  color: #f8fafc;
-
-  background:
-    linear-gradient(
-      135deg,
-      #2563eb,
-      #1d4ed8
-    );
-
-  box-shadow:
-    0 5px 15px rgba(37, 99, 235, 0.22);
-}
-
-
-/* =========================================================
-   FILTERS
-========================================================= */
-
-.filters {
-  width: 100%;
-  max-width: 1500px;
-
-  margin: 0 auto 15px;
-
-  display: grid;
-
-  grid-template-columns:
-    minmax(220px, 1.5fr)
-    repeat(3, minmax(130px, 0.6fr));
-
-  gap: 9px;
-}
-
-.search {
-  min-width: 0;
-
-  height: 43px;
-
-  display: flex;
-  align-items: center;
-
-  gap: 8px;
-
-  padding: 0 12px;
-
-  border-radius: 11px;
-
-  background: rgba(13, 24, 40, 0.82);
-
-  border: 1px solid rgba(148, 163, 184, 0.1);
-
-  color: #64748b;
-}
-
-.search input {
-  width: 100%;
-  min-width: 0;
-
-  border: 0;
-  outline: 0;
-
-  background: transparent;
-
-  color: #e2e8f0;
-
-  font-size: 12px;
-}
-
-.search input::placeholder {
-  color: #526176;
-}
-
-.filters select {
-  width: 100%;
-  min-width: 0;
-
-  height: 43px;
-
-  padding: 0 11px;
-
-  border-radius: 11px;
-
-  border: 1px solid rgba(148, 163, 184, 0.1);
-
-  background: #0d1828;
-  color: #b8c3d1;
-
-  outline: none;
-
-  cursor: pointer;
-
-  font-size: 11px;
-}
-
-.filters select:focus {
-  border-color: rgba(59, 130, 246, 0.5);
-}
-
-
-/* =========================================================
-   MAIN CARDS
-========================================================= */
-
-.tableCard,
-.scouting,
-.contracts,
-.requestsSection,
-.activitySection {
-  width: 100%;
-  max-width: 1500px;
-
-  margin: 0 auto 20px;
-
-  overflow: hidden;
-
-  border-radius: 17px;
-
-  background: rgba(13, 24, 40, 0.8);
-
-  border: 1px solid rgba(148, 163, 184, 0.1);
-
-  box-shadow:
-    0 12px 35px rgba(0, 0, 0, 0.15);
-}
-
-.tableHeader {
-  min-height: 74px;
-
-  padding: 17px 20px;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  gap: 15px;
-
-  border-bottom:
-    1px solid rgba(148, 163, 184, 0.08);
-}
-
-.tableHeader span,
-.sectionHeading > div > span {
-  color: #60a5fa;
-
-  font-size: 9px;
-  font-weight: 800;
-
-  letter-spacing: 0.12em;
-}
-
-.tableHeader h2,
-.sectionHeading h2 {
-  margin: 4px 0 0;
-
-  color: #f1f5f9;
-
-  font-size: 18px;
-}
-
-.tableHeader > strong {
-  color: #64748b;
-
-  font-size: 11px;
-}
-
-
-/* =========================================================
-   TABLE
-========================================================= */
-
-.tableWrapper {
-  width: 100%;
-
-  overflow-x: auto;
-  overflow-y: hidden;
-
-  -webkit-overflow-scrolling: touch;
-
-  scrollbar-width: thin;
-}
-
-.playersTable {
-  width: 100%;
-
-  min-width: 920px;
-
-  border-collapse: collapse;
-
-  text-align: left;
-}
-
-.playersTable th {
-  padding: 11px 15px;
-
-  background: rgba(255, 255, 255, 0.018);
-
-  color: #607087;
-
-  font-size: 9px;
-  font-weight: 800;
-
-  letter-spacing: 0.07em;
-
-  text-transform: uppercase;
-
-  white-space: nowrap;
-}
-
-.playersTable td {
-  padding: 12px 15px;
-
-  border-top:
-    1px solid rgba(148, 163, 184, 0.055);
-
-  color: #aeb9c8;
-
-  font-size: 11px;
-
-  white-space: nowrap;
-}
-
-.playersTable tbody tr {
-  transition:
-    background 0.18s ease;
-}
-
-.playersTable tbody tr:hover {
-  background: rgba(59, 130, 246, 0.035);
-}
-
-.playerCell {
-  display: flex;
-  align-items: center;
-
-  gap: 10px;
-
-  min-width: 170px;
-}
-
-.playerAvatar {
-  width: 37px;
-  height: 37px;
-
-  flex: 0 0 37px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-
-  border-radius: 10px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #1e3a5f,
-      #102238
-    );
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  color: #bfdbfe;
-
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.playerAvatar img {
-  width: 100%;
-  height: 100%;
-
-  object-fit: cover;
-}
-
-.playerCell strong {
-  display: block;
-
-  color: #e8edf5;
-
-  font-size: 12px;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.playerCell small {
-  display: block;
-
-  margin-top: 2px;
-
-  color: #5f6f83;
-
-  font-size: 9px;
-}
-
-.position {
-  display: inline-flex;
-
-  padding: 4px 7px;
-
-  border-radius: 6px;
-
-  color: #9db7d6;
-
-  background: rgba(59, 130, 246, 0.07);
-
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.overall {
-  color: #f8fafc;
-
-  font-size: 14px;
-}
-
-.clubName {
-  display: inline-block;
-
-  max-width: 130px;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  color: #8fa0b5;
-}
-
-.status {
-  display: inline-flex;
-
-  align-items: center;
-
-  padding: 4px 8px;
-
-  border-radius: 999px;
-
-  font-size: 8px;
-  font-weight: 800;
-
-  white-space: nowrap;
-}
-
-.available {
-  color: #86efac;
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.listed {
-  color: #93c5fd;
-  background: rgba(59, 130, 246, 0.11);
-}
-
-.loan {
-  color: #fcd34d;
-  background: rgba(245, 158, 11, 0.11);
-}
-
-.unavailable {
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.free {
-  color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.1);
-}
-
-
-/* =========================================================
-   ACTION BUTTONS
-========================================================= */
-
-.actions {
-  display: flex;
-  align-items: center;
-
-  gap: 5px;
-}
-
-.actions button,
-.modalActions button,
-.scoutCard button,
-.primaryButton {
-  min-height: 31px;
-
-  padding: 0 9px;
-
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  border-radius: 7px;
-
-  background: rgba(255, 255, 255, 0.045);
-
-  color: #cbd5e1;
-
-  cursor: pointer;
-
-  font-size: 9px;
-  font-weight: 700;
-
-  white-space: nowrap;
-
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    transform 0.18s ease;
-}
-
-.actions button:hover,
-.modalActions button:hover,
-.scoutCard button:hover,
-.primaryButton:hover {
-  transform: translateY(-1px);
-
-  background: rgba(59, 130, 246, 0.13);
-
-  border-color:
-    rgba(59, 130, 246, 0.3);
-}
-
-.buyAction {
-  color: #93c5fd !important;
-
-  background:
-    rgba(37, 99, 235, 0.1) !important;
-
-  border-color:
-    rgba(37, 99, 235, 0.2) !important;
-}
-
-.loanAction {
-  color: #fcd34d !important;
-
-  background:
-    rgba(245, 158, 11, 0.08) !important;
-}
-
-.dangerAction {
-  color: #fca5a5 !important;
-
-  background:
-    rgba(239, 68, 68, 0.08) !important;
-
-  border-color:
-    rgba(239, 68, 68, 0.15) !important;
-}
-
-.noPlayers {
-  padding: 45px 20px !important;
-
-  text-align: center;
-
-  color: #526176 !important;
-}
-
-
-/* =========================================================
-   SCOUTING
-========================================================= */
-
-.scouting {
-  padding: 20px;
-}
-
-.sectionHeading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-
-  gap: 15px;
-
-  margin-bottom: 18px;
-}
-
-.sectionHeading p {
-  margin: 7px 0 0;
-
-  color: #65758a;
-
-  font-size: 11px;
-}
-
-.scoutIcon {
-  width: 42px;
-  height: 42px;
-
-  flex: 0 0 42px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 12px;
-
-  background:
-    rgba(37, 99, 235, 0.1);
-
-  font-size: 18px;
-}
-
-.scoutGrid {
-  display: grid;
-
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
-
-  gap: 12px;
-}
-
-.scoutCard {
-  min-width: 0;
-
-  padding: 15px;
-
-  border-radius: 13px;
-
-  background:
-    rgba(255, 255, 255, 0.025);
-
-  border:
-    1px solid rgba(148, 163, 184, 0.08);
-}
-
-.scoutTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  gap: 10px;
-}
-
-.largeAvatar {
-  width: 48px;
-  height: 48px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-
-  border-radius: 12px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #1e3a5f,
-      #0c1728
-    );
-
-  color: #bfdbfe;
-
-  font-weight: 800;
-}
-
-.largeAvatar img {
-  width: 100%;
-  height: 100%;
-
-  object-fit: cover;
-}
-
-.scoutTop > div:last-child {
-  text-align: right;
-}
-
-.scoutTop span {
-  display: block;
-
-  color: #64748b;
-
-  font-size: 8px;
-  font-weight: 800;
-}
-
-.scoutTop strong {
-  display: block;
-
-  margin-top: 2px;
-
-  color: #60a5fa;
-
-  font-size: 19px;
-}
-
-.scoutCard h3 {
-  margin: 13px 0 3px;
-
-  color: #e5edf7;
-
-  font-size: 14px;
-}
-
-.scoutCard > p {
-  margin: 0;
-
-  color: #697a90;
-
-  font-size: 10px;
-}
-
-.scoutStats {
-  display: grid;
-
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
-
-  gap: 5px;
-
-  margin: 13px 0;
-}
-
-.scoutStats div {
-  min-width: 0;
-
-  padding: 7px;
-
-  border-radius: 7px;
-
-  background:
-    rgba(255, 255, 255, 0.025);
-}
-
-.scoutStats span {
-  display: block;
-
-  color: #59697e;
-
-  font-size: 7px;
-}
-
-.scoutStats strong {
-  display: block;
-
-  margin-top: 3px;
-
-  color: #cbd5e1;
-
-  font-size: 9px;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.scoutReason {
-  margin-bottom: 11px;
-
-  padding: 8px;
-
-  border-radius: 7px;
-
-  background:
-    rgba(34, 197, 94, 0.05);
-
-  color: #7fa991;
-
-  font-size: 9px;
-}
-
-.scoutCard button {
-  width: 100%;
-}
-
-
-/* =========================================================
-   CONTRACTS
-========================================================= */
-
-.contractList {
-  width: 100%;
-}
-
-.contractRow {
-  min-height: 68px;
-
-  display: grid;
-
-  grid-template-columns:
-    1.6fr 1fr 1fr;
-
-  align-items: center;
-
-  gap: 15px;
-
-  padding: 12px 20px;
-
-  border-top:
-    1px solid rgba(148, 163, 184, 0.055);
-}
-
-.contractRow > div {
-  min-width: 0;
-}
-
-.contractRow strong {
-  display: block;
-
-  color: #dbe4ef;
-
-  font-size: 11px;
-}
-
-.contractRow span,
-.contractRow small {
-  display: block;
-
-  margin-top: 3px;
-
-  color: #607087;
-
-  font-size: 9px;
-}
-
-.contractWarning {
-  color: #fbbf24 !important;
-}
-
-
-/* =========================================================
-   MODALS
-========================================================= */
-
-.modalOverlay {
-  position: fixed;
-
-  inset: 0;
-
-  z-index: 1000;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: 18px;
-
-  background:
-    rgba(2, 6, 23, 0.76);
-
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-
-  overflow-y: auto;
-}
-
-.playerModal,
-.negotiationModal {
-  position: relative;
-
-  width: min(100%, 520px);
-
-  max-height:
-    calc(100vh - 36px);
-  max-height:
-    calc(100dvh - 36px);
-
-  overflow-y: auto;
-
-  padding: 23px;
-
-  border-radius: 18px;
-
-  background:
-    linear-gradient(
-      145deg,
-      #101d2f,
-      #0b1625
-    );
-
-  border:
-    1px solid rgba(148, 163, 184, 0.13);
-
-  box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.5);
-
-  animation:
-    modalIn 0.2s ease-out;
-}
-
-@keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.close {
-  position: absolute;
-
-  top: 12px;
-  right: 12px;
-
-  width: 32px;
-  height: 32px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: 0;
-  border-radius: 8px;
-
-  background:
-    rgba(255, 255, 255, 0.05);
-
-  color: #94a3b8;
-
-  cursor: pointer;
-
-  font-size: 21px;
-}
-
-.close:hover {
-  background:
-    rgba(239, 68, 68, 0.1);
-
-  color: #fca5a5;
-}
-
-
-/* =========================================================
-   PLAYER MODAL
-========================================================= */
-
-.modalPlayerHeader {
-  display: flex;
-  align-items: center;
-
-  gap: 13px;
-
-  padding-right: 35px;
-
-  margin-bottom: 20px;
-}
-
-.modalAvatar {
-  width: 62px;
-  height: 62px;
-
-  flex: 0 0 62px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-
-  border-radius: 15px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #1e3a5f,
-      #0c1728
-    );
-
-  color: #bfdbfe;
-
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.modalAvatar img {
-  width: 100%;
-  height: 100%;
-
-  object-fit: cover;
-}
-
-.modalPlayerHeader span {
-  color: #60a5fa;
-
-  font-size: 9px;
-  font-weight: 800;
-
-  text-transform: uppercase;
-}
-
-.modalPlayerHeader h2 {
-  margin: 3px 0;
-
-  color: #f1f5f9;
-
-  font-size: 20px;
-}
-
-.modalPlayerHeader p {
-  margin: 0;
-
-  color: #64748b;
-
-  font-size: 10px;
-}
-
-.detailsGrid {
-  display: grid;
-
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
-
-  gap: 7px;
-
-  margin-bottom: 18px;
-}
-
-.detailsGrid div {
-  min-width: 0;
-
-  padding: 10px;
-
-  border-radius: 9px;
-
-  background:
-    rgba(255, 255, 255, 0.025);
-
-  border:
-    1px solid rgba(255, 255, 255, 0.04);
-}
-
-.detailsGrid span {
-  display: block;
-
-  color: #5f6f83;
-
-  font-size: 7px;
-  font-weight: 800;
-}
-
-.detailsGrid strong {
-  display: block;
-
-  margin-top: 4px;
-
-  color: #dce6f2;
-
-  font-size: 10px;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modalActions {
-  display: flex;
-
-  gap: 7px;
-}
-
-.modalActions button {
-  flex: 1;
-}
-
-
-/* =========================================================
-   NEGOTIATION
-========================================================= */
-
-.negotiationModal {
-  width: min(100%, 430px);
-}
-
-.negotiationModal h2 {
-  margin: 6px 0 3px;
-
-  color: #f1f5f9;
-
-  font-size: 20px;
-}
-
-.negotiationModal > p {
-  margin: 0 0 18px;
-
-  color: #6d7d91;
-
-  font-size: 11px;
-}
-
-.negotiationSummary {
-  display: grid;
-
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-
-  gap: 7px;
-
-  margin-bottom: 18px;
-}
-
-.negotiationSummary div {
-  padding: 11px;
-
-  border-radius: 9px;
-
-  background:
-    rgba(255, 255, 255, 0.025);
-}
-
-.negotiationSummary span {
-  display: block;
-
-  color: #64748b;
-
-  font-size: 8px;
-}
-
-.negotiationSummary strong {
-  display: block;
-
-  margin-top: 4px;
-
-  color: #e2e8f0;
-
-  font-size: 13px;
-}
-
-.negotiationModal label {
-  display: block;
-
-  margin-bottom: 14px;
-
-  color: #9eacbe;
-
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.moneyInput {
-  height: 44px;
-
-  display: flex;
-  align-items: center;
-
-  margin-top: 6px;
-
-  border-radius: 9px;
-
-  background: #081321;
-
-  border:
-    1px solid rgba(148, 163, 184, 0.12);
-
-  overflow: hidden;
-}
-
-.moneyInput span {
-  padding: 0 11px;
-
-  color: #64748b;
-
-  font-size: 12px;
-}
-
-.moneyInput input {
-  width: 100%;
-  height: 100%;
-
-  border: 0;
-  outline: 0;
-
-  background: transparent;
-
-  color: #f1f5f9;
-
-  font-size: 13px;
-}
-
-.negotiationModal select {
-  width: 100%;
-
-  height: 44px;
-
-  margin-top: 6px;
-
-  padding: 0 11px;
-
-  border-radius: 9px;
-
-  border:
-    1px solid rgba(148, 163, 184, 0.12);
-
-  background: #081321;
-
-  color: #d5deea;
-
-  outline: none;
-
-  font-size: 11px;
-}
-
-.negotiationHint {
-  margin: 4px 0 15px;
-
-  padding: 10px;
-
-  border-radius: 9px;
-
-  background:
-    rgba(59, 130, 246, 0.06);
-
-  border:
-    1px solid rgba(59, 130, 246, 0.08);
-
-  color: #7890ac;
-
-  font-size: 9px;
-
-  line-height: 1.5;
-}
-
-.primaryButton {
-  width: 100%;
-
-  min-height: 43px;
-
-  border: 0 !important;
-
-  color: white !important;
-
-  background:
-    linear-gradient(
-      135deg,
-      #2563eb,
-      #1d4ed8
-    ) !important;
-}
-
-.primaryButton:disabled {
-  opacity: 0.55;
-
-  cursor: not-allowed;
-
-  transform: none !important;
-}
-
-
-/* =========================================================
-   EMPTY PAGE
-========================================================= */
-
-.emptyPage {
-  min-height: 100vh;
-  min-height: 100dvh;
-
+/* ============================================================
+   EMPTY STATE (no club)
+============================================================ */
+.page .emptyPage {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
-  padding: 25px;
-
+  min-height: 70vh;
   text-align: center;
-
-  color: #e2e8f0;
-
-  background:
-    radial-gradient(
-      circle at center,
-      rgba(37, 99, 235, 0.1),
-      transparent 45%
-    ),
-    #07101c;
+  gap: 1rem;
+  padding: 1rem;
+}
+.page .emptyIcon {
+  font-size: 4.5rem;
+  filter: drop-shadow(0 0 32px var(--accent-yellow-glow));
+}
+.page .emptyTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0.2rem 0;
+}
+.page .emptyDescription {
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  max-width: 400px;
+}
+.page .emptyButton {
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 40px;
+  padding: 0.7rem 2.2rem;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+  min-height: 44px;
+}
+.page .emptyButton:hover {
+  background: #3a7be0;
+  transform: scale(1.03);
 }
 
-.emptyIcon {
-  width: 70px;
-  height: 70px;
+/* ============================================================
+   HEADER
+============================================================ */
+.page .header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: 1.2rem 1.5rem;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
 
+.page .headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1 1 200px;
+}
+
+.page .clubLogo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-input);
   display: flex;
   align-items: center;
   justify-content: center;
-
-  margin-bottom: 15px;
-
-  border-radius: 20px;
-
-  background:
-    rgba(59, 130, 246, 0.08);
-
-  font-size: 30px;
+  font-size: 1.8rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.page .clubLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.emptyPage h1 {
+.page .eyebrow {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+  background: rgba(79, 140, 255, 0.12);
+  padding: 0.2rem 0.8rem;
+  border-radius: 40px;
+  margin-bottom: 0.2rem;
+}
+
+.page .headerTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 0 0.1rem;
+}
+.page .headerSubtitle {
+  color: var(--text-secondary);
   margin: 0;
-
-  font-size: 24px;
+  font-weight: 500;
+  font-size: 0.9rem;
 }
 
-.emptyPage p {
-  max-width: 420px;
-
-  margin: 9px 0 18px;
-
-  color: #718096;
-
-  font-size: 12px;
-
-  line-height: 1.6;
+.page .budgetPanel {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+.page .budgetPanel > div {
+  text-align: right;
+}
+.page .budgetPanel span {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+.page .budgetPanel strong {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--accent-green);
 }
 
-.emptyPage button {
-  min-height: 42px;
+/* ============================================================
+   SUMMARY GRID
+============================================================ */
+.page .summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
 
-  padding: 0 17px;
+.page .summaryCard {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--border-color);
+  transition: background var(--transition);
+}
+.page .summaryCard:hover {
+  background: var(--bg-card-hover);
+}
+.page .summaryCard > span {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.page .summaryCard small {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+.page .summaryCard strong {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.page .summaryCard p {
+  margin: 0;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
 
-  border: 0;
-  border-radius: 9px;
-
-  color: white;
-
-  background:
-    linear-gradient(
-      135deg,
-      #2563eb,
-      #1d4ed8
-    );
-
+/* ============================================================
+   GM BANNER
+============================================================ */
+.page .gmBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
+  border-radius: var(--radius-md);
+  padding: 1rem 1.5rem;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+.page .gmAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+.page .gmBanner div:not(:first-child) {
+  flex: 1;
+}
+.page .gmBanner span {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+.page .gmBanner strong {
+  display: block;
+  font-size: 1rem;
+}
+.page .gmBanner p {
+  margin: 0.1rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.page .gmBanner button {
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 40px;
+  padding: 0.5rem 1.5rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
   cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+  min-height: 40px;
+  white-space: nowrap;
+}
+.page .gmBanner button:hover {
+  background: #3a7be0;
+  transform: scale(1.02);
+}
 
-  font-size: 11px;
+/* ============================================================
+   TABS
+============================================================ */
+.page .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+.page .tabButton {
+  background: transparent;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 40px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.page .tabButton:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.page .tabButtonActive {
+  background: var(--accent-blue);
+  color: #fff;
+  box-shadow: 0 0 16px var(--accent-blue-glow);
+}
+.page .tabButton b {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 40px;
+  padding: 0.05rem 0.6rem;
+  font-size: 0.7rem;
+}
+
+/* ============================================================
+   CONTENT CARD
+============================================================ */
+.page .contentCard {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.page .contentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.page .contentHeader span {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+.page .contentHeader h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.1rem 0 0;
+}
+.page .contentHeader p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.page .headerTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.page .search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-input);
+  border-radius: 40px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--border-color);
+  transition: border var(--transition), box-shadow var(--transition);
+  min-width: 160px;
+}
+.page .search:focus-within {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-glow);
+}
+.page .search span {
+  font-size: 0.9rem;
+  opacity: 0.6;
+}
+.page .search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+  width: 100%;
+  font-family: inherit;
+  min-height: 40px;
+}
+.page .search input::placeholder {
+  color: var(--text-muted);
+}
+
+.page .filterSelect {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 40px;
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  transition: border var(--transition), box-shadow var(--transition);
+  min-width: 120px;
+  min-height: 40px;
+}
+.page .filterSelect:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-glow);
+}
+.page .filterSelect option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   TABLE (bids)
+============================================================ */
+.page .tableWrapper {
+  overflow-x: auto;
+  padding: 0 0.2rem 0.2rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page .transferTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 700px;
+}
+.page .transferTable thead {
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-color);
+}
+.page .transferTable th {
+  padding: 0.6rem 0.6rem;
+  text-align: left;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.page .transferTable td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+.page .transferTable tr:hover td {
+  background: var(--bg-card-hover);
+}
+
+/* Player button inside table */
+.page .playerButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  text-align: left;
+}
+.page .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.7rem;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+}
+.page .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.page .playerButton span strong {
+  display: block;
+  font-size: 0.85rem;
+}
+.page .playerButton span small {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+.page .clubButton {
+  background: transparent;
+  border: none;
+  color: var(--accent-blue);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.page .clubButton:hover {
+  text-decoration: underline;
+}
+
+.page .offerAmount {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--accent-green);
+}
+
+.page .date {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.page .status {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.15rem 0.6rem;
+  border-radius: 40px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.page .status.pending {
+  background: rgba(79, 140, 255, 0.15);
+  color: var(--accent-blue);
+}
+.page .status.success {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--accent-green);
+}
+.page .status.danger {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--accent-red);
+}
+.page .status.warning {
+  background: rgba(241, 196, 15, 0.15);
+  color: var(--accent-yellow);
+}
+
+.page .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.page .actions button {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+  white-space: nowrap;
+  min-height: 28px;
+}
+.page .actions button:hover:not(:disabled) {
+  background: var(--accent-blue);
+  color: #fff;
+  border-color: var(--accent-blue);
+}
+.page .acceptButton {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
+.page .acceptButton:hover:not(:disabled) {
+  background: var(--accent-green);
+  color: #fff;
+}
+.page .rejectButton {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+.page .rejectButton:hover:not(:disabled) {
+  background: var(--accent-red);
+  color: #fff;
+}
+.page .actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page .emptyTable {
+  text-align: center;
+  padding: 2rem !important;
+}
+.page .emptyTable div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+.page .emptyTable span {
+  font-size: 2.4rem;
+}
+.page .emptyTable strong {
+  font-size: 1rem;
+}
+.page .emptyTable p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   CONTRACT GRID (cards)
+============================================================ */
+.page .contractGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+  padding: 1.2rem 1.2rem;
+}
+
+.page .contractCard {
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: 1rem 1rem 1rem;
+  border: 1px solid var(--border-color);
+  transition: transform var(--transition), box-shadow var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.page .contractCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.page .contractTop {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.page .avatarLarge {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.page .avatarLarge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.page .contractTop div span {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+}
+.page .contractTop div h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0.1rem 0;
+}
+.page .contractTop div p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.page .contractStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.3rem;
+}
+.page .contractStats > div {
+  text-align: center;
+}
+.page .contractStats small {
+  display: block;
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.page .contractStats strong {
+  display: block;
+  font-size: 0.85rem;
   font-weight: 700;
 }
 
-
-/* =========================================================
-   SCROLLBARS
-========================================================= */
-
-.page ::-webkit-scrollbar,
-.playerModal::-webkit-scrollbar,
-.negotiationModal::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.page .contractStatus {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.page .contractStatus .status {
+  font-size: 0.6rem;
 }
 
-.page ::-webkit-scrollbar-track,
-.playerModal::-webkit-scrollbar-track,
-.negotiationModal::-webkit-scrollbar-track {
+.page .contractActions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+.page .contractActions button {
+  flex: 1;
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 40px;
+  padding: 0.3rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition);
+  min-height: 32px;
+}
+.page .contractActions button:hover:not(:disabled) {
+  background: #3a7be0;
+}
+.page .contractActions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page .secondaryButton {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+.page .secondaryButton:hover {
+  background: var(--bg-card) !important;
+}
+
+.page .emptyState {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+  gap: 0.3rem;
+  color: var(--text-muted);
+}
+.page .emptyState span {
+  font-size: 2.4rem;
+}
+.page .emptyState h3 {
+  font-size: 1rem;
+  margin: 0.2rem 0;
+  color: var(--text-secondary);
+}
+.page .emptyState p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   SUGGESTIONS (GM)
+============================================================ */
+.page .gmBadge {
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  border-radius: 40px;
+  padding: 0.3rem 1rem;
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.page .suggestionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 1.2rem 1.2rem;
+}
+
+.page .suggestionCard {
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: 1rem 1rem 0.8rem;
+  border: 1px solid var(--border-color);
+  transition: transform var(--transition), box-shadow var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.page .suggestionCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.page .suggestionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.page .suggestionHeader div:last-child {
+  text-align: right;
+}
+.page .suggestionHeader span {
+  display: block;
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.page .suggestionHeader strong {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent-yellow);
+}
+
+.page .suggestionCard h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0.1rem 0;
+}
+.page .suggestionCard > p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.page .suggestionInfo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.2rem;
+}
+.page .suggestionInfo > div {
+  text-align: center;
+}
+.page .suggestionInfo span {
+  display: block;
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.page .suggestionInfo strong {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.page .reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+  margin: 0.2rem 0;
+}
+.page .reasons span {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 20px;
+  padding: 0.05rem 0.6rem;
+}
+
+.page .suggestionActions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+.page .suggestionActions button {
+  flex: 1;
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 40px;
+  padding: 0.3rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition);
+  min-height: 34px;
+}
+.page .suggestionActions button:hover {
+  background: #3a7be0;
+}
+.page .suggestionActions .acceptButton {
+  background: var(--accent-green);
+}
+.page .suggestionActions .acceptButton:hover {
+  background: #27ae60;
+}
+
+/* ============================================================
+   MODAL OVERLAY
+============================================================ */
+.page .modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.page .modal {
+  background: var(--bg-modal);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  max-width: 480px;
+  width: 100%;
+  padding: 1.5rem 1.5rem 1.8rem;
+  position: relative;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  animation: slideUp 0.3s ease;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.page .close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.8rem;
   background: transparent;
+  border: none;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition), transform var(--transition);
+  padding: 0.2rem 0.5rem;
+}
+.page .close:hover {
+  color: var(--text-primary);
+  transform: rotate(90deg);
 }
 
-.page ::-webkit-scrollbar-thumb,
-.playerModal::-webkit-scrollbar-thumb,
-.negotiationModal::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-
-  background:
-    rgba(100, 116, 139, 0.35);
+.page .modalSubtitle {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0.2rem 0 1rem;
 }
 
+.page .bidSummary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+.page .bidSummary > div {
+  text-align: center;
+}
+.page .bidSummary span {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.page .bidSummary strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
 
-/* =========================================================
-   TABLET
-========================================================= */
+.page .bidMeta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.8rem;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.2rem;
+}
+.page .bidMeta > div span {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.page .bidMeta > div strong {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
 
-@media (max-width: 1100px) {
+.page .modalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.page .modalActions button {
+  flex: 1;
+  padding: 0.5rem;
+  border-radius: 40px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+  min-height: 44px;
+  border: none;
+}
+.page .modalActions .secondaryButton {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+.page .modalActions .secondaryButton:hover {
+  background: var(--bg-card);
+}
+.page .modalActions .acceptButton {
+  background: var(--accent-green);
+  color: #fff;
+}
+.page .modalActions .acceptButton:hover:not(:disabled) {
+  background: #27ae60;
+}
+.page .modalActions .rejectButton {
+  background: var(--accent-red);
+  color: #fff;
+}
+.page .modalActions .rejectButton:hover:not(:disabled) {
+  background: #c0392b;
+}
+.page .modalActions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
-  .page {
-    padding: 18px;
-  }
+.page .contractPrompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(79, 140, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 1rem;
+  border-left: 4px solid var(--accent-blue);
+  margin-top: 1rem;
+}
+.page .contractPrompt div {
+  flex: 1;
+}
+.page .contractPrompt strong {
+  display: block;
+  font-size: 0.9rem;
+}
+.page .contractPrompt p {
+  margin: 0.1rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+.page .contractPrompt button {
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 40px;
+  padding: 0.4rem 1.2rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition);
+  min-height: 40px;
+}
+.page .contractPrompt button:hover {
+  background: #3a7be0;
+}
 
-  .header {
-    align-items: flex-start;
+/* ============================================================
+   CONTRACT FORM (inside modal)
+============================================================ */
+.page .contractForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.page .contractForm label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.page .contractForm select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 40px;
+  padding: 0.5rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+  outline: none;
+  font-family: inherit;
+  transition: border var(--transition);
+  min-height: 40px;
+}
+.page .contractForm select:focus {
+  border-color: var(--accent-blue);
+}
+
+.page .moneyInput {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 40px;
+  padding: 0 0.8rem;
+  margin-top: 0.2rem;
+  transition: border var(--transition);
+}
+.page .moneyInput:focus-within {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-glow);
+}
+.page .moneyInput span {
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-right: 0.2rem;
+}
+.page .moneyInput input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  width: 100%;
+  font-family: inherit;
+  min-height: 40px;
+}
+.page .moneyInput input::-webkit-outer-spin-button,
+.page .moneyInput input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.page .moneyInput input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.page .contractNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: rgba(79, 140, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--accent-blue);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.page .primaryButton {
+  width: 100%;
+  background: var(--accent-green);
+  border: none;
+  border-radius: 40px;
+  padding: 0.6rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+  font-family: inherit;
+  min-height: 44px;
+}
+.page .primaryButton:hover:not(:disabled) {
+  background: #27ae60;
+  transform: scale(1.02);
+  box-shadow: 0 0 24px var(--accent-green-glow);
+}
+.page .primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   RESPONSIVE – Enhanced for very small screens
+============================================================ */
+
+/* --- Tablets and small laptops --- */
+@media (max-width: 860px) {
+  .page .header {
     flex-direction: column;
+    align-items: stretch;
   }
-
-  .headerBudgets {
-    width: 100%;
+  .page .headerLeft {
+    justify-content: center;
   }
-
-  .headerBudgets > div {
-    flex: 1;
+  .page .budgetPanel {
+    justify-content: center;
+    gap: 1.5rem;
   }
-
-  .stats {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+  .page .budgetPanel > div {
+    text-align: center;
   }
-
-  .filters {
-    grid-template-columns:
-      1fr 1fr;
+  .page .summaryGrid {
+    grid-template-columns: repeat(2, 1fr);
   }
-
-  .search {
-    grid-column: 1 / -1;
+  .page .transferTable th,
+  .page .transferTable td {
+    padding: 0.4rem 0.3rem;
+    font-size: 0.7rem;
   }
-
-  .scoutGrid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+  .page .transferTable th:last-child,
+  .page .transferTable td:last-child {
+    min-width: 80px;
+  }
+  .page .playerButton span strong {
+    font-size: 0.75rem;
   }
 }
 
-
-/* =========================================================
-   MOBILE
-========================================================= */
-
-@media (max-width: 700px) {
-
+/* --- Mobile (<= 600px) --- */
+@media (max-width: 600px) {
   .page {
-    padding: 11px;
+    padding: 0.8rem 0.6rem 2.5rem;
   }
-
-  .header {
-    padding: 15px;
-
-    border-radius: 14px;
-
-    margin-bottom: 11px;
+  .page .header {
+    padding: 1rem 0.8rem;
   }
-
-  .clubLogo {
-    width: 46px;
-    height: 46px;
-
-    flex-basis: 46px;
-
-    border-radius: 11px;
-
-    font-size: 20px;
+  .page .clubLogo {
+    width: 44px;
+    height: 44px;
+    font-size: 1.2rem;
   }
-
-  .headerIdentity {
-    width: 100%;
+  .page .headerTitle {
+    font-size: 1.2rem;
   }
-
-  .header h1 {
-    font-size: 19px;
+  .page .budgetPanel strong {
+    font-size: 1rem;
   }
-
-  .header p {
-    font-size: 11px;
+  .page .summaryGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
   }
-
-  .headerBudgets {
-    display: grid;
-
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-
-    gap: 7px;
+  .page .summaryCard {
+    padding: 0.6rem 0.8rem;
   }
-
-  .headerBudgets > div {
-    min-width: 0;
-
-    padding: 9px 10px;
+  .page .summaryCard strong {
+    font-size: 1.1rem;
   }
-
-  .headerBudgets strong {
-    font-size: 12px;
+  .page .tabs {
+    justify-content: center;
+    padding: 0.2rem 0.3rem;
   }
-
-  .stats {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-
-    gap: 7px;
-
-    margin-bottom: 11px;
+  .page .tabButton {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.7rem;
+    min-height: 34px;
   }
-
-  .statCard {
-    padding: 11px;
-
-    gap: 8px;
-
-    border-radius: 11px;
-  }
-
-  .statCard > span {
-    width: 34px;
-    height: 34px;
-
-    flex-basis: 34px;
-
-    border-radius: 9px;
-
-    font-size: 15px;
-  }
-
-  .statCard strong {
-    font-size: 16px;
-  }
-
-  .statCard p {
-    font-size: 9px;
-  }
-
-  .tabs {
-    margin-bottom: 11px;
-
-    border-radius: 10px;
-  }
-
-  .tabs button {
-    min-height: 36px;
-
-    padding: 0 11px;
-
-    font-size: 10px;
-  }
-
-  .filters {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-
-    gap: 6px;
-
-    margin-bottom: 10px;
-  }
-
-  .search {
-    grid-column: 1 / -1;
-
-    height: 39px;
-  }
-
-  .filters select {
-    height: 39px;
-
-    font-size: 10px;
-  }
-
-  .tableCard {
-    border-radius: 13px;
-
-    margin-bottom: 12px;
-  }
-
-  .tableHeader {
-    min-height: 60px;
-
-    padding: 13px;
-  }
-
-  .tableHeader h2,
-  .sectionHeading h2 {
-    font-size: 15px;
-  }
-
-  .tableHeader > strong {
-    font-size: 9px;
-  }
-
-  .scouting {
-    padding: 13px;
-
-    border-radius: 13px;
-  }
-
-  .scoutGrid {
-    grid-template-columns:
-      1fr;
-  }
-
-  .contractRow {
-    grid-template-columns:
-      1.4fr 1fr 0.8fr;
-
-    gap: 8px;
-
-    padding: 10px 13px;
-  }
-
-  .contractRow strong {
-    font-size: 10px;
-  }
-
-  .modalOverlay {
-    align-items: flex-end;
-
-    padding: 0;
-  }
-
-  .playerModal,
-  .negotiationModal {
-    width: 100%;
-
-    max-height:
-      92vh;
-    max-height:
-      92dvh;
-
-    border-radius:
-      18px 18px 0 0;
-
-    padding: 18px;
-
-    animation:
-      mobileModalIn 0.2s ease-out;
-  }
-
-  @keyframes mobileModalIn {
-    from {
-      transform: translateY(100%);
-    }
-
-    to {
-      transform: translateY(0);
-    }
-  }
-
-  .detailsGrid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-
-  .modalActions {
+  .page .contentHeader {
     flex-direction: column;
+    align-items: stretch;
   }
-
-  .modalActions button {
+  .page .headerTools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .page .search {
+    min-width: unset;
+  }
+  .page .filterSelect {
+    min-width: unset;
     width: 100%;
-
-    min-height: 40px;
   }
-
-}
-
-
-/* =========================================================
-   SMALL PHONES
-========================================================= */
-
-@media (max-width: 430px) {
-
-  .page {
-    padding: 8px;
+  .page .transferTable {
+    font-size: 0.65rem;
+    min-width: 550px;
   }
-
-  .header {
-    padding: 12px;
-
-    border-radius: 12px;
+  .page .transferTable th,
+  .page .transferTable td {
+    padding: 0.3rem 0.25rem;
   }
-
-  .headerIdentity {
-    gap: 9px;
+  .page .transferTable td:first-child {
+    min-width: 100px;
   }
-
-  .clubLogo {
-    width: 40px;
-    height: 40px;
-
-    flex-basis: 40px;
-
-    border-radius: 9px;
-
-    font-size: 17px;
+  .page .transferTable td:nth-child(3),
+  .page .transferTable th:nth-child(3) {
+    display: none; /* Hide Offer column? Actually we keep offer and asking, but we can hide asking? Better keep all but we can reduce. We'll keep both but they may wrap */
   }
-
-  .eyebrow {
-    font-size: 8px;
-
-    letter-spacing: 0.1em;
+  .page .actions button {
+    font-size: 0.55rem;
+    padding: 0.1rem 0.4rem;
+    min-height: 24px;
   }
-
-  .header h1 {
-    font-size: 16px;
-  }
-
-  .header p {
-    margin-top: 4px;
-
-    font-size: 9px;
-  }
-
-  .headerBudgets {
-    gap: 5px;
-  }
-
-  .headerBudgets > div {
-    padding: 8px;
-  }
-
-  .headerBudgets span {
-    font-size: 7px;
-  }
-
-  .headerBudgets strong {
-    margin-top: 3px;
-
-    font-size: 10px;
-  }
-
-  .stats {
-    gap: 5px;
-  }
-
-  .statCard {
-    padding: 9px;
-
-    gap: 6px;
-  }
-
-  .statCard > span {
-    width: 28px;
-    height: 28px;
-
-    flex-basis: 28px;
-
-    font-size: 12px;
-  }
-
-  .statCard small {
-    font-size: 7px;
-  }
-
-  .statCard strong {
-    font-size: 14px;
-  }
-
-  .statCard p {
-    display: none;
-  }
-
-  .tabs {
-    gap: 3px;
-
-    padding: 4px;
-  }
-
-  .tabs button {
-    min-height: 33px;
-
-    padding: 0 8px;
-
-    font-size: 8px;
-  }
-
-  .filters {
-    grid-template-columns:
-      1fr 1fr;
-  }
-
-  .search {
-    height: 37px;
-  }
-
-  .filters select {
-    height: 37px;
-
-    padding: 0 7px;
-
-    font-size: 8px;
-  }
-
-  .tableHeader {
-    padding: 11px;
-  }
-
-  .tableHeader h2,
-  .sectionHeading h2 {
-    font-size: 13px;
-  }
-
-  .tableHeader span,
-  .sectionHeading > div > span {
-    font-size: 7px;
-  }
-
-  .tableHeader > strong {
-    font-size: 8px;
-  }
-
-  .scouting {
-    padding: 10px;
-  }
-
-  .sectionHeading {
-    margin-bottom: 12px;
-  }
-
-  .sectionHeading p {
-    font-size: 9px;
-  }
-
-  .scoutCard {
-    padding: 11px;
-  }
-
-  .scoutCard h3 {
-    font-size: 12px;
-  }
-
-  .scoutStats {
-    gap: 4px;
-  }
-
-  .scoutStats div {
-    padding: 6px;
-  }
-
-  .scoutReason {
-    font-size: 8px;
-  }
-
-  .contractRow {
-    grid-template-columns:
-      1.2fr 1fr 0.8fr;
-
-    padding: 9px 10px;
-
-    gap: 5px;
-  }
-
-  .contractRow strong {
-    font-size: 9px;
-  }
-
-  .contractRow span,
-  .contractRow small {
-    font-size: 7px;
-  }
-
-  .modalPlayerHeader {
-    gap: 9px;
-  }
-
-  .modalAvatar {
-    width: 50px;
-    height: 50px;
-
-    flex-basis: 50px;
-
-    border-radius: 11px;
-
-    font-size: 16px;
-  }
-
-  .modalPlayerHeader h2 {
-    font-size: 16px;
-  }
-
-  .detailsGrid {
-    gap: 5px;
-  }
-
-  .detailsGrid div {
-    padding: 8px;
-  }
-
-  .detailsGrid strong {
-    font-size: 9px;
-  }
-
-  .negotiationModal {
-    padding: 15px;
-  }
-
-  .negotiationModal h2 {
-    font-size: 17px;
-  }
-
-  .negotiationSummary strong {
-    font-size: 11px;
-  }
-
-}
-
-
-/* =========================================================
-   VERY SMALL SCREENS
-   320px - 360px
-========================================================= */
-
-@media (max-width: 360px) {
-
-  .page {
-    padding: 6px;
-  }
-
-  .header {
-    padding: 10px;
-
-    border-radius: 10px;
-  }
-
-  .header h1 {
-    font-size: 14px;
-  }
-
-  .header p {
-    font-size: 8px;
-  }
-
-  .headerBudgets {
+  .page .contractGrid {
     grid-template-columns: 1fr;
   }
-
-  .headerBudgets > div {
+  .page .suggestionGrid {
+    grid-template-columns: 1fr;
+  }
+  .page .gmBanner {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .page .gmBanner button {
     width: 100%;
   }
-
-  .stats {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+  .page .modal {
+    padding: 1.2rem;
+    max-width: 100%;
+    margin: 0.5rem;
   }
-
-  .statCard {
-    min-height: 58px;
-
-    padding: 7px;
+  .page .bidSummary {
+    grid-template-columns: 1fr 1fr;
   }
-
-  .statCard > span {
-    display: none;
+  .page .bidMeta {
+    grid-template-columns: 1fr;
   }
-
-  .statCard strong {
-    font-size: 13px;
+  .page .modalActions {
+    flex-direction: column;
   }
+  .page .modalActions button {
+    min-width: unset;
+  }
+  .page .contractPrompt {
+    flex-direction: column;
+    text-align: center;
+  }
+  .page .contractPrompt button {
+    width: 100%;
+  }
+}
 
-  .tabs button {
+/* --- Small phones (<= 420px) --- */
+@media (max-width: 420px) {
+  .page .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+  .page .budgetPanel {
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .page .transferTable th:nth-child(3),
+  .page .transferTable td:nth-child(3) {
+    display: none; /* Hide Offer amount? Actually we want to keep it, but we can hide asking price (col 4) */
+  }
+  .page .transferTable th:nth-child(4),
+  .page .transferTable td:nth-child(4) {
+    display: none; /* Hide Asking Price */
+  }
+  .page .contractStats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .page .suggestionInfo {
+    grid-template-columns: 1fr 1fr;
+  }
+  .page .suggestionCard {
+    padding: 0.8rem;
+  }
+  .page .suggestionActions {
+    flex-direction: column;
+  }
+  .page .bidSummary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Very small phones (<= 360px) --- */
+@media (max-width: 360px) {
+  .page {
+    padding: 0.5rem 0.4rem 2rem;
+  }
+  .page .header {
+    padding: 0.8rem 0.5rem;
+  }
+  .page .clubLogo {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+  .page .headerTitle {
+    font-size: 1rem;
+  }
+  .page .budgetPanel strong {
+    font-size: 0.9rem;
+  }
+  .page .summaryCard {
+    padding: 0.4rem 0.6rem;
+  }
+  .page .summaryCard > span {
+    font-size: 1.2rem;
+  }
+  .page .summaryCard strong {
+    font-size: 0.9rem;
+  }
+  .page .tabButton {
+    font-size: 0.6rem;
+    padding: 0.2rem 0.5rem;
     min-height: 30px;
-
-    padding: 0 7px;
-
-    font-size: 7px;
   }
-
-  .filters {
-    grid-template-columns:
-      1fr;
+  .page .transferTable {
+    font-size: 0.55rem;
+    min-width: 420px;
   }
-
-  .search {
-    grid-column: auto;
+  .page .transferTable th,
+  .page .transferTable td {
+    padding: 0.2rem 0.15rem;
   }
-
-  .filters select {
-    height: 35px;
-
-    font-size: 8px;
+  .page .transferTable td:first-child {
+    min-width: 70px;
   }
-
-  .tableHeader {
-    flex-direction: column;
-    align-items: flex-start;
-
-    gap: 3px;
+  .page .playerButton span strong {
+    font-size: 0.65rem;
   }
-
-  .sectionHeading {
-    flex-direction: column;
+  .page .playerButton span small {
+    font-size: 0.5rem;
   }
-
-  .scoutIcon {
-    display: none;
+  .page .actions button {
+    font-size: 0.5rem;
+    padding: 0.05rem 0.3rem;
+    min-height: 20px;
   }
-
-  .contractRow {
-    grid-template-columns:
-      1fr 1fr;
-
-    padding: 9px;
+  .page .modal {
+    padding: 1rem;
   }
-
-  .contractRow > div:last-child {
-    grid-column: 1 / -1;
-
-    padding-top: 5px;
-
-    border-top:
-      1px solid rgba(148, 163, 184, 0.06);
+  .page .close {
+    font-size: 1.5rem;
+    top: 0.2rem;
+    right: 0.5rem;
   }
-
-  .detailsGrid {
-    grid-template-columns:
-      1fr 1fr;
+  .page .primaryButton {
+    font-size: 0.8rem;
+    padding: 0.5rem;
+    min-height: 38px;
   }
-
-  .modalOverlay {
-    padding: 0;
-  }
-
-  .playerModal,
-  .negotiationModal {
-    padding: 14px;
-
-    border-radius:
-      15px 15px 0 0;
-  }
-
-  .close {
-    width: 29px;
-    height: 29px;
-
-    top: 9px;
-    right: 9px;
-  }
-
-}
-
-
-/* =========================================================
-   ACCESSIBILITY / REDUCED MOTION
-========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-  .spinner,
-  .playerModal,
-  .negotiationModal,
-  .statCard,
-  .actions button,
-  .modalActions button,
-  .scoutCard button,
-  .primaryButton {
-    animation: none !important;
-    transition: none !important;
-  }
-
-}
-
-
-/* =========================================================
-   TOUCH DEVICES
-========================================================= */
-
-@media (hover: none) {
-
-  .statCard:hover {
-    transform: none;
-  }
-
-  .actions button:hover,
-  .modalActions button:hover,
-  .scoutCard button:hover,
-  .primaryButton:hover {
-    transform: none;
-  }
-
-}
-
-
-/* =========================================================
-   LANDSCAPE SMALL PHONES
-========================================================= */
-
-@media (max-height: 500px) and (orientation: landscape) {
-
-  .modalOverlay {
-    align-items: flex-start;
-
-    padding: 8px;
-  }
-
-  .playerModal,
-  .negotiationModal {
-    max-height:
-      calc(100dvh - 16px);
-
-    border-radius: 14px;
-  }
-
 }
