@@ -1,0 +1,2103 @@
+/* =========================================================
+   MATCH MODULE
+   Football Manager / Live 3D Match
+========================================================= */
+
+.page {
+  --pitch-green: #167a3a;
+  --pitch-dark: #0b5428;
+  --pitch-light: #219653;
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: hidden;
+  color: #f8fafc;
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(14, 165, 233, 0.16),
+      transparent 35%
+    ),
+    linear-gradient(
+      180deg,
+      #020617 0%,
+      #07111f 45%,
+      #020617 100%
+    );
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 16px;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(14, 165, 233, 0.12),
+      transparent 40%
+    ),
+    #020617;
+
+  color: #cbd5e1;
+}
+
+.spinner {
+  width: 46px;
+  height: 46px;
+
+  border-radius: 50%;
+
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #0ea5e9;
+
+  animation: spin 0.8s linear infinite;
+}
+
+.loading p {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   TOP MATCH BAR
+========================================================= */
+
+.matchHeader {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  width: 100%;
+
+  min-height: 72px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding:
+    12px
+    clamp(12px, 3vw, 36px);
+
+  background:
+    rgba(2, 6, 23, 0.88);
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.backButton {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  background: rgba(255, 255, 255, 0.05);
+
+  color: #e2e8f0;
+
+  min-height: 42px;
+  padding: 8px 14px;
+
+  border-radius: 10px;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.backButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.competitionInfo {
+  flex: 1;
+
+  min-width: 0;
+
+  text-align: center;
+}
+
+.competitionInfo span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.competitionInfo strong {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #f8fafc;
+
+  font-size: clamp(13px, 2vw, 16px);
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matchClock {
+  min-width: 100px;
+
+  text-align: right;
+}
+
+.matchClock span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.1em;
+}
+
+.matchClock strong {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #38bdf8;
+
+  font-size: 20px;
+
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   SCOREBOARD
+========================================================= */
+
+.scoreboard {
+  width: min(100%, 1000px);
+
+  margin: 18px auto 0;
+
+  padding: 18px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: clamp(12px, 4vw, 50px);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.025)
+    );
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.team {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 14px;
+}
+
+.homeTeam {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.awayTeam {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.teamLogo {
+  width: 58px;
+  height: 58px;
+
+  flex: 0 0 58px;
+
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.03)
+    );
+
+  border:
+    1px solid rgba(255, 255, 255, 0.12);
+
+  box-shadow:
+    0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.teamLogo img {
+  width: 80%;
+  height: 80%;
+
+  object-fit: contain;
+}
+
+.teamName {
+  min-width: 0;
+}
+
+.teamName span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.12em;
+}
+
+.teamName strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #f8fafc;
+
+  font-size: clamp(14px, 2vw, 19px);
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score {
+  min-width: 150px;
+
+  text-align: center;
+}
+
+.scoreNumbers {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  font-size: clamp(30px, 5vw, 48px);
+
+  font-weight: 900;
+
+  line-height: 1;
+
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreNumbers span {
+  color: #f8fafc;
+}
+
+.scoreNumbers small {
+  color: #64748b;
+
+  font-size: 20px;
+}
+
+.liveBadge {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  margin-top: 10px;
+
+  padding: 5px 9px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(239, 68, 68, 0.12);
+
+  border:
+    1px solid rgba(239, 68, 68, 0.25);
+
+  color: #f87171;
+
+  font-size: 9px;
+  font-weight: 900;
+
+  letter-spacing: 0.1em;
+}
+
+.liveBadge::before {
+  content: "";
+
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background: #ef4444;
+
+  box-shadow:
+    0 0 0 4px rgba(239, 68, 68, 0.1);
+
+  animation: livePulse 1.2s infinite;
+}
+
+@keyframes livePulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+
+/* =========================================================
+   STADIUM
+========================================================= */
+
+.stadium {
+  position: relative;
+
+  width: min(1400px, calc(100% - 24px));
+
+  margin: 20px auto;
+
+  min-height: clamp(480px, 62vw, 760px);
+
+  overflow: hidden;
+
+  border-radius: 26px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #172554 0%,
+      #0f172a 30%,
+      #07111d 100%
+    );
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  box-shadow:
+    0 35px 100px rgba(0, 0, 0, 0.5);
+}
+
+/* =========================================================
+   SKY
+========================================================= */
+
+.sky {
+  position: absolute;
+  inset: 0 0 auto;
+
+  height: 42%;
+
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      180deg,
+      #0f2745 0%,
+      #173d63 50%,
+      #285b78 100%
+    );
+}
+
+.sky::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    radial-gradient(
+      circle at 50% 25%,
+      rgba(255, 255, 255, 0.13),
+      transparent 30%
+    );
+}
+
+.sun {
+  position: absolute;
+
+  width: 80px;
+  height: 80px;
+
+  right: 13%;
+  top: 12%;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(255, 245, 190, 0.95),
+      rgba(255, 218, 120, 0.3) 45%,
+      transparent 72%
+    );
+
+  filter: blur(1px);
+}
+
+/* =========================================================
+   CLOUDS
+========================================================= */
+
+.clouds {
+  position: absolute;
+  inset: 0;
+
+  overflow: hidden;
+
+  pointer-events: none;
+}
+
+.cloud {
+  position: absolute;
+
+  width: 150px;
+  height: 42px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(255, 255, 255, 0.12);
+
+  filter: blur(4px);
+
+  animation:
+    cloudMove 55s linear infinite;
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+
+  position: absolute;
+
+  border-radius: 50%;
+
+  background: inherit;
+}
+
+.cloud::before {
+  width: 70px;
+  height: 70px;
+
+  left: 25px;
+  bottom: 0;
+}
+
+.cloud::after {
+  width: 55px;
+  height: 55px;
+
+  left: 78px;
+  bottom: 0;
+}
+
+.cloud:nth-child(1) {
+  top: 14%;
+  left: -180px;
+  animation-duration: 58s;
+}
+
+.cloud:nth-child(2) {
+  top: 26%;
+  left: -280px;
+  transform: scale(0.7);
+  animation-duration: 72s;
+  animation-delay: -20s;
+}
+
+.cloud:nth-child(3) {
+  top: 8%;
+  left: -320px;
+  transform: scale(1.2);
+  animation-duration: 90s;
+  animation-delay: -45s;
+}
+
+@keyframes cloudMove {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(100vw + 500px));
+  }
+}
+
+/* =========================================================
+   STADIUM STANDS
+========================================================= */
+
+.stands {
+  position: absolute;
+
+  left: 0;
+  right: 0;
+
+  top: 22%;
+
+  height: 25%;
+
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0 2px,
+      transparent 2px 6px
+    ),
+    linear-gradient(
+      180deg,
+      #111827,
+      #020617
+    );
+
+  transform:
+    perspective(700px)
+    rotateX(45deg);
+
+  transform-origin: top;
+}
+
+.stands::before {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 10px,
+      rgba(255, 255, 255, 0.04) 10px 12px
+    );
+}
+
+.stadiumLights {
+  position: absolute;
+
+  top: 15%;
+
+  left: 5%;
+  right: 5%;
+
+  height: 30px;
+
+  display: flex;
+
+  justify-content: space-between;
+}
+
+.stadiumLight {
+  width: 12px;
+  height: 30px;
+
+  border-radius: 8px;
+
+  background: #f8fafc;
+
+  box-shadow:
+    0 0 25px rgba(255, 255, 255, 0.7);
+}
+
+/* =========================================================
+   PITCH AREA
+========================================================= */
+
+.pitchArea {
+  position: absolute;
+
+  left: 5%;
+  right: 5%;
+
+  bottom: 4%;
+
+  height: 60%;
+
+  display: grid;
+  place-items: center;
+
+  perspective: 1000px;
+}
+
+.pitch {
+  position: relative;
+
+  width: min(94%, 1100px);
+
+  aspect-ratio: 1.62 / 1;
+
+  overflow: hidden;
+
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #16803e 0 7%,
+      #1b8d47 7% 14%
+    );
+
+  border:
+    4px solid rgba(255, 255, 255, 0.85);
+
+  box-shadow:
+    0 25px 50px rgba(0, 0, 0, 0.5);
+
+  transform:
+    rotateX(4deg);
+}
+
+/* =========================================================
+   PITCH MARKINGS
+========================================================= */
+
+.centerLine {
+  position: absolute;
+
+  top: 0;
+  bottom: 0;
+  left: 50%;
+
+  width: 2px;
+
+  transform: translateX(-50%);
+
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.centerCircle {
+  position: absolute;
+
+  width: 20%;
+
+  aspect-ratio: 1;
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  border:
+    2px solid rgba(255, 255, 255, 0.8);
+
+  border-radius: 50%;
+}
+
+.centerSpot {
+  position: absolute;
+
+  width: 7px;
+  height: 7px;
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  border-radius: 50%;
+
+  background: #fff;
+}
+
+.penaltyBoxLeft,
+.penaltyBoxRight {
+  position: absolute;
+
+  top: 24%;
+
+  width: 16%;
+
+  height: 52%;
+
+  border:
+    2px solid rgba(255, 255, 255, 0.8);
+}
+
+.penaltyBoxLeft {
+  left: 0;
+}
+
+.penaltyBoxRight {
+  right: 0;
+}
+
+.goalBoxLeft,
+.goalBoxRight {
+  position: absolute;
+
+  top: 37%;
+
+  width: 7%;
+
+  height: 26%;
+
+  border:
+    2px solid rgba(255, 255, 255, 0.8);
+}
+
+.goalBoxLeft {
+  left: 0;
+}
+
+.goalBoxRight {
+  right: 0;
+}
+
+.penaltySpotLeft,
+.penaltySpotRight {
+  position: absolute;
+
+  top: 50%;
+
+  width: 7px;
+  height: 7px;
+
+  transform: translateY(-50%);
+
+  border-radius: 50%;
+
+  background: #fff;
+}
+
+.penaltySpotLeft {
+  left: 10%;
+}
+
+.penaltySpotRight {
+  right: 10%;
+}
+
+.goalLeft,
+.goalRight {
+  position: absolute;
+
+  top: 38%;
+
+  width: 2.8%;
+
+  height: 24%;
+
+  border:
+    2px solid rgba(255, 255, 255, 0.85);
+
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.18) 0 2px,
+      transparent 2px 5px
+    );
+}
+
+.goalLeft {
+  left: -2.8%;
+}
+
+.goalRight {
+  right: -2.8%;
+}
+
+/* =========================================================
+   PLAYERS
+========================================================= */
+
+.player {
+  position: absolute;
+
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  font-size: 10px;
+  font-weight: 900;
+
+  color: #fff;
+
+  border:
+    2px solid rgba(255, 255, 255, 0.85);
+
+  box-shadow:
+    0 5px 12px rgba(0, 0, 0, 0.45);
+
+  z-index: 20;
+
+  transform:
+    translate(-50%, -50%);
+
+  transition:
+    left 0.7s ease,
+    top 0.7s ease,
+    transform 0.2s ease;
+}
+
+.player:hover {
+  transform:
+    translate(-50%, -50%)
+    scale(1.18);
+
+  z-index: 40;
+}
+
+.homePlayer {
+  background:
+    linear-gradient(
+      145deg,
+      #ef4444,
+      #991b1b
+    );
+}
+
+.awayPlayer {
+  background:
+    linear-gradient(
+      145deg,
+      #2563eb,
+      #1e3a8a
+    );
+}
+
+.userPlayer {
+  box-shadow:
+    0 0 0 3px rgba(250, 204, 21, 0.7),
+    0 0 20px rgba(250, 204, 21, 0.5);
+}
+
+.playerNumber {
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.playerName {
+  position: absolute;
+
+  top: calc(100% + 5px);
+
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  padding: 3px 6px;
+
+  max-width: 90px;
+
+  border-radius: 5px;
+
+  background:
+    rgba(2, 6, 23, 0.8);
+
+  color: #f8fafc;
+
+  font-size: 8px;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  pointer-events: none;
+}
+
+/* =========================================================
+   BALL
+========================================================= */
+
+.ball {
+  position: absolute;
+
+  width: 16px;
+  height: 16px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      #fff,
+      #dbeafe 45%,
+      #64748b
+    );
+
+  box-shadow:
+    0 5px 12px rgba(0, 0, 0, 0.45);
+
+  z-index: 35;
+
+  transform: translate(-50%, -50%);
+
+  transition:
+    left 0.25s linear,
+    top 0.25s linear;
+}
+
+/* =========================================================
+   REFEREE
+========================================================= */
+
+.referee {
+  position: absolute;
+
+  width: 27px;
+  height: 27px;
+
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  background:
+    linear-gradient(
+      145deg,
+      #111827,
+      #020617
+    );
+
+  border:
+    2px solid #f8fafc;
+
+  color: #facc15;
+
+  font-size: 9px;
+  font-weight: 900;
+
+  z-index: 25;
+
+  transform:
+    translate(-50%, -50%);
+}
+
+.assistantReferee {
+  position: absolute;
+
+  width: 22px;
+  height: 22px;
+
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  background: #f97316;
+
+  border: 2px solid #fff;
+
+  font-size: 8px;
+
+  z-index: 25;
+}
+
+/* =========================================================
+   WEATHER
+========================================================= */
+
+.weather {
+  position: absolute;
+
+  top: 16px;
+  right: 16px;
+
+  z-index: 50;
+
+  padding: 8px 11px;
+
+  border-radius: 10px;
+
+  background:
+    rgba(2, 6, 23, 0.62);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  backdrop-filter: blur(8px);
+
+  color: #cbd5e1;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   MATCH EVENTS
+========================================================= */
+
+.eventPanel {
+  position: absolute;
+
+  left: 18px;
+  bottom: 18px;
+
+  z-index: 60;
+
+  width: min(270px, calc(100% - 36px));
+
+  max-height: 180px;
+
+  overflow-y: auto;
+
+  padding: 10px;
+
+  border-radius: 12px;
+
+  background:
+    rgba(2, 6, 23, 0.78);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  backdrop-filter: blur(10px);
+}
+
+.event {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 7px 4px;
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.05);
+
+  font-size: 11px;
+}
+
+.event:last-child {
+  border-bottom: 0;
+}
+
+.eventMinute {
+  min-width: 30px;
+
+  color: #38bdf8;
+
+  font-weight: 900;
+}
+
+.eventIcon {
+  width: 22px;
+
+  text-align: center;
+}
+
+/* =========================================================
+   COACH CONTROL PANEL
+========================================================= */
+
+.controls {
+  width: min(1400px, calc(100% - 24px));
+
+  margin: 0 auto 24px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.5fr)
+    minmax(280px, 0.8fr);
+
+  gap: 18px;
+}
+
+.controlCard {
+  padding: 18px;
+
+  border-radius: 18px;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.22);
+}
+
+.controlHeader {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  margin-bottom: 15px;
+}
+
+.controlHeader h3 {
+  margin: 0;
+
+  font-size: 16px;
+}
+
+.controlHeader span {
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.1em;
+}
+
+/* =========================================================
+   TACTICS
+========================================================= */
+
+.tacticsGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 9px;
+}
+
+.tacticButton {
+  min-height: 62px;
+
+  padding: 9px;
+
+  border-radius: 10px;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  background:
+    rgba(255, 255, 255, 0.04);
+
+  color: #cbd5e1;
+
+  cursor: pointer;
+
+  font-family: inherit;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.tacticButton:hover {
+  background:
+    rgba(14, 165, 233, 0.1);
+
+  border-color:
+    rgba(14, 165, 233, 0.35);
+
+  transform: translateY(-1px);
+}
+
+.activeTactic {
+  background:
+    rgba(14, 165, 233, 0.15);
+
+  border-color:
+    #0ea5e9;
+
+  color: #7dd3fc;
+}
+
+.tacticButton strong {
+  display: block;
+
+  font-size: 11px;
+}
+
+.tacticButton small {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #64748b;
+
+  font-size: 8px;
+}
+
+/* =========================================================
+   COACH SLIDERS
+========================================================= */
+
+.sliderGroup {
+  margin-top: 18px;
+}
+
+.sliderRow {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  margin-bottom: 7px;
+}
+
+.sliderRow span {
+  color: #94a3b8;
+
+  font-size: 11px;
+}
+
+.sliderRow strong {
+  color: #f8fafc;
+
+  font-size: 11px;
+}
+
+.slider {
+  width: 100%;
+
+  height: 5px;
+
+  appearance: none;
+
+  border-radius: 999px;
+
+  background:
+    rgba(255, 255, 255, 0.08);
+
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+
+  width: 16px;
+  height: 16px;
+
+  border-radius: 50%;
+
+  background: #0ea5e9;
+
+  border: 2px solid #fff;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 0 0 4px rgba(14, 165, 233, 0.15);
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+
+  border-radius: 50%;
+
+  background: #0ea5e9;
+
+  border: 2px solid #fff;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   MATCH ACTIONS
+========================================================= */
+
+.matchActions {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.actionButton {
+  min-height: 48px;
+
+  border-radius: 10px;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.1);
+
+  background:
+    rgba(255, 255, 255, 0.05);
+
+  color: #e2e8f0;
+
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 12px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.actionButton:hover {
+  background:
+    rgba(255, 255, 255, 0.1);
+
+  transform: translateY(-1px);
+}
+
+.primaryAction {
+  background:
+    linear-gradient(
+      135deg,
+      #0ea5e9,
+      #6366f1
+    );
+
+  border: 0;
+
+  color: #fff;
+
+  box-shadow:
+    0 8px 25px rgba(14, 165, 233, 0.2);
+}
+
+.primaryAction:hover {
+  background:
+    linear-gradient(
+      135deg,
+      #0284c7,
+      #4f46e5
+    );
+}
+
+/* =========================================================
+   SUBSTITUTIONS
+========================================================= */
+
+.substitutionList {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  max-height: 280px;
+
+  overflow-y: auto;
+}
+
+.substitutionRow {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    32px
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: 7px;
+
+  padding: 8px;
+
+  border-radius: 9px;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.06);
+}
+
+.substitutionPlayer {
+  min-width: 0;
+
+  padding: 7px;
+
+  border-radius: 7px;
+
+  background:
+    rgba(255, 255, 255, 0.04);
+
+  color: #cbd5e1;
+
+  font-size: 10px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.substitutionArrow {
+  text-align: center;
+
+  color: #22c55e;
+
+  font-weight: 900;
+}
+
+/* =========================================================
+   MATCH STATUS
+========================================================= */
+
+.matchStatus {
+  width: min(1400px, calc(100% - 24px));
+
+  margin: 0 auto 20px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  padding: 12px 16px;
+
+  border-radius: 12px;
+
+  background:
+    rgba(14, 165, 233, 0.06);
+
+  border:
+    1px solid rgba(14, 165, 233, 0.12);
+}
+
+.matchStatus span {
+  color: #94a3b8;
+
+  font-size: 11px;
+}
+
+.matchStatus strong {
+  color: #38bdf8;
+
+  font-size: 12px;
+}
+
+/* =========================================================
+   HALFTIME / FULLTIME
+========================================================= */
+
+.overlay {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 500;
+
+  display: grid;
+
+  place-items: center;
+
+  padding: 20px;
+
+  background:
+    rgba(2, 6, 23, 0.78);
+
+  backdrop-filter: blur(12px);
+}
+
+.resultCard {
+  width: min(500px, 100%);
+
+  padding: 30px;
+
+  text-align: center;
+
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(15, 23, 42, 0.98),
+      rgba(2, 6, 23, 0.98)
+    );
+
+  border:
+    1px solid rgba(255, 255, 255, 0.1);
+
+  box-shadow:
+    0 30px 100px rgba(0, 0, 0, 0.55);
+}
+
+.resultCard span {
+  display: block;
+
+  color: #38bdf8;
+
+  font-size: 11px;
+  font-weight: 900;
+
+  letter-spacing: 0.14em;
+}
+
+.resultCard h2 {
+  margin: 10px 0 5px;
+
+  font-size: 25px;
+}
+
+.resultScore {
+  margin: 18px 0;
+
+  font-size: 50px;
+  font-weight: 900;
+}
+
+.resultCard p {
+  margin: 0;
+
+  color: #94a3b8;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   DISABLED / PAUSED
+========================================================= */
+
+.paused {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: 200;
+
+  display: grid;
+
+  place-items: center;
+
+  background:
+    rgba(2, 6, 23, 0.3);
+
+  pointer-events: none;
+}
+
+.pausedBadge {
+  padding: 10px 18px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(2, 6, 23, 0.85);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.12);
+
+  color: #f8fafc;
+
+  font-size: 11px;
+  font-weight: 900;
+
+  letter-spacing: 0.1em;
+}
+
+/* =========================================================
+   SCROLLBARS
+========================================================= */
+
+.eventPanel::-webkit-scrollbar,
+.substitutionList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.eventPanel::-webkit-scrollbar-track,
+.substitutionList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.eventPanel::-webkit-scrollbar-thumb,
+.substitutionList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+
+  border-radius: 999px;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .stadium {
+    min-height: 560px;
+  }
+
+  .pitchArea {
+    left: 2%;
+    right: 2%;
+  }
+
+  .scoreboard {
+    gap: 15px;
+  }
+
+  .teamLogo {
+    width: 50px;
+    height: 50px;
+
+    flex-basis: 50px;
+  }
+
+  .player {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tacticsGrid {
+    grid-template-columns:
+      repeat(4, 1fr);
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 680px) {
+  .matchHeader {
+    min-height: 60px;
+
+    padding: 9px 10px;
+
+    gap: 8px;
+  }
+
+  .backButton {
+    min-height: 38px;
+
+    padding: 7px 10px;
+
+    font-size: 11px;
+  }
+
+  .competitionInfo span {
+    font-size: 8px;
+  }
+
+  .competitionInfo strong {
+    font-size: 12px;
+  }
+
+  .matchClock {
+    min-width: 65px;
+  }
+
+  .matchClock strong {
+    font-size: 16px;
+  }
+
+  .scoreboard {
+    width: calc(100% - 16px);
+
+    margin-top: 10px;
+
+    padding: 12px 8px;
+
+    gap: 5px;
+
+    border-radius: 14px;
+  }
+
+  .team {
+    gap: 7px;
+  }
+
+  .teamLogo {
+    width: 40px;
+    height: 40px;
+
+    flex-basis: 40px;
+  }
+
+  .teamName strong {
+    font-size: 11px;
+  }
+
+  .teamName span {
+    font-size: 7px;
+  }
+
+  .score {
+    min-width: 85px;
+  }
+
+  .scoreNumbers {
+    font-size: 27px;
+
+    gap: 4px;
+  }
+
+  .scoreNumbers small {
+    font-size: 13px;
+  }
+
+  .liveBadge {
+    margin-top: 6px;
+
+    font-size: 7px;
+  }
+
+  .stadium {
+    width: calc(100% - 12px);
+
+    min-height: 400px;
+
+    margin: 10px auto;
+
+    border-radius: 16px;
+  }
+
+  .sky {
+    height: 38%;
+  }
+
+  .stands {
+    top: 23%;
+  }
+
+  .pitchArea {
+    bottom: 8%;
+
+    height: 55%;
+  }
+
+  .pitch {
+    width: 96%;
+
+    border-width: 2px;
+  }
+
+  .player {
+    width: 23px;
+    height: 23px;
+
+    font-size: 7px;
+
+    border-width: 1px;
+  }
+
+  .playerName {
+    display: none;
+  }
+
+  .ball {
+    width: 10px;
+    height: 10px;
+  }
+
+  .referee {
+    width: 19px;
+    height: 19px;
+
+    font-size: 6px;
+  }
+
+  .assistantReferee {
+    width: 17px;
+    height: 17px;
+
+    font-size: 6px;
+  }
+
+  .weather {
+    top: 8px;
+    right: 8px;
+
+    padding: 6px 8px;
+
+    font-size: 8px;
+  }
+
+  .eventPanel {
+    left: 8px;
+    bottom: 8px;
+
+    width: min(210px, calc(100% - 16px));
+
+    max-height: 110px;
+
+    padding: 6px;
+  }
+
+  .event {
+    padding: 5px 2px;
+
+    font-size: 8px;
+  }
+
+  .eventMinute {
+    min-width: 23px;
+  }
+
+  .controls {
+    width: calc(100% - 12px);
+
+    margin-bottom: 12px;
+
+    gap: 10px;
+  }
+
+  .controlCard {
+    padding: 12px;
+
+    border-radius: 14px;
+  }
+
+  .controlHeader h3 {
+    font-size: 14px;
+  }
+
+  .tacticsGrid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 7px;
+  }
+
+  .tacticButton {
+    min-height: 54px;
+
+    padding: 7px;
+  }
+
+  .tacticButton strong {
+    font-size: 10px;
+  }
+
+  .tacticButton small {
+    font-size: 7px;
+  }
+
+  .matchActions {
+    grid-template-columns: 1fr;
+  }
+
+  .actionButton {
+    min-height: 44px;
+
+    font-size: 11px;
+  }
+
+  .matchStatus {
+    width: calc(100% - 12px);
+
+    margin-bottom: 12px;
+
+    padding: 9px 11px;
+  }
+
+  .matchStatus span,
+  .matchStatus strong {
+    font-size: 9px;
+  }
+
+  .resultCard {
+    padding: 22px;
+
+    border-radius: 16px;
+  }
+
+  .resultCard h2 {
+    font-size: 20px;
+  }
+
+  .resultScore {
+    font-size: 40px;
+  }
+}
+
+/* =========================================================
+   VERY SMALL PHONES
+========================================================= */
+
+@media (max-width: 380px) {
+  .matchHeader {
+    padding: 7px;
+  }
+
+  .backButton {
+    padding: 6px 8px;
+
+    font-size: 9px;
+  }
+
+  .teamLogo {
+    width: 34px;
+    height: 34px;
+
+    flex-basis: 34px;
+  }
+
+  .teamName strong {
+    font-size: 9px;
+  }
+
+  .score {
+    min-width: 70px;
+  }
+
+  .scoreNumbers {
+    font-size: 23px;
+  }
+
+  .stadium {
+    min-height: 350px;
+  }
+
+  .player {
+    width: 20px;
+    height: 20px;
+  }
+
+  .controlCard {
+    padding: 9px;
+  }
+}
+
+/* =========================================================
+   LANDSCAPE MOBILE
+========================================================= */
+
+@media (max-height: 550px) and (orientation: landscape) {
+  .matchHeader {
+    position: relative;
+  }
+
+  .stadium {
+    min-height: 500px;
+  }
+
+  .sky {
+    height: 34%;
+  }
+
+  .pitchArea {
+    height: 63%;
+  }
+
+  .eventPanel {
+    max-height: 100px;
+  }
+
+  .controls {
+    margin-top: 12px;
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .liveBadge::before,
+  .cloud {
+    animation: none !important;
+  }
+
+  .player,
+  .ball,
+  .actionButton,
+  .tacticButton,
+  .backButton {
+    transition: none !important;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+.backButton:focus-visible,
+.actionButton:focus-visible,
+.tacticButton:focus-visible,
+.slider:focus-visible {
+  outline: 3px solid rgba(56, 189, 248, 0.55);
+
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print {
+  .page {
+    background: white;
+
+    color: black;
+  }
+
+  .matchHeader,
+  .controls,
+  .eventPanel,
+  .weather {
+    display: none;
+  }
+
+  .stadium {
+    box-shadow: none;
+
+    border: 1px solid #ddd;
+  }
+}
