@@ -9,8 +9,9 @@
   margin: 0 auto;
   padding: 32px 24px 80px;
   overflow-x: hidden;
+  background: #0a0a0a;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
-
 
 /* =========================================================
    LOADING
@@ -49,7 +50,6 @@
     transform: rotate(360deg);
   }
 }
-
 
 /* =========================================================
    HEADER
@@ -127,7 +127,6 @@
   text-transform: uppercase;
 }
 
-
 /* =========================================================
    STATS
 ========================================================= */
@@ -149,14 +148,12 @@
   padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  background:
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.055),
-      rgba(255, 255, 255, 0.025)
-    );
-  box-shadow:
-    0 12px 35px rgba(0, 0, 0, 0.16);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.055),
+    rgba(255, 255, 255, 0.025)
+  );
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.16);
 }
 
 .statCard > span {
@@ -180,6 +177,7 @@
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .statCard strong {
@@ -187,6 +185,7 @@
   margin-top: 3px;
   color: #fff;
   font-size: 23px;
+  font-weight: 800;
 }
 
 .statCard p {
@@ -194,7 +193,6 @@
   color: rgba(255, 255, 255, 0.43);
   font-size: 11px;
 }
-
 
 /* =========================================================
    FILTERS
@@ -260,7 +258,6 @@
   color: #fff;
 }
 
-
 /* =========================================================
    RESULTS HEADER
 ========================================================= */
@@ -289,13 +286,13 @@
   color: #fff;
   font-size: 24px;
   line-height: 1.2;
+  font-weight: 800;
 }
 
 .resultsHeader > strong {
   color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
 }
-
 
 /* =========================================================
    LEAGUE GRID
@@ -305,8 +302,7 @@
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -318,14 +314,12 @@
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.065),
-      rgba(255, 255, 255, 0.025)
-    );
-  box-shadow:
-    0 15px 45px rgba(0, 0, 0, 0.18);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.065),
+    rgba(255, 255, 255, 0.025)
+  );
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.18);
   cursor: pointer;
   transition:
     transform 0.2s ease,
@@ -400,7 +394,9 @@
   color: #fff;
   font-size: 18px;
   line-height: 1.25;
+  font-weight: 700;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cardContent p {
@@ -413,8 +409,7 @@
 
 .cardStats {
   display: grid;
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
@@ -435,6 +430,8 @@
   color: rgba(255, 255, 255, 0.35);
   font-size: 8px;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .cardStats strong {
@@ -467,6 +464,8 @@
   color: rgba(255, 255, 255, 0.35);
   font-size: 8px;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .leaderPreview strong {
@@ -501,7 +500,6 @@
   font-size: 17px;
 }
 
-
 /* =========================================================
    BACK BUTTON
 ========================================================= */
@@ -525,7 +523,6 @@
   color: #fff;
 }
 
-
 /* =========================================================
    LEAGUE HERO
 ========================================================= */
@@ -533,8 +530,7 @@
 .leagueHero {
   min-width: 0;
   display: grid;
-  grid-template-columns:
-    100px minmax(0, 1fr) 220px;
+  grid-template-columns: 100px minmax(0, 1fr) 220px;
   align-items: center;
   gap: 24px;
   padding: 26px;
@@ -575,6 +571,7 @@
   color: #fff;
   font-size: clamp(26px, 4vw, 42px);
   line-height: 1.1;
+  font-weight: 800;
 }
 
 .heroInfo p {
@@ -618,6 +615,8 @@
   color: rgba(255, 255, 255, 0.38);
   font-size: 9px;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .leaderBox strong {
@@ -627,6 +626,7 @@
   color: #fff;
   font-size: 16px;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .leaderBox span {
@@ -637,6 +637,43 @@
   font-weight: 700;
 }
 
+/* =========================================================
+   SEASON ACTION
+========================================================= */
+
+.seasonAction {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.seasonButton {
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.seasonButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.35);
+}
+
+.seasonButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 /* =========================================================
    DETAIL TABS
@@ -666,6 +703,7 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .detailTabs button:hover {
@@ -675,14 +713,12 @@
 
 .detailTabs .activeTab {
   color: #fff;
-  background:
-    linear-gradient(
-      135deg,
-      rgba(14, 165, 233, 0.25),
-      rgba(99, 102, 241, 0.22)
-    );
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.25),
+    rgba(99, 102, 241, 0.22)
+  );
 }
-
 
 /* =========================================================
    OVERVIEW
@@ -690,8 +726,7 @@
 
 .overviewGrid {
   display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -712,18 +747,19 @@
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .overviewCard h2 {
   margin: 6px 0 18px;
   color: #fff;
   font-size: 21px;
+  font-weight: 800;
 }
 
 .infoRows {
   display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -738,6 +774,8 @@
   display: block;
   color: rgba(255, 255, 255, 0.35);
   font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .infoRows strong {
@@ -789,8 +827,7 @@
 
 .miniClubGrid {
   display: grid;
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-top: 14px;
 }
@@ -814,6 +851,7 @@
   overflow: hidden;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
 }
 
 .miniClub img {
@@ -842,6 +880,46 @@
   cursor: pointer;
 }
 
+.textButton:hover {
+  text-decoration: underline;
+}
+
+/* =========================================================
+   PRIZE LIST
+========================================================= */
+
+.prizeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.prizeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.prizeRow span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prizeRow strong {
+  flex-shrink: 0;
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 800;
+}
 
 /* =========================================================
    TABLE
@@ -872,12 +950,14 @@
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .tableHeader h2 {
   margin: 5px 0 0;
   color: #fff;
   font-size: 21px;
+  font-weight: 800;
 }
 
 .tableHeader > strong {
@@ -893,7 +973,7 @@
 
 .standingsTable {
   width: 100%;
-  min-width: 760px;
+  min-width: 800px;
   border-collapse: collapse;
 }
 
@@ -905,6 +985,8 @@
   font-weight: 800;
   text-align: left;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .standingsTable td {
@@ -919,8 +1001,17 @@
   background: rgba(255, 255, 255, 0.025);
 }
 
-.standingsTable .leaderRow {
-  background: rgba(16, 185, 129, 0.035);
+.championRow {
+  background: rgba(16, 185, 129, 0.07);
+}
+
+.runnerUpRow {
+  background: rgba(56, 189, 248, 0.04);
+}
+
+.championRow:hover,
+.runnerUpRow:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .tablePosition,
@@ -959,6 +1050,7 @@
   overflow: hidden;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.05);
+  font-size: 14px;
 }
 
 .tableLogo img {
@@ -972,11 +1064,19 @@
   color: #fff;
   font-size: 11px;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .points {
   color: #fff;
   font-size: 13px;
+  font-weight: 800;
+}
+
+.prizeAmount {
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .positive {
@@ -1023,7 +1123,6 @@
   text-align: center !important;
 }
 
-
 /* =========================================================
    TEAMS
 ========================================================= */
@@ -1043,6 +1142,7 @@
 
 .sectionHeading h2 {
   font-size: 24px;
+  font-weight: 800;
 }
 
 .sectionHeading p {
@@ -1054,12 +1154,12 @@
 .sectionHeading > strong {
   color: rgba(255, 255, 255, 0.55);
   font-size: 24px;
+  font-weight: 800;
 }
 
 .teamGrid {
   display: grid;
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -1073,6 +1173,11 @@
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.035);
+  transition: border-color 0.2s ease;
+}
+
+.teamCard:hover {
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .teamLogo {
@@ -1100,6 +1205,8 @@
   color: rgba(255, 255, 255, 0.3);
   font-size: 8px;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .teamCard h3 {
@@ -1107,6 +1214,7 @@
   overflow: hidden;
   color: #fff;
   font-size: 13px;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1129,6 +1237,8 @@
   display: block;
   color: rgba(255, 255, 255, 0.3);
   font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .teamMeta strong {
@@ -1137,7 +1247,6 @@
   color: rgba(255, 255, 255, 0.75);
   font-size: 10px;
 }
-
 
 /* =========================================================
    EMPTY STATE
@@ -1164,6 +1273,7 @@
   margin: 10px 0 0;
   color: #fff;
   font-size: 18px;
+  font-weight: 700;
 }
 
 .emptyState p {
@@ -1178,23 +1288,23 @@
   font-size: 12px;
 }
 
-
 /* =========================================================
    RESPONSIVE
 ========================================================= */
 
 @media (max-width: 1200px) {
   .leagueGrid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .teamGrid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-
 
 @media (max-width: 1024px) {
   .page {
@@ -1204,6 +1314,7 @@
   .header {
     align-items: flex-start;
     flex-direction: column;
+    gap: 20px;
   }
 
   .headerStats {
@@ -1221,8 +1332,8 @@
   }
 
   .leagueHero {
-    grid-template-columns:
-      80px minmax(0, 1fr);
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 18px;
   }
 
   .leagueHeroLogo {
@@ -1235,11 +1346,9 @@
   }
 
   .miniClubGrid {
-    grid-template-columns:
-      repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-
 
 @media (max-width: 768px) {
   .page {
@@ -1272,9 +1381,8 @@
   }
 
   .stats {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
     gap: 9px;
+    margin-bottom: 20px;
   }
 
   .statCard {
@@ -1299,9 +1407,8 @@
   }
 
   .filters {
-    display: grid;
-    grid-template-columns:
-      1fr 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
   .search {
@@ -1310,11 +1417,11 @@
 
   .leagueGrid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .leagueHero {
-    grid-template-columns:
-      68px minmax(0, 1fr);
+    grid-template-columns: 68px minmax(0, 1fr);
     gap: 15px;
     padding: 18px;
     border-radius: 17px;
@@ -1357,8 +1464,7 @@
   }
 
   .miniClubGrid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .teamGrid {
@@ -1368,8 +1474,12 @@
   .tableHeader {
     padding: 15px;
   }
-}
 
+  .seasonButton {
+    font-size: 12px;
+    padding: 12px 16px;
+  }
+}
 
 @media (max-width: 480px) {
   .page {
@@ -1398,7 +1508,6 @@
 
   .stats {
     gap: 7px;
-    margin-bottom: 20px;
   }
 
   .statCard {
@@ -1534,8 +1643,7 @@
   }
 
   .teamCard {
-    grid-template-columns:
-      43px minmax(0, 1fr) auto;
+    grid-template-columns: 43px minmax(0, 1fr) auto;
     padding: 11px;
     gap: 9px;
   }
@@ -1553,7 +1661,6 @@
     min-width: 45px;
   }
 }
-
 
 @media (max-width: 360px) {
   .page {
@@ -1584,8 +1691,12 @@
   .miniClubGrid {
     grid-template-columns: 1fr;
   }
-}
 
+  .prizeRow {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
 
 /* =========================================================
    ACCESSIBILITY / MOTION
@@ -1594,12 +1705,13 @@
 @media (prefers-reduced-motion: reduce) {
   .leagueCard,
   .backButton,
-  .spinner {
+  .spinner,
+  .seasonButton,
+  .detailTabs button {
     animation: none;
     transition: none;
   }
 }
-
 
 /* =========================================================
    PRINT
@@ -1609,11 +1721,15 @@
   .page {
     max-width: none;
     padding: 0;
+    background: #fff;
+    color: #000;
   }
 
   .filters,
   .detailTabs,
-  .backButton {
+  .backButton,
+  .seasonAction,
+  .cardFooter {
     display: none;
   }
 
@@ -1621,7 +1737,8 @@
   .statCard,
   .tableCard,
   .teamCard,
-  .overviewCard {
+  .overviewCard,
+  .leagueHero {
     border: 1px solid #ddd;
     box-shadow: none;
     background: #fff;
@@ -1633,7 +1750,17 @@
   .leagueCard h3,
   .tableHeader h2,
   .standingsTable td,
-  .standingsTable th {
+  .standingsTable th,
+  .heroInfo h1,
+  .heroInfo p {
     color: #000;
+  }
+
+  .leagueLogo,
+  .leagueHeroLogo,
+  .tableLogo,
+  .teamLogo,
+  .topClubLogo {
+    background: #f0f0f0;
   }
 }
