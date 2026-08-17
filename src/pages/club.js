@@ -1,6 +1,6 @@
 // pages/club.js
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 
@@ -12,6 +12,7 @@ import {
   query,
   where,
   updateDoc,
+  onSnapshot,
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
@@ -74,10 +75,7 @@ function formatDate(value) {
   if (!value) return '-';
 
   try {
-    if (
-      typeof value === 'object' &&
-      typeof value.toDate === 'function'
-    ) {
+    if (typeof value === 'object' && typeof value.toDate === 'function') {
       return value.toDate().toLocaleDateString();
     }
 
@@ -98,10 +96,7 @@ function dateToISOString(value) {
     return new Date().toISOString();
   }
 
-  if (
-    typeof value === 'object' &&
-    typeof value.toDate === 'function'
-  ) {
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
     return value.toDate().toISOString();
   }
 
@@ -120,16 +115,12 @@ function daysBetween(start, end) {
   const startDate = new Date(start);
   const endDate = new Date(end);
 
-  if (
-    Number.isNaN(startDate.getTime()) ||
-    Number.isNaN(endDate.getTime())
-  ) {
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return 0;
   }
 
   return Math.ceil(
-    (endDate.getTime() - startDate.getTime()) /
-    (1000 * 60 * 60 * 24)
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
   );
 }
 
@@ -140,31 +131,17 @@ function addYears(date, years) {
 }
 
 function getContractStatus(contract) {
-  if (!contract) {
-    return 'none';
-  }
-
-  if (contract.status === 'terminated') {
-    return 'terminated';
-  }
-
-  if (!contract.endDate) {
-    return 'active';
-  }
+  if (!contract) return 'none';
+  if (contract.status === 'terminated') return 'terminated';
+  if (!contract.endDate) return 'active';
 
   const remaining = daysBetween(
     new Date().toISOString(),
     dateToISOString(contract.endDate)
   );
 
-  if (remaining <= 0) {
-    return 'expired';
-  }
-
-  if (remaining <= CONTRACT_WARNING_DAYS) {
-    return 'expiring';
-  }
-
+  if (remaining <= 0) return 'expired';
+  if (remaining <= CONTRACT_WARNING_DAYS) return 'expiring';
   return 'active';
 }
 
@@ -173,7 +150,6 @@ function getConfidenceLabel(value) {
   if (value >= 65) return 'Good';
   if (value >= 50) return 'Stable';
   if (value >= 35) return 'Under Pressure';
-
   return 'Critical';
 }
 
@@ -188,12 +164,7 @@ function getPlayerName(player) {
 }
 
 function getPlayerPosition(player) {
-  return (
-    player.position ||
-    player.role ||
-    player.positionName ||
-    'Player'
-  );
+  return player.position || player.role || player.positionName || 'Player';
 }
 
 function getPlayerClubId(player) {
@@ -205,40 +176,6 @@ function getPlayerClubId(player) {
     player.currentTeam ||
     null
   );
-}
-
-function normalizeRelation(value) {
-  if (!value) return null;
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'object') {
-    return (
-      value.id ||
-      value.name ||
-      value.title ||
-      value.label ||
-      null
-    );
-  }
-
-  return String(value);
-}
-
-function getRelationId(value) {
-  if (!value) return null;
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'object') {
-    return value.id || null;
-  }
-
-  return null;
 }
 
 /* =========================================================
@@ -279,9 +216,9 @@ function generateYouthPlayer(club, index, seasonYear) {
   const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
   const position = positions[Math.floor(Math.random() * positions.length)];
 
-  const age = 15 + Math.floor(Math.random() * 4); // 15-18
-  const potential = 65 + Math.floor(Math.random() * 25); // 65-89
-  const overall = 40 + Math.floor(Math.random() * 20); // 40-59
+  const age = 15 + Math.floor(Math.random() * 4);
+  const potential = 65 + Math.floor(Math.random() * 25);
+  const overall = 40 + Math.floor(Math.random() * 20);
 
   const birthYear = seasonYear - age;
   const birthMonth = Math.floor(Math.random() * 12);
@@ -317,6 +254,97 @@ function generateYouthPlayer(club, index, seasonYear) {
     needsContractDecision: false,
     createdAt: new Date().toISOString(),
   };
+}
+
+/* =========================================================
+   STANDINGS CALCULATION
+========================================================= */
+
+function calculateTeamRecord(matches, clubId) {
+  let wins = 0;
+  let losses = 0;
+  let draws = 0;
+  let goalsFor = 0;
+  let goalsAgainst = 0;
+  let points = 0;
+
+  matches.forEach((match) => {
+    if (!match.result) return;
+
+    const homeScore = safeNumber(
+      match.result.homeScore ?? match.homeScore,
+      0
+    );
+    const awayScore = safeNumber(
+      match.result.awayScore ?? match.awayScore,
+      0
+    );
+
+    const isHome = match.homeClubId === clubId;
+    const isAway = match.awayClubId === clubId;
+
+    if (!isHome && !isAway) return;
+
+    const teamScore = isHome ? homeScore : awayScore;
+    const opponentScore = isHome ? awayScore : homeScore;
+
+    goalsFor += teamScore;
+    goalsAgainst += opponentScore;
+
+    if (teamScore > opponentScore) {
+      wins += 1;
+      points += 3;
+    } else if (teamScore < opponentScore) {
+      losses += 1;
+    } else {
+      draws += 1;
+      points += 1;
+    }
+  });
+
+  return {
+    matches: wins + losses + draws,
+    wins,
+    losses,
+    draws,
+    goalsFor,
+    goalsAgainst,
+    goalDifference: goalsFor - goalsAgainst,
+    points,
+  };
+}
+
+function calculateLeaguePosition(clubId, clubLeagueId, allMatches, allClubs) {
+  if (!clubId || !clubLeagueId) return '-';
+
+  const leagueClubs = allClubs.filter(
+    (club) =>
+      (club.leagueId || club.leagueID || club.league || null) === clubLeagueId
+  );
+
+  if (leagueClubs.length === 0) return '-';
+
+  const standings = leagueClubs.map((club) => {
+    const record = calculateTeamRecord(allMatches, club.id);
+
+    return {
+      clubId: club.id,
+      clubName: club.name || club.clubName,
+      ...record,
+    };
+  });
+
+  standings.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference)
+      return b.goalDifference - a.goalDifference;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return 0;
+  });
+
+  const position = standings.findIndex((s) => s.clubId === clubId);
+
+  return position >= 0 ? position + 1 : '-';
 }
 
 /* =========================================================
@@ -494,6 +522,20 @@ export default function ClubPage({ initialClubs = [] }) {
   const [selectedYouthPlayer, setSelectedYouthPlayer] = useState(null);
   const [youthContractType, setYouthContractType] = useState('youth');
   const [isGeneratingYouth, setIsGeneratingYouth] = useState(false);
+
+  // Match data
+  const [allMatches, setAllMatches] = useState([]);
+  const [teamRecord, setTeamRecord] = useState({
+    matches: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    goalDifference: 0,
+    points: 0,
+  });
+  const [leaguePosition, setLeaguePosition] = useState('-');
 
   const managerName =
     userData?.displayName ||
@@ -675,6 +717,52 @@ export default function ClubPage({ initialClubs = [] }) {
   };
 
   /* =======================================================
+     LOAD MATCHES FOR CURRENT CLUB (REAL-TIME)
+  ======================================================= */
+
+  useEffect(() => {
+    if (!user || !careerData?.currentClub) return;
+
+    const clubId = careerData.currentClub;
+
+    const matchesQuery = query(
+      collection(db, 'matches'),
+      where('seasonYear', '==', seasonYear)
+    );
+
+    const unsubscribe = onSnapshot(
+      matchesQuery,
+      (snapshot) => {
+        const matches = snapshot.docs.map((docItem) => ({
+          id: docItem.id,
+          ...docItem.data(),
+        }));
+
+        setAllMatches(matches);
+
+        // Calculate team record
+        const record = calculateTeamRecord(matches, clubId);
+        setTeamRecord(record);
+
+        // Calculate league position
+        const clubLeagueId = clubInfo?.leagueId || clubInfo?.league || null;
+        const position = calculateLeaguePosition(
+          clubId,
+          clubLeagueId,
+          matches,
+          clubs
+        );
+        setLeaguePosition(position);
+      },
+      (error) => {
+        console.error('Matches realtime error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user, careerData?.currentClub, seasonYear, clubInfo, clubs]);
+
+  /* =======================================================
      PRIZE MONEY ALLOCATION
   ======================================================= */
 
@@ -753,37 +841,6 @@ export default function ClubPage({ initialClubs = [] }) {
     return monthlyWage;
   }, [clubInfo?.players, youthSquad]);
 
-  const deductMonthlyWages = useCallback(async () => {
-    if (!clubInfo || !clubInfo.id) return;
-
-    const monthlyWage = calculateMonthlyWages();
-
-    if (monthlyWage <= 0) return;
-
-    try {
-      const newWageBudget = safeNumber(clubInfo.wageBudget, 0) - monthlyWage;
-
-      await updateDoc(doc(db, 'clubs', clubInfo.id), {
-        wageBudget: newWageBudget,
-        lastWagePayment: monthlyWage,
-        lastWagePaymentAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      setClubInfo((prev) => ({
-        ...prev,
-        wageBudget: newWageBudget,
-        lastWagePayment: monthlyWage,
-      }));
-
-      if (newWageBudget < 0) {
-        toast.error(`Wage budget exceeded! Monthly wages: €${formatMoney(monthlyWage)}`);
-      }
-    } catch (error) {
-      console.error('Wage deduction error:', error);
-    }
-  }, [clubInfo, calculateMonthlyWages]);
-
   /* =======================================================
      YOUTH SQUAD GENERATION
   ======================================================= */
@@ -840,55 +897,6 @@ export default function ClubPage({ initialClubs = [] }) {
   }, [clubInfo, youthSquad, seasonYear, generateYouthSquad, isGeneratingYouth]);
 
   /* =======================================================
-     SEASON END - YOUTH CONTRACT DECISIONS
-  ======================================================= */
-
-  const processSeasonEndYouth = useCallback(async () => {
-    if (!clubInfo || !clubInfo.id) return;
-
-    try {
-      const oldYouth = youthSquad.filter(
-        (player) =>
-          player.seasonYear !== seasonYear &&
-          !player.contractEnd &&
-          !player.needsContractDecision
-      );
-
-      if (oldYouth.length === 0) return;
-
-      const batch = writeBatch(db);
-
-      oldYouth.forEach((player) => {
-        const playerRef = doc(db, 'players', player.id);
-        batch.update(playerRef, {
-          needsContractDecision: true,
-          updatedAt: serverTimestamp(),
-        });
-      });
-
-      await batch.commit();
-
-      setYouthSquad((prev) =>
-        prev.map((player) =>
-          player.seasonYear !== seasonYear && !player.contractEnd
-            ? { ...player, needsContractDecision: true }
-            : player
-        )
-      );
-
-      toast.success(`${oldYouth.length} youth players need contract decisions`);
-    } catch (error) {
-      console.error('Season end youth processing error:', error);
-    }
-  }, [clubInfo, youthSquad, seasonYear]);
-
-  useEffect(() => {
-    if (clubInfo && clubInfo.id) {
-      processSeasonEndYouth();
-    }
-  }, [clubInfo, processSeasonEndYouth]);
-
-  /* =======================================================
      YOUTH CONTRACT DECISIONS
   ======================================================= */
 
@@ -904,7 +912,9 @@ export default function ClubPage({ initialClubs = [] }) {
     try {
       setSaving(true);
 
-      const contractEnd = new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000).toISOString();
+      const contractEnd = new Date(
+        Date.now() + 3 * 365 * 24 * 60 * 60 * 1000
+      ).toISOString();
       const wage = 500 + Math.floor(Math.random() * 1500);
 
       await updateDoc(doc(db, 'players', player.id), {
@@ -970,9 +980,7 @@ export default function ClubPage({ initialClubs = [] }) {
         updatedAt: serverTimestamp(),
       });
 
-      setYouthSquad((prev) =>
-        prev.filter((p) => p.id !== player.id)
-      );
+      setYouthSquad((prev) => prev.filter((p) => p.id !== player.id));
 
       setShowYouthContract(false);
       setSelectedYouthPlayer(null);
@@ -1010,8 +1018,7 @@ export default function ClubPage({ initialClubs = [] }) {
         clubs
           .map(
             (club) =>
-              club.leagueName ||
-              safeString(club.league, 'Unknown League')
+              club.leagueName || safeString(club.league, 'Unknown League')
           )
           .filter(Boolean)
       ),
@@ -1048,9 +1055,7 @@ export default function ClubPage({ initialClubs = [] }) {
   const filteredPlayers = useMemo(() => {
     const value = playerSearch.trim().toLowerCase();
 
-    if (!value) {
-      return squad;
-    }
+    if (!value) return squad;
 
     return squad.filter(
       (player) =>
@@ -1195,7 +1200,9 @@ export default function ClubPage({ initialClubs = [] }) {
       setSaving(true);
 
       const newEndDate = addYears(
-        contract.endDate ? dateToISOString(contract.endDate) : new Date().toISOString(),
+        contract.endDate
+          ? dateToISOString(contract.endDate)
+          : new Date().toISOString(),
         1
       );
 
@@ -1539,13 +1546,6 @@ export default function ClubPage({ initialClubs = [] }) {
     clubInfo?.balance || 0
   );
 
-  const matches = safeNumber(careerData?.totalMatches, 0);
-  const wins = safeNumber(careerData?.totalWins, 0);
-  const losses = safeNumber(careerData?.totalLosses, 0);
-  const draws = safeNumber(careerData?.totalDraws, 0);
-
-  const leaguePosition = careerData?.currentPosition || '-';
-
   const clubLeague =
     clubInfo?.leagueName ||
     safeString(clubInfo?.league, 'Unknown League');
@@ -1706,20 +1706,52 @@ export default function ClubPage({ initialClubs = [] }) {
 
                 <div className={styles.performanceGrid}>
                   <div>
-                    <strong>{matches}</strong>
+                    <strong>{teamRecord.matches}</strong>
                     <span>Matches</span>
                   </div>
                   <div>
-                    <strong className={styles.green}>{wins}</strong>
+                    <strong className={styles.green}>{teamRecord.wins}</strong>
                     <span>Wins</span>
                   </div>
                   <div>
-                    <strong className={styles.yellow}>{draws}</strong>
+                    <strong className={styles.yellow}>{teamRecord.draws}</strong>
                     <span>Draws</span>
                   </div>
                   <div>
-                    <strong className={styles.red}>{losses}</strong>
+                    <strong className={styles.red}>{teamRecord.losses}</strong>
                     <span>Losses</span>
+                  </div>
+                </div>
+
+                <div className={styles.performanceExtra}>
+                  <div>
+                    <span>Goals For</span>
+                    <strong>{teamRecord.goalsFor}</strong>
+                  </div>
+                  <div>
+                    <span>Goals Against</span>
+                    <strong>{teamRecord.goalsAgainst}</strong>
+                  </div>
+                  <div>
+                    <span>Goal Difference</span>
+                    <strong
+                      className={
+                        teamRecord.goalDifference > 0
+                          ? styles.green
+                          : teamRecord.goalDifference < 0
+                            ? styles.red
+                            : ''
+                      }
+                    >
+                      {teamRecord.goalDifference > 0 ? '+' : ''}
+                      {teamRecord.goalDifference}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Points</span>
+                    <strong className={styles.pointsHighlight}>
+                      {teamRecord.points}
+                    </strong>
                   </div>
                 </div>
               </article>
@@ -1735,7 +1767,11 @@ export default function ClubPage({ initialClubs = [] }) {
 
                 <div className={styles.boardFeeling}>
                   <div className={styles.boardFace}>
-                    {boardConfidence >= 70 ? '🙂' : boardConfidence >= 50 ? '😐' : '😟'}
+                    {boardConfidence >= 70
+                      ? '🙂'
+                      : boardConfidence >= 50
+                        ? '😐'
+                        : '😟'}
                   </div>
 
                   <div>
@@ -1785,7 +1821,9 @@ export default function ClubPage({ initialClubs = [] }) {
                             />
                           </div>
 
-                          <small>Target: {objective.target || 'Complete objective'}</small>
+                          <small>
+                            Target: {objective.target || 'Complete objective'}
+                          </small>
                         </div>
                       </div>
                     );
