@@ -1,3 +1,4 @@
+// src/pages/match.js
 import {
   useCallback,
   useEffect,
@@ -196,49 +197,133 @@ function normalizePosition(position) {
 }
 
 /* =========================================================
-   FORMATION
+   FORMATIONS
 ========================================================= */
 
-const FORMATION_POSITIONS = {
-  balanced: [
-    { x: 8, y: 50 },
-    { x: 23, y: 18 },
-    { x: 23, y: 39 },
-    { x: 23, y: 61 },
-    { x: 23, y: 82 },
-    { x: 42, y: 20 },
-    { x: 42, y: 42 },
-    { x: 42, y: 58 },
-    { x: 42, y: 80 },
-    { x: 62, y: 36 },
-    { x: 62, y: 64 },
-  ],
-  attacking: [
-    { x: 8, y: 50 },
-    { x: 22, y: 18 },
-    { x: 22, y: 40 },
-    { x: 22, y: 60 },
-    { x: 22, y: 82 },
-    { x: 40, y: 20 },
-    { x: 40, y: 50 },
-    { x: 40, y: 80 },
-    { x: 59, y: 20 },
-    { x: 64, y: 50 },
-    { x: 59, y: 80 },
-  ],
-  defensive: [
-    { x: 8, y: 50 },
-    { x: 20, y: 18 },
-    { x: 20, y: 39 },
-    { x: 20, y: 61 },
-    { x: 20, y: 82 },
-    { x: 38, y: 20 },
-    { x: 38, y: 42 },
-    { x: 38, y: 58 },
-    { x: 38, y: 80 },
-    { x: 52, y: 38 },
-    { x: 52, y: 62 },
-  ],
+const FORMATIONS = {
+  '4-4-2': {
+    name: '4-4-2',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 18 },
+      { x: 23, y: 39 },
+      { x: 23, y: 61 },
+      { x: 23, y: 82 },
+      { x: 42, y: 20 },
+      { x: 42, y: 42 },
+      { x: 42, y: 58 },
+      { x: 42, y: 80 },
+      { x: 62, y: 36 },
+      { x: 62, y: 64 },
+    ],
+  },
+  '4-3-3': {
+    name: '4-3-3',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 18 },
+      { x: 23, y: 39 },
+      { x: 23, y: 61 },
+      { x: 23, y: 82 },
+      { x: 42, y: 30 },
+      { x: 42, y: 50 },
+      { x: 42, y: 70 },
+      { x: 64, y: 20 },
+      { x: 64, y: 50 },
+      { x: 64, y: 80 },
+    ],
+  },
+  '3-5-2': {
+    name: '3-5-2',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 30 },
+      { x: 23, y: 50 },
+      { x: 23, y: 70 },
+      { x: 42, y: 20 },
+      { x: 42, y: 39 },
+      { x: 42, y: 50 },
+      { x: 42, y: 61 },
+      { x: 42, y: 80 },
+      { x: 64, y: 36 },
+      { x: 64, y: 64 },
+    ],
+  },
+  '5-3-2': {
+    name: '5-3-2',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 20, y: 15 },
+      { x: 20, y: 32 },
+      { x: 20, y: 50 },
+      { x: 20, y: 68 },
+      { x: 20, y: 85 },
+      { x: 42, y: 30 },
+      { x: 42, y: 50 },
+      { x: 42, y: 70 },
+      { x: 64, y: 36 },
+      { x: 64, y: 64 },
+    ],
+  },
+  '4-2-3-1': {
+    name: '4-2-3-1',
+    positions: [
+      { x: 8, y: 50 },
+      { x: 23, y: 18 },
+      { x: 23, y: 39 },
+      { x: 23, y: 61 },
+      { x: 23, y: 82 },
+      { x: 38, y: 35 },
+      { x: 38, y: 65 },
+      { x: 52, y: 20 },
+      { x: 52, y: 50 },
+      { x: 52, y: 80 },
+      { x: 68, y: 50 },
+    ],
+  },
+};
+
+const TACTICS = {
+  'Tiki-Taka': {
+    name: 'Tiki-Taka',
+    description: 'Short passes, high possession',
+    passChance: 0.6,
+    dribbleChance: 0.2,
+    shootChance: 0.2,
+    pressIntensity: 0.7,
+  },
+  'Counter Attack': {
+    name: 'Counter Attack',
+    description: 'Quick transitions, direct play',
+    passChance: 0.3,
+    dribbleChance: 0.4,
+    shootChance: 0.3,
+    pressIntensity: 0.4,
+  },
+  'High Press': {
+    name: 'High Press',
+    description: 'Aggressive pressing, win ball high',
+    passChance: 0.4,
+    dribbleChance: 0.3,
+    shootChance: 0.3,
+    pressIntensity: 0.9,
+  },
+  'Park the Bus': {
+    name: 'Park the Bus',
+    description: 'Defensive, compact shape',
+    passChance: 0.5,
+    dribbleChance: 0.2,
+    shootChance: 0.3,
+    pressIntensity: 0.2,
+  },
+  'Wing Play': {
+    name: 'Wing Play',
+    description: 'Crosses from wide areas',
+    passChance: 0.4,
+    dribbleChance: 0.35,
+    shootChance: 0.25,
+    pressIntensity: 0.5,
+  },
 };
 
 /* =========================================================
@@ -330,8 +415,18 @@ function createDefaultStats() {
    STARTING XI
 ========================================================= */
 
-function selectStartingXI(squad) {
+function selectStartingXI(squad, formation = '4-4-2') {
   const safeSquad = Array.isArray(squad) ? [...squad] : [];
+
+  const formationRequirements = {
+    '4-4-2': { GK: 1, DEF: 4, MID: 4, ATT: 2 },
+    '4-3-3': { GK: 1, DEF: 4, MID: 3, ATT: 3 },
+    '3-5-2': { GK: 1, DEF: 3, MID: 5, ATT: 2 },
+    '5-3-2': { GK: 1, DEF: 5, MID: 3, ATT: 2 },
+    '4-2-3-1': { GK: 1, DEF: 4, MID: 5, ATT: 1 },
+  };
+
+  const requirements = formationRequirements[formation] || formationRequirements['4-4-2'];
 
   const goalkeepers = safeSquad.filter(
     (player) => normalizePosition(getPlayerPosition(player)) === 'GK',
@@ -361,10 +456,10 @@ function selectStartingXI(squad) {
       });
   }
 
-  addBest(goalkeepers, 1);
-  addBest(defenders, 4);
-  addBest(midfielders, 4);
-  addBest(attackers, 2);
+  addBest(goalkeepers, requirements.GK);
+  addBest(defenders, requirements.DEF);
+  addBest(midfielders, requirements.MID);
+  addBest(attackers, requirements.ATT);
 
   const remaining = safeSquad
     .filter((player) => !used.has(player.id))
@@ -554,7 +649,10 @@ export default function MatchPage() {
   const [awayStats, setAwayStats] = useState(createDefaultStats());
 
   const [mentality, setMentality] = useState('balanced');
+  const [formation, setFormation] = useState('4-4-2');
+  const [tactic, setTactic] = useState('Tiki-Taka');
   const [showTactics, setShowTactics] = useState(false);
+  const [showFormation, setShowFormation] = useState(false);
   const [showSubs, setShowSubs] = useState(false);
   const [showEvents, setShowEvents] = useState(true);
 
@@ -564,8 +662,9 @@ export default function MatchPage() {
   const [halfTimeShown, setHalfTimeShown] = useState(false);
   const [userClubId, setUserClubId] = useState(null);
   const [substitutionsUsed, setSubstitutionsUsed] = useState(0);
-  const [selectedSubPlayer, setSelectedSubPlayer] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('home');
+  const [selectedSubIn, setSelectedSubIn] = useState('');
+  const [selectedSubOut, setSelectedSubOut] = useState('');
+  const [playerStamina, setPlayerStamina] = useState({ home: {}, away: {} });
 
   const timerRef = useRef(null);
   const processingRef = useRef(false);
@@ -581,13 +680,10 @@ export default function MatchPage() {
   const animationFrameRef = useRef(null);
   
   // Match simulation state refs
-  const ballPossessionRef = useRef(null); // { team: 'home'|'away', playerIndex: number }
-  const ballTargetRef = useRef(null); // { x, z }
+  const ballPossessionRef = useRef(null);
+  const ballTargetRef = useRef(null);
   const playerTargetsRef = useRef({ home: [], away: [] });
-
-  /* =======================================================
-     DERIVED
-  ======================================================== */
+  const staminaRef = useRef({ home: {}, away: {} });
 
   const isHomeUser =
     String(userClubId || '') === String(homeClub?.id || '');
@@ -664,6 +760,12 @@ export default function MatchPage() {
 
     if (data.mentality) {
       setMentality(data.mentality);
+    }
+    if (data.formation) {
+      setFormation(data.formation);
+    }
+    if (data.tactic) {
+      setTactic(data.tactic);
     }
 
     const status = normalize(data.status);
@@ -744,8 +846,8 @@ export default function MatchPage() {
         setHomeSquad(preparedHome);
         setAwaySquad(preparedAway);
 
-        const startingHome = selectStartingXI(preparedHome);
-        const startingAway = selectStartingXI(preparedAway);
+        const startingHome = selectStartingXI(preparedHome, formation);
+        const startingAway = selectStartingXI(preparedAway, formation);
 
         setHomeXI(startingHome);
         setAwayXI(startingAway);
@@ -769,6 +871,18 @@ export default function MatchPage() {
               ),
           ),
         );
+
+        // Initialize stamina
+        const homeStamina = {};
+        const awayStamina = {};
+        startingHome.forEach((player) => {
+          homeStamina[playerId(player)] = 100;
+        });
+        startingAway.forEach((player) => {
+          awayStamina[playerId(player)] = 100;
+        });
+        staminaRef.current = { home: homeStamina, away: awayStamina };
+        setPlayerStamina({ home: homeStamina, away: awayStamina });
       } catch (error) {
         console.error('Match loading error:', error);
         toast.error('Could not load match');
@@ -784,7 +898,7 @@ export default function MatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [loading, user, matchId, router, applyMatchState]);
+  }, [loading, user, matchId, router, applyMatchState, formation]);
 
   /* =======================================================
      THREE.JS 3D PITCH SETUP
@@ -793,12 +907,10 @@ export default function MatchPage() {
   useEffect(() => {
     if (!mountRef.current || loadingMatch) return;
 
-    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b1120);
     scene.fog = new THREE.Fog(0x0b1120, 30, 80);
 
-    // Camera
     const camera = new THREE.PerspectiveCamera(
       45,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
@@ -808,7 +920,6 @@ export default function MatchPage() {
     camera.position.set(0, 25, 30);
     camera.lookAt(0, 0, 0);
 
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -816,7 +927,6 @@ export default function MatchPage() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mountRef.current.appendChild(renderer.domElement);
 
-    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -826,7 +936,6 @@ export default function MatchPage() {
     controls.maxDistance = 50;
     controls.update();
 
-    // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
@@ -843,7 +952,6 @@ export default function MatchPage() {
     directionalLight.shadow.camera.bottom = -30;
     scene.add(directionalLight);
 
-    // Pitch (grass)
     const pitchGeometry = new THREE.PlaneGeometry(30, 20);
     const pitchMaterial = new THREE.MeshStandardMaterial({
       color: 0x15803d,
@@ -856,8 +964,7 @@ export default function MatchPage() {
     pitch.receiveShadow = true;
     scene.add(pitch);
 
-    // Pitch lines
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
 
     const borderGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-15, 0.01, -10),
@@ -886,63 +993,73 @@ export default function MatchPage() {
     centerCircle.position.y = 0.02;
     scene.add(centerCircle);
 
-    // Goals
     const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
-    const leftGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
-    const leftGoal = new THREE.Mesh(leftGoalGeometry, goalMaterial);
+    const leftGoal = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.15, 6),
+      goalMaterial,
+    );
     leftGoal.position.set(-15, 0.08, 0);
     scene.add(leftGoal);
 
-    const rightGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
-    const rightGoal = new THREE.Mesh(rightGoalGeometry, goalMaterial);
+    const rightGoal = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.15, 6),
+      goalMaterial,
+    );
     rightGoal.position.set(15, 0.08, 0);
     scene.add(rightGoal);
 
-    // Ball
-    const ballGeometry = new THREE.SphereGeometry(0.15, 32, 32);
-    const ballMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.3,
-      metalness: 0.1,
-    });
-    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 32, 32),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.3,
+        metalness: 0.1,
+      }),
+    );
     ball.position.set(0, 0.15, 0);
     ball.castShadow = true;
     scene.add(ball);
     ballMeshRef.current = ball;
 
-    // Create players
     const createPlayer = (x, z, color, index) => {
-      const playerGeometry = new THREE.CylinderGeometry(0.3, 0.35, 1.2, 16);
-      const playerMaterial = new THREE.MeshStandardMaterial({
-        color,
-        roughness: 0.5,
-        metalness: 0.2,
-      });
-      const player = new THREE.Mesh(playerGeometry, playerMaterial);
-      player.position.set(x, 0.6, z);
-      player.castShadow = true;
-      player.userData = { originalX: x, originalZ: z, index };
-      scene.add(player);
-      return player;
+      const group = new THREE.Group();
+
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.35, 0.6, 16),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.5 }),
+      );
+      body.position.y = 0.3;
+      group.add(body);
+
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffcc99 }),
+      );
+      head.position.y = 0.75;
+      group.add(head);
+
+      group.position.set(x, 0, z);
+      group.castShadow = true;
+      scene.add(group);
+      return group;
     };
 
-    const homeFormation = FORMATION_POSITIONS[mentality] || FORMATION_POSITIONS.balanced;
+    const formationData = FORMATIONS[formation] || FORMATIONS['4-4-2'];
+    const formationPositions = formationData.positions;
 
-    playerMeshesRef.current.home = homeFormation.map((pos, index) => {
-      const x = (pos.x - 50) / 50 * 15;
-      const z = (pos.y - 50) / 50 * 10;
+    playerMeshesRef.current.home = formationPositions.map((pos, index) => {
+      const x = ((pos.x - 50) / 50) * 15;
+      const z = ((pos.y - 50) / 50) * 10;
       return createPlayer(x, z, 0x3b82f6, index);
     });
 
-    playerMeshesRef.current.away = homeFormation.map((pos, index) => {
-      const x = (50 - pos.x) / 50 * 15;
-      const z = (50 - pos.y) / 50 * 10;
+    playerMeshesRef.current.away = formationPositions.map((pos, index) => {
+      const x = ((50 - pos.x) / 50) * 15;
+      const z = ((50 - pos.y) / 50) * 10;
       return createPlayer(x, z, 0xef4444, index);
     });
 
-    // Initialize player targets
     playerTargetsRef.current.home = playerMeshesRef.current.home.map((player) => ({
       x: player.position.x,
       z: player.position.z,
@@ -953,11 +1070,9 @@ export default function MatchPage() {
       z: player.position.z,
     }));
 
-    // Animation loop
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
-      
-      // Smooth player movement
+
       playerMeshesRef.current.home.forEach((player, index) => {
         const target = playerTargetsRef.current.home[index];
         if (target) {
@@ -974,12 +1089,11 @@ export default function MatchPage() {
         }
       });
 
-      // Ball follows possession
       if (ballPossessionRef.current && ballMeshRef.current) {
         const { team, playerIndex } = ballPossessionRef.current;
         const players = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
         const player = players[playerIndex];
-        
+
         if (player) {
           ballMeshRef.current.position.x = player.position.x;
           ballMeshRef.current.position.z = player.position.z;
@@ -992,13 +1106,11 @@ export default function MatchPage() {
     };
     animate();
 
-    // Store refs
     sceneRef.current = scene;
     cameraRef.current = camera;
     rendererRef.current = renderer;
     controlsRef.current = controls;
 
-    // Handle resize
     const handleResize = () => {
       if (!mountRef.current || !camera || !renderer) return;
       camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
@@ -1007,7 +1119,6 @@ export default function MatchPage() {
     };
     window.addEventListener('resize', handleResize);
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animationFrameRef.current) {
@@ -1020,15 +1131,14 @@ export default function MatchPage() {
         mountRef.current.removeChild(renderer.domElement);
       }
     };
-  }, [loadingMatch, mentality]);
+  }, [loadingMatch, formation]);
 
   /* =======================================================
-     SIMULATE PLAYER MOVEMENT AND BALL POSSESSION
+     SIMULATE PLAYER MOVEMENT
   ======================================================== */
 
   const simulatePlayerMovement = useCallback(() => {
     if (!ballPossessionRef.current) {
-      // Give ball to a random player
       const team = Math.random() < 0.5 ? 'home' : 'away';
       const playerIndex = Math.floor(Math.random() * 11);
       ballPossessionRef.current = { team, playerIndex };
@@ -1038,126 +1148,84 @@ export default function MatchPage() {
     const { team, playerIndex } = ballPossessionRef.current;
     const players = team === 'home' ? homeXI : awayXI;
     const opposingTeam = team === 'home' ? 'away' : 'home';
-    const opposingPlayers = opposingTeam === 'home' ? homeXI : awayXI;
 
-    // Calculate possession player's current position
     const playerMeshes = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
     const opposingMeshes = opposingTeam === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
-    
+
     const currentPlayer = playerMeshes[playerIndex];
     if (!currentPlayer) return;
 
-    // Decide: pass, shoot, or dribble
+    const tacticData = TACTICS[tactic] || TACTICS['Tiki-Taka'];
+
     const random = Math.random();
 
-    // 30% chance to pass to teammate
-    if (random < 0.3) {
+    if (random < tacticData.passChance) {
       const teammateIndex = Math.floor(Math.random() * 11);
       if (teammateIndex !== playerIndex) {
         const teammate = playerMeshes[teammateIndex];
         if (teammate) {
-          // Pass ball to teammate
           ballPossessionRef.current = { team, playerIndex: teammateIndex };
-          
-          // Move current player towards teammate
           playerTargetsRef.current[team][playerIndex] = {
             x: teammate.position.x,
             z: teammate.position.z,
           };
-          
           return;
         }
       }
     }
 
-    // 20% chance to shoot if close to goal
     const goalX = team === 'home' ? 14 : -14;
     const distanceToGoal = Math.abs(currentPlayer.position.x - goalX);
-    
-    if (random < 0.5 && distanceToGoal < 10) {
-      // Shoot!
+
+    if (random < tacticData.shootChance && distanceToGoal < 10) {
       const goalZ = randomBetweenSafe(-2, 2);
       ballTargetRef.current = { x: goalX, z: goalZ };
-      
-      // Check if goal
+
       const saveChance = 0.3;
       if (Math.random() > saveChance) {
-        // GOAL!
         if (team === 'home') {
           setHomeScore((prev) => prev + 1);
         } else {
           setAwayScore((prev) => prev + 1);
         }
-        
-        // Reset possession
         ballPossessionRef.current = null;
       } else {
-        // Save by goalkeeper
-        const gkIndex = 0;
-        ballPossessionRef.current = { team: opposingTeam, playerIndex: gkIndex };
+        ballPossessionRef.current = { team: opposingTeam, playerIndex: 0 };
       }
-      
       return;
     }
 
-    // Dribble towards opponent goal
     const direction = team === 'home' ? 1 : -1;
     const newX = clamp(currentPlayer.position.x + direction * randomBetweenSafe(1, 3), -14, 14);
     const newZ = clamp(currentPlayer.position.z + randomBetweenSafe(-2, 2), -9, 9);
-    
+
     playerTargetsRef.current[team][playerIndex] = { x: newX, z: newZ };
-    
-    // Move ball with player
     ballTargetRef.current = { x: newX, z: newZ };
 
-    // Defending players move towards ball carrier
     opposingMeshes.forEach((opponent, index) => {
       const targetX = currentPlayer.position.x + (Math.random() - 0.5) * 2;
       const targetZ = currentPlayer.position.z + (Math.random() - 0.5) * 2;
       playerTargetsRef.current[opposingTeam][index] = { x: targetX, z: targetZ };
     });
 
-    // Check if opponent steals ball
-    const stealChance = 0.05;
-    if (Math.random() < stealChance) {
+    if (Math.random() < 0.05) {
       const opponentIndex = Math.floor(Math.random() * 11);
       ballPossessionRef.current = { team: opposingTeam, playerIndex: opponentIndex };
     }
-  }, [homeXI, awayXI]);
 
-  /* =======================================================
-     REALTIME MATCH LISTENER
-  ======================================================== */
-
-  useEffect(() => {
-    if (!user || !matchId) return;
-
-    const matchRef = doc(db, 'matches', matchId);
-
-    const unsubscribe = onSnapshot(
-      matchRef,
-      (snapshot) => {
-        if (!snapshot.exists()) return;
-
-        const data = {
-          id: snapshot.id,
-          ...snapshot.data(),
-        };
-
-        setFixture((previous) => ({
-          ...(previous || {}),
-          ...data,
-        }));
-
-        applyMatchState(data);
-      },
-      (error) => {
-        console.error('Match realtime listener error:', error);
-      },
-    );
-
-    return () => unsubscribe();
-  }, [user, matchId, applyMatchState]);
+    // Update stamina
+    const staminaHome = staminaRef.current.home;
+    const staminaAway = staminaRef.current.away;
+    const currentPlayerData = players[playerIndex];
+    if (currentPlayerData) {
+      const pid = playerId(currentPlayerData);
+      const stamina = team === 'home' ? staminaHome : staminaAway;
+      if (stamina[pid]) {
+        stamina[pid] = clamp(stamina[pid] - 0.5, 0, 100);
+        setPlayerStamina({ home: staminaHome, away: staminaAway });
+      }
+    }
+  }, [homeXI, awayXI, tactic]);
 
   /* =======================================================
      SAVE MATCH STATE
@@ -1174,6 +1242,8 @@ export default function MatchPage() {
       statusValue,
       substitutionsValue,
       mentalityValue,
+      formationValue,
+      tacticValue,
       extra = {},
     }) => {
       if (!matchId) return;
@@ -1197,6 +1267,8 @@ export default function MatchPage() {
           awayStats: awayStatsValue || createDefaultStats(),
           substitutionsUsed: safeNumber(substitutionsValue, 0),
           mentality: mentalityValue || 'balanced',
+          formation: formationValue || '4-4-2',
+          tactic: tacticValue || 'Tiki-Taka',
           updatedAt: serverTimestamp(),
           ...extra,
         },
@@ -1216,7 +1288,6 @@ export default function MatchPage() {
       processingRef.current = true;
 
       try {
-        // Run player movement simulation multiple times per minute
         for (let i = 0; i < 10; i++) {
           simulatePlayerMovement();
         }
@@ -1259,6 +1330,8 @@ export default function MatchPage() {
           statusValue: 'live',
           substitutionsValue: substitutionsUsed,
           mentalityValue: mentality,
+          formationValue: formation,
+          tacticValue: tactic,
         });
       } catch (error) {
         console.error('Simulation error:', error);
@@ -1270,6 +1343,8 @@ export default function MatchPage() {
       homeXI,
       awayXI,
       mentality,
+      formation,
+      tactic,
       homeScore,
       awayScore,
       homeStats,
@@ -1314,6 +1389,8 @@ export default function MatchPage() {
         statusValue: 'live',
         substitutionsValue: substitutionsUsed,
         mentalityValue: mentality,
+        formationValue: formation,
+        tacticValue: tactic,
       });
 
       setMatchStatus('live');
@@ -1338,6 +1415,8 @@ export default function MatchPage() {
     awayStats,
     substitutionsUsed,
     mentality,
+    formation,
+    tactic,
     saveMatchState,
   ]);
 
@@ -1405,6 +1484,8 @@ export default function MatchPage() {
         statusValue: 'live',
         substitutionsValue: substitutionsUsed,
         mentalityValue: mentality,
+        formationValue: formation,
+        tacticValue: tactic,
       });
 
       setHalfTimeShown(false);
@@ -1441,6 +1522,8 @@ export default function MatchPage() {
         statusValue: 'finished',
         substitutionsValue: substitutionsUsed,
         mentalityValue: mentality,
+        formationValue: formation,
+        tacticValue: tactic,
         extra: {
           result: finalResult,
           finishedAt: serverTimestamp(),
@@ -1467,6 +1550,8 @@ export default function MatchPage() {
     awayStats,
     substitutionsUsed,
     mentality,
+    formation,
+    tactic,
     user,
     saveMatchState,
   ]);
@@ -1491,7 +1576,50 @@ export default function MatchPage() {
   };
 
   /* =======================================================
-     TACTICS
+     CHANGE FORMATION
+  ======================================================== */
+
+  const changeFormation = async (value) => {
+    setFormation(value);
+
+    const startingHome = selectStartingXI(homeSquad, value);
+    const startingAway = selectStartingXI(awaySquad, value);
+
+    setHomeXI(startingHome);
+    setAwayXI(startingAway);
+
+    setHomeBench(
+      homeSquad.filter(
+        (player) =>
+          !startingHome.some(
+            (starter) => String(playerId(starter)) === String(playerId(player)),
+          ),
+      ),
+    );
+
+    setAwayBench(
+      awaySquad.filter(
+        (player) =>
+          !startingAway.some(
+            (starter) => String(playerId(starter)) === String(playerId(player)),
+          ),
+      ),
+    );
+
+    toast.success(`Formation changed to ${value}`);
+  };
+
+  /* =======================================================
+     CHANGE TACTIC
+  ======================================================== */
+
+  const changeTactic = async (value) => {
+    setTactic(value);
+    toast.success(`Tactic changed to ${value}`);
+  };
+
+  /* =======================================================
+     CHANGE MENTALITY
   ======================================================== */
 
   const changeMentality = async (value) => {
@@ -1508,6 +1636,8 @@ export default function MatchPage() {
         statusValue: matchStatus === 'ready' ? 'ready' : matchStatus,
         substitutionsValue: substitutionsUsed,
         mentalityValue: value,
+        formationValue: formation,
+        tacticValue: tactic,
       });
     } catch (error) {
       console.error(error);
@@ -1526,8 +1656,8 @@ export default function MatchPage() {
       return;
     }
 
-    if (!selectedSubPlayer) {
-      toast.error('Select a player.');
+    if (!selectedSubIn || !selectedSubOut) {
+      toast.error('Select player IN and player OUT.');
       return;
     }
 
@@ -1537,17 +1667,16 @@ export default function MatchPage() {
     const bench = team === 'home' ? homeBench : awayBench;
 
     const playerIn = bench.find(
-      (player) => String(playerId(player)) === String(selectedSubPlayer),
+      (player) => String(playerId(player)) === String(selectedSubIn),
+    );
+    const playerOut = currentXI.find(
+      (player) => String(playerId(player)) === String(selectedSubOut),
     );
 
-    if (!playerIn) {
-      toast.error('Player not found.');
+    if (!playerIn || !playerOut) {
+      toast.error('Invalid selection.');
       return;
     }
-
-    const playerOut = pick(currentXI);
-
-    if (!playerOut) return;
 
     const nextXI = currentXI.map((player) =>
       String(playerId(player)) === String(playerId(playerOut)) ? playerIn : player,
@@ -1585,7 +1714,8 @@ export default function MatchPage() {
 
     setSubstitutionsUsed(nextSubCount);
     setEvents(nextEvents);
-    setSelectedSubPlayer('');
+    setSelectedSubIn('');
+    setSelectedSubOut('');
 
     await saveMatchState({
       minute: matchMinute,
@@ -1597,6 +1727,8 @@ export default function MatchPage() {
       statusValue: matchStatus,
       substitutionsValue: nextSubCount,
       mentalityValue: mentality,
+      formationValue: formation,
+      tacticValue: tactic,
       extra: {
         [`${team}XI`]: nextXI.map((player) => playerId(player)),
       },
@@ -1682,9 +1814,7 @@ export default function MatchPage() {
         </title>
         <meta
           name="description"
-          content={`Live match between ${getClubName(homeClub)} and ${getClubName(
-            awayClub,
-          )}`}
+          content={`Live match between ${getClubName(homeClub)} and ${getClubName(awayClub)}`}
         />
       </Head>
 
@@ -1755,18 +1885,20 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* LATEST SCORE */}
+        {/* FORMATION + TACTIC BAR */}
         <section className={styles.latestScore}>
           <div>
-            <span>LATEST SCORE</span>
-            <strong>
-              {getClubName(homeClub)} {homeScore} - {awayScore}{' '}
-              {getClubName(awayClub)}
-            </strong>
+            <span>FORMATION</span>
+            <strong>{formation}</strong>
           </div>
-          <span>
-            {matchStatus === 'finished' ? 'FINAL RESULT' : `Minute ${matchMinute}`}
-          </span>
+          <div>
+            <span>TACTIC</span>
+            <strong>{tactic}</strong>
+          </div>
+          <div>
+            <span>MENTALITY</span>
+            <strong>{mentality}</strong>
+          </div>
         </section>
 
         {/* ACCESS WARNING */}
@@ -1813,6 +1945,13 @@ export default function MatchPage() {
 
             <button
               type="button"
+              onClick={() => setShowFormation((previous) => !previous)}
+            >
+              📋 Formation
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowTactics((previous) => !previous)}
             >
               ⚙ Tactics
@@ -1844,11 +1983,49 @@ export default function MatchPage() {
           </section>
         )}
 
-        {/* TACTICS */}
+        {/* FORMATION PANEL */}
+        {showFormation && userIsParticipant && (
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2>Formation</h2>
+              <span>{formation}</span>
+            </div>
+            <div className={styles.mentalityGrid}>
+              {Object.keys(FORMATIONS).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={formation === value ? styles.active : ''}
+                  onClick={() => changeFormation(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* TACTICS PANEL */}
         {showTactics && userIsParticipant && (
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
-              <h2>Team Mentality</h2>
+              <h2>Tactics</h2>
+              <span>{tactic}</span>
+            </div>
+            <div className={styles.mentalityGrid}>
+              {Object.keys(TACTICS).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={tactic === value ? styles.active : ''}
+                  onClick={() => changeTactic(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            <div className={styles.panelHeader}>
+              <h2>Mentality</h2>
             </div>
             <div className={styles.mentalityGrid}>
               {['defensive', 'balanced', 'attacking'].map((value) => (
@@ -1875,26 +2052,50 @@ export default function MatchPage() {
               </span>
             </div>
 
-            <select
-              value={selectedSubPlayer}
-              onChange={(event) => setSelectedSubPlayer(event.target.value)}
-            >
-              <option value="">Select player</option>
-              {(userTeam === 'home' ? homeBench : awayBench).map((player) => (
-                <option
-                  key={String(playerId(player))}
-                  value={String(playerId(player))}
-                >
-                  {getPlayerName(player)} · {getPlayerOverall(player)}
-                </option>
-              ))}
-            </select>
+            <div className={styles.subRow}>
+              <label>Player IN (from bench)</label>
+              <select
+                value={selectedSubIn}
+                onChange={(event) => setSelectedSubIn(event.target.value)}
+              >
+                <option value="">Select player IN</option>
+                {(userTeam === 'home' ? homeBench : awayBench).map((player) => (
+                  <option
+                    key={String(playerId(player))}
+                    value={String(playerId(player))}
+                  >
+                    {getPlayerName(player)} · OVR {getPlayerOverall(player)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.subRow}>
+              <label>Player OUT (from pitch)</label>
+              <select
+                value={selectedSubOut}
+                onChange={(event) => setSelectedSubOut(event.target.value)}
+              >
+                <option value="">Select player OUT</option>
+                {(userTeam === 'home' ? homeXI : awayXI).map((player) => (
+                  <option
+                    key={String(playerId(player))}
+                    value={String(playerId(player))}
+                  >
+                    {getPlayerName(player)} · OVR {getPlayerOverall(player)} · STA{' '}
+                    {Math.round(playerStamina[userTeam]?.[playerId(player)] || 100)}%
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <button
               type="button"
               onClick={makeSubstitution}
               disabled={
-                substitutionsUsed >= MAX_SUBSTITUTIONS || !selectedSubPlayer
+                substitutionsUsed >= MAX_SUBSTITUTIONS ||
+                !selectedSubIn ||
+                !selectedSubOut
               }
             >
               Make Substitution
@@ -1970,12 +2171,12 @@ export default function MatchPage() {
           )}
         </section>
 
-        {/* LINEUPS */}
+        {/* LINEUPS WITH RATINGS AND STAMINA */}
         <section className={styles.lineups}>
           <div className={styles.lineupCard}>
             <div className={styles.sectionHeader}>
               <h2>{getClubName(homeClub)}</h2>
-              <span>{homeXI.length}/11</span>
+              <span>{homeXI.length}/11 · {formation}</span>
             </div>
             <div className={styles.playerList}>
               {homeXI.map((player) => (
@@ -1988,8 +2189,24 @@ export default function MatchPage() {
                   <div>
                     <strong>{getPlayerName(player)}</strong>
                     <small>
-                      {normalizePosition(getPlayerPosition(player))} ·{' '}
+                      {normalizePosition(getPlayerPosition(player))} · OVR{' '}
                       {getPlayerOverall(player)}
+                    </small>
+                  </div>
+                  <div className={styles.playerMeta}>
+                    <span className={styles.playerRating}>
+                      {getPlayerOverall(player)}
+                    </span>
+                    <span className={styles.staminaBar}>
+                      <span
+                        className={styles.staminaFill}
+                        style={{
+                          width: `${Math.round(playerStamina.home?.[playerId(player)] || 100)}%`,
+                        }}
+                      />
+                    </span>
+                    <small>
+                      {Math.round(playerStamina.home?.[playerId(player)] || 100)}%
                     </small>
                   </div>
                 </div>
@@ -2000,7 +2217,7 @@ export default function MatchPage() {
           <div className={styles.lineupCard}>
             <div className={styles.sectionHeader}>
               <h2>{getClubName(awayClub)}</h2>
-              <span>{awayXI.length}/11</span>
+              <span>{awayXI.length}/11 · {formation}</span>
             </div>
             <div className={styles.playerList}>
               {awayXI.map((player) => (
@@ -2013,8 +2230,24 @@ export default function MatchPage() {
                   <div>
                     <strong>{getPlayerName(player)}</strong>
                     <small>
-                      {normalizePosition(getPlayerPosition(player))} ·{' '}
+                      {normalizePosition(getPlayerPosition(player))} · OVR{' '}
                       {getPlayerOverall(player)}
+                    </small>
+                  </div>
+                  <div className={styles.playerMeta}>
+                    <span className={styles.playerRating}>
+                      {getPlayerOverall(player)}
+                    </span>
+                    <span className={styles.staminaBar}>
+                      <span
+                        className={styles.staminaFill}
+                        style={{
+                          width: `${Math.round(playerStamina.away?.[playerId(player)] || 100)}%`,
+                        }}
+                      />
+                    </span>
+                    <small>
+                      {Math.round(playerStamina.away?.[playerId(player)] || 100)}%
                     </small>
                   </div>
                 </div>
@@ -2030,12 +2263,12 @@ export default function MatchPage() {
             <strong>{fixture.stadium || getClubStadium(homeClub)}</strong>
           </div>
           <div>
-            <span>ROUND</span>
-            <strong>{fixture.round || '-'}</strong>
+            <span>FORMATION</span>
+            <strong>{formation}</strong>
           </div>
           <div>
-            <span>SEASON</span>
-            <strong>{fixture.season || '-'}</strong>
+            <span>TACTIC</span>
+            <strong>{tactic}</strong>
           </div>
           <div>
             <span>MATCH ID</span>
