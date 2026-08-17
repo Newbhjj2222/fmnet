@@ -1,7 +1,7 @@
 /* =========================================================
    match.module.css
    Dark theme + responsive + attractive colors
-   Includes Three.js 3D pitch container
+   Complete CSS for 3D Football Match
 ========================================================= */
 
 /* =========================================================
@@ -36,7 +36,7 @@
 }
 
 /* =========================================================
-   EMPTY PAGE (Match Not Found)
+   EMPTY PAGE
 ========================================================= */
 
 .emptyPage {
@@ -319,7 +319,7 @@
 }
 
 /* =========================================================
-   LATEST SCORE
+   LATEST SCORE / INFO BAR
 ========================================================= */
 
 .latestScore {
@@ -355,12 +355,6 @@
   font-size: 1.1rem;
   font-weight: 800;
   color: #e5e7eb;
-}
-
-.latestScore > span:last-child {
-  color: #38bdf8;
-  font-weight: 800;
-  font-size: 0.9rem;
 }
 
 /* =========================================================
@@ -485,7 +479,7 @@
 }
 
 /* =========================================================
-   PANELS (Tactics & Substitutions)
+   PANELS (Formation, Tactics, Substitutions)
 ========================================================= */
 
 .panel {
@@ -535,6 +529,7 @@
   text-transform: capitalize;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 0.85rem;
 }
 
 .mentalityGrid button:hover {
@@ -549,7 +544,7 @@
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
 }
 
-/* Substitution select */
+/* Substitution selects */
 .panel select {
   width: 100%;
   padding: 0.8rem;
@@ -558,7 +553,7 @@
   background: #0f172a;
   color: #e5e7eb;
   font-weight: 600;
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.5rem;
   cursor: pointer;
 }
 
@@ -577,6 +572,7 @@
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
+  margin-top: 0.5rem;
 }
 
 .panel button:hover {
@@ -589,6 +585,20 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.subRow {
+  margin-bottom: 0.8rem;
+}
+
+.subRow label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
 }
 
 /* =========================================================
@@ -836,6 +846,46 @@
   font-size: 0.75rem;
 }
 
+/* Player Meta (Rating + Stamina) */
+.playerMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.playerRating {
+  font-weight: 800;
+  color: #38bdf8;
+  font-size: 0.9rem;
+  min-width: 25px;
+  text-align: center;
+}
+
+.staminaBar {
+  width: 50px;
+  height: 6px;
+  background: #1a2740;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.staminaFill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #38bdf8);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.playerMeta small {
+  color: #94a3b8;
+  font-size: 0.65rem;
+  min-width: 30px;
+  text-align: right;
+}
+
 /* =========================================================
    MATCH INFO
 ========================================================= */
@@ -976,5 +1026,13 @@
 
   .player div small {
     font-size: 0.65rem;
+  }
+
+  .playerMeta {
+    gap: 0.3rem;
+  }
+
+  .staminaBar {
+    width: 35px;
   }
 }
