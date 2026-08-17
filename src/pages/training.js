@@ -1,8 +1,15 @@
 // pages/training.js
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+
 import { useAuth } from '../context/AuthContext';
 import { db } from '../components/firebase';
 
@@ -34,7 +41,8 @@ const TRAINING_DRILLS = {
     name: 'Attacking Drill',
     icon: '⚽',
     color: '#38bdf8',
-    description: 'Improve shooting, finishing, and offensive movement',
+    description:
+      'Improve shooting, finishing, and offensive movement',
     effects: {
       shooting: { min: 1, max: 3 },
       dribbling: { min: 0, max: 2 },
@@ -48,7 +56,8 @@ const TRAINING_DRILLS = {
     name: 'Defending Drill',
     icon: '🛡️',
     color: '#ef4444',
-    description: 'Improve tackling, marking, and defensive positioning',
+    description:
+      'Improve tackling, marking, and defensive positioning',
     effects: {
       defending: { min: 1, max: 3 },
       physical: { min: 0, max: 2 },
@@ -62,7 +71,8 @@ const TRAINING_DRILLS = {
     name: 'Passing Drill',
     icon: '🦶',
     color: '#22c55e',
-    description: 'Improve passing accuracy and vision',
+    description:
+      'Improve passing accuracy and vision',
     effects: {
       passing: { min: 1, max: 3 },
       vision: { min: 0, max: 2 },
@@ -76,7 +86,8 @@ const TRAINING_DRILLS = {
     name: 'Fitness Training',
     icon: '💪',
     color: '#f59e0b',
-    description: 'Improve stamina, strength, and physical condition',
+    description:
+      'Improve stamina, strength, and physical condition',
     effects: {
       stamina: { min: 1, max: 4 },
       physical: { min: 0, max: 3 },
@@ -90,7 +101,8 @@ const TRAINING_DRILLS = {
     name: 'Shooting Practice',
     icon: '🎯',
     color: '#ec4899',
-    description: 'Improve finishing and long shots',
+    description:
+      'Improve finishing and long shots',
     effects: {
       shooting: { min: 2, max: 4 },
       finishing: { min: 0, max: 3 },
@@ -104,7 +116,8 @@ const TRAINING_DRILLS = {
     name: 'Goalkeeper Training',
     icon: '🧤',
     color: '#8b5cf6',
-    description: 'Improve goalkeeping, reflexes, and positioning',
+    description:
+      'Improve goalkeeping, reflexes, and positioning',
     effects: {
       goalkeeping: { min: 1, max: 4 },
       reflexes: { min: 0, max: 3 },
@@ -118,7 +131,8 @@ const TRAINING_DRILLS = {
     name: 'Tactical Session',
     icon: '📋',
     color: '#14b8a6',
-    description: 'Improve tactical awareness and teamwork',
+    description:
+      'Improve tactical awareness and teamwork',
     effects: {
       vision: { min: 1, max: 2 },
       positioning: { min: 0, max: 2 },
@@ -132,7 +146,8 @@ const TRAINING_DRILLS = {
     name: 'Set Piece Practice',
     icon: '🚩',
     color: '#f97316',
-    description: 'Improve free kicks, corners, and penalties',
+    description:
+      'Improve free kicks, corners, and penalties',
     effects: {
       technique: { min: 1, max: 3 },
       passing: { min: 0, max: 1 },
@@ -157,13 +172,19 @@ const DAY_NAMES = [
 ========================================================= */
 
 function safeNumber(value, fallback = 0) {
-  if (value === null || value === undefined || value === '') {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
     return fallback;
   }
 
   const number = Number(value);
 
-  return Number.isFinite(number) ? number : fallback;
+  return Number.isFinite(number)
+    ? number
+    : fallback;
 }
 
 function getPlayerName(player) {
@@ -171,7 +192,9 @@ function getPlayerName(player) {
     player?.name ||
     player?.fullName ||
     player?.displayName ||
-    `${player?.firstName || ''} ${player?.lastName || ''}`.trim() ||
+    `${player?.firstName || ''} ${
+      player?.lastName || ''
+    }`.trim() ||
     'Unknown Player'
   );
 }
@@ -207,71 +230,75 @@ function createId(prefix = 'item') {
     .slice(2, 10)}`;
 }
 
-/*
-  Old schedule compatibility.
-
-  Old structure:
-
-  {
-    "0": [
-      {
-        drillId: "attacking",
-        playerIds: ["abc"]
-      }
-    ]
-  }
-
-  New structure:
-
-  {
-    "0": [
-      {
-        id: "drill-...",
-        drillId: "attacking",
-        playerIds: ["abc"]
-      }
-    ]
-  }
-
-  This converts old data automatically.
-*/
+/* =========================================================
+   NORMALIZE OLD SCHEDULE
+========================================================= */
 
 function normalizeSchedule(rawSchedule) {
-  if (!rawSchedule || typeof rawSchedule !== 'object') {
+  if (
+    !rawSchedule ||
+    typeof rawSchedule !== 'object'
+  ) {
     return {};
   }
 
   const normalized = {};
 
-  for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
-    const rawDay = rawSchedule[dayIndex];
+  for (let day = 0; day < 7; day += 1) {
+    const rawDay = rawSchedule[day];
 
     if (!Array.isArray(rawDay)) {
       continue;
     }
 
-    normalized[dayIndex] = rawDay
+    const slots = rawDay
       .map((slot) => {
-        if (!slot || typeof slot !== 'object') {
+        if (
+          !slot ||
+          typeof slot !== 'object'
+        ) {
           return null;
         }
 
-        const drillId = slot.drillId;
+        const drillId =
+          slot.drillId;
 
-        if (!TRAINING_DRILLS[drillId]) {
+        if (
+          !TRAINING_DRILLS[drillId]
+        ) {
           return null;
         }
 
         return {
-          id: slot.id || createId('drill'),
+          id:
+            slot.id ||
+            createId('drill'),
+
           drillId,
-          playerIds: Array.isArray(slot.playerIds)
-            ? [...new Set(slot.playerIds.map(String))]
-            : [],
+
+          playerIds:
+            Array.isArray(
+              slot.playerIds
+            )
+              ? [
+                  ...new Set(
+                    slot.playerIds.map(
+                      String
+                    )
+                  ),
+                ]
+              : [],
         };
       })
       .filter(Boolean)
-      .slice(0, MAX_DRILLS_PER_DAY);
+      .slice(
+        0,
+        MAX_DRILLS_PER_DAY
+      );
+
+    if (slots.length > 0) {
+      normalized[day] = slots;
+    }
   }
 
   return normalized;
@@ -283,36 +310,92 @@ function normalizeSchedule(rawSchedule) {
 
 export default function TrainingPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
 
-  const [careerData, setCareerData] = useState(null);
-  const [clubInfo, setClubInfo] = useState(null);
-  const [players, setPlayers] = useState([]);
+  const {
+    user,
+    loading,
+  } = useAuth();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [
+    careerData,
+    setCareerData,
+  ] = useState(null);
 
-  const [schedule, setSchedule] = useState({});
+  const [
+    clubInfo,
+    setClubInfo,
+  ] = useState(null);
 
-  const [selectedDay, setSelectedDay] = useState(0);
+  const [
+    players,
+    setPlayers,
+  ] = useState([]);
 
-  const [draggedPlayer, setDraggedPlayer] = useState(null);
-  const [draggedDrill, setDraggedDrill] = useState(null);
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
 
-  const [draggedScheduleDrill, setDraggedScheduleDrill] =
-    useState(null);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-  const [dropTarget, setDropTarget] = useState(null);
+  const [
+    schedule,
+    setSchedule,
+  ] = useState({});
 
-  const scheduleRef = useRef({});
-  const saveTimerRef = useRef(null);
+  const [
+    selectedDay,
+    setSelectedDay,
+  ] = useState(0);
+
+  const [
+    dropTarget,
+    setDropTarget,
+  ] = useState(null);
+
+  const [
+    activeDrag,
+    setActiveDrag,
+  ] = useState(null);
+
+  /*
+    Reference containing the current
+    schedule without waiting for React
+    to finish a render.
+  */
+
+  const scheduleRef =
+    useRef({});
+
+  /*
+    Pointer drag reference.
+
+    This is the important part for
+    Android / touch devices.
+  */
+
+  const pointerDragRef =
+    useRef(null);
+
+  const pointerMovedRef =
+    useRef(false);
+
+  const autoSaveTimerRef =
+    useRef(null);
+
+  const suppressClickRef =
+    useRef(false);
 
   /* =======================================================
-     SYNC REF
+     SYNC SCHEDULE REF
   ======================================================= */
 
   useEffect(() => {
-    scheduleRef.current = schedule;
+    scheduleRef.current =
+      schedule;
   }, [schedule]);
 
   /* =======================================================
@@ -320,7 +403,9 @@ export default function TrainingPage() {
   ======================================================= */
 
   useEffect(() => {
-    if (loading) return;
+    if (loading) {
+      return;
+    }
 
     if (!user) {
       router.push('/login');
@@ -328,150 +413,223 @@ export default function TrainingPage() {
     }
 
     fetchTrainingData();
-  }, [user, loading, router]);
+  }, [
+    user,
+    loading,
+    router,
+  ]);
 
   /* =======================================================
-     FETCH DATA
+     FETCH TRAINING DATA
   ======================================================= */
 
-  const fetchTrainingData = async () => {
-    if (!user) return;
-
-    try {
-      setIsLoading(true);
-
-      const userRef = doc(db, 'users', user.uid);
-      const userSnapshot = await getDoc(userRef);
-
-      if (!userSnapshot.exists()) {
-        toast.error('User account not found');
+  const fetchTrainingData =
+    async () => {
+      if (!user) {
         return;
-      }
-
-      const userData = userSnapshot.data();
-      const career = userData.careerData || {};
-
-      setCareerData(career);
-
-      if (!career.currentClub) {
-        setPlayers([]);
-        setSchedule({});
-        return;
-      }
-
-      /* ===================================================
-         CLUB
-      =================================================== */
-
-      const clubRef = doc(
-        db,
-        'clubs',
-        career.currentClub
-      );
-
-      const clubSnapshot = await getDoc(clubRef);
-
-      if (clubSnapshot.exists()) {
-        setClubInfo({
-          id: clubSnapshot.id,
-          ...clubSnapshot.data(),
-        });
-      } else {
-        setClubInfo(null);
-      }
-
-      /* ===================================================
-         PLAYERS
-      =================================================== */
-
-      const playersQuery = query(
-        collection(db, 'players'),
-        where('clubId', '==', career.currentClub)
-      );
-
-      const playersSnapshot = await getDocs(playersQuery);
-
-      const playerList = [];
-
-      playersSnapshot.forEach((playerDoc) => {
-        const player = playerDoc.data();
-
-        if (
-          player.squadType !== 'youth' &&
-          player.isYouth !== true
-        ) {
-          playerList.push({
-            id: playerDoc.id,
-            ...player,
-          });
-        }
-      });
-
-      playerList.sort(
-        (a, b) => getPlayerOverall(b) - getPlayerOverall(a)
-      );
-
-      setPlayers(playerList);
-
-      /* ===================================================
-         SCHEDULE
-      =================================================== */
-
-      const normalized = normalizeSchedule(
-        career.trainingSchedule
-      );
-
-      setSchedule(normalized);
-      scheduleRef.current = normalized;
-    } catch (error) {
-      console.error(
-        'Error fetching training data:',
-        error
-      );
-
-      toast.error('Failed to load training data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /* =======================================================
-     SAVE SCHEDULE TO FIRESTORE
-  ======================================================= */
-
-  const saveScheduleToFirestore = useCallback(
-    async (scheduleToSave) => {
-      if (!user || !careerData?.currentClub) {
-        return false;
       }
 
       try {
-        await updateDoc(doc(db, 'users', user.uid), {
-          'careerData.trainingSchedule': scheduleToSave,
-          'careerData.trainingScheduleUpdatedAt':
-            new Date().toISOString(),
-          updatedAt: serverTimestamp(),
-        });
+        setIsLoading(true);
 
-        setCareerData((prev) => ({
-          ...(prev || {}),
-          trainingSchedule: scheduleToSave,
-          trainingScheduleUpdatedAt:
-            new Date().toISOString(),
-        }));
+        const userRef = doc(
+          db,
+          'users',
+          user.uid
+        );
 
-        return true;
+        const userSnapshot =
+          await getDoc(userRef);
+
+        if (
+          !userSnapshot.exists()
+        ) {
+          toast.error(
+            'User account not found'
+          );
+
+          return;
+        }
+
+        const userData =
+          userSnapshot.data();
+
+        const career =
+          userData.careerData ||
+          {};
+
+        setCareerData(career);
+
+        if (!career.currentClub) {
+          setPlayers([]);
+          setSchedule({});
+          scheduleRef.current = {};
+          return;
+        }
+
+        /* ================================================
+           CLUB
+        ================================================ */
+
+        const clubRef = doc(
+          db,
+          'clubs',
+          career.currentClub
+        );
+
+        const clubSnapshot =
+          await getDoc(clubRef);
+
+        if (
+          clubSnapshot.exists()
+        ) {
+          setClubInfo({
+            id: clubSnapshot.id,
+            ...clubSnapshot.data(),
+          });
+        } else {
+          setClubInfo(null);
+        }
+
+        /* ================================================
+           PLAYERS
+        ================================================ */
+
+        const playersQuery =
+          query(
+            collection(
+              db,
+              'players'
+            ),
+            where(
+              'clubId',
+              '==',
+              career.currentClub
+            )
+          );
+
+        const playersSnapshot =
+          await getDocs(
+            playersQuery
+          );
+
+        const playerList = [];
+
+        playersSnapshot.forEach(
+          (playerDoc) => {
+            const player =
+              playerDoc.data();
+
+            if (
+              player.squadType !==
+                'youth' &&
+              player.isYouth !== true
+            ) {
+              playerList.push({
+                id: playerDoc.id,
+                ...player,
+              });
+            }
+          }
+        );
+
+        playerList.sort(
+          (a, b) =>
+            getPlayerOverall(b) -
+            getPlayerOverall(a)
+        );
+
+        setPlayers(
+          playerList
+        );
+
+        /* ================================================
+           SCHEDULE
+        ================================================ */
+
+        const normalized =
+          normalizeSchedule(
+            career.trainingSchedule
+          );
+
+        setSchedule(normalized);
+
+        scheduleRef.current =
+          normalized;
       } catch (error) {
         console.error(
-          'Save training schedule error:',
+          'Error fetching training data:',
           error
         );
 
-        return false;
+        toast.error(
+          'Failed to load training data'
+        );
+      } finally {
+        setIsLoading(false);
       }
-    },
-    [user, careerData?.currentClub]
-  );
+    };
+
+  /* =======================================================
+     SAVE TO FIRESTORE
+  ======================================================= */
+
+  const saveScheduleToFirestore =
+    useCallback(
+      async (scheduleToSave) => {
+        if (
+          !user ||
+          !careerData?.currentClub
+        ) {
+          return false;
+        }
+
+        try {
+          await updateDoc(
+            doc(
+              db,
+              'users',
+              user.uid
+            ),
+            {
+              'careerData.trainingSchedule':
+                scheduleToSave,
+
+              'careerData.trainingScheduleUpdatedAt':
+                new Date().toISOString(),
+
+              updatedAt:
+                serverTimestamp(),
+            }
+          );
+
+          setCareerData(
+            (previous) => ({
+              ...(previous || {}),
+
+              trainingSchedule:
+                scheduleToSave,
+
+              trainingScheduleUpdatedAt:
+                new Date().toISOString(),
+            })
+          );
+
+          return true;
+        } catch (error) {
+          console.error(
+            'Save schedule error:',
+            error
+          );
+
+          return false;
+        }
+      },
+      [
+        user,
+        careerData?.currentClub,
+      ]
+    );
 
   /* =======================================================
      AUTO SAVE
@@ -486,24 +644,28 @@ export default function TrainingPage() {
       return;
     }
 
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
+    if (
+      autoSaveTimerRef.current
+    ) {
+      clearTimeout(
+        autoSaveTimerRef.current
+      );
     }
 
-    saveTimerRef.current = setTimeout(async () => {
-      const success =
-        await saveScheduleToFirestore(scheduleRef.current);
-
-      if (!success) {
-        console.error(
-          'Automatic training schedule save failed'
+    autoSaveTimerRef.current =
+      setTimeout(() => {
+        saveScheduleToFirestore(
+          scheduleRef.current
         );
-      }
-    }, 700);
+      }, 700);
 
     return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
+      if (
+        autoSaveTimerRef.current
+      ) {
+        clearTimeout(
+          autoSaveTimerRef.current
+        );
       }
     };
   }, [
@@ -515,448 +677,468 @@ export default function TrainingPage() {
   ]);
 
   /* =======================================================
-     DRAG: LIBRARY DRILL
+     UPDATE SCHEDULE HELPER
   ======================================================= */
 
-  const handleDragStartDrill = useCallback(
-    (e, drillId) => {
-      setDraggedDrill(drillId);
-      setDraggedScheduleDrill(null);
-      setDraggedPlayer(null);
+  const updateSchedule =
+    useCallback((updater) => {
+      setSchedule((previous) => {
+        const next =
+          typeof updater ===
+          'function'
+            ? updater(previous)
+            : updater;
 
-      e.dataTransfer.effectAllowed = 'copy';
+        scheduleRef.current =
+          next;
 
-      e.dataTransfer.setData(
-        'application/json',
-        JSON.stringify({
-          type: 'new-drill',
-          drillId,
-        })
-      );
-    },
-    []
-  );
-
-  /* =======================================================
-     DRAG: PLAYER
-  ======================================================= */
-
-  const handleDragStartPlayer = useCallback(
-    (e, player) => {
-      setDraggedPlayer(player);
-      setDraggedDrill(null);
-      setDraggedScheduleDrill(null);
-
-      e.dataTransfer.effectAllowed = 'move';
-
-      e.dataTransfer.setData(
-        'application/json',
-        JSON.stringify({
-          type: 'player',
-          playerId: player.id,
-        })
-      );
-    },
-    []
-  );
-
-  /* =======================================================
-     DRAG: SCHEDULE DRILL
-  ======================================================= */
-
-  const handleDragStartScheduleDrill = useCallback(
-    (e, dayIndex, slotId) => {
-      setDraggedScheduleDrill({
-        dayIndex,
-        slotId,
+        return next;
       });
-
-      setDraggedDrill(null);
-      setDraggedPlayer(null);
-
-      e.dataTransfer.effectAllowed = 'move';
-
-      e.dataTransfer.setData(
-        'application/json',
-        JSON.stringify({
-          type: 'schedule-drill',
-          dayIndex,
-          slotId,
-        })
-      );
-    },
-    []
-  );
+    }, []);
 
   /* =======================================================
-     DRAG OVER
+     ADD DRILL
   ======================================================= */
 
-  const handleDragOver = useCallback(
-    (e, targetId) => {
-      e.preventDefault();
-
-      e.dataTransfer.dropEffect =
-        draggedScheduleDrill ? 'move' : 'copy';
-
-      if (dropTarget !== targetId) {
-        setDropTarget(targetId);
-      }
-    },
-    [dropTarget, draggedScheduleDrill]
-  );
-
-  /* =======================================================
-     DRAG END
-  ======================================================= */
-
-  const handleDragEnd = useCallback(() => {
-    setDraggedPlayer(null);
-    setDraggedDrill(null);
-    setDraggedScheduleDrill(null);
-    setDropTarget(null);
-  }, []);
-
-  /* =======================================================
-     ADD NEW DRILL
-  ======================================================= */
-
-  const addDrillToDay = useCallback(
-    (dayIndex, drillId) => {
-      if (!TRAINING_DRILLS[drillId]) {
-        return;
-      }
-
-      setSchedule((prev) => {
-        const currentDay = Array.isArray(prev[dayIndex])
-          ? prev[dayIndex]
-          : [];
-
+  const addDrillToDay =
+    useCallback(
+      (dayIndex, drillId) => {
         if (
-          currentDay.length >= MAX_DRILLS_PER_DAY
+          !TRAINING_DRILLS[
+            drillId
+          ]
         ) {
-          toast.error(
-            'Maximum 3 drills per day'
-          );
-
-          return prev;
+          return false;
         }
 
-        const newSlot = {
-          id: createId('drill'),
-          drillId,
-          playerIds: [],
-        };
+        let added = false;
 
-        return {
-          ...prev,
-          [dayIndex]: [
-            ...currentDay,
-            newSlot,
-          ],
-        };
-      });
-    },
-    []
-  );
+        updateSchedule(
+          (previous) => {
+            const daySlots =
+              Array.isArray(
+                previous[
+                  dayIndex
+                ]
+              )
+                ? [
+                    ...previous[
+                      dayIndex
+                    ],
+                  ]
+                : [];
+
+            if (
+              daySlots.length >=
+              MAX_DRILLS_PER_DAY
+            ) {
+              toast.error(
+                'Maximum 3 drills per day'
+              );
+
+              return previous;
+            }
+
+            daySlots.push({
+              id: createId(
+                'drill'
+              ),
+
+              drillId,
+
+              playerIds: [],
+            });
+
+            added = true;
+
+            return {
+              ...previous,
+
+              [dayIndex]:
+                daySlots,
+            };
+          }
+        );
+
+        return added;
+      },
+      [updateSchedule]
+    );
 
   /* =======================================================
      MOVE EXISTING DRILL
   ======================================================= */
 
-  const moveScheduleDrill = useCallback(
-    (
-      fromDayIndex,
-      slotId,
-      toDayIndex
-    ) => {
-      setSchedule((prev) => {
-        const sourceDay = Array.isArray(
-          prev[fromDayIndex]
-        )
-          ? [...prev[fromDayIndex]]
-          : [];
-
-        const targetDay = Array.isArray(
-          prev[toDayIndex]
-        )
-          ? [...prev[toDayIndex]]
-          : [];
-
-        const sourceIndex =
-          sourceDay.findIndex(
-            (slot) => slot.id === slotId
-          );
-
-        if (sourceIndex === -1) {
-          return prev;
-        }
-
-        /*
-          Same day:
-          do nothing because the user dropped
-          the drill back onto its own day.
-        */
-
-        if (fromDayIndex === toDayIndex) {
-          return prev;
-        }
-
+  const moveScheduleDrill =
+    useCallback(
+      (
+        fromDay,
+        slotId,
+        toDay
+      ) => {
         if (
-          targetDay.length >= MAX_DRILLS_PER_DAY
+          fromDay === toDay
         ) {
-          toast.error(
-            'Maximum 3 drills per day'
-          );
-
-          return prev;
+          return;
         }
 
-        const [movedSlot] =
-          sourceDay.splice(
-            sourceIndex,
-            1
-          );
+        updateSchedule(
+          (previous) => {
+            const source =
+              Array.isArray(
+                previous[
+                  fromDay
+                ]
+              )
+                ? [
+                    ...previous[
+                      fromDay
+                    ],
+                  ]
+                : [];
 
-        targetDay.push(movedSlot);
+            const target =
+              Array.isArray(
+                previous[
+                  toDay
+                ]
+              )
+                ? [
+                    ...previous[
+                      toDay
+                    ],
+                  ]
+                : [];
 
-        return {
-          ...prev,
-          [fromDayIndex]: sourceDay,
-          [toDayIndex]: targetDay,
-        };
-      });
-    },
-    []
-  );
+            const index =
+              source.findIndex(
+                (slot) =>
+                  slot.id ===
+                  slotId
+              );
+
+            if (index === -1) {
+              return previous;
+            }
+
+            if (
+              target.length >=
+              MAX_DRILLS_PER_DAY
+            ) {
+              toast.error(
+                'Maximum 3 drills per day'
+              );
+
+              return previous;
+            }
+
+            const [
+              movedSlot,
+            ] =
+              source.splice(
+                index,
+                1
+              );
+
+            target.push(
+              movedSlot
+            );
+
+            toast.success(
+              `Training moved to ${DAY_NAMES[toDay]}`
+            );
+
+            return {
+              ...previous,
+
+              [fromDay]:
+                source,
+
+              [toDay]:
+                target,
+            };
+          }
+        );
+      },
+      [updateSchedule]
+    );
 
   /* =======================================================
      ADD PLAYER
   ======================================================= */
 
-  const addPlayerToDrill = useCallback(
-    (dayIndex, slotId, playerId) => {
-      setSchedule((prev) => {
-        const daySlots = Array.isArray(
-          prev[dayIndex]
-        )
-          ? prev[dayIndex]
-          : [];
+  const addPlayerToDrill =
+    useCallback(
+      (
+        dayIndex,
+        slotId,
+        playerId
+      ) => {
+        updateSchedule(
+          (previous) => {
+            const daySlots =
+              Array.isArray(
+                previous[
+                  dayIndex
+                ]
+              )
+                ? previous[
+                    dayIndex
+                  ]
+                : [];
 
-        const targetSlot = daySlots.find(
-          (slot) => slot.id === slotId
+            const target =
+              daySlots.find(
+                (slot) =>
+                  slot.id ===
+                  slotId
+              );
+
+            if (!target) {
+              return previous;
+            }
+
+            if (
+              target.playerIds.length >=
+              MAX_PLAYERS_PER_DRILL
+            ) {
+              toast.error(
+                'Maximum 5 players per drill'
+              );
+
+              return previous;
+            }
+
+            if (
+              target.playerIds.includes(
+                playerId
+              )
+            ) {
+              toast.error(
+                'Player already in this drill'
+              );
+
+              return previous;
+            }
+
+            toast.success(
+              'Player added to training'
+            );
+
+            return {
+              ...previous,
+
+              [dayIndex]:
+                daySlots.map(
+                  (slot) =>
+                    slot.id ===
+                    slotId
+                      ? {
+                          ...slot,
+
+                          playerIds:
+                            [
+                              ...slot.playerIds,
+                              playerId,
+                            ],
+                        }
+                      : slot
+                ),
+            };
+          }
         );
-
-        if (!targetSlot) {
-          return prev;
-        }
-
-        if (
-          targetSlot.playerIds.length >=
-          MAX_PLAYERS_PER_DRILL
-        ) {
-          toast.error(
-            'Maximum 5 players per drill'
-          );
-
-          return prev;
-        }
-
-        /*
-          Prevent same player from being
-          assigned twice in the same drill.
-        */
-
-        if (
-          targetSlot.playerIds.includes(
-            playerId
-          )
-        ) {
-          toast.error(
-            'Player already in this drill'
-          );
-
-          return prev;
-        }
-
-        return {
-          ...prev,
-          [dayIndex]: daySlots.map(
-            (slot) =>
-              slot.id === slotId
-                ? {
-                    ...slot,
-                    playerIds: [
-                      ...slot.playerIds,
-                      playerId,
-                    ],
-                  }
-                : slot
-          ),
-        };
-      });
-    },
-    []
-  );
+      },
+      [updateSchedule]
+    );
 
   /* =======================================================
-     MOVE PLAYER BETWEEN DRILLS
+     MOVE PLAYER
   ======================================================= */
 
-  const movePlayerToDrill = useCallback(
-    (
-      fromDayIndex,
-      fromSlotId,
-      playerId,
-      toDayIndex,
-      toSlotId
-    ) => {
-      setSchedule((prev) => {
-        const sourceDay = Array.isArray(
-          prev[fromDayIndex]
-        )
-          ? [...prev[fromDayIndex]]
-          : [];
+  const movePlayerToDrill =
+    useCallback(
+      (
+        fromDay,
+        fromSlotId,
+        playerId,
+        toDay,
+        toSlotId
+      ) => {
+        updateSchedule(
+          (previous) => {
+            const source =
+              Array.isArray(
+                previous[
+                  fromDay
+                ]
+              )
+                ? [
+                    ...previous[
+                      fromDay
+                    ],
+                  ]
+                : [];
 
-        const targetDay = Array.isArray(
-          prev[toDayIndex]
-        )
-          ? [...prev[toDayIndex]]
-          : [];
+            const target =
+              Array.isArray(
+                previous[
+                  toDay
+                ]
+              )
+                ? [
+                    ...previous[
+                      toDay
+                    ],
+                  ]
+                : [];
 
-        const sourceSlot =
-          sourceDay.find(
-            (slot) => slot.id === fromSlotId
-          );
+            const sourceSlot =
+              source.find(
+                (slot) =>
+                  slot.id ===
+                  fromSlotId
+              );
 
-        const targetSlot =
-          targetDay.find(
-            (slot) => slot.id === toSlotId
-          );
+            const targetSlot =
+              target.find(
+                (slot) =>
+                  slot.id ===
+                  toSlotId
+              );
 
-        if (
-          !sourceSlot ||
-          !targetSlot
-        ) {
-          return prev;
-        }
+            if (
+              !sourceSlot ||
+              !targetSlot
+            ) {
+              return previous;
+            }
 
-        /*
-          Dropping into the same drill.
-        */
+            if (
+              fromDay === toDay &&
+              fromSlotId ===
+                toSlotId
+            ) {
+              return previous;
+            }
 
-        if (
-          fromDayIndex === toDayIndex &&
-          fromSlotId === toSlotId
-        ) {
-          return prev;
-        }
+            if (
+              targetSlot.playerIds.length >=
+              MAX_PLAYERS_PER_DRILL
+            ) {
+              toast.error(
+                'Maximum 5 players per drill'
+              );
 
-        /*
-          Target drill full.
-        */
+              return previous;
+            }
 
-        if (
-          targetSlot.playerIds.length >=
-          MAX_PLAYERS_PER_DRILL
-        ) {
-          toast.error(
-            'Maximum 5 players per drill'
-          );
+            if (
+              targetSlot.playerIds.includes(
+                playerId
+              )
+            ) {
+              toast.error(
+                'Player already in this drill'
+              );
 
-          return prev;
-        }
+              return previous;
+            }
 
-        /*
-          Target already contains player.
-        */
+            const newSource =
+              source.map(
+                (slot) =>
+                  slot.id ===
+                  fromSlotId
+                    ? {
+                        ...slot,
 
-        if (
-          targetSlot.playerIds.includes(
-            playerId
-          )
-        ) {
-          toast.error(
-            'Player already in this drill'
-          );
+                        playerIds:
+                          slot.playerIds.filter(
+                            (id) =>
+                              id !==
+                              playerId
+                          ),
+                      }
+                    : slot
+              );
 
-          return prev;
-        }
+            const newTarget =
+              target.map(
+                (slot) =>
+                  slot.id ===
+                  toSlotId
+                    ? {
+                        ...slot,
 
-        /*
-          Remove from source.
-        */
+                        playerIds:
+                          [
+                            ...slot.playerIds,
+                            playerId,
+                          ],
+                      }
+                    : slot
+              );
 
-        const newSourceDay =
-          sourceDay.map((slot) =>
-            slot.id === fromSlotId
-              ? {
-                  ...slot,
-                  playerIds:
-                    slot.playerIds.filter(
-                      (id) =>
-                        id !== playerId
-                    ),
-                }
-              : slot
-          );
+            toast.success(
+              'Player moved to training'
+            );
 
-        /*
-          Add to target.
-        */
+            return {
+              ...previous,
 
-        const newTargetDay =
-          targetDay.map((slot) =>
-            slot.id === toSlotId
-              ? {
-                  ...slot,
-                  playerIds: [
-                    ...slot.playerIds,
-                    playerId,
-                  ],
-                }
-              : slot
-          );
+              [fromDay]:
+                newSource,
 
-        return {
-          ...prev,
-          [fromDayIndex]:
-            newSourceDay,
-          [toDayIndex]:
-            newTargetDay,
-        };
-      });
-    },
-    []
-  );
+              [toDay]:
+                newTarget,
+            };
+          }
+        );
+      },
+      [updateSchedule]
+    );
 
   /* =======================================================
      REMOVE DRILL
   ======================================================= */
 
-  const removeDrillFromDay = useCallback(
-    (dayIndex, slotId) => {
-      setSchedule((prev) => {
-        const daySlots = Array.isArray(
-          prev[dayIndex]
-        )
-          ? prev[dayIndex]
-          : [];
+  const removeDrillFromDay =
+    useCallback(
+      (
+        dayIndex,
+        slotId
+      ) => {
+        updateSchedule(
+          (previous) => {
+            const daySlots =
+              Array.isArray(
+                previous[
+                  dayIndex
+                ]
+              )
+                ? previous[
+                    dayIndex
+                  ]
+                : [];
 
-        const newDaySlots =
-          daySlots.filter(
-            (slot) =>
-              slot.id !== slotId
-          );
+            const filtered =
+              daySlots.filter(
+                (slot) =>
+                  slot.id !==
+                  slotId
+              );
 
-        return {
-          ...prev,
-          [dayIndex]: newDaySlots,
-        };
-      });
-    },
-    []
-  );
+            return {
+              ...previous,
+
+              [dayIndex]:
+                filtered,
+            };
+          }
+        );
+      },
+      [updateSchedule]
+    );
 
   /* =======================================================
      REMOVE PLAYER
@@ -969,256 +1151,632 @@ export default function TrainingPage() {
         slotId,
         playerId
       ) => {
-        setSchedule((prev) => {
-          const daySlots = Array.isArray(
-            prev[dayIndex]
-          )
-            ? prev[dayIndex]
-            : [];
+        updateSchedule(
+          (previous) => {
+            const daySlots =
+              Array.isArray(
+                previous[
+                  dayIndex
+                ]
+              )
+                ? previous[
+                    dayIndex
+                  ]
+                : [];
 
-          return {
-            ...prev,
-            [dayIndex]: daySlots.map(
-              (slot) =>
-                slot.id === slotId
-                  ? {
-                      ...slot,
-                      playerIds:
-                        slot.playerIds.filter(
-                          (id) =>
-                            id !==
-                            playerId
-                        ),
-                    }
-                  : slot
-            ),
-          };
-        });
+            return {
+              ...previous,
+
+              [dayIndex]:
+                daySlots.map(
+                  (slot) =>
+                    slot.id ===
+                    slotId
+                      ? {
+                          ...slot,
+
+                          playerIds:
+                            slot.playerIds.filter(
+                              (id) =>
+                                id !==
+                                playerId
+                            ),
+                        }
+                      : slot
+                ),
+            };
+          }
+        );
+      },
+      [updateSchedule]
+    );
+
+  /* =======================================================
+     POINTER DRAG START
+  ======================================================= */
+
+  const startPointerDrag =
+    useCallback(
+      (
+        e,
+        dragData
+      ) => {
+        if (
+          e.pointerType ===
+          'mouse'
+        ) {
+          return;
+        }
+
+        e.preventDefault();
+
+        pointerMovedRef.current =
+          false;
+
+        suppressClickRef.current =
+          false;
+
+        pointerDragRef.current = {
+          ...dragData,
+
+          pointerId:
+            e.pointerId,
+
+          x: e.clientX,
+          y: e.clientY,
+
+          started: false,
+        };
+
+        setActiveDrag(
+          dragData
+        );
+
+        setDropTarget(null);
+
+        try {
+          e.currentTarget.setPointerCapture(
+            e.pointerId
+          );
+        } catch {
+          // Ignore pointer capture errors.
+        }
       },
       []
     );
 
   /* =======================================================
-     DROP ON DAY
+     FIND DROP TARGET
   ======================================================= */
 
-  const handleDropOnDay = useCallback(
-    (e, dayIndex) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      try {
-        const rawData =
-          e.dataTransfer.getData(
-            'application/json'
+  const findPointerDropTarget =
+    useCallback(
+      (x, y) => {
+        const element =
+          document.elementFromPoint(
+            x,
+            y
           );
 
-        if (!rawData) {
+        if (!element) {
+          return null;
+        }
+
+        const slot =
+          element.closest(
+            '[data-training-slot]'
+          );
+
+        if (slot) {
+          return {
+            type: 'slot',
+            day: Number(
+              slot.dataset.day
+            ),
+            slotId:
+              slot.dataset.slotId,
+          };
+        }
+
+        const day =
+          element.closest(
+            '[data-training-day]'
+          );
+
+        if (day) {
+          return {
+            type: 'day',
+            day: Number(
+              day.dataset.day
+            ),
+          };
+        }
+
+        return null;
+      },
+      []
+    );
+
+  /* =======================================================
+     POINTER MOVE
+  ======================================================= */
+
+  const handlePointerMove =
+    useCallback(
+      (e) => {
+        const drag =
+          pointerDragRef.current;
+
+        if (!drag) {
           return;
         }
 
-        const data =
-          JSON.parse(rawData);
+        const distance =
+          Math.sqrt(
+            Math.pow(
+              e.clientX -
+                drag.x,
+              2
+            ) +
+              Math.pow(
+                e.clientY -
+                  drag.y,
+                2
+              )
+          );
 
-        /* New drill from library */
+        if (distance > 8) {
+          pointerMovedRef.current =
+            true;
+
+          suppressClickRef.current =
+            true;
+
+          drag.started = true;
+        }
+
+        if (!drag.started) {
+          return;
+        }
+
+        const target =
+          findPointerDropTarget(
+            e.clientX,
+            e.clientY
+          );
+
+        if (!target) {
+          setDropTarget(null);
+          return;
+        }
 
         if (
-          data.type === 'new-drill'
+          target.type ===
+          'slot'
         ) {
-          addDrillToDay(
-            dayIndex,
-            data.drillId
+          setDropTarget(
+            `slot-${target.day}-${target.slotId}`
+          );
+        } else {
+          setDropTarget(
+            `day-${target.day}`
+          );
+        }
+
+        e.preventDefault();
+      },
+      [findPointerDropTarget]
+    );
+
+  /* =======================================================
+     POINTER DROP
+  ======================================================= */
+
+  const finishPointerDrag =
+    useCallback(
+      (e) => {
+        const drag =
+          pointerDragRef.current;
+
+        if (!drag) {
+          return;
+        }
+
+        const target =
+          findPointerDropTarget(
+            e.clientX,
+            e.clientY
           );
 
-          toast.success(
-            `${
-              TRAINING_DRILLS[
-                data.drillId
-              ]?.name ||
-              'Drill'
-            } added to ${
-              DAY_NAMES[dayIndex]
-            }`
+        const wasDragging =
+          drag.started;
+
+        pointerDragRef.current =
+          null;
+
+        setActiveDrag(null);
+        setDropTarget(null);
+
+        if (!wasDragging) {
+          return;
+        }
+
+        e.preventDefault();
+
+        if (!target) {
+          toast.error(
+            'Drop the item inside a training day or drill'
           );
 
           return;
         }
 
-        /* Existing schedule drill */
+        /* ================================================
+           NEW DRILL
+        ================================================ */
 
         if (
-          data.type ===
+          drag.type ===
+          'new-drill'
+        ) {
+          if (
+            target.type ===
+            'day'
+          ) {
+            addDrillToDay(
+              target.day,
+              drag.drillId
+            );
+          } else {
+            addDrillToDay(
+              target.day,
+              drag.drillId
+            );
+          }
+
+          return;
+        }
+
+        /* ================================================
+           EXISTING DRILL
+        ================================================ */
+
+        if (
+          drag.type ===
           'schedule-drill'
         ) {
-          moveScheduleDrill(
-            data.dayIndex,
-            data.slotId,
-            dayIndex
+          if (
+            target.type ===
+            'day'
+          ) {
+            moveScheduleDrill(
+              drag.fromDay,
+              drag.slotId,
+              target.day
+            );
+
+            return;
+          }
+
+          if (
+            target.type ===
+            'slot'
+          ) {
+            moveScheduleDrill(
+              drag.fromDay,
+              drag.slotId,
+              target.day
+            );
+
+            return;
+          }
+        }
+
+        /* ================================================
+           PLAYER
+        ================================================ */
+
+        if (
+          drag.type ===
+          'player'
+        ) {
+          if (
+            target.type ===
+            'slot'
+          ) {
+            addPlayerToDrill(
+              target.day,
+              target.slotId,
+              drag.playerId
+            );
+
+            return;
+          }
+
+          toast.error(
+            'Drop the player inside a drill'
           );
 
           return;
         }
 
-        /*
-          Player dropped directly on day:
-          we don't add it because a player
-          must belong to a drill.
-        */
+        /* ================================================
+           EXISTING SCHEDULE PLAYER
+        ================================================ */
 
         if (
-          data.type === 'player'
+          drag.type ===
+          'schedule-player'
         ) {
+          if (
+            target.type ===
+            'slot'
+          ) {
+            movePlayerToDrill(
+              drag.fromDay,
+              drag.fromSlotId,
+              drag.playerId,
+              target.day,
+              target.slotId
+            );
+
+            return;
+          }
+
           toast.error(
             'Drop the player inside a drill'
           );
         }
-      } catch (error) {
-        console.error(
-          'Day drop error:',
-          error
-        );
-      } finally {
-        handleDragEnd();
-      }
-    },
-    [
-      addDrillToDay,
-      moveScheduleDrill,
-      handleDragEnd,
-    ]
-  );
+      },
+      [
+        findPointerDropTarget,
+        addDrillToDay,
+        moveScheduleDrill,
+        addPlayerToDrill,
+        movePlayerToDrill,
+      ]
+    );
 
   /* =======================================================
-     DROP ON DRILL
+     GLOBAL POINTER LISTENERS
   ======================================================= */
 
-  const handleDropOnDrillSlot =
+  useEffect(() => {
+    const onMove = (e) => {
+      handlePointerMove(e);
+    };
+
+    const onUp = (e) => {
+      finishPointerDrag(e);
+    };
+
+    window.addEventListener(
+      'pointermove',
+      onMove,
+      {
+        passive: false,
+      }
+    );
+
+    window.addEventListener(
+      'pointerup',
+      onUp,
+      {
+        passive: false,
+      }
+    );
+
+    window.addEventListener(
+      'pointercancel',
+      onUp,
+      {
+        passive: false,
+      }
+    );
+
+    return () => {
+      window.removeEventListener(
+        'pointermove',
+        onMove
+      );
+
+      window.removeEventListener(
+        'pointerup',
+        onUp
+      );
+
+      window.removeEventListener(
+        'pointercancel',
+        onUp
+      );
+    };
+  }, [
+    handlePointerMove,
+    finishPointerDrag,
+  ]);
+
+  /* =======================================================
+     NATIVE DESKTOP DRAG START
+  ======================================================= */
+
+  const handleNativeDragStart =
     useCallback(
       (
         e,
-        dayIndex,
-        slotId
+        dragData
+      ) => {
+        setActiveDrag(
+          dragData
+        );
+
+        e.dataTransfer.effectAllowed =
+          dragData.type ===
+          'new-drill'
+            ? 'copy'
+            : 'move';
+
+        e.dataTransfer.setData(
+          'application/json',
+          JSON.stringify(
+            dragData
+          )
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     NATIVE DRAG END
+  ======================================================= */
+
+  const handleNativeDragEnd =
+    useCallback(() => {
+      setActiveDrag(null);
+      setDropTarget(null);
+    }, []);
+
+  /* =======================================================
+     NATIVE DRAG OVER
+  ======================================================= */
+
+  const handleNativeDragOver =
+    useCallback(
+      (e, target) => {
+        e.preventDefault();
+
+        e.dataTransfer.dropEffect =
+          activeDrag?.type ===
+          'new-drill'
+            ? 'copy'
+            : 'move';
+
+        setDropTarget(target);
+      },
+      [activeDrag]
+    );
+
+  /* =======================================================
+     NATIVE DROP
+  ======================================================= */
+
+  const handleNativeDrop =
+    useCallback(
+      (
+        e,
+        target
       ) => {
         e.preventDefault();
         e.stopPropagation();
 
         try {
-          const rawData =
+          const raw =
             e.dataTransfer.getData(
               'application/json'
             );
 
-          if (!rawData) {
+          if (!raw) {
             return;
           }
 
           const data =
-            JSON.parse(rawData);
+            JSON.parse(raw);
 
-          /*
-            Player from squad panel.
-          */
-
-          if (
-            data.type === 'player'
-          ) {
-            addPlayerToDrill(
-              dayIndex,
-              slotId,
-              data.playerId
-            );
-
-            return;
-          }
-
-          /*
-            Player already inside
-            another drill.
-          */
+          /* NEW DRILL */
 
           if (
             data.type ===
-            'schedule-player'
+            'new-drill'
           ) {
-            movePlayerToDrill(
-              data.fromDayIndex,
-              data.fromSlotId,
-              data.playerId,
-              dayIndex,
-              slotId
+            addDrillToDay(
+              target.day,
+              data.drillId
             );
 
             return;
           }
 
-          /*
-            Existing drill dropped
-            onto another drill.
-            We move the whole drill
-            to that day.
-          */
+          /* EXISTING DRILL */
 
           if (
             data.type ===
             'schedule-drill'
           ) {
             moveScheduleDrill(
-              data.dayIndex,
+              data.fromDay,
               data.slotId,
-              dayIndex
+              target.day
+            );
+
+            return;
+          }
+
+          /* PLAYER */
+
+          if (
+            data.type ===
+            'player'
+          ) {
+            if (
+              target.type !==
+              'slot'
+            ) {
+              toast.error(
+                'Drop the player inside a drill'
+              );
+
+              return;
+            }
+
+            addPlayerToDrill(
+              target.day,
+              target.slotId,
+              data.playerId
+            );
+
+            return;
+          }
+
+          /* SCHEDULE PLAYER */
+
+          if (
+            data.type ===
+            'schedule-player'
+          ) {
+            if (
+              target.type !==
+              'slot'
+            ) {
+              toast.error(
+                'Drop the player inside a drill'
+              );
+
+              return;
+            }
+
+            movePlayerToDrill(
+              data.fromDay,
+              data.fromSlotId,
+              data.playerId,
+              target.day,
+              target.slotId
             );
           }
         } catch (error) {
           console.error(
-            'Drill drop error:',
+            'Native drop error:',
             error
           );
         } finally {
-          handleDragEnd();
+          setActiveDrag(null);
+          setDropTarget(null);
         }
       },
       [
+        addDrillToDay,
+        moveScheduleDrill,
         addPlayerToDrill,
         movePlayerToDrill,
-        moveScheduleDrill,
-        handleDragEnd,
       ]
-    );
-
-  /* =======================================================
-     DRAG PLAYER INSIDE SCHEDULE
-  ======================================================= */
-
-  const handleDragStartSchedulePlayer =
-    useCallback(
-      (
-        e,
-        dayIndex,
-        slotId,
-        playerId
-      ) => {
-        setDraggedPlayer(null);
-        setDraggedDrill(null);
-
-        setDraggedScheduleDrill(
-          null
-        );
-
-        e.dataTransfer.effectAllowed =
-          'move';
-
-        e.dataTransfer.setData(
-          'application/json',
-          JSON.stringify({
-            type: 'schedule-player',
-            fromDayIndex:
-              dayIndex,
-            fromSlotId: slotId,
-            playerId,
-          })
-        );
-      },
-      []
     );
 
   /* =======================================================
@@ -1226,7 +1784,7 @@ export default function TrainingPage() {
   ======================================================= */
 
   const saveTrainingSchedule =
-    useCallback(async () => {
+    async () => {
       if (
         !user ||
         !careerData?.currentClub
@@ -1255,335 +1813,317 @@ export default function TrainingPage() {
             'Could not save training schedule'
           );
         }
-      } catch (error) {
-        console.error(
-          'Manual save error:',
-          error
-        );
-
-        toast.error(
-          'Could not save training schedule'
-        );
       } finally {
         setSaving(false);
       }
-    }, [
-      user,
-      careerData?.currentClub,
-      saveScheduleToFirestore,
-    ]);
+    };
 
   /* =======================================================
      APPLY TRAINING
   ======================================================= */
 
-  const applyTraining = async () => {
-    if (
-      !user ||
-      !careerData?.currentClub ||
-      !clubInfo
-    ) {
-      toast.error(
-        'No active club found'
-      );
-
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const playerUpdates = {};
-
-      Object.entries(
-        scheduleRef.current
-      ).forEach(
-        ([dayIndex, slots]) => {
-          if (!Array.isArray(slots)) {
-            return;
-          }
-
-          slots.forEach((slot) => {
-            const drill =
-              TRAINING_DRILLS[
-                slot.drillId
-              ];
-
-            if (!drill) {
-              return;
-            }
-
-            (
-              slot.playerIds || []
-            ).forEach(
-              (playerId) => {
-                const player =
-                  players.find(
-                    (p) =>
-                      p.id ===
-                      playerId
-                  );
-
-                if (!player) {
-                  return;
-                }
-
-                if (
-                  !playerUpdates[
-                    playerId
-                  ]
-                ) {
-                  playerUpdates[
-                    playerId
-                  ] = {
-                    ...player,
-                  };
-                }
-
-                Object.entries(
-                  drill.effects
-                ).forEach(
-                  ([
-                    attribute,
-                    range,
-                  ]) => {
-                    const gain =
-                      Math.floor(
-                        Math.random() *
-                          (
-                            range.max -
-                            range.min +
-                            1
-                          ) +
-                          range.min
-                      );
-
-                    const currentValue =
-                      safeNumber(
-                        playerUpdates[
-                          playerId
-                        ][
-                          attribute
-                        ] ??
-                          player[
-                            attribute
-                          ],
-                        0
-                      );
-
-                    playerUpdates[
-                      playerId
-                    ][attribute] =
-                      Math.min(
-                        currentValue +
-                          gain,
-                        99
-                      );
-                  }
-                );
-
-                const currentOverall =
-                  getPlayerOverall(
-                    playerUpdates[
-                      playerId
-                    ]
-                  );
-
-                playerUpdates[
-                  playerId
-                ].overall =
-                  Math.min(
-                    currentOverall +
-                      Math.floor(
-                        Math.random() *
-                          2
-                      ),
-                    99
-                  );
-
-                playerUpdates[
-                  playerId
-                ].rating =
-                  playerUpdates[
-                    playerId
-                  ].overall;
-              }
-            );
-          });
-        }
-      );
-
+  const applyTraining =
+    async () => {
       if (
-        Object.keys(
-          playerUpdates
-        ).length === 0
+        !user ||
+        !careerData?.currentClub ||
+        !clubInfo
       ) {
         toast.error(
-          'No players assigned to training'
+          'No active club found'
         );
 
         return;
       }
 
-      /* ===================================================
-         BATCH UPDATE
-      =================================================== */
+      try {
+        setSaving(true);
 
-      const batch =
-        writeBatch(db);
+        const playerUpdates =
+          {};
 
-      Object.values(
-        playerUpdates
-      ).forEach(
-        (updatedPlayer) => {
-          const playerRef =
-            doc(
-              db,
-              'players',
-              updatedPlayer.id
+        Object.entries(
+          scheduleRef.current
+        ).forEach(
+          ([dayIndex, slots]) => {
+            if (
+              !Array.isArray(
+                slots
+              )
+            ) {
+              return;
+            }
+
+            slots.forEach(
+              (slot) => {
+                const drill =
+                  TRAINING_DRILLS[
+                    slot.drillId
+                  ];
+
+                if (!drill) {
+                  return;
+                }
+
+                (
+                  slot.playerIds ||
+                  []
+                ).forEach(
+                  (playerId) => {
+                    const player =
+                      players.find(
+                        (p) =>
+                          p.id ===
+                          playerId
+                      );
+
+                    if (!player) {
+                      return;
+                    }
+
+                    if (
+                      !playerUpdates[
+                        playerId
+                      ]
+                    ) {
+                      playerUpdates[
+                        playerId
+                      ] = {
+                        ...player,
+                      };
+                    }
+
+                    Object.entries(
+                      drill.effects
+                    ).forEach(
+                      ([
+                        attribute,
+                        range,
+                      ]) => {
+                        const gain =
+                          Math.floor(
+                            Math.random() *
+                              (
+                                range.max -
+                                range.min +
+                                1
+                              ) +
+                              range.min
+                          );
+
+                        const current =
+                          safeNumber(
+                            playerUpdates[
+                              playerId
+                            ][
+                              attribute
+                            ] ??
+                              player[
+                                attribute
+                              ],
+                            0
+                          );
+
+                        playerUpdates[
+                          playerId
+                        ][attribute] =
+                          Math.min(
+                            current +
+                              gain,
+                            99
+                          );
+                      }
+                    );
+
+                    const currentOverall =
+                      getPlayerOverall(
+                        playerUpdates[
+                          playerId
+                        ]
+                      );
+
+                    playerUpdates[
+                      playerId
+                    ].overall =
+                      Math.min(
+                        currentOverall +
+                          Math.floor(
+                            Math.random() *
+                              2
+                          ),
+                        99
+                      );
+
+                    playerUpdates[
+                      playerId
+                    ].rating =
+                      playerUpdates[
+                        playerId
+                      ].overall;
+                  }
+                );
+              }
             );
-
-          const updateData = {
-            overall:
-              safeNumber(
-                updatedPlayer.overall
-              ),
-            rating:
-              safeNumber(
-                updatedPlayer.rating
-              ),
-
-            shooting:
-              safeNumber(
-                updatedPlayer.shooting
-              ),
-
-            dribbling:
-              safeNumber(
-                updatedPlayer.dribbling
-              ),
-
-            pace:
-              safeNumber(
-                updatedPlayer.pace
-              ),
-
-            defending:
-              safeNumber(
-                updatedPlayer.defending
-              ),
-
-            physical:
-              safeNumber(
-                updatedPlayer.physical
-              ),
-
-            tackling:
-              safeNumber(
-                updatedPlayer.tackling
-              ),
-
-            passing:
-              safeNumber(
-                updatedPlayer.passing
-              ),
-
-            vision:
-              safeNumber(
-                updatedPlayer.vision
-              ),
-
-            technique:
-              safeNumber(
-                updatedPlayer.technique
-              ),
-
-            stamina:
-              safeNumber(
-                updatedPlayer.stamina
-              ),
-
-            finishing:
-              safeNumber(
-                updatedPlayer.finishing
-              ),
-
-            goalkeeping:
-              safeNumber(
-                updatedPlayer.goalkeeping
-              ),
-
-            reflexes:
-              safeNumber(
-                updatedPlayer.reflexes
-              ),
-
-            positioning:
-              safeNumber(
-                updatedPlayer.positioning
-              ),
-
-            teamwork:
-              safeNumber(
-                updatedPlayer.teamwork
-              ),
-
-            updatedAt:
-              serverTimestamp(),
-          };
-
-          batch.update(
-            playerRef,
-            updateData
-          );
-        }
-      );
-
-      await batch.commit();
-
-      /* ===================================================
-         UPDATE LOCAL STATE
-      =================================================== */
-
-      setPlayers((prev) =>
-        prev.map((player) => {
-          if (
-            playerUpdates[
-              player.id
-            ]
-          ) {
-            return {
-              ...player,
-              ...playerUpdates[
-                player.id
-              ],
-            };
           }
+        );
 
-          return player;
-        })
-      );
-
-      toast.success(
-        `Training completed: ${
+        const ids =
           Object.keys(
             playerUpdates
-          ).length
-        } players improved`
-      );
-    } catch (error) {
-      console.error(
-        'Apply training error:',
-        error
-      );
+          );
 
-      toast.error(
-        'Could not apply training'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+        if (ids.length === 0) {
+          toast.error(
+            'No players assigned to training'
+          );
+
+          return;
+        }
+
+        const batch =
+          writeBatch(db);
+
+        Object.values(
+          playerUpdates
+        ).forEach(
+          (player) => {
+            const playerRef =
+              doc(
+                db,
+                'players',
+                player.id
+              );
+
+            batch.update(
+              playerRef,
+              {
+                overall:
+                  safeNumber(
+                    player.overall
+                  ),
+
+                rating:
+                  safeNumber(
+                    player.rating
+                  ),
+
+                shooting:
+                  safeNumber(
+                    player.shooting
+                  ),
+
+                dribbling:
+                  safeNumber(
+                    player.dribbling
+                  ),
+
+                pace:
+                  safeNumber(
+                    player.pace
+                  ),
+
+                defending:
+                  safeNumber(
+                    player.defending
+                  ),
+
+                physical:
+                  safeNumber(
+                    player.physical
+                  ),
+
+                tackling:
+                  safeNumber(
+                    player.tackling
+                  ),
+
+                passing:
+                  safeNumber(
+                    player.passing
+                  ),
+
+                vision:
+                  safeNumber(
+                    player.vision
+                  ),
+
+                technique:
+                  safeNumber(
+                    player.technique
+                  ),
+
+                stamina:
+                  safeNumber(
+                    player.stamina
+                  ),
+
+                finishing:
+                  safeNumber(
+                    player.finishing
+                  ),
+
+                goalkeeping:
+                  safeNumber(
+                    player.goalkeeping
+                  ),
+
+                reflexes:
+                  safeNumber(
+                    player.reflexes
+                  ),
+
+                positioning:
+                  safeNumber(
+                    player.positioning
+                  ),
+
+                teamwork:
+                  safeNumber(
+                    player.teamwork
+                  ),
+
+                updatedAt:
+                  serverTimestamp(),
+              }
+            );
+          }
+        );
+
+        await batch.commit();
+
+        setPlayers(
+          (previous) =>
+            previous.map(
+              (player) =>
+                playerUpdates[
+                  player.id
+                ]
+                  ? {
+                      ...player,
+                      ...playerUpdates[
+                        player.id
+                      ],
+                    }
+                  : player
+            )
+        );
+
+        toast.success(
+          `Training completed: ${ids.length} players improved`
+        );
+      } catch (error) {
+        console.error(
+          'Apply training error:',
+          error
+        );
+
+        toast.error(
+          'Could not apply training'
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   /* =======================================================
      LOADING
@@ -1616,11 +2156,16 @@ export default function TrainingPage() {
     return null;
   }
 
-  const daySlots = Array.isArray(
-    schedule[selectedDay]
-  )
-    ? schedule[selectedDay]
-    : [];
+  const daySlots =
+    Array.isArray(
+      schedule[
+        selectedDay
+      ]
+    )
+      ? schedule[
+          selectedDay
+        ]
+      : [];
 
   /* =======================================================
      RENDER
@@ -1641,11 +2186,13 @@ export default function TrainingPage() {
       </Head>
 
       <main
-        className={styles.page}
+        className={
+          styles.page
+        }
       >
-        {/* =================================================
+        {/* ===============================================
             HEADER
-        ================================================= */}
+        =============================================== */}
 
         <header
           className={
@@ -1666,10 +2213,9 @@ export default function TrainingPage() {
             </h1>
 
             <p>
-              Drag drills to days,
-              then drag players to
-              drills to improve
-              their abilities.
+              Drag drills to
+              days and players
+              to drills.
             </p>
           </div>
 
@@ -1708,18 +2254,18 @@ export default function TrainingPage() {
           </div>
         </header>
 
-        {/* =================================================
-            TRAINING LAYOUT
-        ================================================= */}
+        {/* ===============================================
+            MAIN LAYOUT
+        =============================================== */}
 
         <div
           className={
             styles.trainingLayout
           }
         >
-          {/* ===============================================
-              DRILLS PANEL
-          =============================================== */}
+          {/* =============================================
+              DRILLS
+          ============================================= */}
 
           <aside
             className={
@@ -1732,7 +2278,7 @@ export default function TrainingPage() {
 
             <p>
               Drag a drill to a
-              day
+              training day
             </p>
 
             <div
@@ -1743,82 +2289,126 @@ export default function TrainingPage() {
               {Object.values(
                 TRAINING_DRILLS
               ).map(
-                (drill) => (
-                  <div
-                    key={
-                      drill.id
-                    }
-                    className={
-                      styles.drillCard
-                    }
-                    style={{
-                      borderLeftColor:
-                        drill.color,
-                    }}
-                    draggable
-                    onDragStart={(
-                      e
-                    ) =>
-                      handleDragStartDrill(
-                        e,
-                        drill.id
-                      )
-                    }
-                    onDragEnd={
-                      handleDragEnd
-                    }
-                  >
+                (drill) => {
+                  const dragData = {
+                    type:
+                      'new-drill',
+                    drillId:
+                      drill.id,
+                  };
+
+                  return (
                     <div
+                      key={
+                        drill.id
+                      }
                       className={
-                        styles.drillIcon
+                        styles.drillCard
                       }
                       style={{
-                        background: `${drill.color}15`,
+                        borderLeftColor:
+                          drill.color,
+
+                        touchAction:
+                          'none',
+
+                        userSelect:
+                          'none',
+                      }}
+                      draggable
+                      onDragStart={(
+                        e
+                      ) =>
+                        handleNativeDragStart(
+                          e,
+                          dragData
+                        )
+                      }
+                      onDragEnd={
+                        handleNativeDragEnd
+                      }
+                      onPointerDown={(
+                        e
+                      ) =>
+                        startPointerDrag(
+                          e,
+                          dragData
+                        )
+                      }
+                      onClick={() => {
+                        if (
+                          suppressClickRef.current
+                        ) {
+                          suppressClickRef.current =
+                            false;
+
+                          return;
+                        }
+
+                        /*
+                          Tap fallback:
+                          tap a drill to add
+                          it to selected day.
+                        */
+
+                        addDrillToDay(
+                          selectedDay,
+                          drill.id
+                        );
                       }}
                     >
-                      {
-                        drill.icon
-                      }
-                    </div>
-
-                    <div
-                      className={
-                        styles.drillInfo
-                      }
-                    >
-                      <strong
+                      <div
+                        className={
+                          styles.drillIcon
+                        }
                         style={{
-                          color:
-                            drill.color,
+                          background: `${drill.color}15`,
                         }}
                       >
                         {
-                          drill.name
+                          drill.icon
                         }
-                      </strong>
+                      </div>
 
-                      <p>
-                        {
-                          drill.description
+                      <div
+                        className={
+                          styles.drillInfo
                         }
-                      </p>
+                      >
+                        <strong
+                          style={{
+                            color:
+                              drill.color,
+                          }}
+                        >
+                          {
+                            drill.name
+                          }
+                        </strong>
 
-                      <small>
-                        {
-                          drill.duration
-                        }
-                        h session
-                      </small>
+                        <p>
+                          {
+                            drill.description
+                          }
+                        </p>
+
+                        <small>
+                          {
+                            drill.duration
+                          }
+                          h
+                        </small>
+                      </div>
                     </div>
-                  </div>
-                )
+                  );
+                }
               )}
             </div>
           </aside>
 
-          {/* ===============================================
-              PLAYERS PANEL
-          =============================================== */}
+          {/* =============================================
+              PLAYERS
+          ============================================= */}
 
           <aside
             className={
@@ -1830,8 +2420,8 @@ export default function TrainingPage() {
             </h2>
 
             <p>
-              Drag players to a
-              drill
+              Drag a player into
+              a drill
             </p>
 
             <div
@@ -1842,78 +2432,102 @@ export default function TrainingPage() {
               {players
                 .slice(0, 16)
                 .map(
-                  (player) => (
-                    <div
-                      key={
-                        player.id
-                      }
-                      className={
-                        styles.dragPlayer
-                      }
-                      draggable
-                      onDragStart={(
-                        e
-                      ) =>
-                        handleDragStartPlayer(
-                          e,
-                          player
-                        )
-                      }
-                      onDragEnd={
-                        handleDragEnd
-                      }
-                    >
+                  (player) => {
+                    const dragData = {
+                      type:
+                        'player',
+                      playerId:
+                        player.id,
+                    };
+
+                    return (
                       <div
+                        key={
+                          player.id
+                        }
                         className={
-                          styles.dragPlayerAvatar
+                          styles.dragPlayer
+                        }
+                        style={{
+                          touchAction:
+                            'none',
+
+                          userSelect:
+                            'none',
+                        }}
+                        draggable
+                        onDragStart={(
+                          e
+                        ) =>
+                          handleNativeDragStart(
+                            e,
+                            dragData
+                          )
+                        }
+                        onDragEnd={
+                          handleNativeDragEnd
+                        }
+                        onPointerDown={(
+                          e
+                        ) =>
+                          startPointerDrag(
+                            e,
+                            dragData
+                          )
                         }
                       >
-                        {player.photo ? (
-                          <img
-                            src={
-                              player.photo
-                            }
-                            alt={getPlayerName(
+                        <div
+                          className={
+                            styles.dragPlayerAvatar
+                          }
+                        >
+                          {player.photo ? (
+                            <img
+                              src={
+                                player.photo
+                              }
+                              alt={getPlayerName(
+                                player
+                              )}
+                            />
+                          ) : (
+                            getPlayerName(
+                              player
+                            )
+                              .charAt(
+                                0
+                              )
+                              .toUpperCase()
+                          )}
+                        </div>
+
+                        <div>
+                          <strong>
+                            {getPlayerName(
                               player
                             )}
-                          />
-                        ) : (
-                          getPlayerName(
-                            player
-                          )
-                            .charAt(
-                              0
-                            )
-                            .toUpperCase()
-                        )}
-                      </div>
+                          </strong>
 
-                      <div>
-                        <strong>
-                          {getPlayerName(
-                            player
-                          )}
-                        </strong>
-
-                        <small>
-                          {getPlayerPosition(
-                            player
-                          )}{' '}
-                          • OVR{' '}
-                          {getPlayerOverall(
-                            player
-                          )}
-                        </small>
+                          <small>
+                            {getPlayerPosition(
+                              player
+                            )}{' '}
+                            • OVR{' '}
+                            {getPlayerOverall(
+                              player
+                            )}
+                          </small>
+                        </div>
                       </div>
-                    </div>
-                  )
+                    );
+                  }
                 )}
             </div>
           </aside>
 
-          {/* ===============================================
+          {/* =============================================
               SCHEDULE
-          =============================================== */}
+          ============================================= */}
 
           <section
             className={
@@ -1923,6 +2537,8 @@ export default function TrainingPage() {
             <h2>
               Weekly Schedule
             </h2>
+
+            {/* DAYS */}
 
             <div
               className={
@@ -1935,7 +2551,9 @@ export default function TrainingPage() {
                   index
                 ) => (
                   <button
-                    key={day}
+                    key={
+                      day
+                    }
                     type="button"
                     className={
                       selectedDay ===
@@ -1962,6 +2580,8 @@ export default function TrainingPage() {
               )}
             </div>
 
+            {/* DAY DROP ZONE */}
+
             <div
               className={`${styles.dayDropZone} ${
                 dropTarget ===
@@ -1969,19 +2589,25 @@ export default function TrainingPage() {
                   ? styles.dropActive
                   : ''
               }`}
+              data-training-day={
+                selectedDay
+              }
               onDragOver={(e) =>
-                handleDragOver(
+                handleNativeDragOver(
                   e,
                   `day-${selectedDay}`
                 )
               }
-              onDragLeave={
-                handleDragEnd
-              }
               onDrop={(e) =>
-                handleDropOnDay(
+                handleNativeDrop(
                   e,
-                  selectedDay
+                  {
+                    type:
+                      'day',
+
+                    day:
+                      selectedDay,
+                  }
                 )
               }
             >
@@ -2013,23 +2639,31 @@ export default function TrainingPage() {
               </div>
 
               {/* =========================================
-                  DRILLS
+                  SCHEDULE SLOTS
               ========================================= */}
 
               {daySlots.map(
-                (
-                  slot
-                ) => {
+                (slot) => {
                   const drill =
                     TRAINING_DRILLS[
                       slot.drillId
                     ];
 
-                  if (
-                    !drill
-                  ) {
+                  if (!drill) {
                     return null;
                   }
+
+                  const drillDragData =
+                    {
+                      type:
+                        'schedule-drill',
+
+                      fromDay:
+                        selectedDay,
+
+                      slotId:
+                        slot.id,
+                    };
 
                   return (
                     <div
@@ -2042,6 +2676,13 @@ export default function TrainingPage() {
                           ? styles.slotActive
                           : ''
                       }`}
+                      data-training-slot="true"
+                      data-day={
+                        selectedDay
+                      }
+                      data-slot-id={
+                        slot.id
+                      }
                       style={{
                         borderColor:
                           drill.color,
@@ -2049,21 +2690,24 @@ export default function TrainingPage() {
                       onDragOver={(
                         e
                       ) =>
-                        handleDragOver(
+                        handleNativeDragOver(
                           e,
                           `slot-${selectedDay}-${slot.id}`
                         )
                       }
-                      onDragLeave={
-                        handleDragEnd
-                      }
-                      onDrop={(
-                        e
-                      ) =>
-                        handleDropOnDrillSlot(
+                      onDrop={(e) =>
+                        handleNativeDrop(
                           e,
-                          selectedDay,
-                          slot.id
+                          {
+                            type:
+                              'slot',
+
+                            day:
+                              selectedDay,
+
+                            slotId:
+                              slot.id,
+                          }
                         )
                       }
                     >
@@ -2076,22 +2720,35 @@ export default function TrainingPage() {
                       >
                         <div
                           draggable
-                          onDragStart={(
-                            e
-                          ) =>
-                            handleDragStartScheduleDrill(
-                              e,
-                              selectedDay,
-                              slot.id
-                            )
-                          }
-                          onDragEnd={
-                            handleDragEnd
-                          }
                           style={{
                             cursor:
                               'grab',
+
+                            touchAction:
+                              'none',
+
+                            userSelect:
+                              'none',
                           }}
+                          onDragStart={(
+                            e
+                          ) =>
+                            handleNativeDragStart(
+                              e,
+                              drillDragData
+                            )
+                          }
+                          onDragEnd={
+                            handleNativeDragEnd
+                          }
+                          onPointerDown={(
+                            e
+                          ) =>
+                            startPointerDrag(
+                              e,
+                              drillDragData
+                            )
+                          }
                         >
                           <span
                             style={{
@@ -2106,19 +2763,6 @@ export default function TrainingPage() {
                               drill.name
                             }
                           </span>
-
-                          <small
-                            style={{
-                              marginLeft:
-                                8,
-                              opacity:
-                                0.7,
-                            }}
-                          >
-                            Drag to
-                            another
-                            day
-                          </small>
                         </div>
 
                         <button
@@ -2167,6 +2811,20 @@ export default function TrainingPage() {
                                 return null;
                               }
 
+                              const playerDragData =
+                                {
+                                  type:
+                                    'schedule-player',
+
+                                  fromDay:
+                                    selectedDay,
+
+                                  fromSlotId:
+                                    slot.id,
+
+                                  playerId,
+                                };
+
                               return (
                                 <span
                                   key={
@@ -2176,18 +2834,31 @@ export default function TrainingPage() {
                                     styles.slotPlayer
                                   }
                                   draggable
+                                  style={{
+                                    touchAction:
+                                      'none',
+
+                                    userSelect:
+                                      'none',
+                                  }}
                                   onDragStart={(
                                     e
                                   ) =>
-                                    handleDragStartSchedulePlayer(
+                                    handleNativeDragStart(
                                       e,
-                                      selectedDay,
-                                      slot.id,
-                                      playerId
+                                      playerDragData
                                     )
                                   }
                                   onDragEnd={
-                                    handleDragEnd
+                                    handleNativeDragEnd
+                                  }
+                                  onPointerDown={(
+                                    e
+                                  ) =>
+                                    startPointerDrag(
+                                      e,
+                                      playerDragData
+                                    )
                                   }
                                 >
                                   {getPlayerName(
@@ -2196,13 +2867,22 @@ export default function TrainingPage() {
 
                                   <button
                                     type="button"
-                                    onClick={() =>
+                                    onPointerDown={(
+                                      e
+                                    ) =>
+                                      e.stopPropagation()
+                                    }
+                                    onClick={(
+                                      e
+                                    ) => {
+                                      e.stopPropagation();
+
                                       removePlayerFromDrill(
                                         selectedDay,
                                         slot.id,
                                         playerId
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     ×
                                   </button>
@@ -2216,16 +2896,17 @@ export default function TrainingPage() {
                               styles.emptySlot
                             }
                           >
-                            Drop players
+                            Drop player
                             here
                             <br />
                             <small>
                               Maximum 5
-                              players
                             </small>
                           </span>
                         )}
                       </div>
+
+                      {/* SLOT FOOTER */}
 
                       <div
                         className={
@@ -2237,7 +2918,8 @@ export default function TrainingPage() {
                           {
                             slot
                               .playerIds
-                              ?.length || 0
+                              ?.length ||
+                            0
                           }
                           /
                           {
@@ -2258,7 +2940,7 @@ export default function TrainingPage() {
                 }
               )}
 
-              {/* EMPTY DAY */}
+              {/* EMPTY */}
 
               {daySlots.length ===
                 0 && (
@@ -2278,13 +2960,11 @@ export default function TrainingPage() {
 
                   <span>
                     Drag a drill
-                    here to add
-                    training
+                    here or tap a
+                    drill to add it
                   </span>
                 </div>
               )}
-
-              {/* MAX DRILLS */}
 
               {daySlots.length >=
                 MAX_DRILLS_PER_DAY && (
@@ -2301,6 +2981,60 @@ export default function TrainingPage() {
             </div>
           </section>
         </div>
+
+        {/* ===============================================
+            MOBILE DRAG INDICATOR
+        =============================================== */}
+
+        {activeDrag && (
+          <div
+            style={{
+              position:
+                'fixed',
+
+              left: 12,
+              right: 12,
+              bottom: 16,
+
+              zIndex: 99999,
+
+              padding:
+                '12px 16px',
+
+              borderRadius:
+                12,
+
+              background:
+                'rgba(15,23,42,0.95)',
+
+              color:
+                '#fff',
+
+              textAlign:
+                'center',
+
+              pointerEvents:
+                'none',
+
+              boxShadow:
+                '0 10px 30px rgba(0,0,0,0.35)',
+            }}
+          >
+            {activeDrag.type ===
+              'new-drill' &&
+              `Moving ${TRAINING_DRILLS[activeDrag.drillId]?.name || 'drill'}...`}
+
+            {activeDrag.type ===
+              'schedule-drill' &&
+              'Move training to another day...'}
+
+            {(activeDrag.type ===
+              'player' ||
+              activeDrag.type ===
+                'schedule-player') &&
+              'Move player into a training drill...'}
+          </div>
+        )}
       </main>
     </>
   );
