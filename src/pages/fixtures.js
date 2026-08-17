@@ -7,8 +7,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
-  where,
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -24,49 +22,17 @@ import styles from './fixture.module.css';
    CONSTANTS
 ========================================================= */
 
-const SEASON_START_MONTHS = [7, 8]; // August / September
-const SEASON_END_MONTHS = [4, 5]; // May / June
-
-const FRIENDLY_MONTHS = [6, 7];
-
 const MAX_LEAGUES = 500;
 const MAX_CLUBS = 5000;
 
 const MATCH_DURATION_MINUTES = 105;
 
-const DEFAULT_MATCH_HOUR = 15;
-
-const TRANSFER_WINDOWS = {
-  summer: {
-    startMonth: 6,
-    startDay: 1,
-    endMonth: 8,
-    endDay: 1,
-  },
-  winter: {
-    startMonth: 0,
-    startDay: 1,
-    endMonth: 0,
-    endDay: 31,
-  },
-};
-
 /* =========================================================
    SAFE HELPERS
 ========================================================= */
 
-function safeNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function normalize(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
 function makeDate(year, month, day, hour = 15, minute = 0) {
-  const date = new Date(year, month, day, hour, minute, 0, 0);
-  return date;
+  return new Date(year, month, day, hour, minute, 0, 0);
 }
 
 function cloneDate(date) {
@@ -76,12 +42,6 @@ function cloneDate(date) {
 function startOfDay(date) {
   const d = cloneDate(date);
   d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function endOfDay(date) {
-  const d = cloneDate(date);
-  d.setHours(23, 59, 59, 999);
   return d;
 }
 
@@ -104,14 +64,6 @@ function isoDate(date) {
     String(d.getMonth() + 1).padStart(2, '0'),
     String(d.getDate()).padStart(2, '0'),
   ].join('-');
-}
-
-function dateTimeKey(date) {
-  return [
-    isoDate(date),
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-  ].join('T');
 }
 
 function parseDate(value) {
@@ -405,7 +357,6 @@ function generateLeagueFixtures(league, clubs, seasonYear) {
         awayLogo: getClubLogo(match.away),
         stadium: getStadium(match.home),
         date: matchDate.toISOString(),
-        dateKey: dateTimeKey(matchDate),
         status: 'scheduled',
         result: null,
       });
@@ -455,7 +406,6 @@ function generateFriendlies(club, clubs, seasonYear) {
       awayLogo: getClubLogo(away),
       stadium: getStadium(home),
       date: date.toISOString(),
-      dateKey: dateTimeKey(date),
       status: 'scheduled',
       result: null,
     });
@@ -518,7 +468,7 @@ export default function FixturesPage({
   initialMatches = [],
 }) {
   const router = useRouter();
-  const { user, userData, loading } = useAuth();
+  const { user, loading } = useAuth();
 
   const [leagues] = useState(initialLeagues);
   const [clubs] = useState(initialClubs);
@@ -698,31 +648,26 @@ export default function FixturesPage({
   }, [combinedFixtures, currentClub]);
 
   /* =======================================================
-     NEXT MATCH
+     NEXT MATCH (LIVE or UPCOMING)
   ======================================================== */
 
   const nextMatch = useMemo(() => {
+    if (!currentClub?.id) return null;
+
+    // Umukino uri LIVE ufata umwanya wa mbere
+    const live = myFixtures.find(
+      (fixture) => getMatchState(fixture, gameDate) === 'live',
+    );
+
+    if (live) return live;
+
+    // Niba nta live, reba uwitangira ukurikiyeho
     const upcoming = myFixtures
-      .filter((fixture) => {
-        const state = getMatchState(fixture, gameDate);
-        return state === 'upcoming';
-      })
+      .filter((fixture) => getMatchState(fixture, gameDate) === 'upcoming')
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     return upcoming[0] || null;
-  }, [myFixtures, gameDate]);
-
-  /* =======================================================
-     NEXT MATCH TODAY
-  ======================================================== */
-
-  const todaysMatch = useMemo(() => {
-    return myFixtures.find((fixture) => {
-      const date = parseDate(fixture.date);
-      if (!date) return false;
-      return isoDate(date) === isoDate(gameDate);
-    });
-  }, [myFixtures, gameDate]);
+  }, [myFixtures, gameDate, currentClub]);
 
   /* =======================================================
      FILTER
@@ -775,7 +720,7 @@ export default function FixturesPage({
       const date = parseDate(fixture.date);
       if (!date) return false;
 
-      // Umukino uyu munsi gusa
+      // Umukino w'uyu munsi gusa
       if (isoDate(date) !== isoDate(current)) return false;
 
       const state = getMatchState(fixture, current);
@@ -1035,6 +980,8 @@ export default function FixturesPage({
      RENDER
   ======================================================== */
 
+  const nextMatchState = nextMatch ? getMatchState(nextMatch, gameDate) : null;
+
   return (
     <>
       <Head>
@@ -1118,7 +1065,7 @@ export default function FixturesPage({
 
           {nextMatch && (
             <div className={styles.nextMatchActions}>
-              {getMatchState(nextMatch, gameDate) === 'upcoming' && (
+              {nextMatchState === 'upcoming' && (
                 <>
                   {daysBetween(gameDate, parseDate(nextMatch.date)) === 0 ? (
                     <button
@@ -1147,7 +1094,7 @@ export default function FixturesPage({
                 </>
               )}
 
-              {getMatchState(nextMatch, gameDate) === 'live' && (
+              {nextMatchState === 'live' && (
                 <button
                   type="button"
                   className={styles.playButton}
@@ -1155,6 +1102,10 @@ export default function FixturesPage({
                 >
                   ▶ PLAY MATCH
                 </button>
+              )}
+
+              {nextMatchState === 'missed' && (
+                <span className={styles.missed}>MISSED</span>
               )}
             </div>
           )}
