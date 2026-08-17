@@ -16,18 +16,19 @@ import {
   getDocs,
   onSnapshot,
   query,
-  serverTimestamp,
   setDoc,
+  updateDoc,
   where,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
-import toast from 'react-hot-toast';
-
 import { db } from '../components/firebase';
 import { useAuth } from '../context/AuthContext';
+
+import toast from 'react-hot-toast';
 
 import styles from './match.module.css';
 
@@ -35,25 +36,15 @@ import styles from './match.module.css';
    CONSTANTS
 ========================================================= */
 
-const MATCH_DURATION_MINUTES = 20;
+const MATCH_DURATION = 20;
 const FIRST_HALF_END = 10;
 
+const MAX_SQUAD_SIZE = 25;
 const PLAYERS_ON_PITCH = 11;
 const MAX_SUBSTITUTIONS = 5;
 
-const PITCH_WIDTH = 30;
-const PITCH_HEIGHT = 20;
-const GOAL_WIDTH = 6;
-
-const PLAYER_SPEED_BASE = 0.3;
-const PASS_SPEED = 0.25;
-const SHOT_SPEED = 0.6;
-
-const BALL_SIZE = 0.15;
-const PLAYER_RADIUS = 0.35;
-
-const DECISION_INTERVAL = 0.2;
-const FIREBASE_SAVE_INTERVAL = 2;
+const MATCH_TICK_MS = 1000;
+const TICK_SECONDS = 1;
 
 /* =========================================================
    SAFE HELPERS
@@ -66,41 +57,6 @@ function safeNumber(value, fallback = 0) {
 
 function normalize(value) {
   return String(value || '').trim().toLowerCase();
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
-function randomBetween(min, max) {
-  return Math.random() * (max - min) + min;
-}
-
-function pick(array) {
-  if (!Array.isArray(array) || !array.length) return null;
-
-  return array[Math.floor(Math.random() * array.length)];
-}
-
-function distanceBetween(a, b) {
-  return Math.sqrt(
-    (a.x - b.x) ** 2 +
-      (a.y - b.y) ** 2 +
-      (a.z - b.z) ** 2,
-  );
-}
-
-function playerId(player) {
-  return (
-    player?.id ||
-    player?.playerId ||
-    player?.uid ||
-    null
-  );
 }
 
 function getPlayerName(player) {
@@ -140,32 +96,45 @@ function getPlayerPhoto(player) {
   );
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function pick(array) {
+  if (!Array.isArray(array) || !array.length) return null;
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+function randomBetweenSafe(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function distanceBetween(a, b) {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+/* =========================================================
+   CLUB HELPERS
+========================================================= */
+
 function getClubName(club, fallback = 'Unknown Club') {
-  return (
-    club?.name ||
-    club?.clubName ||
-    club?.title ||
-    fallback
-  );
+  return club?.name || club?.clubName || club?.title || fallback;
 }
 
 function getClubLogo(club) {
-  return (
-    club?.logo ||
-    club?.logoUrl ||
-    club?.image ||
-    club?.badge ||
-    null
-  );
+  return club?.logo || club?.logoUrl || club?.image || club?.badge || null;
 }
 
 function getClubPrimaryColor(club) {
-  return (
-    club?.primaryColor ||
-    club?.colors?.primary ||
-    club?.color ||
-    '#2563eb'
-  );
+  return club?.primaryColor || club?.colors?.primary || club?.color || '#2563eb';
+}
+
+function getClubSecondaryColor(club) {
+  return club?.secondaryColor || club?.colors?.secondary || '#ffffff';
 }
 
 function getClubStadium(club) {
@@ -179,7 +148,7 @@ function getClubStadium(club) {
 }
 
 /* =========================================================
-   POSITIONS
+   POSITION
 ========================================================= */
 
 function normalizePosition(position) {
@@ -227,11 +196,11 @@ function normalizePosition(position) {
 }
 
 /* =========================================================
-   FORMATIONS
+   FORMATION
 ========================================================= */
 
-const FORMATIONS = {
-  '4-4-2': [
+const FORMATION_POSITIONS = {
+  balanced: [
     { x: 8, y: 50 },
     { x: 23, y: 18 },
     { x: 23, y: 39 },
@@ -244,61 +213,31 @@ const FORMATIONS = {
     { x: 62, y: 36 },
     { x: 62, y: 64 },
   ],
-
-  '4-3-3': [
+  attacking: [
     { x: 8, y: 50 },
-    { x: 23, y: 18 },
-    { x: 23, y: 39 },
-    { x: 23, y: 61 },
-    { x: 23, y: 82 },
-    { x: 42, y: 30 },
-    { x: 42, y: 50 },
-    { x: 42, y: 70 },
-    { x: 64, y: 20 },
+    { x: 22, y: 18 },
+    { x: 22, y: 40 },
+    { x: 22, y: 60 },
+    { x: 22, y: 82 },
+    { x: 40, y: 20 },
+    { x: 40, y: 50 },
+    { x: 40, y: 80 },
+    { x: 59, y: 20 },
     { x: 64, y: 50 },
-    { x: 64, y: 80 },
+    { x: 59, y: 80 },
   ],
-
-  '3-5-2': [
+  defensive: [
     { x: 8, y: 50 },
-    { x: 23, y: 30 },
-    { x: 23, y: 50 },
-    { x: 23, y: 70 },
-    { x: 42, y: 20 },
-    { x: 42, y: 39 },
-    { x: 42, y: 50 },
-    { x: 42, y: 61 },
-    { x: 42, y: 80 },
-    { x: 64, y: 36 },
-    { x: 64, y: 64 },
-  ],
-
-  '5-3-2': [
-    { x: 8, y: 50 },
-    { x: 20, y: 15 },
-    { x: 20, y: 32 },
-    { x: 20, y: 50 },
-    { x: 20, y: 68 },
-    { x: 20, y: 85 },
-    { x: 42, y: 30 },
-    { x: 42, y: 50 },
-    { x: 42, y: 70 },
-    { x: 64, y: 36 },
-    { x: 64, y: 64 },
-  ],
-
-  '4-2-3-1': [
-    { x: 8, y: 50 },
-    { x: 23, y: 18 },
-    { x: 23, y: 39 },
-    { x: 23, y: 61 },
-    { x: 23, y: 82 },
-    { x: 38, y: 35 },
-    { x: 38, y: 65 },
-    { x: 52, y: 20 },
-    { x: 52, y: 50 },
-    { x: 52, y: 80 },
-    { x: 68, y: 50 },
+    { x: 20, y: 18 },
+    { x: 20, y: 39 },
+    { x: 20, y: 61 },
+    { x: 20, y: 82 },
+    { x: 38, y: 20 },
+    { x: 38, y: 42 },
+    { x: 38, y: 58 },
+    { x: 38, y: 80 },
+    { x: 52, y: 38 },
+    { x: 52, y: 62 },
   ],
 };
 
@@ -317,52 +256,30 @@ const EVENT_TYPES = {
   SHOT: 'shot',
   SUBSTITUTION: 'substitution',
   INJURY: 'injury',
-  PASS: 'pass',
-  TACKLE: 'tackle',
-  KICKOFF: 'kickoff',
 };
 
 function eventLabel(event) {
   switch (event?.type) {
     case EVENT_TYPES.GOAL:
       return 'GOAL';
-
     case EVENT_TYPES.YELLOW:
       return 'YELLOW CARD';
-
     case EVENT_TYPES.RED:
       return 'RED CARD';
-
     case EVENT_TYPES.FOUL:
       return 'FOUL';
-
     case EVENT_TYPES.CORNER:
       return 'CORNER';
-
     case EVENT_TYPES.OFFSIDE:
       return 'OFFSIDE';
-
     case EVENT_TYPES.SAVE:
       return 'SAVE';
-
     case EVENT_TYPES.SHOT:
       return 'SHOT';
-
     case EVENT_TYPES.SUBSTITUTION:
       return 'SUBSTITUTION';
-
     case EVENT_TYPES.INJURY:
       return 'INJURY';
-
-    case EVENT_TYPES.PASS:
-      return 'PASS';
-
-    case EVENT_TYPES.TACKLE:
-      return 'TACKLE';
-
-    case EVENT_TYPES.KICKOFF:
-      return 'KICKOFF';
-
     default:
       return 'MATCH EVENT';
   }
@@ -372,47 +289,27 @@ function eventIcon(event) {
   switch (event?.type) {
     case EVENT_TYPES.GOAL:
       return '⚽';
-
     case EVENT_TYPES.YELLOW:
       return '🟨';
-
     case EVENT_TYPES.RED:
       return '🟥';
-
     case EVENT_TYPES.CORNER:
       return '🚩';
-
     case EVENT_TYPES.OFFSIDE:
       return '🚩';
-
     case EVENT_TYPES.SAVE:
       return '🧤';
-
-    case EVENT_TYPES.SHOT:
-      return '💥';
-
     case EVENT_TYPES.SUBSTITUTION:
       return '🔄';
-
     case EVENT_TYPES.INJURY:
       return '🩹';
-
-    case EVENT_TYPES.PASS:
-      return '🦶';
-
-    case EVENT_TYPES.TACKLE:
-      return '⚡';
-
-    case EVENT_TYPES.KICKOFF:
-      return '🟢';
-
     default:
       return '•';
   }
 }
 
 /* =========================================================
-   STATS
+   DEFAULT STATS
 ========================================================= */
 
 function createDefaultStats() {
@@ -433,113 +330,47 @@ function createDefaultStats() {
    STARTING XI
 ========================================================= */
 
-function selectStartingXI(
-  squad,
-  formation = '4-4-2',
-) {
-  const safeSquad = Array.isArray(squad)
-    ? [...squad]
-    : [];
+function selectStartingXI(squad) {
+  const safeSquad = Array.isArray(squad) ? [...squad] : [];
 
-  const requirementsMap = {
-    '4-4-2': {
-      GK: 1,
-      DEF: 4,
-      MID: 4,
-      ATT: 2,
-    },
-
-    '4-3-3': {
-      GK: 1,
-      DEF: 4,
-      MID: 3,
-      ATT: 3,
-    },
-
-    '3-5-2': {
-      GK: 1,
-      DEF: 3,
-      MID: 5,
-      ATT: 2,
-    },
-
-    '5-3-2': {
-      GK: 1,
-      DEF: 5,
-      MID: 3,
-      ATT: 2,
-    },
-
-    '4-2-3-1': {
-      GK: 1,
-      DEF: 4,
-      MID: 5,
-      ATT: 1,
-    },
-  };
-
-  const requirements =
-    requirementsMap[formation] ||
-    requirementsMap['4-4-2'];
-
-  const groups = {
-    GK: [],
-    DEF: [],
-    MID: [],
-    ATT: [],
-  };
-
-  safeSquad.forEach((player) => {
-    const position = normalizePosition(
-      getPlayerPosition(player),
-    );
-
-    if (groups[position]) {
-      groups[position].push(player);
-    }
-  });
+  const goalkeepers = safeSquad.filter(
+    (player) => normalizePosition(getPlayerPosition(player)) === 'GK',
+  );
+  const defenders = safeSquad.filter(
+    (player) => normalizePosition(getPlayerPosition(player)) === 'DEF',
+  );
+  const midfielders = safeSquad.filter(
+    (player) => normalizePosition(getPlayerPosition(player)) === 'MID',
+  );
+  const attackers = safeSquad.filter(
+    (player) => normalizePosition(getPlayerPosition(player)) === 'ATT',
+  );
 
   const used = new Set();
   const result = [];
 
-  const addBest = (players, count) => {
-    [...players]
-      .sort(
-        (a, b) =>
-          getPlayerOverall(b) -
-          getPlayerOverall(a),
-      )
+  function addBest(list, count) {
+    [...list]
+      .sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a))
       .slice(0, count)
       .forEach((player) => {
-        const id = String(playerId(player));
-
-        if (!used.has(id)) {
-          used.add(id);
+        if (!used.has(player.id)) {
+          used.add(player.id);
           result.push(player);
         }
       });
-  };
+  }
 
-  addBest(groups.GK, requirements.GK);
-  addBest(groups.DEF, requirements.DEF);
-  addBest(groups.MID, requirements.MID);
-  addBest(groups.ATT, requirements.ATT);
+  addBest(goalkeepers, 1);
+  addBest(defenders, 4);
+  addBest(midfielders, 4);
+  addBest(attackers, 2);
 
   const remaining = safeSquad
-    .filter(
-      (player) =>
-        !used.has(String(playerId(player))),
-    )
-    .sort(
-      (a, b) =>
-        getPlayerOverall(b) -
-        getPlayerOverall(a),
-    );
+    .filter((player) => !used.has(player.id))
+    .sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a));
 
-  while (
-    result.length < PLAYERS_ON_PITCH &&
-    remaining.length
-  ) {
+  while (result.length < PLAYERS_ON_PITCH && remaining.length) {
     result.push(remaining.shift());
   }
 
@@ -547,57 +378,83 @@ function selectStartingXI(
 }
 
 /* =========================================================
-   GENERATED PLAYERS
+   PLAYER ID
 ========================================================= */
 
-function createGeneratedPlayer(
-  club,
-  position,
-  index,
-) {
-  const clubName =
+function playerId(player) {
+  return player?.id || player?.playerId || player?.uid || null;
+}
+
+/* =========================================================
+   LOAD CLUB PLAYERS
+========================================================= */
+
+async function loadClubPlayers(clubId) {
+  if (!clubId) return [];
+
+  try {
+    const playersQuery = query(
+      collection(db, 'players'),
+      where('clubId', '==', clubId),
+    );
+
+    const snapshot = await getDocs(playersQuery);
+
+    return snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }));
+  } catch (error) {
+    console.error('clubId player query failed:', error);
+  }
+
+  try {
+    const allSnapshot = await getDocs(collection(db, 'players'));
+
+    return allSnapshot.docs
+      .map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }))
+      .filter((player) => {
+        const id = player.clubId || player.currentClub || player.teamId;
+        return String(id) === String(clubId);
+      });
+  } catch (error) {
+    console.error('Fallback players query failed:', error);
+    return [];
+  }
+}
+
+/* =========================================================
+   GENERATE PLAYERS IF SQUAD IS INCOMPLETE
+========================================================= */
+
+function createGeneratedPlayer(club, position, index) {
+  const baseName =
     getClubName(club, 'Club')
       .replace(/[^a-zA-Z0-9 ]/g, '')
       .trim() || 'Club';
 
-  const clubId = String(club?.id || 'club');
-
-  const overall =
-    55 +
-    ((index * 7 + clubId.length) % 21);
+  const overall = 55 + ((index * 7 + (club.id?.length || 0)) % 21);
 
   return {
-    id: `gen-${clubId}-${position}-${index}`,
-    name: `${clubName} Youth ${index + 1}`,
+    id: `gen-${club.id}-${position}-${index}`,
+    name: `${baseName} Youth ${index + 1}`,
     position,
     overall,
     isGenerated: true,
   };
 }
 
-function generateClubPlayers(
-  club,
-  existingPlayers,
-  targetCount = 16,
-) {
-  const players = Array.isArray(existingPlayers)
-    ? [...existingPlayers]
-    : [];
-
-  const counts = {
-    GK: 0,
-    DEF: 0,
-    MID: 0,
-    ATT: 0,
-  };
+function generateClubPlayers(club, existingPlayers, targetCount = 16) {
+  const players = [...existingPlayers];
+  const counts = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
 
   players.forEach((player) => {
-    const position = normalizePosition(
-      getPlayerPosition(player),
-    );
-
-    if (counts[position] !== undefined) {
-      counts[position] += 1;
+    const pos = normalizePosition(getPlayerPosition(player));
+    if (counts[pos] !== undefined) {
+      counts[pos] += 1;
     }
   });
 
@@ -610,51 +467,24 @@ function generateClubPlayers(
 
   let generatedIndex = 0;
 
-  requiredPositions.forEach(
-    ([position, requiredCount]) => {
-      while (
-        counts[position] < requiredCount
-      ) {
-        players.push(
-          createGeneratedPlayer(
-            club,
-            position,
-            generatedIndex,
-          ),
-        );
+  requiredPositions.forEach(([pos, requiredCount]) => {
+    while (counts[pos] < requiredCount) {
+      const newPlayer = createGeneratedPlayer(club, pos, generatedIndex);
+      players.push(newPlayer);
+      counts[pos] += 1;
+      generatedIndex += 1;
+    }
+  });
 
-        counts[position] += 1;
-        generatedIndex += 1;
-      }
-    },
-  );
-
-  const extraPositions = [
-    'MID',
-    'ATT',
-    'DEF',
-    'MID',
-    'ATT',
-    'DEF',
-    'MID',
-    'GK',
-  ];
+  const extraPositions = ['MID', 'ATT', 'DEF', 'MID', 'ATT', 'DEF', 'MID', 'GK'];
 
   while (players.length < targetCount) {
-    const position =
-      extraPositions[
-        (players.length - 11) %
-          extraPositions.length
-      ] || 'MID';
+    const pos =
+      extraPositions[(players.length - 11) % extraPositions.length] || 'MID';
 
-    players.push(
-      createGeneratedPlayer(
-        club,
-        position,
-        generatedIndex,
-      ),
-    );
-
+    const newPlayer = createGeneratedPlayer(club, pos, generatedIndex);
+    players.push(newPlayer);
+    counts[pos] = (counts[pos] || 0) + 1;
     generatedIndex += 1;
   }
 
@@ -662,390 +492,140 @@ function generateClubPlayers(
 }
 
 /* =========================================================
-   FIREBASE LOADERS
+   LOAD MATCH FROM DATABASE
 ========================================================= */
-
-async function loadClubPlayers(clubId) {
-  if (!clubId) return [];
-
-  try {
-    const playersQuery = query(
-      collection(db, 'players'),
-      where('clubId', '==', clubId),
-    );
-
-    const snapshot =
-      await getDocs(playersQuery);
-
-    return snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    }));
-  } catch (error) {
-    console.error(
-      'Primary player query failed:',
-      error,
-    );
-  }
-
-  try {
-    const snapshot =
-      await getDocs(collection(db, 'players'));
-
-    return snapshot.docs
-      .map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
-      .filter((player) => {
-        const id =
-          player.clubId ||
-          player.currentClub ||
-          player.teamId;
-
-        return String(id) === String(clubId);
-      });
-  } catch (error) {
-    console.error(
-      'Fallback player query failed:',
-      error,
-    );
-
-    return [];
-  }
-}
 
 async function loadMatchFromDatabase(matchId) {
   if (!matchId) return null;
 
-  try {
-    const matchRef = doc(
-      db,
-      'matches',
-      matchId,
-    );
+  const matchRef = doc(db, 'matches', matchId);
+  const matchSnapshot = await getDoc(matchRef);
 
-    const snapshot =
-      await getDoc(matchRef);
-
-    if (snapshot.exists()) {
-      return {
-        id: snapshot.id,
-        ...snapshot.data(),
-        _source: 'matches',
-      };
-    }
-  } catch (error) {
-    console.error(
-      'Matches load error:',
-      error,
-    );
+  if (matchSnapshot.exists()) {
+    return {
+      id: matchSnapshot.id,
+      ...matchSnapshot.data(),
+      _source: 'matches',
+    };
   }
 
-  try {
-    const fixtureRef = doc(
-      db,
-      'fixtures',
-      matchId,
-    );
+  const fixtureRef = doc(db, 'fixtures', matchId);
+  const fixtureSnapshot = await getDoc(fixtureRef);
 
-    const snapshot =
-      await getDoc(fixtureRef);
-
-    if (snapshot.exists()) {
-      return {
-        id: snapshot.id,
-        ...snapshot.data(),
-        _source: 'fixtures',
-      };
-    }
-  } catch (error) {
-    console.error(
-      'Fixtures load error:',
-      error,
-    );
+  if (fixtureSnapshot.exists()) {
+    return {
+      id: fixtureSnapshot.id,
+      ...fixtureSnapshot.data(),
+      _source: 'fixtures',
+    };
   }
 
   return null;
 }
 
 /* =========================================================
-   PAGE
+   MATCH PAGE
 ========================================================= */
 
 export default function MatchPage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
 
-  const {
-    user,
-    loading: authLoading,
-  } = useAuth();
-
-  const matchId =
-    typeof router.query.id === 'string'
-      ? router.query.id
-      : null;
-
-  /* =======================================================
-     UI STATE
-  ======================================================= */
+  const matchId = typeof router.query.id === 'string' ? router.query.id : null;
 
   const [fixture, setFixture] = useState(null);
+  const [homeClub, setHomeClub] = useState(null);
+  const [awayClub, setAwayClub] = useState(null);
 
-  const [homeClub, setHomeClub] =
-    useState(null);
+  const [homeSquad, setHomeSquad] = useState([]);
+  const [awaySquad, setAwaySquad] = useState([]);
+  const [homeXI, setHomeXI] = useState([]);
+  const [awayXI, setAwayXI] = useState([]);
+  const [homeBench, setHomeBench] = useState([]);
+  const [awayBench, setAwayBench] = useState([]);
 
-  const [awayClub, setAwayClub] =
-    useState(null);
+  const [homeScore, setHomeScore] = useState(0);
+  const [awayScore, setAwayScore] = useState(0);
+  const [matchMinute, setMatchMinute] = useState(0);
+  const [matchStatus, setMatchStatus] = useState('loading');
+  const [events, setEvents] = useState([]);
 
-  const [homeSquad, setHomeSquad] =
-    useState([]);
+  const [homeStats, setHomeStats] = useState(createDefaultStats());
+  const [awayStats, setAwayStats] = useState(createDefaultStats());
 
-  const [awaySquad, setAwaySquad] =
-    useState([]);
+  const [mentality, setMentality] = useState('balanced');
+  const [showTactics, setShowTactics] = useState(false);
+  const [showSubs, setShowSubs] = useState(false);
+  const [showEvents, setShowEvents] = useState(true);
 
-  const [homeXI, setHomeXI] =
-    useState([]);
+  const [loadingMatch, setLoadingMatch] = useState(true);
+  const [savingMatch, setSavingMatch] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [halfTimeShown, setHalfTimeShown] = useState(false);
+  const [userClubId, setUserClubId] = useState(null);
+  const [substitutionsUsed, setSubstitutionsUsed] = useState(0);
+  const [selectedSubPlayer, setSelectedSubPlayer] = useState('');
+  const [selectedTeam, setSelectedTeam] = useState('home');
 
-  const [awayXI, setAwayXI] =
-    useState([]);
+  const timerRef = useRef(null);
+  const processingRef = useRef(false);
 
-  const [homeBench, setHomeBench] =
-    useState([]);
-
-  const [awayBench, setAwayBench] =
-    useState([]);
-
-  const [playersLoading, setPlayersLoading] =
-    useState(false);
-
-  const [homeScore, setHomeScore] =
-    useState(0);
-
-  const [awayScore, setAwayScore] =
-    useState(0);
-
-  const [matchMinute, setMatchMinute] =
-    useState(0);
-
-  const [matchStatus, setMatchStatus] =
-    useState('ready');
-
-  const [events, setEvents] =
-    useState([]);
-
-  const [homeStats, setHomeStats] =
-    useState(createDefaultStats());
-
-  const [awayStats, setAwayStats] =
-    useState(createDefaultStats());
-
-  const [mentality, setMentality] =
-    useState('balanced');
-
-  const [formation, setFormation] =
-    useState('4-4-2');
-
-  const [showTactics, setShowTactics] =
-    useState(false);
-
-  const [showSubs, setShowSubs] =
-    useState(false);
-
-  const [showEvents, setShowEvents] =
-    useState(true);
-
-  const [showFormation, setShowFormation] =
-    useState(false);
-
-  const [savingMatch, setSavingMatch] =
-    useState(false);
-
-  const [paused, setPaused] =
-    useState(false);
-
-  const [halfTimeShown, setHalfTimeShown] =
-    useState(false);
-
-  const [userClubId, setUserClubId] =
-    useState(null);
-
-  const [userClubLoading, setUserClubLoading] =
-    useState(true);
-
-  const [substitutionsUsed, setSubstitutionsUsed] =
-    useState(0);
-
-  const [selectedSubPlayer, setSelectedSubPlayer] =
-    useState('');
-
-  /* =======================================================
-     THREE REFS
-  ======================================================= */
-
+  // Three.js refs
   const mountRef = useRef(null);
-
   const sceneRef = useRef(null);
-
   const cameraRef = useRef(null);
-
   const rendererRef = useRef(null);
-
   const controlsRef = useRef(null);
-
   const ballMeshRef = useRef(null);
-
-  const playerMeshesRef = useRef({
-    home: [],
-    away: [],
-  });
-
-  const animationFrameRef =
-    useRef(null);
-
-  const threeClockRef =
-    useRef(null);
-
-  const sceneInitializedRef =
-    useRef(false);
+  const playerMeshesRef = useRef({ home: [], away: [] });
+  const animationFrameRef = useRef(null);
+  
+  // Match simulation state refs
+  const ballPossessionRef = useRef(null); // { team: 'home'|'away', playerIndex: number }
+  const ballTargetRef = useRef(null); // { x, z }
+  const playerTargetsRef = useRef({ home: [], away: [] });
 
   /* =======================================================
-     MATCH ENGINE REFS
-  ======================================================= */
-
-  const gameClockRef =
-    useRef(0);
-
-  const ballStateRef =
-    useRef(null);
-
-  const playersStateRef =
-    useRef({
-      home: [],
-      away: [],
-    });
-
-  const lastSimulationTimeRef =
-    useRef(0);
-
-  const lastFirestoreSaveRef =
-    useRef(0);
-
-  const simulationVersionRef =
-    useRef(0);
-
-  const finishCalledRef =
-    useRef(false);
-
-  const homeScoreRef =
-    useRef(0);
-
-  const awayScoreRef =
-    useRef(0);
-
-  const matchMinuteRef =
-    useRef(0);
-
-  const matchStatusRef =
-    useRef('ready');
-
-  const homeStatsRef =
-    useRef(createDefaultStats());
-
-  const awayStatsRef =
-    useRef(createDefaultStats());
-
-  const eventsRef =
-    useRef([]);
-
-  const mentalityRef =
-    useRef('balanced');
-
-  const formationRef =
-    useRef('4-4-2');
-
-  const pausedRef =
-    useRef(false);
-
-  const substitutionsUsedRef =
-    useRef(0);
-
-  /* =======================================================
-     PARTICIPATION
-  ======================================================= */
+     DERIVED
+  ======================================================== */
 
   const isHomeUser =
-    String(userClubId || '') ===
-    String(homeClub?.id || '');
+    String(userClubId || '') === String(homeClub?.id || '');
 
   const isAwayUser =
-    String(userClubId || '') ===
-    String(awayClub?.id || '');
+    String(userClubId || '') === String(awayClub?.id || '');
 
-  const userIsParticipant =
-    isHomeUser || isAwayUser;
+  const userIsParticipant = isHomeUser || isAwayUser;
 
-  const userTeam =
-    isHomeUser
-      ? 'home'
-      : isAwayUser
-        ? 'away'
-        : null;
+  const userTeam = isHomeUser ? 'home' : isAwayUser ? 'away' : null;
 
   /* =======================================================
      LOAD USER CLUB
-  ======================================================= */
+  ======================================================== */
 
   useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
-      setUserClubLoading(false);
-      return;
-    }
+    if (loading || !user) return;
 
     let cancelled = false;
 
     async function loadUserClub() {
       try {
-        setUserClubLoading(true);
+        const userRef = doc(db, 'users', user.uid);
+        const snapshot = await getDoc(userRef);
 
-        const userRef = doc(
-          db,
-          'users',
-          user.uid,
-        );
-
-        const snapshot =
-          await getDoc(userRef);
-
-        if (!snapshot.exists()) {
-          return;
-        }
+        if (!snapshot.exists()) return;
 
         const data = snapshot.data();
-
-        const career =
-          data.careerData || {};
+        const career = data.careerData || {};
 
         const clubId =
-          career.currentClub ||
-          data.currentClub ||
-          data.clubId ||
-          null;
+          career.currentClub || data.currentClub || data.clubId || null;
 
         if (!cancelled) {
           setUserClubId(clubId);
         }
       } catch (error) {
-        console.error(
-          'User club loading error:',
-          error,
-        );
-      } finally {
-        if (!cancelled) {
-          setUserClubLoading(false);
-        }
+        console.error('User club error:', error);
       }
     }
 
@@ -1054,319 +634,128 @@ export default function MatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading]);
+  }, [user, loading]);
 
   /* =======================================================
-     LOAD MATCH + CLUBS
-     
-     IMPORTANT:
-     We intentionally DO NOT wait for players.
-     Once match + clubs are available, the UI renders.
-  ======================================================= */
+     APPLY MATCH DATABASE STATE
+  ======================================================== */
+
+  const applyMatchState = useCallback((data) => {
+    if (!data) return;
+
+    const result = data.result || {};
+
+    setHomeScore(safeNumber(result.homeScore ?? data.homeScore, 0));
+    setAwayScore(safeNumber(result.awayScore ?? data.awayScore, 0));
+    setMatchMinute(safeNumber(data.minute ?? data.matchMinute, 0));
+    setEvents(Array.isArray(data.events) ? data.events : []);
+
+    setHomeStats({
+      ...createDefaultStats(),
+      ...(data.homeStats || {}),
+    });
+
+    setAwayStats({
+      ...createDefaultStats(),
+      ...(data.awayStats || {}),
+    });
+
+    setSubstitutionsUsed(safeNumber(data.substitutionsUsed, 0));
+
+    if (data.mentality) {
+      setMentality(data.mentality);
+    }
+
+    const status = normalize(data.status);
+
+    if (status === 'finished' || status === 'completed') {
+      setMatchStatus('finished');
+    } else if (status === 'half-time') {
+      setMatchStatus('half-time');
+    } else if (status === 'live') {
+      setMatchStatus('live');
+    } else {
+      setMatchStatus('ready');
+    }
+  }, []);
+
+  /* =======================================================
+     LOAD MATCH + CLUBS + PLAYERS
+  ======================================================== */
 
   useEffect(() => {
-    if (
-      authLoading ||
-      !user ||
-      !matchId
-    ) {
-      return;
-    }
+    if (loading || !user || !matchId) return;
 
     let cancelled = false;
 
     async function loadMatch() {
       try {
-        const match =
-          await loadMatchFromDatabase(
-            matchId,
-          );
+        setLoadingMatch(true);
 
-        if (cancelled) return;
+        const match = await loadMatchFromDatabase(matchId);
 
         if (!match) {
-          toast.error(
-            'Match not found in database',
-          );
-
+          toast.error('Match not found in database');
           router.push('/fixtures');
           return;
         }
 
+        if (cancelled) return;
+
         setFixture(match);
+        applyMatchState(match);
 
-        const homeId =
-          match.homeClubId ||
-          match.homeTeamId ||
-          match.homeId;
-
-        const awayId =
-          match.awayClubId ||
-          match.awayTeamId ||
-          match.awayId;
+        const homeId = match.homeClubId || match.homeTeamId || match.homeId;
+        const awayId = match.awayClubId || match.awayTeamId || match.awayId;
 
         if (!homeId || !awayId) {
-          toast.error(
-            'This match has invalid teams',
-          );
+          toast.error('This match has invalid teams');
           return;
         }
 
-        const [
-          homeSnapshot,
-          awaySnapshot,
-        ] = await Promise.all([
-          getDoc(
-            doc(db, 'clubs', homeId),
-          ),
-          getDoc(
-            doc(db, 'clubs', awayId),
-          ),
+        const [homeSnapshot, awaySnapshot] = await Promise.all([
+          getDoc(doc(db, 'clubs', homeId)),
+          getDoc(doc(db, 'clubs', awayId)),
         ]);
 
+        const home = homeSnapshot.exists()
+          ? { id: homeSnapshot.id, ...homeSnapshot.data() }
+          : { id: homeId, name: match.homeClubName || 'Home' };
+
+        const away = awaySnapshot.exists()
+          ? { id: awaySnapshot.id, ...awaySnapshot.data() }
+          : { id: awayId, name: match.awayClubName || 'Away' };
+
         if (cancelled) return;
-
-        const home =
-          homeSnapshot.exists()
-            ? {
-                id: homeSnapshot.id,
-                ...homeSnapshot.data(),
-              }
-            : {
-                id: homeId,
-                name:
-                  match.homeClubName ||
-                  'Home',
-              };
-
-        const away =
-          awaySnapshot.exists()
-            ? {
-                id: awaySnapshot.id,
-                ...awaySnapshot.data(),
-              }
-            : {
-                id: awayId,
-                name:
-                  match.awayClubName ||
-                  'Away',
-              };
 
         setHomeClub(home);
         setAwayClub(away);
 
-        /* =================================================
-           MATCH STATE
-        ================================================= */
-
-        const initialMinute =
-          safeNumber(
-            match.minute ??
-              match.matchMinute,
-            0,
-          );
-
-        const initialStatus =
-          match.status || 'ready';
-
-        homeScoreRef.current =
-          safeNumber(
-            match.homeScore ??
-              match.result?.homeScore,
-            0,
-          );
-
-        awayScoreRef.current =
-          safeNumber(
-            match.awayScore ??
-              match.result?.awayScore,
-            0,
-          );
-
-        matchMinuteRef.current =
-          initialMinute;
-
-        matchStatusRef.current =
-          initialStatus;
-
-        homeStatsRef.current = {
-          ...createDefaultStats(),
-          ...(match.homeStats || {}),
-        };
-
-        awayStatsRef.current = {
-          ...createDefaultStats(),
-          ...(match.awayStats || {}),
-        };
-
-        eventsRef.current =
-          Array.isArray(match.events)
-            ? match.events
-            : [];
-
-        simulationVersionRef.current =
-          safeNumber(
-            match.simulationVersion,
-            0,
-          );
-
-        mentalityRef.current =
-          match.mentality ||
-          'balanced';
-
-        formationRef.current =
-          match.formation ||
-          '4-4-2';
-
-        substitutionsUsedRef.current =
-          safeNumber(
-            match.substitutionsUsed,
-            0,
-          );
-
-        setMatchMinute(
-          matchMinuteRef.current,
-        );
-
-        setMatchStatus(
-          matchStatusRef.current,
-        );
-
-        setHomeScore(
-          homeScoreRef.current,
-        );
-
-        setAwayScore(
-          awayScoreRef.current,
-        );
-
-        setHomeStats(
-          homeStatsRef.current,
-        );
-
-        setAwayStats(
-          awayStatsRef.current,
-        );
-
-        setEvents(
-          eventsRef.current,
-        );
-
-        setMentality(
-          mentalityRef.current,
-        );
-
-        setFormation(
-          formationRef.current,
-        );
-
-        setSubstitutionsUsed(
-          substitutionsUsedRef.current,
-        );
-
-        /*
-         * Ball can exist before players finish loading.
-         */
-        ballStateRef.current = {
-          mode: 'possessed',
-          team: 'home',
-          playerIndex: 5,
-        };
-
-        /*
-         * IMPORTANT:
-         * From here the page is ready.
-         * Players are loaded separately below.
-         */
-
-        loadPlayersInBackground(
-          home,
-          away,
-          homeId,
-          awayId,
-        );
-      } catch (error) {
-        console.error(
-          'Match loading error:',
-          error,
-        );
-
-        toast.error(
-          'Could not load match',
-        );
-      }
-    }
-
-    async function loadPlayersInBackground(
-      home,
-      away,
-      homeId,
-      awayId,
-    ) {
-      try {
-        setPlayersLoading(true);
-
-        const [
-          rawHomePlayers,
-          rawAwayPlayers,
-        ] = await Promise.all([
+        const [rawHomePlayers, rawAwayPlayers] = await Promise.all([
           loadClubPlayers(homeId),
           loadClubPlayers(awayId),
         ]);
 
         if (cancelled) return;
 
-        const preparedHome =
-          generateClubPlayers(
-            home,
-            rawHomePlayers,
-          );
+        const preparedHome = generateClubPlayers(home, rawHomePlayers);
+        const preparedAway = generateClubPlayers(away, rawAwayPlayers);
 
-        const preparedAway =
-          generateClubPlayers(
-            away,
-            rawAwayPlayers,
-          );
+        setHomeSquad(preparedHome);
+        setAwaySquad(preparedAway);
 
-        const startingHome =
-          selectStartingXI(
-            preparedHome,
-            formationRef.current,
-          );
+        const startingHome = selectStartingXI(preparedHome);
+        const startingAway = selectStartingXI(preparedAway);
 
-        const startingAway =
-          selectStartingXI(
-            preparedAway,
-            formationRef.current,
-          );
-
-        setHomeSquad(
-          preparedHome,
-        );
-
-        setAwaySquad(
-          preparedAway,
-        );
-
-        setHomeXI(
-          startingHome,
-        );
-
-        setAwayXI(
-          startingAway,
-        );
+        setHomeXI(startingHome);
+        setAwayXI(startingAway);
 
         setHomeBench(
           preparedHome.filter(
             (player) =>
               !startingHome.some(
                 (starter) =>
-                  String(
-                    playerId(starter),
-                  ) ===
-                  String(
-                    playerId(player),
-                  ),
+                  String(playerId(starter)) === String(playerId(player)),
               ),
           ),
         );
@@ -1376,98 +765,16 @@ export default function MatchPage() {
             (player) =>
               !startingAway.some(
                 (starter) =>
-                  String(
-                    playerId(starter),
-                  ) ===
-                  String(
-                    playerId(player),
-                  ),
+                  String(playerId(starter)) === String(playerId(player)),
               ),
           ),
         );
       } catch (error) {
-        console.error(
-          'Background players error:',
-          error,
-        );
-
-        /*
-         * Even if Firestore player loading fails,
-         * generate players locally.
-         */
-
-        const generatedHome =
-          generateClubPlayers(
-            home,
-            [],
-          );
-
-        const generatedAway =
-          generateClubPlayers(
-            away,
-            [],
-          );
-
-        const startingHome =
-          selectStartingXI(
-            generatedHome,
-            formationRef.current,
-          );
-
-        const startingAway =
-          selectStartingXI(
-            generatedAway,
-            formationRef.current,
-          );
-
-        setHomeSquad(
-          generatedHome,
-        );
-
-        setAwaySquad(
-          generatedAway,
-        );
-
-        setHomeXI(
-          startingHome,
-        );
-
-        setAwayXI(
-          startingAway,
-        );
-
-        setHomeBench(
-          generatedHome.filter(
-            (player) =>
-              !startingHome.some(
-                (starter) =>
-                  String(
-                    playerId(starter),
-                  ) ===
-                  String(
-                    playerId(player),
-                  ),
-              ),
-          ),
-        );
-
-        setAwayBench(
-          generatedAway.filter(
-            (player) =>
-              !startingAway.some(
-                (starter) =>
-                  String(
-                    playerId(starter),
-                  ) ===
-                  String(
-                    playerId(player),
-                  ),
-              ),
-          ),
-        );
+        console.error('Match loading error:', error);
+        toast.error('Could not load match');
       } finally {
         if (!cancelled) {
-          setPlayersLoading(false);
+          setLoadingMatch(false);
         }
       }
     }
@@ -1477,2637 +784,1028 @@ export default function MatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [
-    authLoading,
-    user,
-    matchId,
-    router,
-  ]);
+  }, [loading, user, matchId, router, applyMatchState]);
 
   /* =======================================================
-     FIRESTORE SAVE
-  ======================================================= */
-
-  const saveMatchStateToFirestore =
-    useCallback(async () => {
-      if (!matchId) return;
-
-      try {
-        const matchRef = doc(
-          db,
-          'matches',
-          matchId,
-        );
-
-        await setDoc(
-          matchRef,
-          {
-            id: matchId,
-
-            status:
-              matchStatusRef.current,
-
-            minute:
-              matchMinuteRef.current,
-
-            homeScore:
-              homeScoreRef.current,
-
-            awayScore:
-              awayScoreRef.current,
-
-            result: {
-              homeScore:
-                homeScoreRef.current,
-
-              awayScore:
-                awayScoreRef.current,
-            },
-
-            events:
-              eventsRef.current,
-
-            homeStats:
-              homeStatsRef.current,
-
-            awayStats:
-              awayStatsRef.current,
-
-            substitutionsUsed:
-              substitutionsUsedRef.current,
-
-            mentality:
-              mentalityRef.current,
-
-            formation:
-              formationRef.current,
-
-            simulationVersion:
-              simulationVersionRef.current,
-
-            updatedAt:
-              serverTimestamp(),
-          },
-          {
-            merge: true,
-          },
-        );
-      } catch (error) {
-        console.error(
-          'Firestore save error:',
-          error,
-        );
-      }
-    }, [matchId]);
-
-  /* =======================================================
-     FINISH MATCH
-  ======================================================= */
-
-  const finishMatch =
-    useCallback(async () => {
-      if (
-        finishCalledRef.current
-      ) {
-        return;
-      }
-
-      finishCalledRef.current = true;
-
-      try {
-        setSavingMatch(true);
-
-        matchStatusRef.current =
-          'finished';
-
-        pausedRef.current = true;
-
-        matchMinuteRef.current =
-          MATCH_DURATION_MINUTES;
-
-        setMatchStatus(
-          'finished',
-        );
-
-        setPaused(true);
-
-        setMatchMinute(
-          MATCH_DURATION_MINUTES,
-        );
-
-        await saveMatchStateToFirestore();
-
-        toast.success(
-          `Full time: ${homeScoreRef.current} - ${awayScoreRef.current}`,
-        );
-      } catch (error) {
-        console.error(
-          'Finish match error:',
-          error,
-        );
-
-        toast.error(
-          'Could not save final result',
-        );
-      } finally {
-        setSavingMatch(false);
-      }
-    }, [
-      saveMatchStateToFirestore,
-    ]);
-
-  /* =======================================================
-     THREE.JS
-     
-     IMPORTANT:
-     substitutionsUsed is NOT a dependency.
-  ======================================================= */
+     THREE.JS 3D PITCH SETUP
+  ======================================================== */
 
   useEffect(() => {
-    if (
-      !mountRef.current ||
-      sceneInitializedRef.current ||
-      !homeXI.length ||
-      !awayXI.length
-    ) {
-      return;
-    }
+    if (!mountRef.current || loadingMatch) return;
 
-    sceneInitializedRef.current = true;
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1120);
+    scene.fog = new THREE.Fog(0x0b1120, 30, 80);
 
-    const container =
-      mountRef.current;
-
-    const width =
-      container.clientWidth || 800;
-
-    const height =
-      container.clientHeight || 450;
-
-    const scene =
-      new THREE.Scene();
-
-    scene.background =
-      new THREE.Color(0x0b1120);
-
-    const camera =
-      new THREE.PerspectiveCamera(
-        45,
-        width / height,
-        0.1,
-        100,
-      );
-
-    camera.position.set(
-      0,
-      25,
-      30,
+    // Camera
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      100,
     );
+    camera.position.set(0, 25, 30);
+    camera.lookAt(0, 0, 0);
 
-    camera.lookAt(
-      0,
-      0,
-      0,
-    );
-
-    const renderer =
-      new THREE.WebGLRenderer({
-        antialias: true,
-      });
-
-    renderer.setSize(
-      width,
-      height,
-    );
-
-    renderer.setPixelRatio(
-      Math.min(
-        window.devicePixelRatio || 1,
-        2,
-      ),
-    );
-
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    mountRef.current.appendChild(renderer.domElement);
 
-    container.appendChild(
-      renderer.domElement,
-    );
-
-    const controls =
-      new OrbitControls(
-        camera,
-        renderer.domElement,
-      );
-
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-
-    controls.target.set(
-      0,
-      0,
-      0,
-    );
-
-    controls.maxPolarAngle =
-      Math.PI / 2.5;
-
+    controls.target.set(0, 0, 0);
+    controls.maxPolarAngle = Math.PI / 2.5;
     controls.minDistance = 15;
     controls.maxDistance = 50;
-
     controls.update();
 
-    const ambientLight =
-      new THREE.AmbientLight(
-        0xffffff,
-        0.5,
-      );
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
 
-    scene.add(
-      ambientLight,
-    );
-
-    const directionalLight =
-      new THREE.DirectionalLight(
-        0xffffff,
-        1,
-      );
-
-    directionalLight.position.set(
-      10,
-      20,
-      10,
-    );
-
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 60;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
+    scene.add(directionalLight);
 
-    scene.add(
-      directionalLight,
-    );
-
-    /* =====================================================
-       PITCH
-    ===================================================== */
-
-    const pitchGeometry =
-      new THREE.PlaneGeometry(
-        PITCH_WIDTH,
-        PITCH_HEIGHT,
-      );
-
-    const pitchMaterial =
-      new THREE.MeshStandardMaterial({
-        color: 0x15803d,
-        roughness: 0.8,
-        metalness: 0.1,
-      });
-
-    const pitch =
-      new THREE.Mesh(
-        pitchGeometry,
-        pitchMaterial,
-      );
-
-    pitch.rotation.x =
-      -Math.PI / 2;
-
+    // Pitch (grass)
+    const pitchGeometry = new THREE.PlaneGeometry(30, 20);
+    const pitchMaterial = new THREE.MeshStandardMaterial({
+      color: 0x15803d,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const pitch = new THREE.Mesh(pitchGeometry, pitchMaterial);
+    pitch.rotation.x = -Math.PI / 2;
+    pitch.position.y = 0;
     pitch.receiveShadow = true;
-
     scene.add(pitch);
 
-    /* =====================================================
-       LINES
-    ===================================================== */
+    // Pitch lines
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
 
-    const lineMaterial =
-      new THREE.LineBasicMaterial({
-        color: 0xffffff,
-      });
+    const borderGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-15, 0.01, -10),
+      new THREE.Vector3(15, 0.01, -10),
+      new THREE.Vector3(15, 0.01, 10),
+      new THREE.Vector3(-15, 0.01, 10),
+      new THREE.Vector3(-15, 0.01, -10),
+    ]);
+    const borderLine = new THREE.Line(borderGeometry, lineMaterial);
+    scene.add(borderLine);
 
-    const borderGeometry =
-      new THREE.BufferGeometry().setFromPoints(
-        [
-          new THREE.Vector3(
-            -PITCH_WIDTH / 2,
-            0.01,
-            -PITCH_HEIGHT / 2,
-          ),
+    const centerLineGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.01, -10),
+      new THREE.Vector3(0, 0.01, 10),
+    ]);
+    const centerLine = new THREE.Line(centerLineGeometry, lineMaterial);
+    scene.add(centerLine);
 
-          new THREE.Vector3(
-            PITCH_WIDTH / 2,
-            0.01,
-            -PITCH_HEIGHT / 2,
-          ),
+    const circleGeometry = new THREE.RingGeometry(3, 3.05, 64);
+    const circleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+    });
+    const centerCircle = new THREE.Mesh(circleGeometry, circleMaterial);
+    centerCircle.rotation.x = -Math.PI / 2;
+    centerCircle.position.y = 0.02;
+    scene.add(centerCircle);
 
-          new THREE.Vector3(
-            PITCH_WIDTH / 2,
-            0.01,
-            PITCH_HEIGHT / 2,
-          ),
+    // Goals
+    const goalMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
-          new THREE.Vector3(
-            -PITCH_WIDTH / 2,
-            0.01,
-            PITCH_HEIGHT / 2,
-          ),
-
-          new THREE.Vector3(
-            -PITCH_WIDTH / 2,
-            0.01,
-            -PITCH_HEIGHT / 2,
-          ),
-        ],
-      );
-
-    scene.add(
-      new THREE.Line(
-        borderGeometry,
-        lineMaterial,
-      ),
-    );
-
-    const centerLineGeometry =
-      new THREE.BufferGeometry().setFromPoints(
-        [
-          new THREE.Vector3(
-            0,
-            0.01,
-            -PITCH_HEIGHT / 2,
-          ),
-
-          new THREE.Vector3(
-            0,
-            0.01,
-            PITCH_HEIGHT / 2,
-          ),
-        ],
-      );
-
-    scene.add(
-      new THREE.Line(
-        centerLineGeometry,
-        lineMaterial,
-      ),
-    );
-
-    const circleGeometry =
-      new THREE.RingGeometry(
-        3,
-        3.05,
-        64,
-      );
-
-    const circleMaterial =
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        side: THREE.DoubleSide,
-      });
-
-    const centerCircle =
-      new THREE.Mesh(
-        circleGeometry,
-        circleMaterial,
-      );
-
-    centerCircle.rotation.x =
-      -Math.PI / 2;
-
-    centerCircle.position.y =
-      0.02;
-
-    scene.add(
-      centerCircle,
-    );
-
-    /* =====================================================
-       GOALS
-    ===================================================== */
-
-    const goalMaterial =
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-      });
-
-    const goalGeometry =
-      new THREE.BoxGeometry(
-        0.1,
-        0.15,
-        GOAL_WIDTH,
-      );
-
-    const leftGoal =
-      new THREE.Mesh(
-        goalGeometry,
-        goalMaterial,
-      );
-
-    leftGoal.position.set(
-      -PITCH_WIDTH / 2,
-      0.08,
-      0,
-    );
-
+    const leftGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
+    const leftGoal = new THREE.Mesh(leftGoalGeometry, goalMaterial);
+    leftGoal.position.set(-15, 0.08, 0);
     scene.add(leftGoal);
 
-    const rightGoal =
-      new THREE.Mesh(
-        goalGeometry,
-        goalMaterial,
-      );
-
-    rightGoal.position.set(
-      PITCH_WIDTH / 2,
-      0.08,
-      0,
-    );
-
+    const rightGoalGeometry = new THREE.BoxGeometry(0.1, 0.15, 6);
+    const rightGoal = new THREE.Mesh(rightGoalGeometry, goalMaterial);
+    rightGoal.position.set(15, 0.08, 0);
     scene.add(rightGoal);
 
-    /* =====================================================
-       BALL
-    ===================================================== */
-
-    const ballGeometry =
-      new THREE.SphereGeometry(
-        BALL_SIZE,
-        32,
-        32,
-      );
-
-    const ballMaterial =
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.3,
-      });
-
-    const ball =
-      new THREE.Mesh(
-        ballGeometry,
-        ballMaterial,
-      );
-
-    ball.position.set(
-      0,
-      BALL_SIZE,
-      0,
-    );
-
+    // Ball
+    const ballGeometry = new THREE.SphereGeometry(0.15, 32, 32);
+    const ballMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.3,
+      metalness: 0.1,
+    });
+    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    ball.position.set(0, 0.15, 0);
+    ball.castShadow = true;
     scene.add(ball);
-
     ballMeshRef.current = ball;
 
-    /* =====================================================
-       PLAYER MESH
-    ===================================================== */
+    // Create players
+    const createPlayer = (x, z, color, index) => {
+      const playerGeometry = new THREE.CylinderGeometry(0.3, 0.35, 1.2, 16);
+      const playerMaterial = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.5,
+        metalness: 0.2,
+      });
+      const player = new THREE.Mesh(playerGeometry, playerMaterial);
+      player.position.set(x, 0.6, z);
+      player.castShadow = true;
+      player.userData = { originalX: x, originalZ: z, index };
+      scene.add(player);
+      return player;
+    };
 
-    const createPlayerMesh =
-      (x, z, color) => {
-        const group =
-          new THREE.Group();
+    const homeFormation = FORMATION_POSITIONS[mentality] || FORMATION_POSITIONS.balanced;
 
-        const bodyGeometry =
-          new THREE.CylinderGeometry(
-            PLAYER_RADIUS,
-            PLAYER_RADIUS,
-            0.6,
-            16,
-          );
+    playerMeshesRef.current.home = homeFormation.map((pos, index) => {
+      const x = (pos.x - 50) / 50 * 15;
+      const z = (pos.y - 50) / 50 * 10;
+      return createPlayer(x, z, 0x3b82f6, index);
+    });
 
-        const bodyMaterial =
-          new THREE.MeshStandardMaterial({
-            color,
-            roughness: 0.5,
-          });
+    playerMeshesRef.current.away = homeFormation.map((pos, index) => {
+      const x = (50 - pos.x) / 50 * 15;
+      const z = (50 - pos.y) / 50 * 10;
+      return createPlayer(x, z, 0xef4444, index);
+    });
 
-        const body =
-          new THREE.Mesh(
-            bodyGeometry,
-            bodyMaterial,
-          );
+    // Initialize player targets
+    playerTargetsRef.current.home = playerMeshesRef.current.home.map((player) => ({
+      x: player.position.x,
+      z: player.position.z,
+    }));
 
-        body.position.y =
-          0.3;
+    playerTargetsRef.current.away = playerMeshesRef.current.away.map((player) => ({
+      x: player.position.x,
+      z: player.position.z,
+    }));
 
-        group.add(body);
-
-        const headGeometry =
-          new THREE.SphereGeometry(
-            0.15,
-            16,
-            16,
-          );
-
-        const headMaterial =
-          new THREE.MeshStandardMaterial({
-            color: 0xffcc99,
-          });
-
-        const head =
-          new THREE.Mesh(
-            headGeometry,
-            headMaterial,
-          );
-
-        head.position.y =
-          0.75;
-
-        group.add(head);
-
-        group.position.set(
-          x,
-          0,
-          z,
-        );
-
-        scene.add(group);
-
-        return group;
-      };
-
-    const positions =
-      FORMATIONS[
-        formationRef.current
-      ] ||
-      FORMATIONS['4-4-2'];
-
-    playerMeshesRef.current.home =
-      positions.map((position) => {
-        const x =
-          ((position.x - 50) / 50) *
-          PITCH_WIDTH;
-
-        const z =
-          ((position.y - 50) / 50) *
-          PITCH_HEIGHT;
-
-        return createPlayerMesh(
-          x,
-          z,
-          0x3b82f6,
-        );
+    // Animation loop
+    const animate = () => {
+      animationFrameRef.current = requestAnimationFrame(animate);
+      
+      // Smooth player movement
+      playerMeshesRef.current.home.forEach((player, index) => {
+        const target = playerTargetsRef.current.home[index];
+        if (target) {
+          player.position.x = lerp(player.position.x, target.x, 0.1);
+          player.position.z = lerp(player.position.z, target.z, 0.1);
+        }
       });
 
-    playerMeshesRef.current.away =
-      positions.map((position) => {
-        const x =
-          ((50 - position.x) / 50) *
-          PITCH_WIDTH;
-
-        const z =
-          ((50 - position.y) / 50) *
-          PITCH_HEIGHT;
-
-        return createPlayerMesh(
-          x,
-          z,
-          0xef4444,
-        );
+      playerMeshesRef.current.away.forEach((player, index) => {
+        const target = playerTargetsRef.current.away[index];
+        if (target) {
+          player.position.x = lerp(player.position.x, target.x, 0.1);
+          player.position.z = lerp(player.position.z, target.z, 0.1);
+        }
       });
 
-    playersStateRef.current.home =
-      homeXI.map(
-        (player, index) => ({
-          id: playerId(player),
-
-          name:
-            getPlayerName(player),
-
-          position:
-            normalizePosition(
-              getPlayerPosition(
-                player,
-              ),
-            ),
-
-          overall:
-            getPlayerOverall(
-              player,
-            ),
-
-          team: 'home',
-
-          index,
-
-          speed:
-            PLAYER_SPEED_BASE +
-            (getPlayerOverall(
-              player,
-            ) -
-              60) *
-              0.005,
-
-          stamina: 100,
-
-          hasBall: false,
-
-          target: {
-            x:
-              playerMeshesRef
-                .current.home[
-                index
-              ]?.position.x || 0,
-
-            z:
-              playerMeshesRef
-                .current.home[
-                index
-              ]?.position.z || 0,
-          },
-
-          decisionCooldown: 0,
-        }),
-      );
-
-    playersStateRef.current.away =
-      awayXI.map(
-        (player, index) => ({
-          id: playerId(player),
-
-          name:
-            getPlayerName(player),
-
-          position:
-            normalizePosition(
-              getPlayerPosition(
-                player,
-              ),
-            ),
-
-          overall:
-            getPlayerOverall(
-              player,
-            ),
-
-          team: 'away',
-
-          index,
-
-          speed:
-            PLAYER_SPEED_BASE +
-            (getPlayerOverall(
-              player,
-            ) -
-              60) *
-              0.005,
-
-          stamina: 100,
-
-          hasBall: false,
-
-          target: {
-            x:
-              playerMeshesRef
-                .current.away[
-                index
-              ]?.position.x || 0,
-
-            z:
-              playerMeshesRef
-                .current.away[
-                index
-              ]?.position.z || 0,
-          },
-
-          decisionCooldown: 0,
-        }),
-      );
-
-    /* =====================================================
-       ENGINE
-    ===================================================== */
-
-    const updatePlayers =
-      (delta) => {
-        const home =
-          playersStateRef.current
-            .home;
-
-        const away =
-          playersStateRef.current
-            .away;
-
-        [
-          ...home,
-          ...away,
-        ].forEach((player) => {
-          player.stamina =
-            clamp(
-              player.stamina -
-                delta * 2,
-              0,
-              100,
-            );
-
-          player.speed =
-            PLAYER_SPEED_BASE +
-            (player.overall - 60) *
-              0.005 +
-            (player.stamina - 100) *
-              0.002;
-        });
-
-        home.forEach(
-          (player, index) => {
-            if (player.hasBall)
-              return;
-
-            const formationPosition =
-              positions[index] ||
-              positions[0];
-
-            let targetX =
-              ((formationPosition.x -
-                50) /
-                50) *
-              PITCH_WIDTH;
-
-            let targetZ =
-              ((formationPosition.y -
-                50) /
-                50) *
-              PITCH_HEIGHT;
-
-            if (
-              player.position ===
-              'GK'
-            ) {
-              targetX =
-                -PITCH_WIDTH / 2 +
-                1;
-            }
-
-            player.target = {
-              x: targetX,
-              z: targetZ,
-            };
-          },
-        );
-
-        away.forEach(
-          (player, index) => {
-            if (player.hasBall)
-              return;
-
-            const formationPosition =
-              positions[index] ||
-              positions[0];
-
-            let targetX =
-              ((50 -
-                formationPosition.x) /
-                50) *
-              PITCH_WIDTH;
-
-            let targetZ =
-              ((50 -
-                formationPosition.y) /
-                50) *
-              PITCH_HEIGHT;
-
-            if (
-              player.position ===
-              'GK'
-            ) {
-              targetX =
-                PITCH_WIDTH / 2 -
-                1;
-            }
-
-            player.target = {
-              x: targetX,
-              z: targetZ,
-            };
-          },
-        );
-
-        const ballState =
-          ballStateRef.current;
-
-        if (!ballState) return;
-
-        if (
-          ballState.mode ===
-          'possessed'
-        ) {
-          const players =
-            ballState.team ===
-            'home'
-              ? home
-              : away;
-
-          const player =
-            players[
-              ballState.playerIndex
-            ];
-
-          if (!player) return;
-
-          player.hasBall = true;
-
-          if (
-            player.decisionCooldown >
-            0
-          ) {
-            player.decisionCooldown -=
-              delta;
-
-            return;
-          }
-
-          player.decisionCooldown =
-            DECISION_INTERVAL;
-
-          const random =
-            Math.random();
-
-          const team =
-            ballState.team;
-
-          const mesh =
-            team === 'home'
-              ? playerMeshesRef
-                  .current.home[
-                  player.index
-                ]
-              : playerMeshesRef
-                  .current.away[
-                  player.index
-                ];
-
-          if (!mesh) return;
-
-          const direction =
-            team === 'home'
-              ? 1
-              : -1;
-
-          const goalX =
-            direction *
-            (PITCH_WIDTH / 2 - 2);
-
-          if (random < 0.3) {
-            const teammates =
-              players.filter(
-                (_, index) =>
-                  index !==
-                  player.index,
-              );
-
-            const teammate =
-              pick(teammates);
-
-            if (teammate) {
-              const teammateMesh =
-                team === 'home'
-                  ? playerMeshesRef
-                      .current.home[
-                      teammate.index
-                    ]
-                  : playerMeshesRef
-                      .current.away[
-                      teammate.index
-                    ];
-
-              if (teammateMesh) {
-                ballStateRef.current =
-                  {
-                    mode: 'passing',
-                    team,
-                    fromIndex:
-                      player.index,
-                    toIndex:
-                      teammate.index,
-                    from: {
-                      x:
-                        mesh.position.x,
-                      y: 0,
-                      z:
-                        mesh.position.z,
-                    },
-                    to: {
-                      x:
-                        teammateMesh
-                          .position.x,
-                      y: 0,
-                      z:
-                        teammateMesh
-                          .position.z,
-                    },
-                    progress: 0,
-                  };
-
-                player.hasBall =
-                  false;
-              }
-            }
-          } else if (
-            random < 0.5
-          ) {
-            const distanceToGoal =
-              Math.abs(
-                goalX -
-                  mesh.position.x,
-              );
-
-            if (
-              distanceToGoal <
-              10
-            ) {
-              ballStateRef.current =
-                {
-                  mode: 'shot',
-                  team,
-                  fromIndex:
-                    player.index,
-                  from: {
-                    x:
-                      mesh.position.x,
-                    y: 0,
-                    z:
-                      mesh.position.z,
-                  },
-                  to: {
-                    x: goalX,
-                    y: 0,
-                    z: randomBetween(
-                      -2,
-                      2,
-                    ),
-                  },
-                  progress: 0,
-                };
-
-              player.hasBall =
-                false;
-
-              const stats =
-                team === 'home'
-                  ? homeStatsRef
-                  : awayStatsRef;
-
-              stats.current = {
-                ...stats.current,
-                shots:
-                  stats.current
-                    .shots + 1,
-              };
-
-              if (team === 'home') {
-                setHomeStats({
-                  ...stats.current,
-                });
-              } else {
-                setAwayStats({
-                  ...stats.current,
-                });
-              }
-            }
-          } else {
-            player.target = {
-              x:
-                mesh.position.x +
-                direction * 0.5,
-
-              z:
-                mesh.position.z +
-                (Math.random() -
-                  0.5),
-            };
-          }
+      // Ball follows possession
+      if (ballPossessionRef.current && ballMeshRef.current) {
+        const { team, playerIndex } = ballPossessionRef.current;
+        const players = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+        const player = players[playerIndex];
+        
+        if (player) {
+          ballMeshRef.current.position.x = player.position.x;
+          ballMeshRef.current.position.z = player.position.z;
+          ballMeshRef.current.position.y = 0.15;
         }
-
-        if (
-          ballState.mode ===
-          'passing'
-        ) {
-          ballState.progress +=
-            PASS_SPEED * delta;
-
-          if (
-            ballState.progress >=
-            1
-          ) {
-            ballStateRef.current =
-              {
-                mode: 'possessed',
-                team:
-                  ballState.team,
-                playerIndex:
-                  ballState.toIndex,
-              };
-          }
-        }
-
-        if (
-          ballState.mode ===
-          'shot'
-        ) {
-          ballState.progress +=
-            SHOT_SPEED * delta;
-
-          if (
-            ballState.progress >=
-            1
-          ) {
-            const shootingTeam =
-              ballState.team;
-
-            const defendingTeam =
-              shootingTeam ===
-              'home'
-                ? 'away'
-                : 'home';
-
-            const isGoal =
-              Math.random() <
-              0.4;
-
-            if (isGoal) {
-              if (
-                shootingTeam ===
-                'home'
-              ) {
-                homeScoreRef.current +=
-                  1;
-
-                setHomeScore(
-                  homeScoreRef.current,
-                );
-
-                homeStatsRef.current = {
-                  ...homeStatsRef.current,
-                  shotsOnTarget:
-                    homeStatsRef.current
-                      .shotsOnTarget +
-                    1,
-                };
-
-                setHomeStats({
-                  ...homeStatsRef.current,
-                });
-              } else {
-                awayScoreRef.current +=
-                  1;
-
-                setAwayScore(
-                  awayScoreRef.current,
-                );
-
-                awayStatsRef.current = {
-                  ...awayStatsRef.current,
-                  shotsOnTarget:
-                    awayStatsRef.current
-                      .shotsOnTarget +
-                    1,
-                };
-
-                setAwayStats({
-                  ...awayStatsRef.current,
-                });
-              }
-
-              const event = {
-                id: `${Date.now()}-goal`,
-                type:
-                  EVENT_TYPES.GOAL,
-                team:
-                  shootingTeam,
-                minute:
-                  matchMinuteRef.current,
-                playerId:
-                  null,
-                playerName:
-                  '',
-                detail:
-                  'Goal scored',
-                createdAt:
-                  new Date().toISOString(),
-              };
-
-              eventsRef.current = [
-                event,
-                ...eventsRef.current,
-              ];
-
-              setEvents([
-                ...eventsRef.current,
-              ]);
-
-              ballStateRef.current =
-                {
-                  mode: 'kickoff',
-                  team:
-                    defendingTeam,
-                };
-            } else {
-              const event = {
-                id: `${Date.now()}-save`,
-                type:
-                  EVENT_TYPES.SAVE,
-                team:
-                  defendingTeam,
-                minute:
-                  matchMinuteRef.current,
-                playerId:
-                  null,
-                playerName:
-                  '',
-                detail:
-                  'Goalkeeper save',
-                createdAt:
-                  new Date().toISOString(),
-              };
-
-              eventsRef.current = [
-                event,
-                ...eventsRef.current,
-              ];
-
-              setEvents([
-                ...eventsRef.current,
-              ]);
-
-              ballStateRef.current =
-                {
-                  mode: 'possessed',
-                  team:
-                    defendingTeam,
-                  playerIndex: 0,
-                };
-            }
-          }
-        }
-
-        if (
-          ballState.mode ===
-          'kickoff'
-        ) {
-          ballStateRef.current =
-            {
-              mode: 'possessed',
-              team:
-                ballState.team,
-              playerIndex: 5,
-            };
-        }
-      };
-
-    const updateBall =
-      () => {
-        const ball =
-          ballMeshRef.current;
-
-        const state =
-          ballStateRef.current;
-
-        if (!ball || !state)
-          return;
-
-        if (
-          state.mode ===
-          'possessed'
-        ) {
-          const mesh =
-            state.team === 'home'
-              ? playerMeshesRef
-                  .current.home[
-                  state.playerIndex
-                ]
-              : playerMeshesRef
-                  .current.away[
-                  state.playerIndex
-                ];
-
-          if (mesh) {
-            ball.position.x =
-              mesh.position.x;
-
-            ball.position.z =
-              mesh.position.z;
-
-            ball.position.y =
-              BALL_SIZE;
-          }
-
-          return;
-        }
-
-        if (
-          state.mode ===
-            'passing' ||
-          state.mode ===
-            'shot'
-        ) {
-          ball.position.x =
-            lerp(
-              state.from.x,
-              state.to.x,
-              state.progress,
-            );
-
-          ball.position.z =
-            lerp(
-              state.from.z,
-              state.to.z,
-              state.progress,
-            );
-
-          ball.position.y =
-            BALL_SIZE +
-            Math.sin(
-              state.progress *
-                Math.PI,
-            ) *
-              0.5;
-        }
-      };
-
-    const animate =
-      () => {
-        animationFrameRef.current =
-          requestAnimationFrame(
-            animate,
-          );
-
-        const delta =
-          threeClockRef.current?.getDelta() ||
-          0.016;
-
-        if (
-          matchStatusRef.current ===
-            'live' &&
-          !pausedRef.current
-        ) {
-          const now =
-            performance.now() /
-            1000;
-
-          if (
-            !lastSimulationTimeRef
-              .current
-          ) {
-            lastSimulationTimeRef.current =
-              now;
-          }
-
-          const elapsed =
-            now -
-            lastSimulationTimeRef
-              .current;
-
-          lastSimulationTimeRef.current =
-            now;
-
-          gameClockRef.current +=
-            elapsed;
-
-          const minute =
-            Math.floor(
-              gameClockRef.current,
-            );
-
-          if (
-            minute >
-            matchMinuteRef.current
-          ) {
-            matchMinuteRef.current =
-              minute;
-
-            setMatchMinute(
-              minute,
-            );
-
-            if (
-              minute ===
-                FIRST_HALF_END &&
-              !halfTimeShown
-            ) {
-              matchStatusRef.current =
-                'half-time';
-
-              setMatchStatus(
-                'half-time',
-              );
-
-              setHalfTimeShown(
-                true,
-              );
-            }
-
-            if (
-              minute >=
-                MATCH_DURATION_MINUTES &&
-              !finishCalledRef.current
-            ) {
-              finishMatch();
-            }
-          }
-
-          if (
-            matchStatusRef.current ===
-            'live'
-          ) {
-            updatePlayers(delta);
-
-            updateBall();
-
-            const current =
-              performance.now() /
-              1000;
-
-            if (
-              current -
-                lastFirestoreSaveRef
-                  .current >
-              FIREBASE_SAVE_INTERVAL
-            ) {
-              lastFirestoreSaveRef.current =
-                current;
-
-              saveMatchStateToFirestore();
-            }
-          }
-        }
-
-        playerMeshesRef.current.home.forEach(
-          (mesh, index) => {
-            const state =
-              playersStateRef.current
-                .home[index];
-
-            if (!state) return;
-
-            mesh.position.x =
-              lerp(
-                mesh.position.x,
-                state.target.x,
-                0.1,
-              );
-
-            mesh.position.z =
-              lerp(
-                mesh.position.z,
-                state.target.z,
-                0.1,
-              );
-          },
-        );
-
-        playerMeshesRef.current.away.forEach(
-          (mesh, index) => {
-            const state =
-              playersStateRef.current
-                .away[index];
-
-            if (!state) return;
-
-            mesh.position.x =
-              lerp(
-                mesh.position.x,
-                state.target.x,
-                0.1,
-              );
-
-            mesh.position.z =
-              lerp(
-                mesh.position.z,
-                state.target.z,
-                0.1,
-              );
-          },
-        );
-
-        controls.update();
-
-        renderer.render(
-          scene,
-          camera,
-        );
-      };
-
-    sceneRef.current = scene;
-
-    cameraRef.current = camera;
-
-    rendererRef.current =
-      renderer;
-
-    controlsRef.current =
-      controls;
-
-    threeClockRef.current =
-      new THREE.Clock();
-
-    lastSimulationTimeRef.current =
-      performance.now() / 1000;
-
-    lastFirestoreSaveRef.current =
-      performance.now() / 1000;
-
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    };
     animate();
 
-    const handleResize =
-      () => {
-        if (
-          !mountRef.current
-        ) {
-          return;
-        }
+    // Store refs
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+    rendererRef.current = renderer;
+    controlsRef.current = controls;
 
-        const nextWidth =
-          mountRef.current
-            .clientWidth || 800;
-
-        const nextHeight =
-          mountRef.current
-            .clientHeight || 450;
-
-        camera.aspect =
-          nextWidth /
-          nextHeight;
-
-        camera.updateProjectionMatrix();
-
-        renderer.setSize(
-          nextWidth,
-          nextHeight,
-        );
-      };
-
-    window.addEventListener(
-      'resize',
-      handleResize,
-    );
-
-    return () => {
-      window.removeEventListener(
-        'resize',
-        handleResize,
-      );
-
-      if (
-        animationFrameRef.current
-      ) {
-        cancelAnimationFrame(
-          animationFrameRef.current,
-        );
-      }
-
-      controls.dispose();
-
-      renderer.dispose();
-
-      pitchGeometry.dispose();
-      pitchMaterial.dispose();
-
-      lineMaterial.dispose();
-
-      ballGeometry.dispose();
-      ballMaterial.dispose();
-
-      if (
-        container.contains(
-          renderer.domElement,
-        )
-      ) {
-        container.removeChild(
-          renderer.domElement,
-        );
-      }
-
-      sceneInitializedRef.current =
-        false;
-
-      playerMeshesRef.current = {
-        home: [],
-        away: [],
-      };
-
-      ballMeshRef.current =
-        null;
+    // Handle resize
+    const handleResize = () => {
+      if (!mountRef.current || !camera || !renderer) return;
+      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     };
-  }, [
-    homeXI,
-    awayXI,
-    finishMatch,
-    saveMatchStateToFirestore,
-  ]);
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+      }
+      if (mountRef.current && renderer) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+    };
+  }, [loadingMatch, mentality]);
 
   /* =======================================================
-     REALTIME LISTENER
-  ======================================================= */
+     SIMULATE PLAYER MOVEMENT AND BALL POSSESSION
+  ======================================================== */
 
-  useEffect(() => {
-    if (
-      !user ||
-      !matchId
-    ) {
+  const simulatePlayerMovement = useCallback(() => {
+    if (!ballPossessionRef.current) {
+      // Give ball to a random player
+      const team = Math.random() < 0.5 ? 'home' : 'away';
+      const playerIndex = Math.floor(Math.random() * 11);
+      ballPossessionRef.current = { team, playerIndex };
       return;
     }
 
-    const matchRef =
-      doc(
-        db,
-        'matches',
-        matchId,
-      );
+    const { team, playerIndex } = ballPossessionRef.current;
+    const players = team === 'home' ? homeXI : awayXI;
+    const opposingTeam = team === 'home' ? 'away' : 'home';
+    const opposingPlayers = opposingTeam === 'home' ? homeXI : awayXI;
 
-    const unsubscribe =
-      onSnapshot(
+    // Calculate possession player's current position
+    const playerMeshes = team === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+    const opposingMeshes = opposingTeam === 'home' ? playerMeshesRef.current.home : playerMeshesRef.current.away;
+    
+    const currentPlayer = playerMeshes[playerIndex];
+    if (!currentPlayer) return;
+
+    // Decide: pass, shoot, or dribble
+    const random = Math.random();
+
+    // 30% chance to pass to teammate
+    if (random < 0.3) {
+      const teammateIndex = Math.floor(Math.random() * 11);
+      if (teammateIndex !== playerIndex) {
+        const teammate = playerMeshes[teammateIndex];
+        if (teammate) {
+          // Pass ball to teammate
+          ballPossessionRef.current = { team, playerIndex: teammateIndex };
+          
+          // Move current player towards teammate
+          playerTargetsRef.current[team][playerIndex] = {
+            x: teammate.position.x,
+            z: teammate.position.z,
+          };
+          
+          return;
+        }
+      }
+    }
+
+    // 20% chance to shoot if close to goal
+    const goalX = team === 'home' ? 14 : -14;
+    const distanceToGoal = Math.abs(currentPlayer.position.x - goalX);
+    
+    if (random < 0.5 && distanceToGoal < 10) {
+      // Shoot!
+      const goalZ = randomBetweenSafe(-2, 2);
+      ballTargetRef.current = { x: goalX, z: goalZ };
+      
+      // Check if goal
+      const saveChance = 0.3;
+      if (Math.random() > saveChance) {
+        // GOAL!
+        if (team === 'home') {
+          setHomeScore((prev) => prev + 1);
+        } else {
+          setAwayScore((prev) => prev + 1);
+        }
+        
+        // Reset possession
+        ballPossessionRef.current = null;
+      } else {
+        // Save by goalkeeper
+        const gkIndex = 0;
+        ballPossessionRef.current = { team: opposingTeam, playerIndex: gkIndex };
+      }
+      
+      return;
+    }
+
+    // Dribble towards opponent goal
+    const direction = team === 'home' ? 1 : -1;
+    const newX = clamp(currentPlayer.position.x + direction * randomBetweenSafe(1, 3), -14, 14);
+    const newZ = clamp(currentPlayer.position.z + randomBetweenSafe(-2, 2), -9, 9);
+    
+    playerTargetsRef.current[team][playerIndex] = { x: newX, z: newZ };
+    
+    // Move ball with player
+    ballTargetRef.current = { x: newX, z: newZ };
+
+    // Defending players move towards ball carrier
+    opposingMeshes.forEach((opponent, index) => {
+      const targetX = currentPlayer.position.x + (Math.random() - 0.5) * 2;
+      const targetZ = currentPlayer.position.z + (Math.random() - 0.5) * 2;
+      playerTargetsRef.current[opposingTeam][index] = { x: targetX, z: targetZ };
+    });
+
+    // Check if opponent steals ball
+    const stealChance = 0.05;
+    if (Math.random() < stealChance) {
+      const opponentIndex = Math.floor(Math.random() * 11);
+      ballPossessionRef.current = { team: opposingTeam, playerIndex: opponentIndex };
+    }
+  }, [homeXI, awayXI]);
+
+  /* =======================================================
+     REALTIME MATCH LISTENER
+  ======================================================== */
+
+  useEffect(() => {
+    if (!user || !matchId) return;
+
+    const matchRef = doc(db, 'matches', matchId);
+
+    const unsubscribe = onSnapshot(
+      matchRef,
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+
+        const data = {
+          id: snapshot.id,
+          ...snapshot.data(),
+        };
+
+        setFixture((previous) => ({
+          ...(previous || {}),
+          ...data,
+        }));
+
+        applyMatchState(data);
+      },
+      (error) => {
+        console.error('Match realtime listener error:', error);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [user, matchId, applyMatchState]);
+
+  /* =======================================================
+     SAVE MATCH STATE
+  ======================================================== */
+
+  const saveMatchState = useCallback(
+    async ({
+      minute,
+      homeScoreValue,
+      awayScoreValue,
+      eventsValue,
+      homeStatsValue,
+      awayStatsValue,
+      statusValue,
+      substitutionsValue,
+      mentalityValue,
+      extra = {},
+    }) => {
+      if (!matchId) return;
+
+      const matchRef = doc(db, 'matches', matchId);
+
+      await setDoc(
         matchRef,
-        (snapshot) => {
-          if (!snapshot.exists())
-            return;
-
-          const data =
-            snapshot.data();
-
-          const incomingVersion =
-            safeNumber(
-              data.simulationVersion,
-              0,
-            );
-
-          if (
-            incomingVersion <
-            simulationVersionRef.current
-          ) {
-            return;
-          }
-
-          /*
-           * The local participant should not have
-           * his live simulation overwritten by snapshots.
-           */
-          if (
-            userIsParticipant &&
-            matchStatusRef.current ===
-              'live'
-          ) {
-            return;
-          }
-
-          matchMinuteRef.current =
-            safeNumber(
-              data.minute,
-              matchMinuteRef.current,
-            );
-
-          homeScoreRef.current =
-            safeNumber(
-              data.homeScore ??
-                data.result
-                  ?.homeScore,
-              homeScoreRef.current,
-            );
-
-          awayScoreRef.current =
-            safeNumber(
-              data.awayScore ??
-                data.result
-                  ?.awayScore,
-              awayScoreRef.current,
-            );
-
-          eventsRef.current =
-            Array.isArray(
-              data.events,
-            )
-              ? data.events
-              : [];
-
-          homeStatsRef.current = {
-            ...createDefaultStats(),
-            ...(data.homeStats ||
-              {}),
-          };
-
-          awayStatsRef.current = {
-            ...createDefaultStats(),
-            ...(data.awayStats ||
-              {}),
-          };
-
-          matchStatusRef.current =
-            data.status ||
-            'ready';
-
-          setMatchMinute(
-            matchMinuteRef.current,
-          );
-
-          setHomeScore(
-            homeScoreRef.current,
-          );
-
-          setAwayScore(
-            awayScoreRef.current,
-          );
-
-          setEvents(
-            eventsRef.current,
-          );
-
-          setHomeStats(
-            homeStatsRef.current,
-          );
-
-          setAwayStats(
-            awayStatsRef.current,
-          );
-
-          setMatchStatus(
-            matchStatusRef.current,
-          );
+        {
+          id: matchId,
+          status: statusValue || 'live',
+          minute: safeNumber(minute, 0),
+          homeScore: safeNumber(homeScoreValue, 0),
+          awayScore: safeNumber(awayScoreValue, 0),
+          result: {
+            homeScore: safeNumber(homeScoreValue, 0),
+            awayScore: safeNumber(awayScoreValue, 0),
+          },
+          events: Array.isArray(eventsValue) ? eventsValue : [],
+          homeStats: homeStatsValue || createDefaultStats(),
+          awayStats: awayStatsValue || createDefaultStats(),
+          substitutionsUsed: safeNumber(substitutionsValue, 0),
+          mentality: mentalityValue || 'balanced',
+          updatedAt: serverTimestamp(),
+          ...extra,
         },
-        (error) => {
-          console.error(
-            'Realtime listener error:',
-            error,
-          );
-        },
+        { merge: true },
       );
+    },
+    [matchId],
+  );
 
-    return () =>
-      unsubscribe();
-  }, [
-    user,
-    matchId,
-    userIsParticipant,
-  ]);
+  /* =======================================================
+     SIMULATE ONE MATCH MINUTE
+  ======================================================== */
+
+  const simulateMinute = useCallback(
+    async (minute) => {
+      if (processingRef.current) return;
+      processingRef.current = true;
+
+      try {
+        // Run player movement simulation multiple times per minute
+        for (let i = 0; i < 10; i++) {
+          simulatePlayerMovement();
+        }
+
+        const homeStrength =
+          homeXI.reduce((total, player) => total + getPlayerOverall(player), 0) /
+          Math.max(homeXI.length, 1);
+
+        const awayStrength =
+          awayXI.reduce((total, player) => total + getPlayerOverall(player), 0) /
+          Math.max(awayXI.length, 1);
+
+        const nextHomeStats = { ...homeStats };
+        const nextAwayStats = { ...awayStats };
+
+        const possessionBase = clamp(
+          50 +
+            (homeStrength - awayStrength) * 0.4 +
+            (mentality === 'attacking' ? 2 : mentality === 'defensive' ? -2 : 0),
+          30,
+          70,
+        );
+
+        nextHomeStats.possession = Math.round(possessionBase);
+        nextAwayStats.possession = 100 - nextHomeStats.possession;
+
+        nextHomeStats.passes += randomBetweenSafe(4, 15);
+        nextAwayStats.passes += randomBetweenSafe(4, 15);
+
+        setHomeStats(nextHomeStats);
+        setAwayStats(nextAwayStats);
+
+        await saveMatchState({
+          minute,
+          homeScoreValue: homeScore,
+          awayScoreValue: awayScore,
+          eventsValue: events,
+          homeStatsValue: nextHomeStats,
+          awayStatsValue: nextAwayStats,
+          statusValue: 'live',
+          substitutionsValue: substitutionsUsed,
+          mentalityValue: mentality,
+        });
+      } catch (error) {
+        console.error('Simulation error:', error);
+      } finally {
+        processingRef.current = false;
+      }
+    },
+    [
+      homeXI,
+      awayXI,
+      mentality,
+      homeScore,
+      awayScore,
+      homeStats,
+      awayStats,
+      events,
+      substitutionsUsed,
+      saveMatchState,
+      simulatePlayerMovement,
+    ],
+  );
 
   /* =======================================================
      START MATCH
-  ======================================================= */
+  ======================================================== */
 
-  const startMatch =
-    useCallback(async () => {
-      if (!fixture) {
-        toast.error(
-          'Match is not ready.',
-        );
-        return;
+  const startMatch = useCallback(async () => {
+    if (!fixture || !userIsParticipant) {
+      toast.error('You are not managing a team in this match.');
+      return;
+    }
+
+    if (homeXI.length < PLAYERS_ON_PITCH || awayXI.length < PLAYERS_ON_PITCH) {
+      toast.error('Both teams need a starting XI.');
+      return;
+    }
+
+    if (matchStatus === 'finished') {
+      toast.error('This match has already finished.');
+      return;
+    }
+
+    try {
+      setSavingMatch(true);
+
+      await saveMatchState({
+        minute: 0,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
+        statusValue: 'live',
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
+      });
+
+      setMatchStatus('live');
+      setPaused(false);
+      toast.success('Match started');
+    } catch (error) {
+      console.error(error);
+      toast.error('Could not start match');
+    } finally {
+      setSavingMatch(false);
+    }
+  }, [
+    fixture,
+    userIsParticipant,
+    homeXI,
+    awayXI,
+    matchStatus,
+    homeScore,
+    awayScore,
+    events,
+    homeStats,
+    awayStats,
+    substitutionsUsed,
+    mentality,
+    saveMatchState,
+  ]);
+
+  /* =======================================================
+     MATCH TIMER
+  ======================================================== */
+
+  useEffect(() => {
+    if (matchStatus !== 'live') return;
+    if (paused) return;
+
+    timerRef.current = setInterval(() => {
+      setMatchMinute((previous) => {
+        const next = previous + TICK_SECONDS;
+
+        if (next === FIRST_HALF_END) {
+          setMatchStatus('half-time');
+          setHalfTimeShown(true);
+          return next;
+        }
+
+        if (next >= MATCH_DURATION) {
+          return MATCH_DURATION;
+        }
+
+        return next;
+      });
+    }, MATCH_TICK_MS);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
+    };
+  }, [matchStatus, paused]);
 
-      if (
-        !userIsParticipant
-      ) {
-        toast.error(
-          'You are not managing a team in this match.',
-        );
-        return;
-      }
+  /* =======================================================
+     SIMULATE CURRENT MINUTE
+  ======================================================== */
 
-      if (
-        matchStatusRef.current ===
-        'finished'
-      ) {
-        toast.error(
-          'This match has already finished.',
-        );
-        return;
-      }
+  useEffect(() => {
+    if (matchStatus !== 'live') return;
+    if (paused) return;
+    if (matchMinute <= 0 || matchMinute >= MATCH_DURATION) return;
 
-      try {
-        setSavingMatch(true);
+    simulateMinute(matchMinute);
+  }, [matchMinute, matchStatus, paused, simulateMinute]);
 
-        const now =
-          performance.now() /
-          1000;
+  /* =======================================================
+     HALF TIME
+  ======================================================== */
 
-        matchStatusRef.current =
-          'live';
+  const continueSecondHalf = async () => {
+    try {
+      setSavingMatch(true);
 
-        pausedRef.current =
-          false;
+      await saveMatchState({
+        minute: FIRST_HALF_END,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
+        statusValue: 'live',
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
+      });
 
-        lastSimulationTimeRef.current =
-          now;
+      setHalfTimeShown(false);
+      setMatchStatus('live');
+      setPaused(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Could not continue match');
+    } finally {
+      setSavingMatch(false);
+    }
+  };
 
-        lastFirestoreSaveRef.current =
-          now;
+  /* =======================================================
+     FINISH MATCH
+  ======================================================== */
 
-        setMatchStatus(
-          'live',
-        );
+  const finishMatch = useCallback(async () => {
+    try {
+      setSavingMatch(true);
 
-        setPaused(false);
+      const finalResult = {
+        homeScore,
+        awayScore,
+      };
 
-        const matchRef =
-          doc(
-            db,
-            'matches',
-            matchId,
-          );
+      await saveMatchState({
+        minute: MATCH_DURATION,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
+        statusValue: 'finished',
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
+        extra: {
+          result: finalResult,
+          finishedAt: serverTimestamp(),
+          playedBy: user?.uid || null,
+        },
+      });
 
-        await setDoc(
-          matchRef,
-          {
-            id: matchId,
+      setMatchMinute(MATCH_DURATION);
+      setMatchStatus('finished');
+      setPaused(true);
 
-            status: 'live',
+      toast.success(`Full time: ${homeScore} - ${awayScore}`);
+    } catch (error) {
+      console.error('Finish match error:', error);
+      toast.error('Could not save final result');
+    } finally {
+      setSavingMatch(false);
+    }
+  }, [
+    homeScore,
+    awayScore,
+    events,
+    homeStats,
+    awayStats,
+    substitutionsUsed,
+    mentality,
+    user,
+    saveMatchState,
+  ]);
 
-            minute:
-              matchMinuteRef.current,
+  /* =======================================================
+     FINISH AUTOMATICALLY
+  ======================================================== */
 
-            homeScore:
-              homeScoreRef.current,
-
-            awayScore:
-              awayScoreRef.current,
-
-            result: {
-              homeScore:
-                homeScoreRef.current,
-
-              awayScore:
-                awayScoreRef.current,
-            },
-
-            events:
-              eventsRef.current,
-
-            homeStats:
-              homeStatsRef.current,
-
-            awayStats:
-              awayStatsRef.current,
-
-            substitutionsUsed:
-              substitutionsUsedRef.current,
-
-            mentality:
-              mentalityRef.current,
-
-            formation:
-              formationRef.current,
-
-            simulationVersion:
-              simulationVersionRef.current,
-
-            updatedAt:
-              serverTimestamp(),
-          },
-          {
-            merge: true,
-          },
-        );
-
-        toast.success(
-          'Match started',
-        );
-      } catch (error) {
-        console.error(
-          'Start match error:',
-          error,
-        );
-
-        matchStatusRef.current =
-          'ready';
-
-        setMatchStatus(
-          'ready',
-        );
-
-        toast.error(
-          'Could not start match.',
-        );
-      } finally {
-        setSavingMatch(false);
-      }
-    }, [
-      fixture,
-      userIsParticipant,
-      matchId,
-    ]);
+  useEffect(() => {
+    if (matchStatus === 'live' && matchMinute >= MATCH_DURATION) {
+      finishMatch();
+    }
+  }, [matchMinute, matchStatus, finishMatch]);
 
   /* =======================================================
      PAUSE
-  ======================================================= */
+  ======================================================== */
 
-  const togglePause =
-    useCallback(() => {
-      if (
-        matchStatusRef.current !==
-        'live'
-      ) {
-        return;
-      }
-
-      pausedRef.current =
-        !pausedRef.current;
-
-      setPaused(
-        pausedRef.current,
-      );
-    }, []);
+  const togglePause = () => {
+    if (matchStatus !== 'live') return;
+    setPaused((previous) => !previous);
+  };
 
   /* =======================================================
-     SECOND HALF
-  ======================================================= */
+     TACTICS
+  ======================================================== */
 
-  const continueSecondHalf =
-    useCallback(async () => {
-      try {
-        setSavingMatch(true);
+  const changeMentality = async (value) => {
+    setMentality(value);
 
-        setHalfTimeShown(
-          false,
-        );
-
-        matchStatusRef.current =
-          'live';
-
-        pausedRef.current =
-          false;
-
-        setMatchStatus(
-          'live',
-        );
-
-        setPaused(false);
-
-        lastSimulationTimeRef.current =
-          performance.now() /
-          1000;
-
-        await saveMatchStateToFirestore();
-      } catch (error) {
-        console.error(
-          'Second half error:',
-          error,
-        );
-
-        toast.error(
-          'Could not continue match.',
-        );
-      } finally {
-        setSavingMatch(false);
-      }
-    }, [
-      saveMatchStateToFirestore,
-    ]);
-
-  /* =======================================================
-     FORMATION
-  ======================================================= */
-
-  const changeFormation =
-    useCallback(
-      async (value) => {
-        formationRef.current =
-          value;
-
-        setFormation(value);
-
-        if (
-          homeSquad.length
-        ) {
-          const startingHome =
-            selectStartingXI(
-              homeSquad,
-              value,
-            );
-
-          setHomeXI(
-            startingHome,
-          );
-
-          setHomeBench(
-            homeSquad.filter(
-              (player) =>
-                !startingHome.some(
-                  (starter) =>
-                    String(
-                      playerId(
-                        starter,
-                      ),
-                    ) ===
-                    String(
-                      playerId(
-                        player,
-                      ),
-                    ),
-                ),
-            ),
-          );
-        }
-
-        if (
-          awaySquad.length
-        ) {
-          const startingAway =
-            selectStartingXI(
-              awaySquad,
-              value,
-            );
-
-          setAwayXI(
-            startingAway,
-          );
-
-          setAwayBench(
-            awaySquad.filter(
-              (player) =>
-                !startingAway.some(
-                  (starter) =>
-                    String(
-                      playerId(
-                        starter,
-                      ),
-                    ) ===
-                    String(
-                      playerId(
-                        player,
-                      ),
-                    ),
-                ),
-            ),
-          );
-        }
-
-        await saveMatchStateToFirestore();
-      },
-      [
-        homeSquad,
-        awaySquad,
-        saveMatchStateToFirestore,
-      ],
-    );
-
-  /* =======================================================
-     MENTALITY
-  ======================================================= */
-
-  const changeMentality =
-    useCallback(
-      async (value) => {
-        mentalityRef.current =
-          value;
-
-        setMentality(value);
-
-        await saveMatchStateToFirestore();
-      },
-      [
-        saveMatchStateToFirestore,
-      ],
-    );
+    try {
+      await saveMatchState({
+        minute: matchMinute,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
+        statusValue: matchStatus === 'ready' ? 'ready' : matchStatus,
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: value,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   /* =======================================================
      SUBSTITUTION
-  ======================================================= */
+  ======================================================== */
 
-  const makeSubstitution =
-    useCallback(async () => {
-      if (
-        !userIsParticipant
-      ) {
-        return;
-      }
+  const makeSubstitution = async () => {
+    if (!userIsParticipant) return;
 
-      if (
-        substitutionsUsedRef.current >=
-        MAX_SUBSTITUTIONS
-      ) {
-        toast.error(
-          'Maximum substitutions reached.',
-        );
-        return;
-      }
+    if (substitutionsUsed >= MAX_SUBSTITUTIONS) {
+      toast.error('Maximum substitutions reached.');
+      return;
+    }
 
-      if (
-        !selectedSubPlayer
-      ) {
-        toast.error(
-          'Select a player.',
-        );
-        return;
-      }
+    if (!selectedSubPlayer) {
+      toast.error('Select a player.');
+      return;
+    }
 
-      const team =
-        userTeam;
+    const team = userTeam === 'home' ? 'home' : 'away';
 
-      const currentXI =
-        team === 'home'
-          ? homeXI
-          : awayXI;
+    const currentXI = team === 'home' ? homeXI : awayXI;
+    const bench = team === 'home' ? homeBench : awayBench;
 
-      const bench =
-        team === 'home'
-          ? homeBench
-          : awayBench;
-
-      const playerIn =
-        bench.find(
-          (player) =>
-            String(
-              playerId(player),
-            ) ===
-            String(
-              selectedSubPlayer,
-            ),
-        );
-
-      if (!playerIn) {
-        toast.error(
-          'Player not found.',
-        );
-        return;
-      }
-
-      const playerOut =
-        pick(currentXI);
-
-      if (!playerOut) {
-        return;
-      }
-
-      const nextXI =
-        currentXI.map(
-          (player) =>
-            String(
-              playerId(player),
-            ) ===
-            String(
-              playerId(
-                playerOut,
-              ),
-            )
-              ? playerIn
-              : player,
-        );
-
-      const nextBench = [
-        ...bench.filter(
-          (player) =>
-            String(
-              playerId(player),
-            ) !==
-            String(
-              playerId(playerIn),
-            ),
-        ),
-
-        playerOut,
-      ];
-
-      const nextSubCount =
-        substitutionsUsedRef.current +
-        1;
-
-      substitutionsUsedRef.current =
-        nextSubCount;
-
-      setSubstitutionsUsed(
-        nextSubCount,
-      );
-
-      const event = {
-        id: `${Date.now()}-substitution`,
-
-        type:
-          EVENT_TYPES.SUBSTITUTION,
-
-        team,
-
-        minute:
-          matchMinuteRef.current,
-
-        playerId:
-          playerId(playerIn),
-
-        playerName:
-          getPlayerName(
-            playerIn,
-          ),
-
-        detail: `${getPlayerName(
-          playerIn,
-        )} replaced ${getPlayerName(
-          playerOut,
-        )}`,
-
-        createdAt:
-          new Date().toISOString(),
-      };
-
-      eventsRef.current = [
-        event,
-        ...eventsRef.current,
-      ];
-
-      setEvents([
-        ...eventsRef.current,
-      ]);
-
-      if (team === 'home') {
-        setHomeXI(nextXI);
-        setHomeBench(
-          nextBench,
-        );
-      } else {
-        setAwayXI(nextXI);
-        setAwayBench(
-          nextBench,
-        );
-      }
-
-      setSelectedSubPlayer(
-        '',
-      );
-
-      await saveMatchStateToFirestore();
-
-      toast.success(
-        'Substitution made',
-      );
-    }, [
-      userIsParticipant,
-      userTeam,
-      homeXI,
-      awayXI,
-      homeBench,
-      awayBench,
-      selectedSubPlayer,
-      saveMatchStateToFirestore,
-    ]);
-
-  /* =======================================================
-     EVENTS
-  ======================================================= */
-
-  const sortedEvents =
-    useMemo(
-      () =>
-        [...events].sort(
-          (a, b) =>
-            safeNumber(
-              b.minute,
-            ) -
-            safeNumber(
-              a.minute,
-            ),
-        ),
-      [events],
+    const playerIn = bench.find(
+      (player) => String(playerId(player)) === String(selectedSubPlayer),
     );
 
+    if (!playerIn) {
+      toast.error('Player not found.');
+      return;
+    }
+
+    const playerOut = pick(currentXI);
+
+    if (!playerOut) return;
+
+    const nextXI = currentXI.map((player) =>
+      String(playerId(player)) === String(playerId(playerOut)) ? playerIn : player,
+    );
+
+    const nextBench = [
+      ...bench.filter(
+        (player) => String(playerId(player)) !== String(playerId(playerIn)),
+      ),
+      playerOut,
+    ];
+
+    const nextSubCount = substitutionsUsed + 1;
+
+    const event = {
+      id: `${Date.now()}-substitution`,
+      type: EVENT_TYPES.SUBSTITUTION,
+      team,
+      minute: matchMinute,
+      playerId: playerId(playerIn),
+      playerName: getPlayerName(playerIn),
+      detail: `${getPlayerName(playerIn)} replaced ${getPlayerName(playerOut)}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextEvents = [event, ...events];
+
+    if (team === 'home') {
+      setHomeXI(nextXI);
+      setHomeBench(nextBench);
+    } else {
+      setAwayXI(nextXI);
+      setAwayBench(nextBench);
+    }
+
+    setSubstitutionsUsed(nextSubCount);
+    setEvents(nextEvents);
+    setSelectedSubPlayer('');
+
+    await saveMatchState({
+      minute: matchMinute,
+      homeScoreValue: homeScore,
+      awayScoreValue: awayScore,
+      eventsValue: nextEvents,
+      homeStatsValue: homeStats,
+      awayStatsValue: awayStats,
+      statusValue: matchStatus,
+      substitutionsValue: nextSubCount,
+      mentalityValue: mentality,
+      extra: {
+        [`${team}XI`]: nextXI.map((player) => playerId(player)),
+      },
+    });
+
+    toast.success('Substitution made');
+  };
+
   /* =======================================================
-     STATUS
-  ======================================================= */
+     DISPLAY EVENTS
+  ======================================================== */
 
-  const statusLabel =
-    useMemo(() => {
-      switch (
-        matchStatus
-      ) {
-        case 'ready':
-          return 'READY';
-
-        case 'live':
-          return paused
-            ? 'PAUSED'
-            : 'LIVE';
-
-        case 'half-time':
-          return 'HALF TIME';
-
-        case 'finished':
-          return 'FULL TIME';
-
-        default:
-          return 'LOADING';
-      }
-    }, [
-      matchStatus,
-      paused,
-    ]);
+  const sortedEvents = useMemo(
+    () =>
+      [...events].sort(
+        (a, b) => safeNumber(b.minute) - safeNumber(a.minute),
+      ),
+    [events],
+  );
 
   /* =======================================================
-     AUTH LOADING ONLY
-     
-     Notice:
-     playersLoading does NOT block the page.
-  ======================================================= */
+     MATCH STATUS LABEL
+  ======================================================== */
 
-  if (authLoading) {
+  const statusLabel = useMemo(() => {
+    switch (matchStatus) {
+      case 'ready':
+        return 'READY';
+      case 'live':
+        return paused ? 'PAUSED' : 'LIVE';
+      case 'half-time':
+        return 'HALF TIME';
+      case 'finished':
+        return 'FULL TIME';
+      default:
+        return 'LOADING';
+    }
+  }, [matchStatus, paused]);
+
+  /* =======================================================
+     LOADING
+  ======================================================== */
+
+  if (loading || loadingMatch) {
     return (
-      <main
-        className={
-          styles.loading
-        }
-      >
-        <div
-          className={
-            styles.spinner
-          }
-        />
-
-        <p>
-          Loading account...
-        </p>
+      <main className={styles.loading}>
+        <div className={styles.spinner} />
+        <p>Loading match...</p>
       </main>
     );
   }
 
   if (!user) {
-    return (
-      <main
-        className={
-          styles.emptyPage
-        }
-      >
-        <div
-          className={
-            styles.emptyIcon
-          }
-        >
-          ⚽
-        </div>
-
-        <h1>
-          Login required
-        </h1>
-
-        <p>
-          You need to sign in
-          to manage this match.
-        </p>
-      </main>
-    );
+    return null;
   }
 
-  /*
-   * Only match + clubs block initial page.
-   * Players and Three.js do not.
-   */
+  /* =======================================================
+     MATCH NOT FOUND
+  ======================================================== */
 
-  if (
-    !fixture ||
-    !homeClub ||
-    !awayClub
-  ) {
+  if (!fixture || !homeClub || !awayClub) {
     return (
-      <main
-        className={
-          styles.loading
-        }
-      >
-        <div
-          className={
-            styles.spinner
-          }
-        />
-
-        <p>
-          Loading match...
-        </p>
+      <main className={styles.emptyPage}>
+        <div className={styles.emptyIcon}>⚽</div>
+        <h1>Match not found</h1>
+        <p>This match does not exist in the database.</p>
+        <button type="button" onClick={() => router.push('/fixtures')}>
+          Back to Fixtures
+        </button>
       </main>
     );
   }
 
   /* =======================================================
      RENDER
-  ======================================================= */
+  ======================================================== */
 
   return (
     <>
       <Head>
         <title>
-          {getClubName(
-            homeClub,
-          )}{' '}
-          vs{' '}
-          {getClubName(
-            awayClub,
-          )}
+          {getClubName(homeClub)} vs {getClubName(awayClub)}
         </title>
-
         <meta
           name="description"
-          content={`Live match between ${getClubName(
-            homeClub,
-          )} and ${getClubName(
+          content={`Live match between ${getClubName(homeClub)} and ${getClubName(
             awayClub,
           )}`}
         />
       </Head>
 
-      <main
-        className={
-          styles.page
-        }
-      >
+      <main className={styles.page}>
         {/* HEADER */}
-
-        <header
-          className={
-            styles.header
-          }
-        >
+        <header className={styles.header}>
           <button
             type="button"
-            className={
-              styles.backButton
-            }
-            onClick={() =>
-              router.push(
-                '/fixtures',
-              )
-            }
+            className={styles.backButton}
+            onClick={() => router.push('/fixtures')}
           >
             ← Fixtures
           </button>
 
           <div>
-            <span
-              className={
-                styles.competition
-              }
-            >
-              {fixture.leagueName ||
-                fixture.competition ||
-                'MATCH'}
+            <span className={styles.competition}>
+              {fixture.leagueName || fixture.competition || 'MATCH'}
             </span>
-
-            <h1>
-              Match Centre
-            </h1>
+            <h1>Match Centre</h1>
           </div>
 
-          <span
-            className={
-              styles.status
-            }
-          >
-            {statusLabel}
-          </span>
+          <span className={styles.status}>{statusLabel}</span>
         </header>
 
         {/* 3D PITCH */}
-
-        <div
-          ref={mountRef}
-          className={
-            styles.threeContainer
-          }
-        />
+        <div ref={mountRef} className={styles.threeContainer} />
 
         {/* SCOREBOARD */}
-
         <section
-          className={
-            styles.scoreboard
-          }
+          className={styles.scoreboard}
           style={{
-            '--home-color':
-              getClubPrimaryColor(
-                homeClub,
-              ),
-            '--away-color':
-              getClubPrimaryColor(
-                awayClub,
-              ),
+            '--home-color': getClubPrimaryColor(homeClub),
+            '--away-color': getClubPrimaryColor(awayClub),
           }}
         >
-          <div
-            className={
-              styles.scoreTeam
-            }
-          >
-            <div
-              className={
-                styles.clubLogo
-              }
-            >
-              {getClubLogo(
-                homeClub,
-              ) ? (
-                <img
-                  src={getClubLogo(
-                    homeClub,
-                  )}
-                  alt=""
-                />
+          <div className={styles.scoreTeam}>
+            <div className={styles.clubLogo}>
+              {getClubLogo(homeClub) ? (
+                <img src={getClubLogo(homeClub)} alt="" />
               ) : (
                 '⚽'
               )}
             </div>
-
-            <strong>
-              {getClubName(
-                homeClub,
-              )}
-            </strong>
-
-            <span>
-              HOME
-            </span>
+            <strong>{getClubName(homeClub)}</strong>
+            <span>HOME</span>
           </div>
 
-          <div
-            className={
-              styles.scoreMiddle
-            }
-          >
-            <div
-              className={
-                styles.score
-              }
-            >
-              <strong>
-                {homeScore}
-              </strong>
-
-              <span>
-                -
-              </span>
-
-              <strong>
-                {awayScore}
-              </strong>
+          <div className={styles.scoreMiddle}>
+            <div className={styles.score}>
+              <strong>{homeScore}</strong>
+              <span>-</span>
+              <strong>{awayScore}</strong>
             </div>
-
-            <div
-              className={
-                styles.matchClock
-              }
-            >
-              {matchMinute}'
-            </div>
-
-            <small>
-              {statusLabel}
-            </small>
+            <div className={styles.matchClock}>{matchMinute}'</div>
+            <small>{statusLabel}</small>
           </div>
 
-          <div
-            className={
-              styles.scoreTeam
-            }
-          >
-            <div
-              className={
-                styles.clubLogo
-              }
-            >
-              {getClubLogo(
-                awayClub,
-              ) ? (
-                <img
-                  src={getClubLogo(
-                    awayClub,
-                  )}
-                  alt=""
-                />
+          <div className={styles.scoreTeam}>
+            <div className={styles.clubLogo}>
+              {getClubLogo(awayClub) ? (
+                <img src={getClubLogo(awayClub)} alt="" />
               ) : (
                 '⚽'
               )}
             </div>
-
-            <strong>
-              {getClubName(
-                awayClub,
-              )}
-            </strong>
-
-            <span>
-              AWAY
-            </span>
+            <strong>{getClubName(awayClub)}</strong>
+            <span>AWAY</span>
           </div>
         </section>
 
         {/* LATEST SCORE */}
-
-        <section
-          className={
-            styles.latestScore
-          }
-        >
+        <section className={styles.latestScore}>
           <div>
-            <span>
-              LATEST SCORE
-            </span>
-
+            <span>LATEST SCORE</span>
             <strong>
-              {getClubName(
-                homeClub,
-              )}{' '}
-              {homeScore} -{' '}
-              {awayScore}{' '}
-              {getClubName(
-                awayClub,
-              )}
+              {getClubName(homeClub)} {homeScore} - {awayScore}{' '}
+              {getClubName(awayClub)}
             </strong>
           </div>
-
           <span>
-            {matchStatus ===
-            'finished'
-              ? 'FINAL RESULT'
-              : `Minute ${matchMinute}`}
+            {matchStatus === 'finished' ? 'FINAL RESULT' : `Minute ${matchMinute}`}
           </span>
         </section>
 
-        {/* VIEW ONLY */}
-
+        {/* ACCESS WARNING */}
         {!userIsParticipant && (
-          <section
-            className={
-              styles.warning
-            }
-          >
-            <strong>
-              View only
-            </strong>
-
+          <section className={styles.warning}>
+            <strong>View only</strong>
             <p>
-              Your current club is
-              not participating in
-              this match. You can
-              view the score and
-              events, but you cannot
-              play it.
+              Your current club is not participating in this match. You can view
+              the latest score and events, but you cannot play it.
             </p>
           </section>
         )}
 
-        {/* PLAYER LOADING NOTICE */}
-
-        {userIsParticipant &&
-          playersLoading && (
-            <div
-              className={
-                styles.warning
-              }
-            >
-              <strong>
-                Preparing squads...
-              </strong>
-
-              <p>
-                Players are loading
-                in the background.
-                You can still start
-                the match.
-              </p>
-            </div>
-          )}
-
         {/* CONTROLS */}
-
         {userIsParticipant && (
-          <section
-            className={
-              styles.controls
-            }
-          >
-            {matchStatus ===
-              'ready' && (
+          <section className={styles.controls}>
+            {matchStatus === 'ready' && (
               <button
                 type="button"
-                className={
-                  styles.primaryButton
-                }
-                onClick={
-                  startMatch
-                }
-                disabled={
-                  savingMatch
-                }
+                className={styles.primaryButton}
+                onClick={startMatch}
+                disabled={savingMatch}
               >
-                {savingMatch
-                  ? 'STARTING...'
-                  : '▶ START MATCH'}
+                ▶ START MATCH
               </button>
             )}
 
-            {matchStatus ===
-              'live' && (
-              <button
-                type="button"
-                onClick={
-                  togglePause
-                }
-              >
-                {paused
-                  ? '▶ Resume'
-                  : 'Ⅱ Pause'}
+            {matchStatus === 'live' && (
+              <button type="button" onClick={togglePause}>
+                {paused ? '▶ Resume' : 'Ⅱ Pause'}
               </button>
             )}
 
-            {matchStatus ===
-              'half-time' && (
+            {matchStatus === 'half-time' && (
               <button
                 type="button"
-                className={
-                  styles.primaryButton
-                }
-                onClick={
-                  continueSecondHalf
-                }
-                disabled={
-                  savingMatch
-                }
+                className={styles.primaryButton}
+                onClick={continueSecondHalf}
+                disabled={savingMatch}
               >
                 ▶ START SECOND HALF
               </button>
@@ -4115,36 +1813,14 @@ export default function MatchPage() {
 
             <button
               type="button"
-              onClick={() =>
-                setShowTactics(
-                  (value) =>
-                    !value,
-                )
-              }
+              onClick={() => setShowTactics((previous) => !previous)}
             >
               ⚙ Tactics
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                setShowFormation(
-                  (value) =>
-                    !value,
-                )
-              }
-            >
-              📋 Formation
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setShowSubs(
-                  (value) =>
-                    !value,
-                )
-              }
+              onClick={() => setShowSubs((previous) => !previous)}
             >
               🔄 Substitutions
             </button>
@@ -4152,692 +1828,218 @@ export default function MatchPage() {
         )}
 
         {/* HALF TIME */}
-
         {halfTimeShown && (
-          <section
-            className={
-              styles.halfTime
-            }
-          >
-            <span>
-              HALF TIME
-            </span>
-
+          <section className={styles.halfTime}>
+            <span>HALF TIME</span>
             <strong>
-              {homeScore} -{' '}
-              {awayScore}
+              {homeScore} - {awayScore}
             </strong>
-
             <button
               type="button"
-              onClick={
-                continueSecondHalf
-              }
-              disabled={
-                savingMatch
-              }
+              onClick={continueSecondHalf}
+              disabled={savingMatch}
             >
               Continue
             </button>
           </section>
         )}
 
-        {/* FORMATION */}
-
-        {showFormation &&
-          userIsParticipant && (
-            <section
-              className={
-                styles.panel
-              }
-            >
-              <div
-                className={
-                  styles.panelHeader
-                }
-              >
-                <h2>
-                  Formation
-                </h2>
-
-                <span>
-                  {formation}
-                </span>
-              </div>
-
-              <div
-                className={
-                  styles.mentalityGrid
-                }
-              >
-                {Object.keys(
-                  FORMATIONS,
-                ).map(
-                  (value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={
-                        formation ===
-                        value
-                          ? styles.active
-                          : ''
-                      }
-                      onClick={() =>
-                        changeFormation(
-                          value,
-                        )
-                      }
-                    >
-                      {value}
-                    </button>
-                  ),
-                )}
-              </div>
-            </section>
-          )}
-
         {/* TACTICS */}
-
-        {showTactics &&
-          userIsParticipant && (
-            <section
-              className={
-                styles.panel
-              }
-            >
-              <div
-                className={
-                  styles.panelHeader
-                }
-              >
-                <h2>
-                  Team Mentality
-                </h2>
-              </div>
-
-              <div
-                className={
-                  styles.mentalityGrid
-                }
-              >
-                {[
-                  'defensive',
-                  'balanced',
-                  'attacking',
-                ].map(
-                  (value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={
-                        mentality ===
-                        value
-                          ? styles.active
-                          : ''
-                      }
-                      onClick={() =>
-                        changeMentality(
-                          value,
-                        )
-                      }
-                    >
-                      {value
-                        .charAt(
-                          0,
-                        )
-                        .toUpperCase() +
-                        value.slice(
-                          1,
-                        )}
-                    </button>
-                  ),
-                )}
-              </div>
-            </section>
-          )}
+        {showTactics && userIsParticipant && (
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2>Team Mentality</h2>
+            </div>
+            <div className={styles.mentalityGrid}>
+              {['defensive', 'balanced', 'attacking'].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={mentality === value ? styles.active : ''}
+                  onClick={() => changeMentality(value)}
+                >
+                  {value.charAt(0).toUpperCase() + value.slice(1)}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* SUBSTITUTIONS */}
+        {showSubs && userIsParticipant && (
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2>Substitutions</h2>
+              <span>
+                {substitutionsUsed}/{MAX_SUBSTITUTIONS}
+              </span>
+            </div>
 
-        {showSubs &&
-          userIsParticipant && (
-            <section
-              className={
-                styles.panel
+            <select
+              value={selectedSubPlayer}
+              onChange={(event) => setSelectedSubPlayer(event.target.value)}
+            >
+              <option value="">Select player</option>
+              {(userTeam === 'home' ? homeBench : awayBench).map((player) => (
+                <option
+                  key={String(playerId(player))}
+                  value={String(playerId(player))}
+                >
+                  {getPlayerName(player)} · {getPlayerOverall(player)}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={makeSubstitution}
+              disabled={
+                substitutionsUsed >= MAX_SUBSTITUTIONS || !selectedSubPlayer
               }
             >
-              <div
-                className={
-                  styles.panelHeader
-                }
-              >
-                <h2>
-                  Substitutions
-                </h2>
-
-                <span>
-                  {
-                    substitutionsUsed
-                  }
-                  /
-                  {
-                    MAX_SUBSTITUTIONS
-                  }
-                </span>
-              </div>
-
-              <select
-                value={
-                  selectedSubPlayer
-                }
-                onChange={(event) =>
-                  setSelectedSubPlayer(
-                    event.target
-                      .value,
-                  )
-                }
-              >
-                <option value="">
-                  Select player
-                </option>
-
-                {(userTeam ===
-                'home'
-                  ? homeBench
-                  : awayBench
-                ).map(
-                  (player) => (
-                    <option
-                      key={String(
-                        playerId(
-                          player,
-                        ),
-                      )}
-                      value={String(
-                        playerId(
-                          player,
-                        ),
-                      )}
-                    >
-                      {getPlayerName(
-                        player,
-                      )}{' '}
-                      · OVR{' '}
-                      {getPlayerOverall(
-                        player,
-                      )}
-                    </option>
-                  ),
-                )}
-              </select>
-
-              <button
-                type="button"
-                onClick={
-                  makeSubstitution
-                }
-                disabled={
-                  substitutionsUsed >=
-                    MAX_SUBSTITUTIONS ||
-                  !selectedSubPlayer
-                }
-              >
-                Make
-                Substitution
-              </button>
-            </section>
-          )}
+              Make Substitution
+            </button>
+          </section>
+        )}
 
         {/* STATS */}
-
-        <section
-          className={
-            styles.statsSection
-          }
-        >
-          <div
-            className={
-              styles.sectionHeader
-            }
-          >
-            <span>
-              MATCH STATISTICS
-            </span>
-
+        <section className={styles.statsSection}>
+          <div className={styles.sectionHeader}>
+            <span>MATCH STATISTICS</span>
             <strong>
-              {homeScore} -{' '}
-              {awayScore}
+              {homeScore} - {awayScore}
             </strong>
           </div>
 
           {[
-            [
-              'Possession',
-              `${homeStats.possession}%`,
-              `${awayStats.possession}%`,
-            ],
-
-            [
-              'Shots',
-              homeStats.shots,
-              awayStats.shots,
-            ],
-
-            [
-              'Shots on Target',
-              homeStats.shotsOnTarget,
-              awayStats.shotsOnTarget,
-            ],
-
-            [
-              'Passes',
-              homeStats.passes,
-              awayStats.passes,
-            ],
-
-            [
-              'Fouls',
-              homeStats.fouls,
-              awayStats.fouls,
-            ],
-
-            [
-              'Corners',
-              homeStats.corners,
-              awayStats.corners,
-            ],
-
-            [
-              'Offsides',
-              homeStats.offsides,
-              awayStats.offsides,
-            ],
-
-            [
-              'Yellow Cards',
-              homeStats.yellow,
-              awayStats.yellow,
-            ],
-
-            [
-              'Red Cards',
-              homeStats.red,
-              awayStats.red,
-            ],
-          ].map(
-            (row) => (
-              <div
-                key={row[0]}
-                className={
-                  styles.statRow
-                }
-              >
-                <strong>
-                  {row[1]}
-                </strong>
-
-                <span>
-                  {row[0]}
-                </span>
-
-                <strong>
-                  {row[2]}
-                </strong>
-              </div>
-            ),
-          )}
+            ['Possession', `${homeStats.possession}%`, `${awayStats.possession}%`],
+            ['Shots', homeStats.shots, awayStats.shots],
+            ['Shots on Target', homeStats.shotsOnTarget, awayStats.shotsOnTarget],
+            ['Passes', homeStats.passes, awayStats.passes],
+            ['Fouls', homeStats.fouls, awayStats.fouls],
+            ['Corners', homeStats.corners, awayStats.corners],
+            ['Offsides', homeStats.offsides, awayStats.offsides],
+            ['Yellow Cards', homeStats.yellow, awayStats.yellow],
+            ['Red Cards', homeStats.red, awayStats.red],
+          ].map((row) => (
+            <div key={row[0]} className={styles.statRow}>
+              <strong>{row[1]}</strong>
+              <span>{row[0]}</span>
+              <strong>{row[2]}</strong>
+            </div>
+          ))}
         </section>
 
         {/* EVENTS */}
-
-        <section
-          className={
-            styles.eventsSection
-          }
-        >
-          <div
-            className={
-              styles.sectionHeader
-            }
-          >
+        <section className={styles.eventsSection}>
+          <div className={styles.sectionHeader}>
             <div>
-              <span>
-                LIVE FEED
-              </span>
-
-              <h2>
-                Match Events
-              </h2>
+              <span>LIVE FEED</span>
+              <h2>Match Events</h2>
             </div>
-
             <button
               type="button"
-              onClick={() =>
-                setShowEvents(
-                  (value) =>
-                    !value,
-                )
-              }
+              onClick={() => setShowEvents((previous) => !previous)}
             >
-              {showEvents
-                ? 'Hide'
-                : 'Show'}
+              {showEvents ? 'Hide' : 'Show'}
             </button>
           </div>
 
           {showEvents && (
-            <div
-              className={
-                styles.eventsList
-              }
-            >
-              {sortedEvents.length >
-              0 ? (
-                sortedEvents.map(
-                  (event) => (
-                    <article
-                      key={
-                        event.id
-                      }
-                      className={
-                        styles.event
-                      }
-                    >
-                      <span
-                        className={
-                          styles.eventMinute
-                        }
-                      >
-                        {
-                          event.minute
-                        }
-                        '
-                      </span>
-
-                      <span
-                        className={
-                          styles.eventIcon
-                        }
-                      >
-                        {eventIcon(
-                          event,
-                        )}
-                      </span>
-
-                      <div>
-                        <strong>
-                          {eventLabel(
-                            event,
-                          )}
-                        </strong>
-
-                        <p>
-                          {event.playerName ||
-                            event.detail ||
-                            'Match event'}
-                        </p>
-                      </div>
-
-                      <span>
-                        {event.team ===
-                        'home'
-                          ? getClubName(
-                              homeClub,
-                            )
-                          : getClubName(
-                              awayClub,
-                            )}
-                      </span>
-                    </article>
-                  ),
-                )
+            <div className={styles.eventsList}>
+              {sortedEvents.length > 0 ? (
+                sortedEvents.map((event) => (
+                  <article key={event.id} className={styles.event}>
+                    <span className={styles.eventMinute}>{event.minute}'</span>
+                    <span className={styles.eventIcon}>{eventIcon(event)}</span>
+                    <div>
+                      <strong>{eventLabel(event)}</strong>
+                      <p>{event.playerName || event.detail || 'Match event'}</p>
+                    </div>
+                    <span>
+                      {event.team === 'home'
+                        ? getClubName(homeClub)
+                        : getClubName(awayClub)}
+                    </span>
+                  </article>
+                ))
               ) : (
-                <div
-                  className={
-                    styles.noEvents
-                  }
-                >
-                  No events yet.
-                </div>
+                <div className={styles.noEvents}>No events yet.</div>
               )}
             </div>
           )}
         </section>
 
         {/* LINEUPS */}
-
-        <section
-          className={
-            styles.lineups
-          }
-        >
-          <div
-            className={
-              styles.lineupCard
-            }
-          >
-            <div
-              className={
-                styles.sectionHeader
-              }
-            >
-              <h2>
-                {getClubName(
-                  homeClub,
-                )}
-              </h2>
-
-              <span>
-                {homeXI.length}/11 ·{' '}
-                {formation}
-              </span>
+        <section className={styles.lineups}>
+          <div className={styles.lineupCard}>
+            <div className={styles.sectionHeader}>
+              <h2>{getClubName(homeClub)}</h2>
+              <span>{homeXI.length}/11</span>
             </div>
-
-            <div
-              className={
-                styles.playerList
-              }
-            >
-              {homeXI.map(
-                (player) => (
-                  <div
-                    key={String(
-                      playerId(
-                        player,
-                      ),
-                    )}
-                    className={
-                      styles.player
-                    }
-                  >
-                    {getPlayerPhoto(
-                      player,
-                    ) ? (
-                      <img
-                        src={getPlayerPhoto(
-                          player,
-                        )}
-                        alt=""
-                      />
-                    ) : (
-                      <span>
-                        ⚽
-                      </span>
-                    )}
-
-                    <div>
-                      <strong>
-                        {getPlayerName(
-                          player,
-                        )}
-                      </strong>
-
-                      <small>
-                        {normalizePosition(
-                          getPlayerPosition(
-                            player,
-                          ),
-                        )}{' '}
-                        · OVR{' '}
-                        {getPlayerOverall(
-                          player,
-                        )}
-                      </small>
-                    </div>
-
-                    <span
-                      className={
-                        styles.playerRating
-                      }
-                    >
-                      {getPlayerOverall(
-                        player,
-                      )}
-                    </span>
+            <div className={styles.playerList}>
+              {homeXI.map((player) => (
+                <div key={String(playerId(player))} className={styles.player}>
+                  {getPlayerPhoto(player) ? (
+                    <img src={getPlayerPhoto(player)} alt="" />
+                  ) : (
+                    <span>⚽</span>
+                  )}
+                  <div>
+                    <strong>{getPlayerName(player)}</strong>
+                    <small>
+                      {normalizePosition(getPlayerPosition(player))} ·{' '}
+                      {getPlayerOverall(player)}
+                    </small>
                   </div>
-                ),
-              )}
+                </div>
+              ))}
             </div>
           </div>
 
-          <div
-            className={
-              styles.lineupCard
-            }
-          >
-            <div
-              className={
-                styles.sectionHeader
-              }
-            >
-              <h2>
-                {getClubName(
-                  awayClub,
-                )}
-              </h2>
-
-              <span>
-                {awayXI.length}/11 ·{' '}
-                {formation}
-              </span>
+          <div className={styles.lineupCard}>
+            <div className={styles.sectionHeader}>
+              <h2>{getClubName(awayClub)}</h2>
+              <span>{awayXI.length}/11</span>
             </div>
-
-            <div
-              className={
-                styles.playerList
-              }
-            >
-              {awayXI.map(
-                (player) => (
-                  <div
-                    key={String(
-                      playerId(
-                        player,
-                      ),
-                    )}
-                    className={
-                      styles.player
-                    }
-                  >
-                    {getPlayerPhoto(
-                      player,
-                    ) ? (
-                      <img
-                        src={getPlayerPhoto(
-                          player,
-                        )}
-                        alt=""
-                      />
-                    ) : (
-                      <span>
-                        ⚽
-                      </span>
-                    )}
-
-                    <div>
-                      <strong>
-                        {getPlayerName(
-                          player,
-                        )}
-                      </strong>
-
-                      <small>
-                        {normalizePosition(
-                          getPlayerPosition(
-                            player,
-                          ),
-                        )}{' '}
-                        · OVR{' '}
-                        {getPlayerOverall(
-                          player,
-                        )}
-                      </small>
-                    </div>
-
-                    <span
-                      className={
-                        styles.playerRating
-                      }
-                    >
-                      {getPlayerOverall(
-                        player,
-                      )}
-                    </span>
+            <div className={styles.playerList}>
+              {awayXI.map((player) => (
+                <div key={String(playerId(player))} className={styles.player}>
+                  {getPlayerPhoto(player) ? (
+                    <img src={getPlayerPhoto(player)} alt="" />
+                  ) : (
+                    <span>⚽</span>
+                  )}
+                  <div>
+                    <strong>{getPlayerName(player)}</strong>
+                    <small>
+                      {normalizePosition(getPlayerPosition(player))} ·{' '}
+                      {getPlayerOverall(player)}
+                    </small>
                   </div>
-                ),
-              )}
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* MATCH INFO */}
-
-        <section
-          className={
-            styles.matchInfo
-          }
-        >
+        {/* FOOTER MATCH INFO */}
+        <section className={styles.matchInfo}>
           <div>
-            <span>
-              STADIUM
-            </span>
-
-            <strong>
-              {fixture.stadium ||
-                getClubStadium(
-                  homeClub,
-                )}
-            </strong>
+            <span>STADIUM</span>
+            <strong>{fixture.stadium || getClubStadium(homeClub)}</strong>
           </div>
-
           <div>
-            <span>
-              FORMATION
-            </span>
-
-            <strong>
-              {formation}
-            </strong>
+            <span>ROUND</span>
+            <strong>{fixture.round || '-'}</strong>
           </div>
-
           <div>
-            <span>
-              MENTALITY
-            </span>
-
-            <strong>
-              {mentality}
-            </strong>
+            <span>SEASON</span>
+            <strong>{fixture.season || '-'}</strong>
           </div>
-
           <div>
-            <span>
-              MATCH ID
-            </span>
-
-            <strong>
-              {matchId}
-            </strong>
+            <span>MATCH ID</span>
+            <strong>{matchId}</strong>
           </div>
         </section>
       </main>
