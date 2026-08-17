@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-
+import { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 
@@ -16,7 +10,6 @@ import {
   query,
   where,
   updateDoc,
-  addDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 
@@ -25,46 +18,153 @@ import { useAuth } from '../context/AuthContext';
 
 import toast from 'react-hot-toast';
 
-import styles from './fixture.module.css';
+import styles from './fixtures.module.css';
 
 
 /* =========================================================
    CONSTANTS
 ========================================================= */
 
-const PRESEASON_FRIENDLIES = 4;
-
-const LEAGUE_START_MONTH_MIN = 7; // August
-const LEAGUE_START_MONTH_MAX = 8; // September
-
-const LEAGUE_END_MONTH_MIN = 4;   // May
-const LEAGUE_END_MONTH_MAX = 5;   // June
-
-const TRANSFER_WINDOWS = [
-  {
-    id: 'summer',
-    name: 'Summer Transfer Window',
-    startMonth: 6,
-    startDay: 1,
-    endMonth: 7,
-    endDay: 31,
-  },
-  {
-    id: 'winter',
-    name: 'Winter Transfer Window',
-    startMonth: 0,
-    startDay: 1,
-    endMonth: 0,
-    endDay: 31,
-  },
+const DAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
 ];
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const MATCH_TYPES = {
+  LEAGUE: 'league',
+  CUP: 'cup',
+  FRIENDLY: 'friendly',
+};
 
 
 /* =========================================================
-   HELPERS
+   DATE HELPERS
 ========================================================= */
 
-function safeNumber(value, fallback = 0) {
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+function formatDateKey(date) {
+  if (!(date instanceof Date)) {
+    date = new Date(date);
+  }
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return `${date.getFullYear()}-${pad(
+    date.getMonth() + 1
+  )}-${pad(date.getDate())}`;
+}
+
+function parseDateKey(dateKey) {
+  if (!dateKey) {
+    return null;
+  }
+
+  const parts = String(dateKey).split('-');
+
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return null;
+  }
+
+  const date = new Date(
+    year,
+    month - 1,
+    day
+  );
+
+  return Number.isNaN(date.getTime())
+    ? null
+    : date;
+}
+
+function addDays(dateKey, amount) {
+  const date = parseDateKey(dateKey);
+
+  if (!date) {
+    return dateKey;
+  }
+
+  date.setDate(
+    date.getDate() + amount
+  );
+
+  return formatDateKey(date);
+}
+
+function formatLongDate(dateKey) {
+  const date = parseDateKey(dateKey);
+
+  if (!date) {
+    return 'Unknown date';
+  }
+
+  return `${DAYS[date.getDay()]}, ${
+    MONTHS[date.getMonth()]
+  } ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+function formatShortDate(dateKey) {
+  const date = parseDateKey(dateKey);
+
+  if (!date) {
+    return '-';
+  }
+
+  return `${pad(
+    date.getDate()
+  )}/${pad(
+    date.getMonth() + 1
+  )}/${date.getFullYear()}`;
+}
+
+function normalize(value) {
+  return String(
+    value || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function safeNumber(
+  value,
+  fallback = 0
+) {
   const number = Number(value);
 
   return Number.isFinite(number)
@@ -73,744 +173,364 @@ function safeNumber(value, fallback = 0) {
 }
 
 
-function normalize(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase();
-}
+/* =========================================================
+   TIME HELPERS
+========================================================= */
 
+function normalizeKickoffTime(
+  time
+) {
+  if (!time) {
+    return '15:00';
+  }
 
-function getTeamName(team) {
-  if (!team) return 'Unknown Club';
+  const value =
+    String(time).trim();
 
-  return (
-    team.name ||
-    team.clubName ||
-    team.teamName ||
-    'Unknown Club'
+  const match =
+    value.match(
+      /^(\d{1,2}):(\d{2})/
+    );
+
+  if (!match) {
+    return '15:00';
+  }
+
+  const hour = Math.min(
+    23,
+    Math.max(
+      0,
+      Number(match[1])
+    )
   );
-}
 
-
-function getClubId(club) {
-  if (!club) return null;
-
-  return (
-    club.id ||
-    club.clubId ||
-    null
+  const minute = Math.min(
+    59,
+    Math.max(
+      0,
+      Number(match[2])
+    )
   );
+
+  return `${pad(hour)}:${pad(
+    minute
+  )}`;
 }
 
-
-function getLeagueName(league) {
-  if (!league) return 'Unknown League';
-
+function getMatchDateKey(match) {
   return (
-    league.name ||
-    league.leagueName ||
-    league.title ||
-    'Unknown League'
-  );
-}
-
-
-function getLeagueCountry(league) {
-  if (!league) return '';
-
-  return (
-    league.country ||
-    league.countryName ||
-    league.nation ||
+    match.date ||
+    match.matchDate ||
+    match.fixtureDate ||
+    match.scheduledDate ||
     ''
   );
 }
 
+function getKickoffTime(match) {
+  return normalizeKickoffTime(
+    match.kickoffTime ||
+      match.time ||
+      match.matchTime ||
+      match.kickoff
+  );
+}
 
-function parseDate(value) {
-  if (!value) return null;
+function getMatchDateTime(match) {
+  const dateKey =
+    getMatchDateKey(match);
 
-  if (
-    value &&
-    typeof value.toDate === 'function'
-  ) {
-    return value.toDate();
+  const time =
+    getKickoffTime(match);
+
+  const date =
+    parseDateKey(dateKey);
+
+  if (!date) {
+    return null;
   }
 
-  const date = new Date(value);
+  const [
+    hours,
+    minutes,
+  ] = time
+    .split(':')
+    .map(Number);
 
-  return Number.isNaN(date.getTime())
-    ? null
-    : date;
-}
-
-
-function dateKey(date) {
-  const d = parseDate(date);
-
-  if (!d) return '';
-
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-
-function startOfDay(date) {
-  const d =
-    parseDate(date) ||
-    new Date();
-
-  return new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate()
-  );
-}
-
-
-function addDays(date, amount) {
-  const d =
-    parseDate(date) ||
-    new Date();
-
-  const result = new Date(d);
-
-  result.setDate(
-    result.getDate() + amount
-  );
-
-  return result;
-}
-
-
-function addMonths(date, amount) {
-  const d =
-    parseDate(date) ||
-    new Date();
-
-  const result = new Date(d);
-
-  result.setMonth(
-    result.getMonth() + amount
-  );
-
-  return result;
-}
-
-
-function randomBetween(min, max) {
-  return Math.floor(
-    Math.random() *
-      (max - min + 1)
-  ) + min;
-}
-
-
-function formatDate(date) {
-  const d = parseDate(date);
-
-  if (!d) return '-';
-
-  return d.toLocaleDateString(
-    'en-US',
-    {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }
-  );
-}
-
-
-function formatShortDate(date) {
-  const d = parseDate(date);
-
-  if (!d) return '-';
-
-  return d.toLocaleDateString(
-    'en-US',
-    {
-      month: 'short',
-      day: 'numeric',
-    }
-  );
-}
-
-
-function formatTime(date) {
-  const d = parseDate(date);
-
-  if (!d) return '-';
-
-  return d.toLocaleTimeString(
-    'en-US',
-    {
-      hour: '2-digit',
-      minute: '2-digit',
-    }
-  );
-}
-
-
-function formatCurrency(value) {
-  return new Intl.NumberFormat(
-    'en-US',
-    {
-      maximumFractionDigits: 0,
-    }
-  ).format(
-    safeNumber(value)
-  );
-}
-
-
-function getRandomKickoff() {
-  const hours = [
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-  ];
-
-  const hour =
-    hours[
-      Math.floor(
-        Math.random() *
-          hours.length
-      )
-    ];
-
-  const minute =
-    Math.random() > 0.5
-      ? 0
-      : 30;
-
-  return {
-    hour,
-    minute,
-  };
-}
-
-
-function makeDateWithTime(
-  date,
-  hour,
-  minute
-) {
-  const d =
-    parseDate(date) ||
-    new Date();
-
-  return new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    hour,
-    minute,
+  date.setHours(
+    hours || 0,
+    minutes || 0,
     0,
     0
   );
+
+  return date;
 }
 
 
-function getLeagueId(league) {
-  if (!league) return null;
+/* =========================================================
+   MATCH STATUS
+========================================================= */
 
+function isCompleted(match) {
   return (
-    league.id ||
-    league.leagueId ||
-    null
+    normalize(
+      match.status
+    ) === 'completed' ||
+    normalize(
+      match.status
+    ) === 'finished' ||
+    match.played === true ||
+    match.completed === true ||
+    Boolean(match.result)
   );
 }
 
-
-function getLeagueTeams(
-  league,
-  clubs
-) {
-  const leagueId =
-    getLeagueId(league);
-
-  return clubs.filter(
-    (club) => {
-      const clubLeague =
-        club.leagueId ||
-        club.currentLeague ||
-        club.league ||
-        null;
-
-      return (
-        String(clubLeague) ===
-        String(leagueId)
-      );
-    }
-  );
-}
-
-
-/* =========================================================
-   SEASON DATE GENERATOR
-========================================================= */
-
-function generateLeagueDates(
-  teamCount,
-  year
-) {
-  const rounds =
-    teamCount % 2 === 0
-      ? (teamCount - 1) * 2
-      : teamCount * 2;
-
-  /*
-   * League starts randomly between August and September.
-   */
-  const startMonth =
-    randomBetween(
-      LEAGUE_START_MONTH_MIN,
-      LEAGUE_START_MONTH_MAX
-    );
-
-  const startDay =
-    randomBetween(
-      1,
-      startMonth === 7 ? 31 : 15
-    );
-
-  const startDate =
-    new Date(
-      year,
-      startMonth,
-      startDay
-    );
-
-  /*
-   * League ends randomly between
-   * May and June of the following year.
-   */
-  const endMonth =
-    randomBetween(
-      LEAGUE_END_MONTH_MIN,
-      LEAGUE_END_MONTH_MAX
-    );
-
-  const endDay =
-    randomBetween(
-      15,
-      endMonth === 4 ? 31 : 20
-    );
-
-  const endDate =
-    new Date(
-      year + 1,
-      endMonth,
-      endDay
-    );
-
-  const totalDays =
-    Math.max(
-      1,
-      Math.floor(
-        (
-          endDate.getTime() -
-          startDate.getTime()
-        ) /
-        (1000 * 60 * 60 * 24)
-      )
-    );
-
-  const interval =
-    rounds > 1
-      ? totalDays /
-        (rounds - 1)
-      : 7;
-
-  const dates = [];
-
-  for (
-    let i = 0;
-    i < rounds;
-    i++
-  ) {
-    dates.push(
-      startOfDay(
-        new Date(
-          startDate.getTime() +
-          interval *
-            i *
-            24 *
-            60 *
-            60 *
-            1000
-        )
-      )
-    );
-  }
-
-  return {
-    startDate,
-    endDate,
-    rounds,
-    dates,
-  };
-}
-
-
-/* =========================================================
-   ROUND ROBIN GENERATOR
-========================================================= */
-
-function generateRoundRobin(
-  teams
-) {
-  let list =
-    teams.map(
-      (team) => ({
-        id: getClubId(team),
-        name: getTeamName(team),
-      })
-    );
-
-  /*
-   * Add a BYE team for odd numbers.
-   */
-  if (list.length % 2 !== 0) {
-    list.push({
-      id: '__BYE__',
-      name: 'BYE',
-    });
-  }
-
-  const total =
-    list.length;
-
-  const rounds =
-    total - 1;
-
-  const matchesPerRound =
-    total / 2;
-
-  const firstHalf = [];
-
-  let rotation = [
-    ...list,
-  ];
-
-  for (
-    let round = 0;
-    round < rounds;
-    round++
-  ) {
-    const matches = [];
-
-    for (
-      let i = 0;
-      i < matchesPerRound;
-      i++
-    ) {
-      const home =
-        rotation[i];
-
-      const away =
-        rotation[
-          total - 1 - i
-        ];
-
-      if (
-        home.id !== '__BYE__' &&
-        away.id !== '__BYE__'
-      ) {
-        matches.push({
-          homeId: home.id,
-          homeName: home.name,
-          awayId: away.id,
-          awayName: away.name,
-        });
-      }
-    }
-
-    firstHalf.push(
-      matches
-    );
-
-    const fixed =
-      rotation[0];
-
-    const rest =
-      rotation.slice(1);
-
-    rest.unshift(
-      rest.pop()
-    );
-
-    rotation = [
-      fixed,
-      ...rest,
-    ];
-  }
-
-  /*
-   * Second half reverses home / away.
-   */
-  const secondHalf =
-    firstHalf.map(
-      (round) =>
-        round.map(
-          (match) => ({
-            homeId:
-              match.awayId,
-            homeName:
-              match.awayName,
-            awayId:
-              match.homeId,
-            awayName:
-              match.homeName,
-          })
-        )
-    );
-
-  return [
-    ...firstHalf,
-    ...secondHalf,
-  ];
-}
-
-
-/* =========================================================
-   FRIENDLY GENERATOR
-========================================================= */
-
-function generateFriendlies(
-  userClub,
-  clubs,
-  leagueStartDate,
-  seasonYear
-) {
-  if (!userClub) {
-    return [];
-  }
-
-  const opponents =
-    clubs
-      .filter(
-        (club) =>
-          getClubId(club) !==
-          getClubId(userClub)
-      )
-      .sort(
-        () =>
-          Math.random() -
-          0.5
-      )
-      .slice(
-        0,
-        PRESEASON_FRIENDLIES
-      );
-
-  const firstFriendly =
-    addDays(
-      leagueStartDate,
-      -28
-    );
-
-  return opponents.map(
-    (opponent, index) => {
-      const date =
-        addDays(
-          firstFriendly,
-          index * 7
-        );
-
-      const kickoff =
-        getRandomKickoff();
-
-      return {
-        id: `friendly-${seasonYear}-${getClubId(userClub)}-${index}`,
-        type: 'friendly',
-        competition: 'Pre-Season Friendly',
-        leagueId: null,
-        leagueName:
-          'Pre-Season Friendly',
-        season: seasonYear,
-        date: makeDateWithTime(
-          date,
-          kickoff.hour,
-          kickoff.minute
-        ).toISOString(),
-        homeClubId:
-          index % 2 === 0
-            ? getClubId(userClub)
-            : getClubId(opponent),
-        homeClubName:
-          index % 2 === 0
-            ? getTeamName(userClub)
-            : getTeamName(opponent),
-        awayClubId:
-          index % 2 === 0
-            ? getClubId(opponent)
-            : getClubId(userClub),
-        awayClubName:
-          index % 2 === 0
-            ? getTeamName(opponent)
-            : getTeamName(userClub),
-        stadium:
-          index % 2 === 0
-            ? (
-                userClub.stadium ||
-                userClub.stadiumName ||
-                'Home Stadium'
-              )
-            : (
-                opponent.stadium ||
-                opponent.stadiumName ||
-                'Away Stadium'
-              ),
-        status: 'scheduled',
-        homeScore: null,
-        awayScore: null,
-        createdBy: 'system',
-      };
-    }
-  );
-}
-
-
-/* =========================================================
-   TRANSFER WINDOW HELPERS
-========================================================= */
-
-function getTransferWindows(
-  seasonYear
-) {
-  return [
-    {
-      id: 'summer',
-      name:
-        'Summer Transfer Window',
-      start: new Date(
-        seasonYear,
-        6,
-        1
-      ),
-      end: new Date(
-        seasonYear,
-        7,
-        31,
-        23,
-        59,
-        59
-      ),
-    },
-    {
-      id: 'winter',
-      name:
-        'Winter Transfer Window',
-      start: new Date(
-        seasonYear + 1,
-        0,
-        1
-      ),
-      end: new Date(
-        seasonYear + 1,
-        0,
-        31,
-        23,
-        59,
-        59
-      ),
-    },
-  ];
-}
-
-
-function getCurrentTransferWindow(
-  currentDate,
-  seasonYear
-) {
-  const date =
-    startOfDay(currentDate);
-
-  const windows =
-    getTransferWindows(
-      seasonYear
-    );
-
+function isPostponed(match) {
   return (
-    windows.find(
-      (window) =>
-        date >=
-          startOfDay(
-            window.start
-          ) &&
-        date <=
-          window.end
-    ) || null
+    normalize(
+      match.status
+    ) === 'postponed'
   );
 }
 
-
-/* =========================================================
-   FIXTURE STATUS
-========================================================= */
-
-function getFixtureStatus(
-  fixture,
-  currentDate
+function getMatchState(
+  match,
+  gameDate
 ) {
-  if (
-    fixture.status ===
-      'finished' ||
-    fixture.status ===
-      'completed'
-  ) {
-    return 'finished';
+  if (isCompleted(match)) {
+    return 'completed';
+  }
+
+  if (isPostponed(match)) {
+    return 'postponed';
   }
 
   const matchDate =
-    parseDate(
-      fixture.date
-    );
-
-  const now =
-    parseDate(
-      currentDate
-    ) || new Date();
+    getMatchDateKey(match);
 
   if (!matchDate) {
-    return 'scheduled';
+    return 'unknown';
   }
 
   if (
-    matchDate.getTime() <=
-    now.getTime()
+    gameDate <
+    matchDate
+  ) {
+    return 'future';
+  }
+
+  if (
+    gameDate >
+    matchDate
+  ) {
+    /*
+     * Umukino wanyuzeho ariko utarakinnye.
+     * Ntitugomba kuwita completed.
+     * Uyu ni state y'ingenzi cyane.
+     */
+    return 'overdue';
+  }
+
+  /*
+   * Ni uyu munsi.
+   * Noneho tureba isaha nyayo ya match.
+   */
+  const matchDateTime =
+    getMatchDateTime(match);
+
+  if (!matchDateTime) {
+    return 'today';
+  }
+
+  const now =
+    new Date();
+
+  if (
+    now >=
+    matchDateTime
   ) {
     return 'ready';
   }
 
-  return 'scheduled';
+  return 'today';
 }
 
 
-function isUserFixture(
-  fixture,
-  clubId
+/* =========================================================
+   PLAYER / CLUB HELPERS
+========================================================= */
+
+function getTeamId(
+  match,
+  home = true
+) {
+  if (home) {
+    return (
+      match.homeTeamId ||
+      match.homeClubId ||
+      match.homeId ||
+      match.homeTeam?.id ||
+      match.homeClub?.id ||
+      null
+    );
+  }
+
+  return (
+    match.awayTeamId ||
+    match.awayClubId ||
+    match.awayId ||
+    match.awayTeam?.id ||
+    match.awayClub?.id ||
+    null
+  );
+}
+
+function getTeamName(
+  match,
+  home = true
+) {
+  if (home) {
+    return (
+      match.homeTeamName ||
+      match.homeClubName ||
+      match.homeName ||
+      match.homeTeam?.name ||
+      match.homeClub?.name ||
+      'Home Team'
+    );
+  }
+
+  return (
+    match.awayTeamName ||
+    match.awayClubName ||
+    match.awayName ||
+    match.awayTeam?.name ||
+    match.awayClub?.name ||
+    'Away Team'
+  );
+}
+
+function getTeamLogo(
+  match,
+  home = true
+) {
+  if (home) {
+    return (
+      match.homeTeamLogo ||
+      match.homeClubLogo ||
+      match.homeTeam?.logo ||
+      match.homeClub?.logo ||
+      ''
+    );
+  }
+
+  return (
+    match.awayTeamLogo ||
+    match.awayClubLogo ||
+    match.awayTeam?.logo ||
+    match.awayClub?.logo ||
+    ''
+  );
+}
+
+function getCompetitionName(
+  match
 ) {
   return (
-    String(
-      fixture.homeClubId
-    ) ===
-      String(clubId) ||
-    String(
-      fixture.awayClubId
-    ) ===
-      String(clubId)
+    match.leagueName ||
+    match.competitionName ||
+    match.league ||
+    match.competition ||
+    (
+      normalize(
+        match.type
+      ) === 'friendly'
+        ? 'Friendly'
+        : 'Competition'
+    )
+  );
+}
+
+function getCompetitionType(
+  match
+) {
+  return normalize(
+    match.type ||
+      match.matchType ||
+      match.competitionType ||
+      'league'
+  );
+}
+
+function getStadium(match) {
+  return (
+    match.stadium ||
+    match.venue ||
+    match.stadiumName ||
+    'Stadium TBA'
+  );
+}
+
+function getResult(match) {
+  if (
+    match.homeScore !== undefined &&
+    match.awayScore !== undefined
+  ) {
+    return `${match.homeScore} - ${match.awayScore}`;
+  }
+
+  if (match.result) {
+    if (
+      typeof match.result ===
+      'string'
+    ) {
+      return match.result;
+    }
+
+    if (
+      match.result.homeScore !==
+        undefined &&
+      match.result.awayScore !==
+        undefined
+    ) {
+      return `${match.result.homeScore} - ${match.result.awayScore}`;
+    }
+  }
+
+  return 'Played';
+}
+
+
+/* =========================================================
+   SORT
+========================================================= */
+
+function compareFixtures(
+  a,
+  b
+) {
+  const dateA =
+    getMatchDateTime(a);
+
+  const dateB =
+    getMatchDateTime(b);
+
+  if (!dateA && !dateB) {
+    return 0;
+  }
+
+  if (!dateA) {
+    return 1;
+  }
+
+  if (!dateB) {
+    return -1;
+  }
+
+  return (
+    dateA.getTime() -
+    dateB.getTime()
   );
 }
 
@@ -822,6 +542,7 @@ function isUserFixture(
 export async function getServerSideProps() {
   try {
     const [
+      fixturesSnapshot,
       leaguesSnapshot,
       clubsSnapshot,
       stadiumsSnapshot,
@@ -829,15 +550,24 @@ export async function getServerSideProps() {
       getDocs(
         collection(
           db,
+          'fixtures'
+        )
+      ),
+
+      getDocs(
+        collection(
+          db,
           'leagues'
         )
       ),
+
       getDocs(
         collection(
           db,
           'clubs'
         )
       ),
+
       getDocs(
         collection(
           db,
@@ -845,6 +575,14 @@ export async function getServerSideProps() {
         )
       ),
     ]);
+
+    const fixtures =
+      fixturesSnapshot.docs.map(
+        (item) => ({
+          id: item.id,
+          ...item.data(),
+        })
+      );
 
     const leagues =
       leaguesSnapshot.docs.map(
@@ -872,6 +610,13 @@ export async function getServerSideProps() {
 
     return {
       props: {
+        initialFixtures:
+          JSON.parse(
+            JSON.stringify(
+              fixtures
+            )
+          ),
+
         initialLeagues:
           JSON.parse(
             JSON.stringify(
@@ -902,6 +647,7 @@ export async function getServerSideProps() {
 
     return {
       props: {
+        initialFixtures: [],
         initialLeagues: [],
         initialClubs: [],
         initialStadiums: [],
@@ -916,6 +662,7 @@ export async function getServerSideProps() {
 ========================================================= */
 
 export default function FixturesPage({
+  initialFixtures = [],
   initialLeagues = [],
   initialClubs = [],
   initialStadiums = [],
@@ -929,25 +676,25 @@ export default function FixturesPage({
     loading,
   } = useAuth();
 
-  const [
-    leagues,
-    setLeagues,
-  ] = useState(
-    initialLeagues
-  );
+  const [fixtures] =
+    useState(
+      initialFixtures
+    );
 
-  const [
-    clubs,
-    setClubs,
-  ] = useState(
-    initialClubs
-  );
+  const [leagues] =
+    useState(
+      initialLeagues
+    );
 
-  const [
-    stadiums,
-  ] = useState(
-    initialStadiums
-  );
+  const [clubs] =
+    useState(
+      initialClubs
+    );
+
+  const [stadiums] =
+    useState(
+      initialStadiums
+    );
 
   const [
     careerData,
@@ -960,57 +707,38 @@ export default function FixturesPage({
   ] = useState(null);
 
   const [
-    fixtures,
-    setFixtures,
-  ] = useState([]);
+    gameDate,
+    setGameDate,
+  ] = useState('');
 
   const [
-    currentDate,
-    setCurrentDate,
-  ] = useState(
-    new Date()
-  );
-
-  const [
-    selectedLeague,
-    setSelectedLeague,
+    selectedCompetition,
+    setSelectedCompetition,
   ] = useState('all');
 
   const [
-    calendarDate,
-    setCalendarDate,
-  ] = useState(
-    new Date()
-  );
+    selectedDate,
+    setSelectedDate,
+  ] = useState('');
 
   const [
-    loadingPage,
-    setLoadingPage,
+    activeView,
+    setActiveView,
+  ] = useState('all');
+
+  const [
+    isLoading,
+    setIsLoading,
   ] = useState(true);
 
   const [
-    generating,
-    setGenerating,
-  ] = useState(false);
-
-  const [
-    friendlyOpponent,
-    setFriendlyOpponent,
-  ] = useState('');
-
-  const [
-    friendlyDate,
-    setFriendlyDate,
-  ] = useState('');
-
-  const [
-    showFriendly,
-    setShowFriendly,
+    advancing,
+    setAdvancing,
   ] = useState(false);
 
 
   /* =======================================================
-     AUTH
+     AUTH + CAREER
   ======================================================= */
 
   useEffect(() => {
@@ -1018,9 +746,12 @@ export default function FixturesPage({
       !loading &&
       !user
     ) {
-      router.push(
-        '/login'
-      );
+      router.push('/login');
+      return;
+    }
+
+    if (user) {
+      loadCareer();
     }
   }, [
     user,
@@ -1029,169 +760,101 @@ export default function FixturesPage({
   ]);
 
 
-  /* =======================================================
-     LOAD CAREER
-  ======================================================= */
-
   const loadCareer =
-    useCallback(
-      async () => {
-        if (!user?.uid) {
+    async () => {
+      try {
+        setIsLoading(true);
+
+        const userRef =
+          doc(
+            db,
+            'users',
+            user.uid
+          );
+
+        const snapshot =
+          await getDoc(
+            userRef
+          );
+
+        if (!snapshot.exists()) {
+          setCareerData({});
+          setIsLoading(false);
           return;
         }
 
-        try {
-          const userRef =
-            doc(
-              db,
-              'users',
-              user.uid
-            );
+        const data =
+          snapshot.data();
 
-          const snapshot =
-            await getDoc(
-              userRef
-            );
+        const career =
+          data.careerData || {};
 
-          if (
-            !snapshot.exists()
-          ) {
-            setCareerData({});
-            return;
-          }
+        setCareerData(
+          career
+        );
 
-          const data =
-            snapshot.data();
+        let clubId =
+          career.currentClub ||
+          null;
 
-          const career =
-            data.careerData ||
-            {};
-
-          setCareerData(
-            career
-          );
-
-          if (
-            career.currentDate
-          ) {
-            setCurrentDate(
-              parseDate(
-                career.currentDate
-              ) || new Date()
-            );
-          }
-
-          if (
-            career.currentClub
-          ) {
-            const clubRef =
-              doc(
-                db,
-                'clubs',
-                career.currentClub
-              );
-
-            const clubSnapshot =
-              await getDoc(
-                clubRef
-              );
-
-            if (
-              clubSnapshot.exists()
-            ) {
-              setCurrentClub({
-                id:
-                  clubSnapshot.id,
-                ...clubSnapshot.data(),
-              });
-            }
-          }
-        } catch (error) {
-          console.error(
-            'Career load error:',
-            error
-          );
-
-          toast.error(
-            'Failed to load career'
-          );
-        }
-      },
-      [user]
-    );
-
-
-  /* =======================================================
-     LOAD FIXTURES
-  ======================================================= */
-
-  const loadFixtures =
-    useCallback(
-      async () => {
-        if (!user?.uid) {
+        if (!clubId) {
+          setIsLoading(false);
           return;
         }
 
-        try {
-          const snapshot =
-            await getDocs(
-              collection(
-                db,
-                'fixtures'
-              )
-            );
-
-          const data =
-            snapshot.docs.map(
-              (item) => ({
-                id:
-                  item.id,
-                ...item.data(),
-              })
-            );
-
-          setFixtures(
-            data
-          );
-        } catch (error) {
-          console.error(
-            'Fixtures load error:',
-            error
+        const clubRef =
+          doc(
+            db,
+            'clubs',
+            clubId
           );
 
-          toast.error(
-            'Failed to load fixtures'
+        const clubSnapshot =
+          await getDoc(
+            clubRef
           );
+
+        if (
+          clubSnapshot.exists()
+        ) {
+          setCurrentClub({
+            id:
+              clubSnapshot.id,
+            ...clubSnapshot.data(),
+          });
         }
-      },
-      [user]
-    );
 
+        /*
+         * Game date.
+         * Niba itarabaho, tuyitangiza uyu munsi.
+         */
+        const savedGameDate =
+          career.gameDate ||
+          data.gameDate ||
+          formatDateKey(
+            new Date()
+          );
 
-  useEffect(() => {
-    if (
-      !loading &&
-      user
-    ) {
-      Promise.all([
-        loadCareer(),
-        loadFixtures(),
-      ]).finally(() =>
-        setLoadingPage(
-          false
-        )
-      );
-    }
-  }, [
-    loading,
-    user,
-    loadCareer,
-    loadFixtures,
-  ]);
+        setGameDate(
+          savedGameDate
+        );
+      } catch (error) {
+        console.error(
+          'Career loading error:',
+          error
+        );
+
+        toast.error(
+          'Failed to load career'
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
 
   /* =======================================================
-     CURRENT LEAGUE
+     CURRENT CLUB
   ======================================================= */
 
   const currentClubId =
@@ -1199,678 +862,448 @@ export default function FixturesPage({
     currentClub?.id ||
     null;
 
-  const currentLeagueId =
-    currentClub?.leagueId ||
-    currentClub?.currentLeague ||
-    currentClub?.league ||
-    careerData?.currentLeague ||
-    null;
-
-  const currentLeague =
-    useMemo(
-      () =>
-        leagues.find(
-          (league) =>
-            String(
-              getLeagueId(
-                league
-              )
-            ) ===
-            String(
-              currentLeagueId
-            )
-        ) || null,
-      [
-        leagues,
-        currentLeagueId,
-      ]
-    );
-
 
   /* =======================================================
      USER FIXTURES
   ======================================================= */
 
   const userFixtures =
-    useMemo(
-      () =>
-        fixtures
-          .filter(
-            (fixture) =>
-              isUserFixture(
-                fixture,
-                currentClubId
-              )
-          )
-          .sort(
-            (a, b) =>
-              new Date(
-                a.date
-              ) -
-              new Date(
-                b.date
-              )
-          ),
-      [
-        fixtures,
-        currentClubId,
-      ]
-    );
-
-
-  /* =======================================================
-     NEXT MATCH
-  ======================================================= */
-
-  const nextMatch =
     useMemo(() => {
-      const now =
-        currentDate.getTime();
-
-      return (
-        userFixtures.find(
-          (fixture) => {
-            const status =
-              getFixtureStatus(
-                fixture,
-                currentDate
-              );
-
-            return (
-              status !==
-                'finished' &&
-              new Date(
-                fixture.date
-              ).getTime() >=
-                now
-            );
-          }
-        ) || null
-      );
-    }, [
-      userFixtures,
-      currentDate,
-    ]);
-
-
-  /* =======================================================
-     TRANSFER WINDOWS
-  ======================================================= */
-
-  const seasonYear =
-    currentLeague?.seasonYear ||
-    currentLeague?.season ||
-    currentDate.getFullYear();
-
-  const transferWindows =
-    useMemo(
-      () =>
-        getTransferWindows(
-          safeNumber(
-            seasonYear,
-            currentDate.getFullYear()
-          )
-        ),
-      [
-        seasonYear,
-        currentDate,
-      ]
-    );
-
-  const activeTransferWindow =
-    getCurrentTransferWindow(
-      currentDate,
-      safeNumber(
-        seasonYear,
-        currentDate.getFullYear()
-      )
-    );
-
-
-  /* =======================================================
-     GENERATE LEAGUE FIXTURES
-  ======================================================= */
-
-  const generateLeagueFixtures =
-    async (league) => {
-      if (!league) {
-        return;
+      if (!currentClubId) {
+        return [];
       }
-
-      const leagueId =
-        getLeagueId(
-          league
-        );
-
-      const leagueClubs =
-        getLeagueTeams(
-          league,
-          clubs
-        );
-
-      if (
-        leagueClubs.length <
-        2
-      ) {
-        toast.error(
-          `${getLeagueName(
-            league
-          )} needs at least 2 clubs`
-        );
-
-        return;
-      }
-
-      setGenerating(
-        true
-      );
-
-      try {
-        const existing =
-          fixtures.filter(
-            (fixture) =>
-              String(
-                fixture.leagueId
-              ) ===
-              String(
-                leagueId
-              )
-          );
-
-        if (
-          existing.length > 0
-        ) {
-          toast.success(
-            `${getLeagueName(
-              league
-            )} fixtures already exist`
-          );
-
-          return;
-        }
-
-        const year =
-          safeNumber(
-            league.seasonYear,
-            currentDate.getFullYear()
-          );
-
-        const schedule =
-          generateLeagueDates(
-            leagueClubs.length,
-            year
-          );
-
-        const rounds =
-          generateRoundRobin(
-            leagueClubs
-          );
-
-        const newFixtures =
-          [];
-
-        rounds.forEach(
-          (
-            round,
-            roundIndex
-          ) => {
-            const roundDate =
-              schedule.dates[
-                roundIndex
-              ];
-
-            round.forEach(
-              (
-                match,
-                matchIndex
-              ) => {
-                const kickoff =
-                  getRandomKickoff();
-
-                const date =
-                  makeDateWithTime(
-                    roundDate,
-                    kickoff.hour,
-                    kickoff.minute
-                  );
-
-                const homeClub =
-                  leagueClubs.find(
-                    (club) =>
-                      String(
-                        getClubId(
-                          club
-                        )
-                      ) ===
-                      String(
-                        match.homeId
-                      )
-                  );
-
-                const stadium =
-                  homeClub?.stadium ||
-                  homeClub?.stadiumName ||
-                  stadiums.find(
-                    (item) =>
-                      String(
-                        item.clubId
-                      ) ===
-                      String(
-                        match.homeId
-                      )
-                  )?.name ||
-                  'Main Stadium';
-
-                newFixtures.push({
-                  type: 'league',
-
-                  leagueId:
-                    leagueId,
-
-                  leagueName:
-                    getLeagueName(
-                      league
-                    ),
-
-                  country:
-                    getLeagueCountry(
-                      league
-                    ),
-
-                  season:
-                    year,
-
-                  round:
-                    roundIndex + 1,
-
-                  matchNumber:
-                    matchIndex + 1,
-
-                  date:
-                    date.toISOString(),
-
-                  homeClubId:
-                    match.homeId,
-
-                  homeClubName:
-                    match.homeName,
-
-                  awayClubId:
-                    match.awayId,
-
-                  awayClubName:
-                    match.awayName,
-
-                  stadium,
-
-                  status:
-                    'scheduled',
-
-                  homeScore:
-                    null,
-
-                  awayScore:
-                    null,
-
-                  createdBy:
-                    'system',
-
-                  createdAt:
-                    new Date().toISOString(),
-                });
-              }
-            );
-          }
-        );
-
-        /*
-         * Firestore does not allow unlimited parallel writes
-         * here, so save sequentially in small batches.
-         */
-        const created =
-          [];
-
-        for (
-          const fixture of
-          newFixtures
-        ) {
-          const ref =
-            await addDoc(
-              collection(
-                db,
-                'fixtures'
-              ),
-              fixture
-            );
-
-          created.push({
-            id: ref.id,
-            ...fixture,
-          });
-        }
-
-        /*
-         * Generate preseason fixtures
-         * for the user's club if it belongs
-         * to this league.
-         */
-        if (
-          String(
-            currentLeagueId
-          ) ===
-          String(
-            leagueId
-          ) &&
-          currentClub
-        ) {
-          const friendlies =
-            generateFriendlies(
-              currentClub,
-              clubs,
-              schedule.startDate,
-              year
-            );
-
-          for (
-            const friendly of
-            friendlies
-          ) {
-            const ref =
-              await addDoc(
-                collection(
-                  db,
-                  'fixtures'
-                ),
-                friendly
-              );
-
-            created.push({
-              id:
-                ref.id,
-              ...friendly,
-            });
-          }
-        }
-
-        setFixtures(
-          (previous) => [
-            ...previous,
-            ...created,
-          ]
-        );
-
-        /*
-         * Store generated season information
-         * inside league document.
-         */
-        await updateDoc(
-          doc(
-            db,
-            'leagues',
-            leagueId
-          ),
-          {
-            seasonYear:
-              year,
-
-            seasonStart:
-              schedule.startDate.toISOString(),
-
-            seasonEnd:
-              schedule.endDate.toISOString(),
-
-            totalRounds:
-              schedule.rounds,
-
-            fixturesGenerated:
-              true,
-
-            transferWindows:
-              transferWindows.map(
-                (window) => ({
-                  id:
-                    window.id,
-                  name:
-                    window.name,
-                  start:
-                    window.start.toISOString(),
-                  end:
-                    window.end.toISOString(),
-                })
-              ),
-
-            updatedAt:
-              serverTimestamp(),
-          }
-        );
-
-        setLeagues(
-          (previous) =>
-            previous.map(
-              (item) =>
-                item.id ===
-                leagueId
-                  ? {
-                      ...item,
-                      seasonYear:
-                        year,
-                      seasonStart:
-                        schedule.startDate.toISOString(),
-                      seasonEnd:
-                        schedule.endDate.toISOString(),
-                      totalRounds:
-                        schedule.rounds,
-                      fixturesGenerated:
-                        true,
-                    }
-                  : item
-            )
-        );
-
-        toast.success(
-          `${getLeagueName(
-            league
-          )} schedule generated`
-        );
-      } catch (error) {
-        console.error(
-          'Fixture generation error:',
-          error
-        );
-
-        toast.error(
-          'Could not generate league fixtures'
-        );
-      } finally {
-        setGenerating(
-          false
-        );
-      }
-    };
-
-
-  /* =======================================================
-     ENSURE USER LEAGUE EXISTS
-  ======================================================= */
-
-  useEffect(() => {
-    if (
-      !currentLeague ||
-      fixtures.length === 0 &&
-      currentLeague.fixturesGenerated !== true
-    ) {
-      return;
-    }
-
-    if (
-      currentLeague &&
-      currentLeague.fixturesGenerated !== true &&
-      !generating
-    ) {
-      generateLeagueFixtures(
-        currentLeague
-      );
-    }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    currentLeague?.id,
-    currentLeague?.fixturesGenerated,
-  ]);
-
-
-  /* =======================================================
-     CALENDAR FIXTURES
-  ======================================================= */
-
-  const calendarFixtures =
-    useMemo(() => {
-      const selectedDate =
-        dateKey(
-          calendarDate
-        );
 
       return fixtures
         .filter(
-          (fixture) => {
-            if (
-              selectedLeague !==
-              'all'
-            ) {
-              if (
-                String(
-                  fixture.leagueId
-                ) !==
-                String(
-                  selectedLeague
-                )
-              ) {
-                return false;
-              }
-            }
+          (match) => {
+            const homeId =
+              getTeamId(
+                match,
+                true
+              );
+
+            const awayId =
+              getTeamId(
+                match,
+                false
+              );
 
             return (
-              dateKey(
-                fixture.date
-              ) ===
-              selectedDate
+              homeId ===
+                currentClubId ||
+              awayId ===
+                currentClubId
             );
           }
         )
         .sort(
-          (a, b) =>
-            new Date(
-              a.date
-            ) -
-            new Date(
-              b.date
-            )
+          compareFixtures
         );
     }, [
       fixtures,
-      calendarDate,
-      selectedLeague,
+      currentClubId,
     ]);
 
 
   /* =======================================================
-     SELECTED LEAGUE FIXTURES
-  ======================================================= */
+     NEXT USER MATCH
+========================================================= */
 
-  const leagueFixtures =
+  const nextUserMatch =
     useMemo(() => {
-      if (
-        selectedLeague ===
-        'all'
-      ) {
-        return fixtures;
+      if (!gameDate) {
+        return null;
       }
 
-      return fixtures.filter(
-        (fixture) =>
-          String(
-            fixture.leagueId
-          ) ===
-          String(
-            selectedLeague
+      const candidates =
+        userFixtures.filter(
+          (match) => {
+            if (
+              isCompleted(
+                match
+              )
+            ) {
+              return false;
+            }
+
+            const date =
+              getMatchDateKey(
+                match
+              );
+
+            return (
+              date >= gameDate
+            );
+          }
+        );
+
+      return (
+        candidates.sort(
+          compareFixtures
+        )[0] ||
+        null
+      );
+    }, [
+      userFixtures,
+      gameDate,
+    ]);
+
+
+  /* =======================================================
+     CURRENT DAY USER MATCHES
+========================================================= */
+
+  const todayMatches =
+    useMemo(() => {
+      return userFixtures.filter(
+        (match) =>
+          getMatchDateKey(
+            match
+          ) === gameDate
+      );
+    }, [
+      userFixtures,
+      gameDate,
+    ]);
+
+
+  /* =======================================================
+     BLOCK ADVANCE
+========================================================= */
+
+  const blockingMatch =
+    useMemo(() => {
+      if (!gameDate) {
+        return null;
+      }
+
+      /*
+       * Reba niba hari match y'umukipe
+       * user atoza itarakinwa kandi igihe
+       * cyayo cyageze.
+       */
+      const overdue =
+        userFixtures
+          .filter(
+            (match) => {
+              const state =
+                getMatchState(
+                  match,
+                  gameDate
+                );
+
+              return (
+                state ===
+                  'ready' ||
+                state ===
+                  'overdue'
+              );
+            }
           )
+          .sort(
+            compareFixtures
+          );
+
+      return (
+        overdue[0] ||
+        null
+      );
+    }, [
+      userFixtures,
+      gameDate,
+    ]);
+
+
+  const canAdvance =
+    !blockingMatch;
+
+
+  /* =======================================================
+     FILTERED FIXTURES
+======================================================= */
+
+  const filteredFixtures =
+    useMemo(() => {
+      let result =
+        [...fixtures];
+
+      if (
+        activeView ===
+        'my-team'
+      ) {
+        result =
+          result.filter(
+            (match) => {
+              const home =
+                getTeamId(
+                  match,
+                  true
+                );
+
+              const away =
+                getTeamId(
+                  match,
+                  false
+                );
+
+              return (
+                home ===
+                  currentClubId ||
+                away ===
+                  currentClubId
+              );
+            }
+          );
+      }
+
+      if (
+        selectedCompetition !==
+        'all'
+      ) {
+        result =
+          result.filter(
+            (match) =>
+              (
+                match.leagueId ||
+                match.competitionId
+              ) ===
+              selectedCompetition
+          );
+      }
+
+      if (selectedDate) {
+        result =
+          result.filter(
+            (match) =>
+              getMatchDateKey(
+                match
+              ) ===
+              selectedDate
+          );
+      }
+
+      return result.sort(
+        compareFixtures
       );
     }, [
       fixtures,
-      selectedLeague,
+      activeView,
+      currentClubId,
+      selectedCompetition,
+      selectedDate,
     ]);
 
 
   /* =======================================================
-     RESULTS
-  ======================================================= */
+     COMPETITIONS
+======================================================= */
 
-  const results =
-    useMemo(
-      () =>
-        userFixtures
-          .filter(
-            (fixture) =>
-              getFixtureStatus(
-                fixture,
-                currentDate
-              ) ===
-                'finished' ||
-              fixture.status ===
-                'completed'
+  const competitions =
+    useMemo(() => {
+      const map =
+        new Map();
+
+      leagues.forEach(
+        (league) => {
+          map.set(
+            league.id,
+            league
+          );
+        }
+      );
+
+      fixtures.forEach(
+        (match) => {
+          const id =
+            match.leagueId ||
+            match.competitionId;
+
+          if (
+            id &&
+            !map.has(id)
+          ) {
+            map.set(
+              id,
+              {
+                id,
+                name:
+                  getCompetitionName(
+                    match
+                  ),
+              }
+            );
+          }
+        }
+      );
+
+      return Array.from(
+        map.values()
+      ).sort(
+        (a, b) =>
+          String(
+            a.name || ''
+          ).localeCompare(
+            String(
+              b.name || ''
+            )
           )
-          .slice(-10)
-          .reverse(),
-      [
-        userFixtures,
-        currentDate,
-      ]
-    );
+      );
+    }, [
+      leagues,
+      fixtures,
+    ]);
+
+
+  /* =======================================================
+     STATS
+======================================================= */
+
+  const completedCount =
+    userFixtures.filter(
+      isCompleted
+    ).length;
+
+  const upcomingCount =
+    userFixtures.filter(
+      (match) =>
+        !isCompleted(
+          match
+        ) &&
+        getMatchDateKey(
+          match
+        ) >= gameDate
+    ).length;
+
+  const totalCount =
+    userFixtures.length;
+
+
+  /* =======================================================
+     PLAY MATCH
+======================================================= */
+
+  const playMatch =
+    (match) => {
+      if (!match) {
+        return;
+      }
+
+      const state =
+        getMatchState(
+          match,
+          gameDate
+        );
+
+      /*
+       * Ntabwo yemera Play mbere y'igihe.
+       */
+      if (
+        state !==
+        'ready'
+      ) {
+        toast.error(
+          'This match is not ready to play yet.'
+        );
+
+        return;
+      }
+
+      /*
+       * Ntabwo twemera match yamaze gukinwa.
+       */
+      if (
+        isCompleted(
+          match
+        )
+      ) {
+        toast.error(
+          'This match has already been played.'
+        );
+
+        return;
+      }
+
+      router.push(
+        `/match/${match.id}`
+      );
+    };
 
 
   /* =======================================================
      ADVANCE DAY
-  ======================================================= */
+======================================================= */
 
-  const advanceDay =
+  const handleAdvanceDay =
     async () => {
-      if (!user?.uid) {
+      if (
+        !user ||
+        !gameDate
+      ) {
         return;
       }
 
-      const nextDay =
+      /*
+       * IKI NI CYO KIBUZA USER
+       * GUSIMBUKA MATCH.
+       */
+      if (blockingMatch) {
+        toast.error(
+          `You must play ${
+            getTeamName(
+              blockingMatch,
+              true
+            ) ===
+            currentClub?.name
+              ? getTeamName(
+                  blockingMatch,
+                  false
+                )
+              : getTeamName(
+                  blockingMatch,
+                  true
+                )
+          } before advancing.`
+        );
+
+        return;
+      }
+
+      const nextDate =
         addDays(
-          currentDate,
+          gameDate,
           1
         );
 
       try {
-        await updateDoc(
+        setAdvancing(true);
+
+        const userRef =
           doc(
             db,
             'users',
             user.uid
-          ),
+          );
+
+        await updateDoc(
+          userRef,
           {
-            careerData: {
-              ...(careerData || {}),
-              currentDate:
-                nextDay.toISOString(),
-            },
+            'careerData.gameDate':
+              nextDate,
+
             updatedAt:
               serverTimestamp(),
           }
         );
 
-        setCurrentDate(
-          nextDay
+        setGameDate(
+          nextDate
         );
 
         setCareerData(
           (previous) => ({
             ...(previous || {}),
-            currentDate:
-              nextDay.toISOString(),
+            gameDate:
+              nextDate,
           })
         );
       } catch (error) {
@@ -1880,236 +1313,88 @@ export default function FixturesPage({
         );
 
         toast.error(
-          'Could not advance the day'
+          'Could not advance the game day.'
         );
+      } finally {
+        setAdvancing(false);
       }
     };
 
 
   /* =======================================================
-     PLAY MATCH
+     GO TO PREVIOUS DAY
   ======================================================= */
 
-  const playMatch =
-    (fixture) => {
-      if (!fixture) {
-        return;
-      }
-
-      const status =
-        getFixtureStatus(
-          fixture,
-          currentDate
-        );
-
-      if (
-        status !==
-        'ready'
-      ) {
-        toast.error(
-          'This match is not ready yet'
-        );
-
-        return;
-      }
-
-      router.push(
-        `/match?id=${encodeURIComponent(
-          fixture.id
-        )}`
-      );
-    };
-
-
-  /* =======================================================
-     FRIENDLY
-  ======================================================= */
-
-  const createFriendly =
+  const handlePreviousDay =
     async () => {
-      if (
-        !currentClub ||
-        !friendlyOpponent ||
-        !friendlyDate
-      ) {
-        toast.error(
-          'Choose an opponent and date'
-        );
-
+      if (!gameDate) {
         return;
       }
 
-      const opponent =
-        clubs.find(
-          (club) =>
-            String(
-              getClubId(
-                club
-              )
-            ) ===
-            String(
-              friendlyOpponent
-            )
+      const previousDate =
+        addDays(
+          gameDate,
+          -1
         );
 
-      if (!opponent) {
-        return;
-      }
-
-      const date =
-        new Date(
-          `${friendlyDate}T18:00:00`
-        );
-
-      if (
-        Number.isNaN(
-          date.getTime()
-        )
-      ) {
-        toast.error(
-          'Invalid friendly date'
-        );
-
-        return;
-      }
-
-      const leagueStart =
-        parseDate(
-          currentLeague?.seasonStart
-        );
-
-      if (
-        leagueStart &&
-        date >= leagueStart
-      ) {
-        toast.error(
-          'Friendly matches must be before the league starts'
-        );
-
-        return;
-      }
-
+      /*
+       * Ntabwo tugomba gusubiza
+       * gameDate inyuma cyane.
+       *
+       * Niba ushaka ko user atabasha
+       * gusubira inyuma na gato,
+       * ushobora gukuraho iyi button.
+       */
       try {
-        setGenerating(
-          true
+        setAdvancing(true);
+
+        await updateDoc(
+          doc(
+            db,
+            'users',
+            user.uid
+          ),
+          {
+            'careerData.gameDate':
+              previousDate,
+
+            updatedAt:
+              serverTimestamp(),
+          }
         );
 
-        const fixture = {
-          type: 'friendly',
-
-          competition:
-            'Pre-Season Friendly',
-
-          leagueId: null,
-
-          leagueName:
-            'Pre-Season Friendly',
-
-          season:
-            safeNumber(
-              seasonYear
-            ),
-
-          date:
-            date.toISOString(),
-
-          homeClubId:
-            currentClub.id,
-
-          homeClubName:
-            getTeamName(
-              currentClub
-            ),
-
-          awayClubId:
-            getClubId(
-              opponent
-            ),
-
-          awayClubName:
-            getTeamName(
-              opponent
-            ),
-
-          stadium:
-            currentClub.stadium ||
-            currentClub.stadiumName ||
-            'Home Stadium',
-
-          status:
-            'scheduled',
-
-          homeScore:
-            null,
-
-          awayScore:
-            null,
-
-          createdBy:
-            user.uid,
-
-          createdAt:
-            new Date().toISOString(),
-        };
-
-        const ref =
-          await addDoc(
-            collection(
-              db,
-              'fixtures'
-            ),
-            fixture
-          );
-
-        setFixtures(
-          (previous) => [
-            ...previous,
-            {
-              id: ref.id,
-              ...fixture,
-            },
-          ]
+        setGameDate(
+          previousDate
         );
 
-        setShowFriendly(
-          false
-        );
-
-        setFriendlyOpponent(
-          ''
-        );
-
-        setFriendlyDate(
-          ''
-        );
-
-        toast.success(
-          'Friendly match scheduled'
+        setCareerData(
+          (previous) => ({
+            ...(previous || {}),
+            gameDate:
+              previousDate,
+          })
         );
       } catch (error) {
         console.error(
-          'Friendly error:',
           error
         );
 
         toast.error(
-          'Could not create friendly'
+          'Could not change date.'
         );
       } finally {
-        setGenerating(
-          false
-        );
+        setAdvancing(false);
       }
     };
 
 
   /* =======================================================
      LOADING
-  ======================================================= */
+======================================================= */
 
   if (
     loading ||
-    loadingPage
+    isLoading
   ) {
     return (
       <div
@@ -2124,7 +1409,7 @@ export default function FixturesPage({
         />
 
         <p>
-          Loading fixtures centre...
+          Loading fixtures...
         </p>
       </div>
     );
@@ -2137,21 +1422,76 @@ export default function FixturesPage({
 
 
   /* =======================================================
+     NO CLUB
+======================================================= */
+
+  if (!currentClubId) {
+    return (
+      <>
+        <Head>
+          <title>
+            Fixtures | Virtual Football Manager
+          </title>
+        </Head>
+
+        <main
+          className={
+            styles.emptyPage
+          }
+        >
+          <div
+            className={
+              styles.emptyIcon
+            }
+          >
+            📅
+          </div>
+
+          <h1>
+            No Club Assigned
+          </h1>
+
+          <p>
+            Choose a club before
+            managing fixtures and
+            matches.
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push(
+                '/club'
+              )
+            }
+          >
+            Choose a Club
+          </button>
+        </main>
+      </>
+    );
+  }
+
+
+  /* =======================================================
      RENDER
-  ======================================================= */
+======================================================= */
 
   return (
     <>
       <Head>
         <title>
-          Fixtures Centre | Virtual Football Manager
+          Fixtures |{' '}
+          {currentClub?.name ||
+            'Football Manager'}
         </title>
 
         <meta
           name="description"
-          content="Manage fixtures, league schedules, results, preseason friendlies and transfer windows."
+          content="Manage league fixtures, match days, friendlies and your club's football calendar."
         />
       </Head>
+
 
       <main
         className={
@@ -2177,10 +1517,19 @@ export default function FixturesPage({
 
             <div
               className={
-                styles.headerIcon
+                styles.clubLogo
               }
             >
-              📅
+              {currentClub?.logo ? (
+                <img
+                  src={
+                    currentClub.logo
+                  }
+                  alt=""
+                />
+              ) : (
+                '⚽'
+              )}
             </div>
 
             <div>
@@ -2189,25 +1538,15 @@ export default function FixturesPage({
                   styles.eyebrow
                 }
               >
-                MATCH CENTRE
+                FOOTBALL CALENDAR
               </span>
 
               <h1>
-                Fixtures & Calendar
+                Fixtures
               </h1>
 
               <p>
-                {currentClub
-                  ? `${getTeamName(
-                      currentClub
-                    )} • ${
-                      currentLeague
-                        ? getLeagueName(
-                            currentLeague
-                          )
-                        : 'No League'
-                    }`
-                  : 'Football Calendar'}
+                {currentClub?.name}
               </p>
             </div>
 
@@ -2216,28 +1555,50 @@ export default function FixturesPage({
 
           <div
             className={
-              styles.currentDate
+              styles.headerStats
             }
           >
-            <span>
-              CAREER DATE
-            </span>
 
-            <strong>
-              {formatDate(
-                currentDate
-              )}
-            </strong>
+            <div>
+              <span>
+                TOTAL
+              </span>
+
+              <strong>
+                {totalCount}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                PLAYED
+              </span>
+
+              <strong>
+                {completedCount}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                UPCOMING
+              </span>
+
+              <strong>
+                {upcomingCount}
+              </strong>
+            </div>
+
           </div>
 
         </header>
 
 
         {/* =================================================
-            NEXT MATCH
+            NEXT MATCH HERO
         ================================================= */}
 
-        {nextMatch && (
+        {nextUserMatch && (
           <section
             className={
               styles.nextMatchCard
@@ -2249,6 +1610,7 @@ export default function FixturesPage({
                 styles.nextMatchTop
               }
             >
+
               <div>
                 <span
                   className={
@@ -2259,21 +1621,37 @@ export default function FixturesPage({
                 </span>
 
                 <h2>
-                  {nextMatch.competition ||
-                    nextMatch.leagueName ||
-                    'Fixture'}
+                  {getCompetitionName(
+                    nextUserMatch
+                  )}
                 </h2>
+
+                <p>
+                  {formatLongDate(
+                    getMatchDateKey(
+                      nextUserMatch
+                    )
+                  )}
+                  {' • '}
+                  {getKickoffTime(
+                    nextUserMatch
+                  )}
+                </p>
               </div>
 
               <span
                 className={
-                  styles.nextBadge
+                  styles.nextMatchType
                 }
               >
-                {formatShortDate(
-                  nextMatch.date
-                )}
+                {getCompetitionType(
+                  nextUserMatch
+                ) ===
+                'friendly'
+                  ? 'FRIENDLY'
+                  : 'COMPETITIVE'}
               </span>
+
             </div>
 
 
@@ -2288,43 +1666,44 @@ export default function FixturesPage({
                   styles.nextTeam
                 }
               >
+
                 <div
                   className={
-                    styles.teamBadge
+                    styles.nextLogo
                   }
                 >
-                  ⚽
+                  {getTeamLogo(
+                    nextUserMatch,
+                    true
+                  ) ? (
+                    <img
+                      src={getTeamLogo(
+                        nextUserMatch,
+                        true
+                      )}
+                      alt=""
+                    />
+                  ) : (
+                    '⚽'
+                  )}
                 </div>
 
                 <strong>
-                  {nextMatch.homeClubName}
+                  {getTeamName(
+                    nextUserMatch,
+                    true
+                  )}
                 </strong>
 
-                <span>
-                  HOME
-                </span>
               </div>
 
 
               <div
                 className={
-                  styles.nextMiddle
+                  styles.vs
                 }
               >
-                <span>
-                  {formatTime(
-                    nextMatch.date
-                  )}
-                </span>
-
-                <strong>
-                  VS
-                </strong>
-
-                <small>
-                  {nextMatch.stadium ||
-                    'Stadium TBA'}
-                </small>
+                VS
               </div>
 
 
@@ -2333,21 +1712,35 @@ export default function FixturesPage({
                   styles.nextTeam
                 }
               >
+
                 <div
                   className={
-                    styles.teamBadge
+                    styles.nextLogo
                   }
                 >
-                  ⚽
+                  {getTeamLogo(
+                    nextUserMatch,
+                    false
+                  ) ? (
+                    <img
+                      src={getTeamLogo(
+                        nextUserMatch,
+                        false
+                      )}
+                      alt=""
+                    />
+                  ) : (
+                    '⚽'
+                  )}
                 </div>
 
                 <strong>
-                  {nextMatch.awayClubName}
+                  {getTeamName(
+                    nextUserMatch,
+                    false
+                  )}
                 </strong>
 
-                <span>
-                  AWAY
-                </span>
               </div>
 
             </div>
@@ -2355,30 +1748,24 @@ export default function FixturesPage({
 
             <div
               className={
-                styles.nextActions
+                styles.nextMatchFooter
               }
             >
 
-              {new Date(
-                nextMatch.date
-              ).getTime() >
-                currentDate.getTime() ? (
-                <button
-                  type="button"
-                  className={
-                    styles.advanceButton
-                  }
-                  onClick={
-                    advanceDay
-                  }
-                >
-                  <span>
-                    ▶
-                  </span>
+              <span>
+                🏟️{' '}
+                {getStadium(
+                  nextUserMatch
+                )}
+              </span>
 
-                  Advance to Next Day
-                </button>
-              ) : (
+
+              {getMatchState(
+                nextUserMatch,
+                gameDate
+              ) ===
+                'ready' ? (
+
                 <button
                   type="button"
                   className={
@@ -2386,115 +1773,226 @@ export default function FixturesPage({
                   }
                   onClick={() =>
                     playMatch(
-                      nextMatch
+                      nextUserMatch
                     )
                   }
                 >
-                  ⚽ Play Match
+                  ▶ Play Match
+                </button>
+
+              ) : (
+                <button
+                  type="button"
+                  className={
+                    styles.advanceButton
+                  }
+                  disabled={
+                    !canAdvance ||
+                    advancing
+                  }
+                  onClick={
+                    handleAdvanceDay
+                  }
+                >
+                  ⏭ Next Day
                 </button>
               )}
 
             </div>
+
+
+            {blockingMatch && (
+              <div
+                className={
+                  styles.blockNotice
+                }
+              >
+                🔒 You cannot advance until
+                this match is played.
+              </div>
+            )}
 
           </section>
         )}
 
 
         {/* =================================================
-            TRANSFER WINDOWS
+            GAME DATE CONTROL
         ================================================= */}
 
         <section
           className={
-            styles.transferPanel
+            styles.calendarControl
           }
         >
 
-          <div>
-            <span
-              className={
-                styles.eyebrow
-              }
-            >
-              TRANSFERS
-            </span>
-
-            <h2>
-              Transfer Windows
-            </h2>
-
-            <p>
-              The system controls when clubs
-              can buy, sell and negotiate.
-            </p>
-          </div>
-
-
-          <div
-            className={
-              styles.transferWindows
+          <button
+            type="button"
+            onClick={
+              handlePreviousDay
+            }
+            disabled={
+              advancing
             }
           >
+            ‹
+          </button>
 
-            {transferWindows.map(
-              (window) => (
-                <div
-                  key={
-                    window.id
-                  }
-                  className={
-                    activeTransferWindow?.id ===
-                    window.id
-                      ? styles.transferWindowActive
-                      : styles.transferWindow
-                  }
-                >
-                  <span>
-                    {window.id ===
-                    'summer'
-                      ? '☀️'
-                      : '❄️'}
-                  </span>
 
-                  <div>
-                    <strong>
-                      {window.name}
-                    </strong>
+          <div>
+            <span>
+              CURRENT GAME DATE
+            </span>
 
-                    <small>
-                      {formatShortDate(
-                        window.start
-                      )}{' '}
-                      -
-                      {' '}
-                      {formatShortDate(
-                        window.end
-                      )}
-                    </small>
-                  </div>
-
-                  {activeTransferWindow?.id ===
-                    window.id && (
-                    <b>
-                      OPEN
-                    </b>
-                  )}
-                </div>
-              )
-            )}
-
+            <strong>
+              {formatLongDate(
+                gameDate
+              )}
+            </strong>
           </div>
+
+
+          <button
+            type="button"
+            disabled={
+              !canAdvance ||
+              advancing
+            }
+            onClick={
+              handleAdvanceDay
+            }
+          >
+            {advancing
+              ? '...'
+              : '›'}
+          </button>
 
         </section>
 
 
         {/* =================================================
-            LEAGUES
+            FILTER BAR
         ================================================= */}
 
         <section
           className={
-            styles.leaguesSection
+            styles.filters
+          }
+        >
+
+          <div
+            className={
+              styles.viewTabs
+            }
+          >
+
+            <button
+              type="button"
+              className={
+                activeView ===
+                'all'
+                  ? styles.active
+                  : ''
+              }
+              onClick={() =>
+                setActiveView(
+                  'all'
+                )
+              }
+            >
+              All Fixtures
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeView ===
+                'my-team'
+                  ? styles.active
+                  : ''
+              }
+              onClick={() =>
+                setActiveView(
+                  'my-team'
+                )
+              }
+            >
+              My Club
+            </button>
+
+          </div>
+
+
+          <select
+            value={
+              selectedCompetition
+            }
+            onChange={(event) =>
+              setSelectedCompetition(
+                event.target.value
+              )
+            }
+          >
+            <option value="all">
+              All Competitions
+            </option>
+
+            {competitions.map(
+              (competition) => (
+                <option
+                  key={
+                    competition.id
+                  }
+                  value={
+                    competition.id
+                  }
+                >
+                  {competition.name}
+                </option>
+              )
+            )}
+
+          </select>
+
+
+          <input
+            type="date"
+            value={
+              selectedDate
+            }
+            onChange={(event) =>
+              setSelectedDate(
+                event.target.value
+              )
+            }
+          />
+
+          {selectedDate && (
+            <button
+              type="button"
+              className={
+                styles.clearDate
+              }
+              onClick={() =>
+                setSelectedDate(
+                  ''
+                )
+              }
+            >
+              Clear
+            </button>
+          )}
+
+        </section>
+
+
+        {/* =================================================
+            TODAY
+        ================================================= */}
+
+        <section
+          className={
+            styles.todaySection
           }
         >
 
@@ -2504,299 +2002,303 @@ export default function FixturesPage({
             }
           >
             <div>
-              <span
-                className={
-                  styles.eyebrow
-                }
-              >
-                COMPETITIONS
+              <span>
+                GAME DAY
               </span>
 
               <h2>
-                Leagues
+                {formatLongDate(
+                  gameDate
+                )}
               </h2>
-
-              <p>
-                Browse every competition
-                and its fixtures.
-              </p>
             </div>
 
-            <span
-              className={
-                styles.countBadge
-              }
-            >
-              {leagues.length}
-              {' '}
-              leagues
-            </span>
+            <strong>
+              {todayMatches.length}{' '}
+              match
+              {todayMatches.length ===
+              1
+                ? ''
+                : 'es'}
+            </strong>
           </div>
 
 
-          <div
-            className={
-              styles.leagueCards
-            }
-          >
+          {todayMatches.length >
+          0 ? (
 
-            <button
-              type="button"
+            <div
               className={
-                selectedLeague ===
-                'all'
-                  ? styles.leagueCardActive
-                  : styles.leagueCard
+                styles.todayGrid
               }
-              onClick={() =>
-                setSelectedLeague(
-                  'all'
-                )
+            >
+
+              {todayMatches.map(
+                (match) => {
+
+                  const state =
+                    getMatchState(
+                      match,
+                      gameDate
+                    );
+
+                  const userIsHome =
+                    getTeamId(
+                      match,
+                      true
+                    ) ===
+                    currentClubId;
+
+                  return (
+                    <article
+                      key={
+                        match.id
+                      }
+                      className={
+                        `${styles.todayMatch} ${
+                          state ===
+                          'ready'
+                            ? styles.readyMatch
+                            : ''
+                        }`
+                      }
+                    >
+
+                      <div
+                        className={
+                          styles.matchMeta
+                        }
+                      >
+                        <span>
+                          {getCompetitionName(
+                            match
+                          )}
+                        </span>
+
+                        <strong>
+                          {getKickoffTime(
+                            match
+                          )}
+                        </strong>
+                      </div>
+
+
+                      <div
+                        className={
+                          styles.matchTeams
+                        }
+                      >
+
+                        <div>
+                          <div
+                            className={
+                              styles.smallLogo
+                            }
+                          >
+                            {getTeamLogo(
+                              match,
+                              true
+                            ) ? (
+                              <img
+                                src={getTeamLogo(
+                                  match,
+                                  true
+                                )}
+                                alt=""
+                              />
+                            ) : (
+                              '⚽'
+                            )}
+                          </div>
+
+                          <strong>
+                            {getTeamName(
+                              match,
+                              true
+                            )}
+                          </strong>
+                        </div>
+
+
+                        <span>
+                          VS
+                        </span>
+
+
+                        <div>
+                          <div
+                            className={
+                              styles.smallLogo
+                            }
+                          >
+                            {getTeamLogo(
+                              match,
+                              false
+                            ) ? (
+                              <img
+                                src={getTeamLogo(
+                                  match,
+                                  false
+                                )}
+                                alt=""
+                              />
+                            ) : (
+                              '⚽'
+                            )}
+                          </div>
+
+                          <strong>
+                            {getTeamName(
+                              match,
+                              false
+                            )}
+                          </strong>
+                        </div>
+
+                      </div>
+
+
+                      <div
+                        className={
+                          styles.matchVenue
+                        }
+                      >
+                        🏟️{' '}
+                        {getStadium(
+                          match
+                        )}
+                      </div>
+
+
+                      <div
+                        className={
+                          styles.todayAction
+                        }
+                      >
+
+                        {state ===
+                          'ready' && (
+                          <button
+                            type="button"
+                            className={
+                              styles.playButton
+                            }
+                            onClick={() =>
+                              playMatch(
+                                match
+                              )
+                            }
+                          >
+                            ▶ Play Match
+                          </button>
+                        )}
+
+                        {state ===
+                          'today' && (
+                          <span
+                            className={
+                              styles.waiting
+                            }
+                          >
+                            Match starts at{' '}
+                            {getKickoffTime(
+                              match
+                            )}
+                          </span>
+                        )}
+
+                        {state ===
+                          'completed' && (
+                          <button
+                            type="button"
+                            className={
+                              styles.resultButton
+                            }
+                            onClick={() =>
+                              router.push(
+                                `/match/${match.id}`
+                              )
+                            }
+                          >
+                            Result
+                          </button>
+                        )}
+
+                      </div>
+
+                    </article>
+                  );
+                }
+              )}
+
+            </div>
+
+          ) : (
+
+            <div
+              className={
+                styles.noMatches
               }
             >
               <span>
-                🌍
+                📅
               </span>
 
-              <div>
-                <strong>
-                  All Leagues
-                </strong>
+              <p>
+                No matches scheduled
+                for this day.
+              </p>
 
-                <small>
-                  {fixtures.length}
-                  {' '}
-                  fixtures
-                </small>
-              </div>
-            </button>
+              <button
+                type="button"
+                disabled={
+                  !canAdvance ||
+                  advancing
+                }
+                onClick={
+                  handleAdvanceDay
+                }
+              >
+                ⏭ Advance Day
+              </button>
+            </div>
 
-
-            {leagues.map(
-              (league) => {
-                const leagueId =
-                  getLeagueId(
-                    league
-                  );
-
-                const count =
-                  fixtures.filter(
-                    (fixture) =>
-                      String(
-                        fixture.leagueId
-                      ) ===
-                      String(
-                        leagueId
-                      )
-                  ).length;
-
-                const isCurrent =
-                  String(
-                    leagueId
-                  ) ===
-                  String(
-                    currentLeagueId
-                  );
-
-                return (
-                  <button
-                    type="button"
-                    key={
-                      leagueId
-                    }
-                    className={
-                      String(
-                        selectedLeague
-                      ) ===
-                        String(
-                          leagueId
-                        )
-                        ? styles.leagueCardActive
-                        : styles.leagueCard
-                    }
-                    onClick={() =>
-                      setSelectedLeague(
-                        leagueId
-                      )
-                    }
-                  >
-
-                    <div
-                      className={
-                        styles.leagueLogo
-                      }
-                    >
-                      {league.logo ? (
-                        <img
-                          src={
-                            league.logo
-                          }
-                          alt=""
-                        />
-                      ) : (
-                        '🏆'
-                      )}
-                    </div>
-
-                    <div>
-                      <strong>
-                        {getLeagueName(
-                          league
-                        )}
-                      </strong>
-
-                      <small>
-                        {getLeagueCountry(
-                          league
-                        ) ||
-                          'International'}
-                      </small>
-                    </div>
-
-                    {isCurrent && (
-                      <b>
-                        YOUR LEAGUE
-                      </b>
-                    )}
-
-                  </button>
-                );
-              }
-            )}
-
-          </div>
+          )}
 
         </section>
 
 
         {/* =================================================
-            CALENDAR
+            FIXTURE LIST
         ================================================= */}
 
         <section
           className={
-            styles.calendarSection
+            styles.fixtureSection
           }
         >
 
           <div
             className={
-              styles.calendarHeader
+              styles.sectionHeading
             }
           >
-
-            <button
-              type="button"
-              onClick={() =>
-                setCalendarDate(
-                  (date) =>
-                    addDays(
-                      date,
-                      -1
-                    )
-                )
-              }
-            >
-              ‹
-            </button>
 
             <div>
               <span>
-                MATCH DAY
+                MATCH CALENDAR
               </span>
 
-              <strong>
-                {formatDate(
-                  calendarDate
-                )}
-              </strong>
+              <h2>
+                Fixtures
+              </h2>
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                setCalendarDate(
-                  (date) =>
-                    addDays(
-                      date,
-                      1
-                    )
-                )
-              }
-            >
-              ›
-            </button>
+            <strong>
+              {filteredFixtures.length}{' '}
+              fixtures
+            </strong>
 
-          </div>
-
-
-          <div
-            className={
-              styles.calendarStrip
-            }
-          >
-            {[-2, -1, 0, 1, 2].map(
-              (offset) => {
-                const date =
-                  addDays(
-                    calendarDate,
-                    offset
-                  );
-
-                const active =
-                  dateKey(
-                    date
-                  ) ===
-                  dateKey(
-                    calendarDate
-                  );
-
-                return (
-                  <button
-                    type="button"
-                    key={
-                      dateKey(
-                        date
-                      )
-                    }
-                    className={
-                      active
-                        ? styles.dayActive
-                        : styles.day
-                    }
-                    onClick={() =>
-                      setCalendarDate(
-                        date
-                      )
-                    }
-                  >
-                    <small>
-                      {date.toLocaleDateString(
-                        'en-US',
-                        {
-                          weekday:
-                            'short',
-                        }
-                      )}
-                    </small>
-
-                    <strong>
-                      {date.getDate()}
-                    </strong>
-
-                    <span>
-                      {date.toLocaleDateString(
-                        'en-US',
-                        {
-                          month:
-                            'short',
-                        }
-                      )}
-                    </span>
-                  </button>
-                );
-              }
-            )}
           </div>
 
 
@@ -2806,45 +2308,90 @@ export default function FixturesPage({
             }
           >
 
-            {calendarFixtures.length >
+            {filteredFixtures.length >
             0 ? (
-              calendarFixtures.map(
-                (fixture) => {
 
-                  const status =
-                    getFixtureStatus(
-                      fixture,
-                      currentDate
+              filteredFixtures.map(
+                (match) => {
+
+                  const state =
+                    getMatchState(
+                      match,
+                      gameDate
                     );
+
+                  const homeId =
+                    getTeamId(
+                      match,
+                      true
+                    );
+
+                  const awayId =
+                    getTeamId(
+                      match,
+                      false
+                    );
+
+                  const isMyMatch =
+                    homeId ===
+                      currentClubId ||
+                    awayId ===
+                      currentClubId;
 
                   return (
                     <article
                       key={
-                        fixture.id
+                        match.id
                       }
                       className={
-                        styles.fixtureCard
+                        `${styles.fixtureCard} ${
+                          isMyMatch
+                            ? styles.myFixture
+                            : ''
+                        }`
                       }
                     >
 
                       <div
                         className={
-                          styles.fixtureMeta
+                          styles.fixtureDate
+                        }
+                      >
+                        <strong>
+                          {formatShortDate(
+                            getMatchDateKey(
+                              match
+                            )
+                          )}
+                        </strong>
+
+                        <span>
+                          {formatLongDate(
+                            getMatchDateKey(
+                              match
+                            )
+                          ).split(
+                            ','
+                          )[0]}
+                        </span>
+                      </div>
+
+
+                      <div
+                        className={
+                          styles.fixtureCompetition
                         }
                       >
                         <span>
-                          {fixture.leagueName ||
-                            fixture.competition}
+                          {getCompetitionName(
+                            match
+                          )}
                         </span>
 
                         <small>
-                          {fixture.type ===
-                          'friendly'
-                            ? 'FRIENDLY'
-                            : `ROUND ${
-                                fixture.round ||
-                                '-'
-                              }`}
+                          {getCompetitionType(
+                            match
+                          )}
                         </small>
                       </div>
 
@@ -2855,108 +2402,195 @@ export default function FixturesPage({
                         }
                       >
 
-                        <strong>
-                          {fixture.homeClubName}
-                        </strong>
-
-                        <div
-                          className={
-                            styles.fixtureScore
-                          }
-                        >
-                          {status ===
-                            'finished' ? (
-                            <>
-                              <b>
-                                {
-                                  fixture.homeScore
-                                }
-                              </b>
-
-                              <span>
-                                -
-                              </span>
-
-                              <b>
-                                {
-                                  fixture.awayScore
-                                }
-                              </b>
-                            </>
+                        <div>
+                          {getTeamLogo(
+                            match,
+                            true
+                          ) ? (
+                            <img
+                              src={getTeamLogo(
+                                match,
+                                true
+                              )}
+                              alt=""
+                            />
                           ) : (
-                            <>
-                              <span>
-                                {formatTime(
-                                  fixture.date
-                                )}
-                              </span>
-
-                              <small>
-                                VS
-                              </small>
-                            </>
+                            '⚽'
                           )}
+
+                          <strong>
+                            {getTeamName(
+                              match,
+                              true
+                            )}
+                          </strong>
                         </div>
 
-                        <strong>
-                          {fixture.awayClubName}
-                        </strong>
+
+                        <span className={
+                          styles.fixtureVs
+                        }>
+                          VS
+                        </span>
+
+
+                        <div>
+                          {getTeamLogo(
+                            match,
+                            false
+                          ) ? (
+                            <img
+                              src={getTeamLogo(
+                                match,
+                                false
+                              )}
+                              alt=""
+                            />
+                          ) : (
+                            '⚽'
+                          )}
+
+                          <strong>
+                            {getTeamName(
+                              match,
+                              false
+                            )}
+                          </strong>
+                        </div>
 
                       </div>
 
 
                       <div
                         className={
-                          styles.fixtureFooter
+                          styles.fixtureTime
                         }
                       >
+                        <strong>
+                          {getKickoffTime(
+                            match
+                          )}
+                        </strong>
+
                         <span>
                           🏟️{' '}
-                          {fixture.stadium ||
-                            'Stadium TBA'}
-                        </span>
-
-                        <span>
-                          {formatDate(
-                            fixture.date
+                          {getStadium(
+                            match
                           )}
                         </span>
+                      </div>
 
-                        {status ===
-                          'finished' ? (
-                          <b
-                            className={
-                              styles.resultBadge
-                            }
-                          >
-                            RESULT
-                          </b>
-                        ) : isUserFixture(
-                            fixture,
-                            currentClubId
-                          ) &&
-                          status ===
-                            'ready' ? (
+
+                      <div
+                        className={
+                          styles.fixtureStatus
+                        }
+                      >
+
+                        {state ===
+                          'completed' && (
+                          <>
+                            <span
+                              className={
+                                styles.completed
+                              }
+                            >
+                              {getResult(
+                                match
+                              )}
+                            </span>
+
+                            {isMyMatch && (
+                              <button
+                                type="button"
+                                className={
+                                  styles.resultButton
+                                }
+                                onClick={() =>
+                                  router.push(
+                                    `/match/${match.id}`
+                                  )
+                                }
+                              >
+                                Result
+                              </button>
+                            )}
+                          </>
+                        )}
+
+
+                        {state ===
+                          'ready' &&
+                          isMyMatch && (
                           <button
                             type="button"
                             className={
-                              styles.smallPlay
+                              styles.playButton
                             }
                             onClick={() =>
                               playMatch(
-                                fixture
+                                match
                               )
                             }
                           >
-                            PLAY MATCH
+                            ▶ Play Match
                           </button>
-                        ) : (
+                        )}
+
+
+                        {state ===
+                          'today' && (
                           <span
                             className={
-                              styles.scheduledBadge
+                              styles.upcoming
                             }
                           >
-                            SCHEDULED
+                            {getKickoffTime(
+                              match
+                            )}
+                          </span>
+                        )}
+
+
+                        {state ===
+                          'future' && (
+                          <span
+                            className={
+                              styles.future
+                            }
+                          >
+                            Upcoming
+                          </span>
+                        )}
+
+
+                        {state ===
+                          'overdue' &&
+                          isMyMatch && (
+                          <button
+                            type="button"
+                            className={
+                              styles.playButton
+                            }
+                            onClick={() =>
+                              playMatch(
+                                match
+                              )
+                            }
+                          >
+                            ▶ Play Match
+                          </button>
+                        )}
+
+
+                        {state ===
+                          'postponed' && (
+                          <span
+                            className={
+                              styles.postponed
+                            }
+                          >
+                            Postponed
                           </span>
                         )}
 
@@ -2966,25 +2600,28 @@ export default function FixturesPage({
                   );
                 }
               )
+
             ) : (
+
               <div
                 className={
                   styles.noFixtures
                 }
               >
                 <span>
-                  📅
+                  📭
                 </span>
 
                 <h3>
-                  No fixtures today
+                  No fixtures found
                 </h3>
 
                 <p>
-                  No match was scheduled
-                  for this date.
+                  There are no fixtures
+                  matching your filters.
                 </p>
               </div>
+
             )}
 
           </div>
@@ -2993,458 +2630,106 @@ export default function FixturesPage({
 
 
         {/* =================================================
-            MY CLUB FIXTURES
+            ADVANCE DAY FOOTER
         ================================================= */}
 
         <section
           className={
-            styles.myFixtures
+            styles.advanceSection
           }
         >
 
-          <div
-            className={
-              styles.sectionHeading
-            }
-          >
-            <div>
-              <span
-                className={
-                  styles.eyebrow
-                }
-              >
-                YOUR CLUB
-              </span>
-
-              <h2>
-                Upcoming Fixtures
-              </h2>
-            </div>
-
-            <span
-              className={
-                styles.countBadge
-              }
-            >
-              {userFixtures.length}
-              {' '}
-              matches
-            </span>
-          </div>
-
-
-          <div
-            className={
-              styles.upcomingGrid
-            }
-          >
-
-            {userFixtures
-              .filter(
-                (fixture) =>
-                  new Date(
-                    fixture.date
-                  ).getTime() >=
-                  currentDate.getTime()
-              )
-              .slice(
-                0,
-                8
-              )
-              .map(
-                (fixture) => {
-
-                  const home =
-                    String(
-                      fixture.homeClubId
-                    ) ===
-                    String(
-                      currentClubId
-                    );
-
-                  return (
-                    <div
-                      key={
-                        fixture.id
-                      }
-                      className={
-                        styles.upcomingCard
-                      }
-                    >
-
-                      <div>
-                        <small>
-                          {formatShortDate(
-                            fixture.date
-                          )}
-                        </small>
-
-                        <span>
-                          {fixture.leagueName ||
-                            fixture.competition}
-                        </span>
-                      </div>
-
-                      <strong>
-                        {home
-                          ? `vs ${fixture.awayClubName}`
-                          : `@ ${fixture.homeClubName}`}
-                      </strong>
-
-                      <span>
-                        {formatTime(
-                          fixture.date
-                        )}
-                        {' • '}
-                        {fixture.stadium ||
-                          'TBA'}
-                      </span>
-
-                    </div>
-                  );
-                }
-              )}
-
-          </div>
-
-        </section>
-
-
-        {/* =================================================
-            RESULTS
-        ================================================= */}
-
-        <section
-          className={
-            styles.resultsSection
-          }
-        >
-
-          <div
-            className={
-              styles.sectionHeading
-            }
-          >
-            <div>
-              <span
-                className={
-                  styles.eyebrow
-                }
-              >
-                MATCH HISTORY
-              </span>
-
-              <h2>
-                Recent Results
-              </h2>
-            </div>
-          </div>
-
-
-          <div
-            className={
-              styles.resultsList
-            }
-          >
-
-            {results.length >
-            0 ? (
-              results.map(
-                (fixture) => {
-
-                  const home =
-                    String(
-                      fixture.homeClubId
-                    ) ===
-                    String(
-                      currentClubId
-                    );
-
-                  const userScore =
-                    home
-                      ? safeNumber(
-                          fixture.homeScore
-                        )
-                      : safeNumber(
-                          fixture.awayScore
-                        );
-
-                  const opponentScore =
-                    home
-                      ? safeNumber(
-                          fixture.awayScore
-                        )
-                      : safeNumber(
-                          fixture.homeScore
-                        );
-
-                  const result =
-                    userScore >
-                    opponentScore
-                      ? 'W'
-                      : userScore <
-                        opponentScore
-                      ? 'L'
-                      : 'D';
-
-                  return (
-                    <div
-                      key={
-                        fixture.id
-                      }
-                      className={
-                        styles.resultRow
-                      }
-                    >
-
-                      <span
-                        className={
-                          result === 'W'
-                            ? styles.win
-                            : result === 'L'
-                            ? styles.loss
-                            : styles.draw
-                        }
-                      >
-                        {result}
-                      </span>
-
-                      <div>
-                        <strong>
-                          {home
-                            ? fixture.awayClubName
-                            : fixture.homeClubName}
-                        </strong>
-
-                        <small>
-                          {fixture.leagueName ||
-                            fixture.competition}
-                          {' • '}
-                          {formatShortDate(
-                            fixture.date
-                          )}
-                        </small>
-                      </div>
-
-                      <b>
-                        {userScore}
-                        {' - '}
-                        {opponentScore}
-                      </b>
-
-                    </div>
-                  );
-                }
-              )
-            ) : (
-              <div
-                className={
-                  styles.emptyResults
-                }
-              >
-                No completed matches yet.
-              </div>
-            )}
-
-          </div>
-
-        </section>
-
-
-        {/* =================================================
-            PRESEASON
-        ================================================= */}
-
-        <section
-          className={
-            styles.preseason
-          }
-        >
-
-          <div>
-            <span
-              className={
-                styles.eyebrow
-              }
-            >
-              PRE-SEASON
-            </span>
-
-            <h2>
-              Friendly Matches
-            </h2>
-
-            <p>
-              Prepare your squad before the
-              league campaign begins.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            className={
-              styles.primaryButton
-            }
-            onClick={() =>
-              setShowFriendly(
-                true
-              )
-            }
-          >
-            + Schedule Friendly
-          </button>
-
-        </section>
-
-
-        {/* =================================================
-            FRIENDLY MODAL
-        ================================================= */}
-
-        {showFriendly && (
-          <div
-            className={
-              styles.modalOverlay
-            }
-            onClick={() =>
-              setShowFriendly(
-                false
-              )
-            }
-          >
+          {blockingMatch ? (
 
             <div
               className={
-                styles.modal
-              }
-              onClick={(event) =>
-                event.stopPropagation()
+                styles.lockedAdvance
               }
             >
+
+              <div>
+                <span>
+                  🔒 MATCH DAY LOCKED
+                </span>
+
+                <strong>
+                  Play the scheduled match
+                  before continuing.
+                </strong>
+
+                <p>
+                  {
+                    getTeamName(
+                      blockingMatch,
+                      true
+                    )
+                  }
+                  {' '}
+                  vs{' '}
+                  {
+                    getTeamName(
+                      blockingMatch,
+                      false
+                    )
+                  }
+                </p>
+              </div>
+
 
               <button
                 type="button"
                 className={
-                  styles.close
+                  styles.playButton
                 }
                 onClick={() =>
-                  setShowFriendly(
-                    false
+                  playMatch(
+                    blockingMatch
                   )
                 }
               >
-                ×
+                ▶ Play Match
               </button>
 
-              <span
-                className={
-                  styles.eyebrow
-                }
-              >
-                PRE-SEASON
-              </span>
+            </div>
 
-              <h2>
-                Schedule Friendly
-              </h2>
+          ) : (
 
-              <p>
-                Arrange a warm-up match before
-                the competitive season starts.
-              </p>
+            <div
+              className={
+                styles.freeAdvance
+              }
+            >
 
+              <div>
+                <span>
+                  CALENDAR
+                </span>
 
-              <label>
-                Opponent
-
-                <select
-                  value={
-                    friendlyOpponent
-                  }
-                  onChange={(event) =>
-                    setFriendlyOpponent(
-                      event.target.value
-                    )
-                  }
-                >
-                  <option value="">
-                    Select opponent
-                  </option>
-
-                  {clubs
-                    .filter(
-                      (club) =>
-                        String(
-                          getClubId(
-                            club
-                          )
-                        ) !==
-                        String(
-                          currentClubId
-                        )
-                    )
-                    .map(
-                      (club) => (
-                        <option
-                          key={
-                            getClubId(
-                              club
-                            )
-                          }
-                          value={
-                            getClubId(
-                              club
-                            )
-                          }
-                        >
-                          {getTeamName(
-                            club
-                          )}
-                        </option>
-                      )
-                    )}
-                </select>
-              </label>
-
-
-              <label>
-                Match Date
-
-                <input
-                  type="date"
-                  value={
-                    friendlyDate
-                  }
-                  onChange={(event) =>
-                    setFriendlyDate(
-                      event.target.value
-                    )
-                  }
-                />
-              </label>
-
+                <strong>
+                  No pending match is
+                  blocking your career.
+                </strong>
+              </div>
 
               <button
                 type="button"
                 disabled={
-                  generating
-                }
-                className={
-                  styles.primaryButton
+                  advancing
                 }
                 onClick={
-                  createFriendly
+                  handleAdvanceDay
                 }
               >
-                {generating
-                  ? 'Scheduling...'
-                  : 'Schedule Match'}
+                {advancing
+                  ? 'Advancing...'
+                  : '⏭ Next Day'}
               </button>
 
             </div>
 
-          </div>
-        )}
+          )}
+
+        </section>
 
       </main>
     </>
