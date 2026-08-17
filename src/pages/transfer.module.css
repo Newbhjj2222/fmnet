@@ -1,1544 +1,2409 @@
-/* ============================================================
-   TRANSFER.MODULE.CSS
-   Dark theme · Responsive · Touch-friendly
-   All styles use class selectors only
-   Optimized for very small screens (320px+)
-   Disabled zoom & text selection for better UI control
-============================================================ */
+/* =========================================================
+   TRANSFER CENTRE
+   Responsive CSS Module
+========================================================= */
 
 .page {
-  /* ----- COLORS ----- */
-  --bg-primary: #0b0e14;
-  --bg-secondary: #131821;
-  --bg-card: #1a212c;
-  --bg-card-hover: #222b3a;
-  --bg-input: #0f141e;
-  --bg-modal: #11171f;
+  --bg: #070b12;
+  --bg-soft: #0b111a;
+  --panel: #0e1621;
+  --panel-2: #111b28;
+  --panel-3: #151f2c;
 
-  --text-primary: #f0f4f8;
-  --text-secondary: #a8b9d0;
-  --text-muted: #6a7f9a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.12);
 
-  --accent-blue: #4f8cff;
-  --accent-blue-glow: rgba(79, 140, 255, 0.25);
-  --accent-green: #2ecc71;
-  --accent-green-glow: rgba(46, 204, 113, 0.2);
-  --accent-yellow: #f1c40f;
-  --accent-yellow-glow: rgba(241, 196, 15, 0.2);
-  --accent-red: #e74c3c;
-  --accent-red-glow: rgba(231, 76, 60, 0.2);
-  --accent-orange: #f39c12;
-  --accent-purple: #9b59b6;
+  --text: #eef3f8;
+  --text-soft: #aab5c2;
+  --text-muted: #718096;
 
-  --border-color: #2a3444;
-  --shadow-color: rgba(0, 0, 0, 0.6);
+  --primary: #4ade80;
+  --primary-dark: #22c55e;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  --blue: #60a5fa;
+  --cyan: #22d3ee;
+  --yellow: #fbbf24;
+  --orange: #fb923c;
+  --red: #f87171;
+  --purple: #a78bfa;
 
-  --transition: 0.25s ease;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-
-  /* Disable zoom and text selection */
-  touch-action: pan-x pan-y;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-
-  font-family: var(--font-sans);
-  background: var(--bg-primary);
-  color: var(--text-primary);
   min-height: 100vh;
-  padding: 1rem 0.8rem 3rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  padding: 28px;
+  color: var(--text);
+  background:
+    radial-gradient(
+      circle at 10% 0%,
+      rgba(34, 197, 94, 0.08),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(96, 165, 250, 0.06),
+      transparent 25%
+    ),
+    var(--bg);
+
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
-/* Allow text selection in inputs and textareas */
-.page .inputField,
-.page .textAreaField,
-.page .contentEditable {
-  -webkit-user-select: text;
-  user-select: text;
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
 }
 
-/* ----- SCROLLBAR (subtle) ----- */
-.page::-webkit-scrollbar {
-  width: 4px;
-}
-.page::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-.page::-webkit-scrollbar-thumb {
-  background: var(--accent-blue);
-  border-radius: 10px;
-}
-.page::-webkit-scrollbar-thumb:hover {
-  background: #3a7be0;
+.page button,
+.page input,
+.page select {
+  font: inherit;
 }
 
-/* ============================================================
+.page button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.page img {
+  max-width: 100%;
+  display: block;
+}
+
+
+/* =========================================================
    LOADING
-============================================================ */
-.page .loadingContainer {
+========================================================= */
+
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 80vh;
-  gap: 1.5rem;
-  text-align: center;
-}
-.page .loadingText {
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  letter-spacing: 0.3px;
+  gap: 16px;
+  padding: 24px;
+  color: var(--text-soft);
+  background: var(--bg);
 }
 
-.page .spinner {
-  width: 56px;
-  height: 56px;
+.loading p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid rgba(255, 255, 255, 0.08);
+  border-top-color: var(--primary);
   border-radius: 50%;
-  border: 4px solid var(--border-color);
-  border-top-color: var(--accent-blue);
-  animation: spin 0.85s linear infinite;
-  box-shadow: 0 0 24px var(--accent-blue-glow);
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* ============================================================
-   EMPTY STATE (no club)
-============================================================ */
-.page .emptyPage {
+
+/* =========================================================
+   EMPTY PAGE
+========================================================= */
+
+.emptyPage {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  padding: 30px 20px;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 70vh;
+
   text-align: center;
-  gap: 1rem;
-  padding: 1rem;
-}
-.page .emptyIcon {
-  font-size: 4.5rem;
-  filter: drop-shadow(0 0 32px var(--accent-yellow-glow));
-}
-.page .emptyTitle {
-  font-size: 2rem;
-  font-weight: 800;
-  margin: 0.2rem 0;
-}
-.page .emptyDescription {
-  color: var(--text-secondary);
-  font-size: 1.05rem;
-  max-width: 400px;
-}
-.page .emptyButton {
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.7rem 2.2rem;
-  font-weight: 700;
-  font-size: 1rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition), transform var(--transition);
-  min-height: 44px;
-}
-.page .emptyButton:hover {
-  background: #3a7be0;
-  transform: scale(1.03);
+  color: var(--text);
+  background: var(--bg);
 }
 
-/* ============================================================
+.emptyIcon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 20px;
+
+  border: 1px solid var(--border-light);
+  border-radius: 22px;
+
+  background: var(--panel);
+  font-size: 34px;
+}
+
+.emptyPage h1 {
+  margin: 0 0 10px;
+  font-size: clamp(24px, 4vw, 36px);
+}
+
+.emptyPage p {
+  max-width: 500px;
+  margin: 0 0 24px;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.emptyPage button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 20px;
+
+  color: #041009;
+  background: var(--primary);
+
+  font-weight: 800;
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.emptyPage button:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
    HEADER
-============================================================ */
-.page .header {
+========================================================= */
+
+.header {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto 22px;
+
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  padding: 1.2rem 1.5rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-  gap: 1rem;
+  gap: 24px;
+
+  padding: 22px 24px;
+
+  border: 1px solid var(--border);
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.035),
+      rgba(255, 255, 255, 0.012)
+    );
+
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.18);
 }
 
-.page .headerLeft {
+.headerLeft {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex: 1 1 200px;
+  gap: 15px;
 }
 
-.page .clubLogo {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--bg-input);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8rem;
+.clubLogo {
+  flex: 0 0 auto;
+
+  width: 58px;
+  height: 58px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid var(--border-light);
+  border-radius: 15px;
+
+  background: var(--panel-2);
+
+  color: var(--text);
+  font-size: 27px;
   overflow: hidden;
-  border: 1px solid var(--border-color);
-  flex-shrink: 0;
 }
-.page .clubLogo img {
+
+.clubLogo img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
-.page .eyebrow {
-  display: inline-block;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--accent-blue);
-  background: rgba(79, 140, 255, 0.12);
-  padding: 0.2rem 0.8rem;
-  border-radius: 40px;
-  margin-bottom: 0.2rem;
-}
-
-.page .headerTitle {
-  font-size: 1.5rem;
-  font-weight: 800;
-  margin: 0 0 0.1rem;
-}
-.page .headerSubtitle {
-  color: var(--text-secondary);
-  margin: 0;
-  font-weight: 500;
-  font-size: 0.9rem;
-}
-
-.page .budgetPanel {
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  flex: 1 1 auto;
-  justify-content: flex-end;
-}
-.page .budgetPanel > div {
-  text-align: right;
-}
-.page .budgetPanel span {
+.eyebrow {
   display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-}
-.page .budgetPanel strong {
-  font-size: 1.2rem;
+  margin-bottom: 5px;
+
+  color: var(--primary);
+
+  font-size: 10px;
+  line-height: 1.2;
   font-weight: 800;
-  color: var(--accent-green);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
-/* ============================================================
-   SUMMARY GRID
-============================================================ */
-.page .summaryGrid {
+.header h1 {
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: clamp(22px, 3vw, 32px);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.headerLeft p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.budgetPanel {
+  flex: 0 0 auto;
+
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.8rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(2, minmax(145px, 1fr));
+  gap: 10px;
 }
 
-.page .summaryCard {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 0.8rem 1rem;
-  border: 1px solid var(--border-color);
-  transition: background var(--transition);
+.budgetPanel > div {
+  min-width: 145px;
+
+  padding: 12px 15px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.025);
 }
-.page .summaryCard:hover {
-  background: var(--bg-card-hover);
-}
-.page .summaryCard > span {
-  font-size: 1.6rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.page .summaryCard small {
+
+.budgetPanel span {
   display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
+  margin-bottom: 5px;
+
   color: var(--text-muted);
-}
-.page .summaryCard strong {
-  display: block;
-  font-size: 1.3rem;
+
+  font-size: 9px;
   font-weight: 800;
-}
-.page .summaryCard p {
-  margin: 0;
-  font-size: 0.65rem;
-  color: var(--text-secondary);
+  letter-spacing: 0.08em;
 }
 
-/* ============================================================
-   GM BANNER
-============================================================ */
-.page .gmBanner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
-  border-radius: var(--radius-md);
-  padding: 1rem 1.5rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-}
-.page .gmAvatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.budgetPanel strong {
+  display: block;
+
+  color: var(--primary);
+
+  font-size: 17px;
   font-weight: 800;
-  font-size: 1.2rem;
-  color: #fff;
-  flex-shrink: 0;
 }
-.page .gmBanner div:not(:first-child) {
+
+
+/* =========================================================
+   SUMMARY
+========================================================= */
+
+.summaryGrid {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto 22px;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summaryCard {
+  min-width: 0;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+
+  padding: 17px;
+
+  border: 1px solid var(--border);
+  border-radius: 15px;
+
+  background: var(--panel);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.summaryCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-light);
+}
+
+.summaryCard > span {
+  flex: 0 0 auto;
+
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.05);
+
+  font-size: 18px;
+}
+
+.summaryCard > div {
+  min-width: 0;
+}
+
+.summaryCard small {
+  display: block;
+
+  color: var(--text-muted);
+
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.summaryCard strong {
+  display: block;
+
+  margin-top: 3px;
+
+  font-size: 25px;
+  line-height: 1.1;
+}
+
+.summaryCard p {
+  margin: 4px 0 0;
+
+  color: var(--text-soft);
+
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   GM BANNER
+========================================================= */
+
+.gmBanner {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto 22px;
+
+  display: flex;
+  align-items: center;
+  gap: 15px;
+
+  padding: 17px 19px;
+
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      120deg,
+      rgba(167, 139, 250, 0.09),
+      rgba(96, 165, 250, 0.035)
+    );
+}
+
+.gmAvatar {
+  flex: 0 0 auto;
+
+  width: 46px;
+  height: 46px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 13px;
+
+  color: #ddd6fe;
+  background: rgba(167, 139, 250, 0.14);
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.gmBanner > div:nth-child(2) {
+  min-width: 0;
   flex: 1;
 }
-.page .gmBanner span {
+
+.gmBanner span {
   display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-}
-.page .gmBanner strong {
-  display: block;
-  font-size: 1rem;
-}
-.page .gmBanner p {
-  margin: 0.1rem 0 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-}
-.page .gmBanner button {
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.5rem 1.5rem;
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition), transform var(--transition);
-  min-height: 40px;
-  white-space: nowrap;
-}
-.page .gmBanner button:hover {
-  background: #3a7be0;
-  transform: scale(1.02);
+  margin-bottom: 3px;
+
+  color: var(--purple);
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
 }
 
-/* ============================================================
+.gmBanner strong {
+  display: block;
+
+  color: var(--text);
+
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.gmBanner p {
+  margin: 3px 0 0;
+
+  color: var(--text-muted);
+
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.gmBanner button {
+  flex: 0 0 auto;
+
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 9px;
+
+  padding: 10px 13px;
+
+  color: #ddd6fe;
+  background: rgba(167, 139, 250, 0.1);
+
+  font-size: 11px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.gmBanner button:hover {
+  background: rgba(167, 139, 250, 0.17);
+}
+
+
+/* =========================================================
    TABS
-============================================================ */
-.page .tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-}
-.page .tabButton {
-  background: transparent;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 40px;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: inherit;
-  min-height: 40px;
-  white-space: nowrap;
-}
-.page .tabButton:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
-}
-.page .tabButtonActive {
-  background: var(--accent-blue);
-  color: #fff;
-  box-shadow: 0 0 16px var(--accent-blue-glow);
-}
-.page .tabButton b {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 40px;
-  padding: 0.05rem 0.6rem;
-  font-size: 0.7rem;
-}
+========================================================= */
 
-/* ============================================================
-   CONTENT CARD
-============================================================ */
-.page .contentCard {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
-
-.page .contentHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.2rem;
-  border-bottom: 1px solid var(--border-color);
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.page .contentHeader span {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-}
-.page .contentHeader h2 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin: 0.1rem 0 0;
-}
-.page .contentHeader p {
-  margin: 0.2rem 0 0;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.page .headerTools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-}
-.page .search {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--bg-input);
-  border-radius: 40px;
-  padding: 0 0.8rem;
-  border: 1px solid var(--border-color);
-  transition: border var(--transition), box-shadow var(--transition);
-  min-width: 160px;
-}
-.page .search:focus-within {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--accent-blue-glow);
-}
-.page .search span {
-  font-size: 0.9rem;
-  opacity: 0.6;
-}
-.page .search input {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  padding: 0.5rem 0;
+.tabs {
   width: 100%;
-  font-family: inherit;
-  min-height: 40px;
+  max-width: 1500px;
+  margin: 0 auto 18px;
+
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+
+  padding: 6px;
+
+  border: 1px solid var(--border);
+  border-radius: 13px;
+
+  background: var(--panel);
+
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
-.page .search input::placeholder {
+
+.tabs button {
+  flex: 0 0 auto;
+
+  min-height: 40px;
+
+  border: 0;
+  border-radius: 8px;
+
+  padding: 9px 14px;
+
+  color: var(--text-soft);
+  background: transparent;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  white-space: nowrap;
+
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.tabs button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tabs .activeTab {
+  color: #041009;
+  background: var(--primary);
+}
+
+.tabs button b {
+  display: inline-grid;
+  place-items: center;
+
+  min-width: 18px;
+  height: 18px;
+
+  margin-left: 5px;
+  padding: 0 5px;
+
+  border-radius: 20px;
+
+  color: #fff;
+  background: rgba(0, 0, 0, 0.25);
+
+  font-size: 9px;
+}
+
+
+/* =========================================================
+   CONTENT CARD
+========================================================= */
+
+.contentCard {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+
+  border: 1px solid var(--border);
+  border-radius: 17px;
+
+  background: var(--panel);
+
+  overflow: hidden;
+}
+
+.contentHeader {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+
+  padding: 21px 22px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.contentHeader > div:first-child {
+  min-width: 0;
+}
+
+.contentHeader > div:first-child > span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: var(--primary);
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.contentHeader h2 {
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.contentHeader p {
+  max-width: 700px;
+
+  margin: 6px 0 0;
+
+  color: var(--text-muted);
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.headerTools {
+  flex: 0 0 auto;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search {
+  width: 240px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 0 11px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: var(--bg-soft);
+
   color: var(--text-muted);
 }
 
-.page .filterSelect {
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 40px;
-  padding: 0.5rem 1rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
-  transition: border var(--transition), box-shadow var(--transition);
-  min-width: 120px;
-  min-height: 40px;
-}
-.page .filterSelect:focus {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--accent-blue-glow);
-}
-.page .filterSelect option {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+.search input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+
+  border: 0;
+  outline: 0;
+
+  color: var(--text);
+  background: transparent;
+
+  font-size: 11px;
 }
 
-/* ============================================================
-   TABLE (bids)
-============================================================ */
-.page .tableWrapper {
+.search input::placeholder {
+  color: #566273;
+}
+
+.headerTools select,
+.contractForm select {
+  min-height: 38px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  padding: 0 10px;
+
+  outline: none;
+
+  color: var(--text-soft);
+  background: var(--bg-soft);
+
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.headerTools select:focus,
+.contractForm select:focus,
+.search:focus-within {
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.tableWrapper {
+  width: 100%;
   overflow-x: auto;
-  padding: 0 0.2rem 0.2rem;
   -webkit-overflow-scrolling: touch;
 }
 
-.page .transferTable {
+.transferTable {
   width: 100%;
+  min-width: 850px;
+
   border-collapse: collapse;
-  font-size: 0.8rem;
-  min-width: 700px;
+
+  table-layout: auto;
 }
-.page .transferTable thead {
-  background: var(--bg-input);
-  border-bottom: 1px solid var(--border-color);
-}
-.page .transferTable th {
-  padding: 0.6rem 0.6rem;
-  text-align: left;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+
+.transferTable th {
+  padding: 12px 15px;
+
+  border-bottom: 1px solid var(--border);
+
   color: var(--text-muted);
+
+  background: rgba(255, 255, 255, 0.015);
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-align: left;
+  text-transform: uppercase;
+
   white-space: nowrap;
 }
-.page .transferTable td {
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--border-color);
+
+.transferTable td {
+  padding: 13px 15px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+
+  color: var(--text-soft);
+
+  font-size: 11px;
+
   vertical-align: middle;
 }
-.page .transferTable tr:hover td {
-  background: var(--bg-card-hover);
+
+.transferTable tbody tr {
+  transition: background 0.15s ease;
 }
 
-/* Player button inside table */
-.page .playerButton {
+.transferTable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.transferTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.playerButton,
+.clubButton {
+  border: 0;
+
+  padding: 0;
+
+  color: inherit;
+  background: transparent;
+
+  cursor: pointer;
+}
+
+.playerButton {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
+  gap: 10px;
+
   text-align: left;
 }
-.page .avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bg-input);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.7rem;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 1px solid var(--border-color);
+
+.playerButton > span {
+  min-width: 0;
 }
-.page .avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.page .playerButton span strong {
+
+.playerButton strong {
   display: block;
-  font-size: 0.85rem;
+
+  max-width: 180px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--text);
+
+  font-size: 12px;
 }
-.page .playerButton span small {
-  font-size: 0.6rem;
+
+.playerButton small {
+  display: block;
+
+  margin-top: 3px;
+
   color: var(--text-muted);
+
+  font-size: 9px;
 }
 
-.page .clubButton {
-  background: transparent;
-  border: none;
-  color: var(--accent-blue);
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
-  font-size: 0.8rem;
-}
-.page .clubButton:hover {
-  text-decoration: underline;
-}
+.avatar {
+  flex: 0 0 auto;
 
-.page .offerAmount {
-  font-size: 0.95rem;
+  width: 36px;
+  height: 36px;
+
+  display: grid;
+  place-items: center;
+
+  overflow: hidden;
+
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+
+  color: var(--text);
+  background: var(--panel-3);
+
+  font-size: 12px;
   font-weight: 800;
-  color: var(--accent-green);
 }
 
-.page .date {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.page .status {
-  display: inline-block;
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.15rem 0.6rem;
-  border-radius: 40px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-}
-.page .status.pending {
-  background: rgba(79, 140, 255, 0.15);
-  color: var(--accent-blue);
-}
-.page .status.success {
-  background: rgba(46, 204, 113, 0.15);
-  color: var(--accent-green);
-}
-.page .status.danger {
-  background: rgba(231, 76, 60, 0.15);
-  color: var(--accent-red);
-}
-.page .status.warning {
-  background: rgba(241, 196, 15, 0.15);
-  color: var(--accent-yellow);
-}
-
-.page .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-.page .actions button {
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition);
-  font-family: inherit;
-  white-space: nowrap;
-  min-height: 28px;
-}
-.page .actions button:hover:not(:disabled) {
-  background: var(--accent-blue);
-  color: #fff;
-  border-color: var(--accent-blue);
-}
-.page .acceptButton {
-  color: var(--accent-green);
-  border-color: var(--accent-green);
-}
-.page .acceptButton:hover:not(:disabled) {
-  background: var(--accent-green);
-  color: #fff;
-}
-.page .rejectButton {
-  color: var(--accent-red);
-  border-color: var(--accent-red);
-}
-.page .rejectButton:hover:not(:disabled) {
-  background: var(--accent-red);
-  color: #fff;
-}
-.page .actions button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.page .emptyTable {
-  text-align: center;
-  padding: 2rem !important;
-}
-.page .emptyTable div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-}
-.page .emptyTable span {
-  font-size: 2.4rem;
-}
-.page .emptyTable strong {
-  font-size: 1rem;
-}
-.page .emptyTable p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-/* ============================================================
-   CONTRACT GRID (cards)
-============================================================ */
-.page .contractGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1rem;
-  padding: 1.2rem 1.2rem;
-}
-
-.page .contractCard {
-  background: var(--bg-input);
-  border-radius: var(--radius-md);
-  padding: 1rem 1rem 1rem;
-  border: 1px solid var(--border-color);
-  transition: transform var(--transition), box-shadow var(--transition);
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-.page .contractCard:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.page .contractTop {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-}
-.page .avatarLarge {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--bg-card);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 1.2rem;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-.page .avatarLarge img {
+.avatar img,
+.avatarLarge img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.page .contractTop div span {
-  display: block;
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  color: var(--accent-blue);
-}
-.page .contractTop div h3 {
-  font-size: 0.95rem;
+
+.clubButton {
+  color: var(--blue);
+
+  font-size: 11px;
   font-weight: 700;
-  margin: 0.1rem 0;
-}
-.page .contractTop div p {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+
+  text-align: left;
 }
 
-.page .contractStats {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.3rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  padding: 0.4rem 0.3rem;
+.clubButton:hover,
+.playerButton:hover strong {
+  color: var(--primary);
 }
-.page .contractStats > div {
-  text-align: center;
+
+.offerAmount {
+  color: var(--primary);
+  white-space: nowrap;
 }
-.page .contractStats small {
-  display: block;
-  font-size: 0.5rem;
-  text-transform: uppercase;
+
+.date {
   color: var(--text-muted);
-}
-.page .contractStats strong {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 700;
+  white-space: nowrap;
 }
 
-.page .contractStatus {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-.page .contractStatus .status {
-  font-size: 0.6rem;
-}
 
-.page .contractActions {
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 0.2rem;
-}
-.page .contractActions button {
-  flex: 1;
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.3rem;
-  font-weight: 600;
-  font-size: 0.75rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition);
-  min-height: 32px;
-}
-.page .contractActions button:hover:not(:disabled) {
-  background: #3a7be0;
-}
-.page .contractActions button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.page .secondaryButton {
-  background: transparent !important;
-  border: 1px solid var(--border-color) !important;
-  color: var(--text-secondary) !important;
-}
-.page .secondaryButton:hover {
-  background: var(--bg-card) !important;
-}
+/* =========================================================
+   STATUS
+========================================================= */
 
-.page .emptyState {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem 1rem;
-  gap: 0.3rem;
-  color: var(--text-muted);
-}
-.page .emptyState span {
-  font-size: 2.4rem;
-}
-.page .emptyState h3 {
-  font-size: 1rem;
-  margin: 0.2rem 0;
-  color: var(--text-secondary);
-}
-.page .emptyState p {
-  margin: 0;
-  font-size: 0.85rem;
-}
-
-/* ============================================================
-   SUGGESTIONS (GM)
-============================================================ */
-.page .gmBadge {
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  border-radius: 40px;
-  padding: 0.3rem 1rem;
-  font-weight: 700;
-  font-size: 0.75rem;
-  color: #fff;
+.status {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+
+  min-height: 24px;
+
+  padding: 4px 8px;
+
+  border: 1px solid transparent;
+  border-radius: 20px;
+
+  font-size: 9px;
+  font-weight: 800;
+
   white-space: nowrap;
 }
 
-.page .suggestionGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1rem;
-  padding: 1.2rem 1.2rem;
+.success {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.09);
+  border-color: rgba(34, 197, 94, 0.16);
 }
 
-.page .suggestionCard {
-  background: var(--bg-input);
-  border-radius: var(--radius-md);
-  padding: 1rem 1rem 0.8rem;
-  border: 1px solid var(--border-color);
-  transition: transform var(--transition), box-shadow var(--transition);
+.danger {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.09);
+  border-color: rgba(239, 68, 68, 0.16);
+}
+
+.warning {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.09);
+  border-color: rgba(245, 158, 11, 0.16);
+}
+
+.pending {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.09);
+  border-color: rgba(59, 130, 246, 0.16);
+}
+
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.actions button,
+.contractActions button,
+.suggestionActions button {
+  min-height: 30px;
+
+  border: 1px solid var(--border);
+  border-radius: 7px;
+
+  padding: 6px 9px;
+
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.025);
+
+  font-size: 9px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.actions button:hover,
+.contractActions button:hover,
+.suggestionActions button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-light);
+}
+
+.acceptButton {
+  color: #052e16 !important;
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.acceptButton:hover {
+  background: var(--primary-dark) !important;
+}
+
+.rejectButton {
+  color: #fecaca !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.18) !important;
+}
+
+.rejectButton:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+}
+
+.primaryButton {
+  width: 100%;
+
+  min-height: 44px;
+
+  margin-top: 17px;
+
+  border: 0;
+  border-radius: 10px;
+
+  padding: 11px 16px;
+
+  color: #052e16;
+  background: var(--primary);
+
+  font-size: 12px;
+  font-weight: 900;
+
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  background: var(--primary-dark);
+}
+
+.secondaryButton {
+  color: var(--text-soft) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+
+
+/* =========================================================
+   EMPTY TABLE
+========================================================= */
+
+.emptyTable {
+  height: 260px;
+
+  text-align: center !important;
+}
+
+.emptyTable > div {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-}
-.page .suggestionCard:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  align-items: center;
+  justify-content: center;
 }
 
-.page .suggestionHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.emptyTable span {
+  font-size: 30px;
+  margin-bottom: 10px;
 }
-.page .suggestionHeader div:last-child {
+
+.emptyTable strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.emptyTable p {
+  margin: 5px 0 0;
+
+  color: var(--text-muted);
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   CONTRACT GRID
+========================================================= */
+
+.contractGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+
+  padding: 18px;
+}
+
+.contractCard {
+  min-width: 0;
+
+  padding: 17px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  background: var(--panel-2);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.contractCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-light);
+}
+
+.contractTop {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.avatarLarge {
+  flex: 0 0 auto;
+
+  width: 50px;
+  height: 50px;
+
+  display: grid;
+  place-items: center;
+
+  overflow: hidden;
+
+  border: 1px solid var(--border-light);
+  border-radius: 13px;
+
+  color: var(--text);
+  background: var(--panel-3);
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.contractTop > div:last-child {
+  min-width: 0;
+}
+
+.contractTop span {
+  display: block;
+
+  color: var(--primary);
+
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.contractTop h3 {
+  margin: 3px 0;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--text);
+
+  font-size: 14px;
+}
+
+.contractTop p {
+  margin: 0;
+
+  color: var(--text-muted);
+
+  font-size: 10px;
+}
+
+.contractStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+
+  margin-top: 17px;
+}
+
+.contractStats > div {
+  min-width: 0;
+
+  padding: 10px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.contractStats small,
+.suggestionInfo span {
+  display: block;
+
+  color: var(--text-muted);
+
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.contractStats strong {
+  display: block;
+
+  margin-top: 4px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  color: var(--text);
+
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.contractStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  margin-top: 13px;
+}
+
+.contractStatus > span:last-child {
+  color: var(--text-muted);
+
+  font-size: 9px;
+
   text-align: right;
 }
-.page .suggestionHeader span {
-  display: block;
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.page .suggestionHeader strong {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: var(--accent-yellow);
-}
 
-.page .suggestionCard h3 {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin: 0.1rem 0;
-}
-.page .suggestionCard > p {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.page .suggestionInfo {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.2rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  padding: 0.3rem 0.2rem;
-}
-.page .suggestionInfo > div {
-  text-align: center;
-}
-.page .suggestionInfo span {
-  display: block;
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.page .suggestionInfo strong {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.page .reasons {
+.contractActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.2rem 0.5rem;
-  margin: 0.2rem 0;
-}
-.page .reasons span {
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border-radius: 20px;
-  padding: 0.05rem 0.6rem;
+  gap: 7px;
+
+  margin-top: 14px;
 }
 
-.page .suggestionActions {
+.contractActions button {
+  flex: 1 1 120px;
+}
+
+.emptyState {
+  min-height: 280px;
+
   display: flex;
-  gap: 0.4rem;
-  margin-top: 0.2rem;
-}
-.page .suggestionActions button {
-  flex: 1;
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.3rem;
-  font-weight: 600;
-  font-size: 0.75rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition);
-  min-height: 34px;
-}
-.page .suggestionActions button:hover {
-  background: #3a7be0;
-}
-.page .suggestionActions .acceptButton {
-  background: var(--accent-green);
-}
-.page .suggestionActions .acceptButton:hover {
-  background: #27ae60;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 25px;
+
+  text-align: center;
 }
 
-/* ============================================================
-   MODAL OVERLAY
-============================================================ */
-.page .modalOverlay {
+.emptyState > span {
+  margin-bottom: 10px;
+  font-size: 30px;
+}
+
+.emptyState h3 {
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: 15px;
+}
+
+.emptyState p {
+  max-width: 400px;
+
+  margin: 6px 0 0;
+
+  color: var(--text-muted);
+
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   GM SUGGESTIONS
+========================================================= */
+
+.gmBadge {
+  flex: 0 0 auto;
+
+  padding: 8px 11px;
+
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 9px;
+
+  color: #ddd6fe;
+  background: rgba(167, 139, 250, 0.09);
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.suggestionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+
+  padding: 18px;
+}
+
+.suggestionCard {
+  min-width: 0;
+
+  padding: 16px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  background: var(--panel-2);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.suggestionCard:hover {
+  transform: translateY(-3px);
+  border-color: rgba(74, 222, 128, 0.2);
+}
+
+.suggestionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.suggestionHeader > div:last-child {
+  text-align: right;
+}
+
+.suggestionHeader span {
+  display: block;
+
+  color: var(--text-muted);
+
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.suggestionHeader strong {
+  display: block;
+
+  margin-top: 2px;
+
+  color: var(--primary);
+
+  font-size: 22px;
+}
+
+.suggestionCard h3 {
+  margin: 13px 0 3px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--text);
+
+  font-size: 14px;
+}
+
+.suggestionCard > p {
+  margin: 0;
+
+  color: var(--text-muted);
+
+  font-size: 10px;
+}
+
+.suggestionInfo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+
+  margin-top: 14px;
+}
+
+.suggestionInfo > div {
+  padding: 9px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.suggestionInfo strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color: var(--text);
+
+  font-size: 11px;
+}
+
+.reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  margin-top: 13px;
+}
+
+.reasons span {
+  display: block;
+
+  color: #9ca3af;
+
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.reasons span::first-letter {
+  color: var(--primary);
+}
+
+.suggestionActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+
+  margin-top: 15px;
+}
+
+.suggestionActions button {
+  min-width: 0;
+}
+
+.suggestionActions .acceptButton {
+  color: #052e16 !important;
+}
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  z-index: 9999;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  z-index: 1000;
-  animation: fadeIn 0.25s ease;
-}
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+  padding: 22px;
 
-@keyframes slideUp {
-  from { transform: translateY(30px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
-}
+  background: rgba(0, 0, 0, 0.72);
 
-.page .modal {
-  background: var(--bg-modal);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  max-width: 480px;
-  width: 100%;
-  padding: 1.5rem 1.5rem 1.8rem;
-  position: relative;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-  animation: slideUp 0.3s ease;
-  max-height: 90vh;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+
   overflow-y: auto;
 }
 
-.page .close {
+.modal {
+  position: relative;
+
+  width: min(560px, 100%);
+
+  max-height: calc(100vh - 44px);
+  max-height: calc(100dvh - 44px);
+
+  overflow-y: auto;
+
+  padding: 25px;
+
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #111a26,
+      #0b121c
+    );
+
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.5);
+
+  scrollbar-width: thin;
+}
+
+.close {
   position: absolute;
-  top: 0.4rem;
-  right: 0.8rem;
-  background: transparent;
-  border: none;
-  font-size: 1.8rem;
+  top: 14px;
+  right: 14px;
+
+  width: 32px;
+  height: 32px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.035);
+
+  font-size: 21px;
   line-height: 1;
-  color: var(--text-muted);
+
   cursor: pointer;
-  transition: color var(--transition), transform var(--transition);
-  padding: 0.2rem 0.5rem;
-}
-.page .close:hover {
-  color: var(--text-primary);
-  transform: rotate(90deg);
 }
 
-.page .modalSubtitle {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin: 0.2rem 0 1rem;
+.close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.page .bidSummary {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.4rem;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1rem;
-}
-.page .bidSummary > div {
-  text-align: center;
-}
-.page .bidSummary span {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.page .bidSummary strong {
-  font-size: 1rem;
-  font-weight: 700;
+.modal h2 {
+  margin: 3px 45px 7px 0;
+
+  color: var(--text);
+
+  font-size: clamp(20px, 4vw, 27px);
+  line-height: 1.2;
 }
 
-.page .bidMeta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem 0.8rem;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.2rem;
-}
-.page .bidMeta > div span {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.page .bidMeta > div strong {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
+.modalSubtitle {
+  max-width: 450px;
 
-.page .modalActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-.page .modalActions button {
-  flex: 1;
-  padding: 0.5rem;
-  border-radius: 40px;
-  font-weight: 700;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all var(--transition);
-  font-family: inherit;
-  min-height: 44px;
-  border: none;
-}
-.page .modalActions .secondaryButton {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-}
-.page .modalActions .secondaryButton:hover {
-  background: var(--bg-card);
-}
-.page .modalActions .acceptButton {
-  background: var(--accent-green);
-  color: #fff;
-}
-.page .modalActions .acceptButton:hover:not(:disabled) {
-  background: #27ae60;
-}
-.page .modalActions .rejectButton {
-  background: var(--accent-red);
-  color: #fff;
-}
-.page .modalActions .rejectButton:hover:not(:disabled) {
-  background: #c0392b;
-}
-.page .modalActions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page .contractPrompt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  background: rgba(79, 140, 255, 0.06);
-  border-radius: var(--radius-sm);
-  padding: 0.8rem 1rem;
-  border-left: 4px solid var(--accent-blue);
-  margin-top: 1rem;
-}
-.page .contractPrompt div {
-  flex: 1;
-}
-.page .contractPrompt strong {
-  display: block;
-  font-size: 0.9rem;
-}
-.page .contractPrompt p {
-  margin: 0.1rem 0 0;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-}
-.page .contractPrompt button {
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.4rem 1.2rem;
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition);
-  min-height: 40px;
-}
-.page .contractPrompt button:hover {
-  background: #3a7be0;
-}
-
-/* ============================================================
-   CONTRACT FORM (inside modal)
-============================================================ */
-.page .contractForm {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-}
-.page .contractForm label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.page .contractForm select {
-  width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 40px;
-  padding: 0.5rem 1rem;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  margin-top: 0.2rem;
-  outline: none;
-  font-family: inherit;
-  transition: border var(--transition);
-  min-height: 40px;
-}
-.page .contractForm select:focus {
-  border-color: var(--accent-blue);
-}
-
-.page .moneyInput {
-  display: flex;
-  align-items: center;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 40px;
-  padding: 0 0.8rem;
-  margin-top: 0.2rem;
-  transition: border var(--transition);
-}
-.page .moneyInput:focus-within {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--accent-blue-glow);
-}
-.page .moneyInput span {
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-right: 0.2rem;
-}
-.page .moneyInput input {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  padding: 0.5rem 0;
-  width: 100%;
-  font-family: inherit;
-  min-height: 40px;
-}
-.page .moneyInput input::-webkit-outer-spin-button,
-.page .moneyInput input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
   margin: 0;
-}
-.page .moneyInput input[type='number'] {
-  -moz-appearance: textfield;
+
+  color: var(--text-soft);
+
+  font-size: 12px;
+  line-height: 1.55;
 }
 
-.page .contractNotice {
+
+/* =========================================================
+   BID SUMMARY
+========================================================= */
+
+.bidSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  margin-top: 20px;
+}
+
+.bidSummary > div {
+  min-width: 0;
+
+  padding: 13px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.bidSummary span,
+.bidMeta span {
+  display: block;
+
+  color: var(--text-muted);
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.bidSummary strong {
+  display: block;
+
+  margin-top: 5px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  color: var(--primary);
+
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.bidMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  margin-top: 9px;
+}
+
+.bidMeta > div {
+  min-width: 0;
+
+  padding: 11px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.bidMeta strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: var(--text);
+
+  font-size: 10px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.modalActions {
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  background: rgba(79, 140, 255, 0.06);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem 0.8rem;
-  border-left: 3px solid var(--accent-blue);
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 7px;
+
+  margin-top: 19px;
 }
 
-.page .primaryButton {
-  width: 100%;
-  background: var(--accent-green);
-  border: none;
-  border-radius: 40px;
-  padding: 0.6rem;
+.modalActions button {
+  min-height: 39px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  padding: 9px 13px;
+
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.035);
+
+  font-size: 10px;
   font-weight: 800;
-  font-size: 0.95rem;
-  color: #fff;
+
   cursor: pointer;
-  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
-  font-family: inherit;
-  min-height: 44px;
 }
-.page .primaryButton:hover:not(:disabled) {
-  background: #27ae60;
-  transform: scale(1.02);
-  box-shadow: 0 0 24px var(--accent-green-glow);
+
+.modalActions button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
 }
-.page .primaryButton:disabled {
-  opacity: 0.5;
+
+.contractPrompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 13px;
+
+  margin-top: 17px;
+  padding: 13px;
+
+  border: 1px solid rgba(74, 222, 128, 0.15);
+  border-radius: 11px;
+
+  background: rgba(74, 222, 128, 0.045);
+}
+
+.contractPrompt > div {
+  min-width: 0;
+}
+
+.contractPrompt strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.contractPrompt p {
+  margin: 4px 0 0;
+
+  color: var(--text-muted);
+
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.contractPrompt button {
+  flex: 0 0 auto;
+
+  border: 0;
+  border-radius: 8px;
+
+  padding: 9px 11px;
+
+  color: #052e16;
+  background: var(--primary);
+
+  font-size: 9px;
+  font-weight: 900;
+
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   CONTRACT FORM
+========================================================= */
+
+.contractForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  margin-top: 21px;
+}
+
+.contractForm label {
+  min-width: 0;
+
+  color: var(--text-soft);
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.contractForm label:last-child {
+  grid-column: 1 / -1;
+}
+
+.moneyInput {
+  display: flex;
+  align-items: center;
+
+  height: 42px;
+
+  margin-top: 6px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: var(--bg-soft);
+
+  overflow: hidden;
+}
+
+.moneyInput > span {
+  flex: 0 0 auto;
+
+  height: 100%;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0 12px;
+
+  border-right: 1px solid var(--border);
+
+  color: var(--primary);
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.moneyInput input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+
+  border: 0;
+  outline: 0;
+
+  padding: 0 10px;
+
+  color: var(--text);
+  background: transparent;
+
+  font-size: 12px;
+}
+
+.contractForm select {
+  width: 100%;
+  height: 42px;
+
+  margin-top: 6px;
+
+  font-size: 11px;
+}
+
+.contractNotice {
+  margin-top: 16px;
+  padding: 12px 13px;
+
+  border: 1px solid rgba(251, 191, 36, 0.14);
+  border-radius: 10px;
+
+  color: #a8a29e;
+  background: rgba(251, 191, 36, 0.045);
+
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.contractNotice strong {
+  color: #fcd34d;
+}
+
+
+/* =========================================================
+   DISABLED
+========================================================= */
+
+.page button:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
+  transform: none !important;
 }
 
-/* ============================================================
-   RESPONSIVE – Enhanced for very small screens
-============================================================ */
 
-/* --- Tablets and small laptops --- */
-@media (max-width: 860px) {
-  .page .header {
+/* =========================================================
+   SCROLLBARS
+========================================================= */
+
+.page ::-webkit-scrollbar,
+.modal::-webkit-scrollbar,
+.tabs::-webkit-scrollbar,
+.tableWrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.page ::-webkit-scrollbar-track,
+.modal::-webkit-scrollbar-track,
+.tabs::-webkit-scrollbar-track,
+.tableWrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page ::-webkit-scrollbar-thumb,
+.modal::-webkit-scrollbar-thumb,
+.tabs::-webkit-scrollbar-thumb,
+.tableWrapper::-webkit-scrollbar-thumb {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+
+/* =========================================================
+   LARGE TABLET
+========================================================= */
+
+@media (max-width: 1200px) {
+  .page {
+    padding: 22px;
+  }
+
+  .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contractGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .suggestionGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+  .page {
+    padding: 17px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .budgetPanel {
+    width: 100%;
+  }
+
+  .budgetPanel > div {
+    min-width: 0;
+  }
+
+  .contentHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .headerTools {
+    width: 100%;
+  }
+
+  .search {
+    flex: 1;
+    width: auto;
+  }
+
+  .headerTools select {
+    flex: 0 0 auto;
+  }
+
+  .contractGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .suggestionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 640px) {
+  .page {
+    padding: 10px;
+  }
+
+  .header {
+    padding: 16px;
+
+    border-radius: 14px;
+
+    gap: 16px;
+  }
+
+  .headerLeft {
+    width: 100%;
+  }
+
+  .clubLogo {
+    width: 48px;
+    height: 48px;
+
+    border-radius: 12px;
+
+    font-size: 22px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+  }
+
+  .headerLeft p {
+    font-size: 11px;
+  }
+
+  .eyebrow {
+    font-size: 8px;
+  }
+
+  .budgetPanel {
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .budgetPanel > div {
+    padding: 10px;
+  }
+
+  .budgetPanel strong {
+    font-size: 14px;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .summaryCard {
+    padding: 12px;
+    gap: 9px;
+
+    border-radius: 12px;
+  }
+
+  .summaryCard > span {
+    width: 34px;
+    height: 34px;
+
+    border-radius: 9px;
+
+    font-size: 15px;
+  }
+
+  .summaryCard strong {
+    font-size: 20px;
+  }
+
+  .summaryCard p {
+    font-size: 9px;
+  }
+
+  .gmBanner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+
+    padding: 13px;
+    gap: 10px;
+  }
+
+  .gmAvatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .gmBanner > div:nth-child(2) {
+    flex: 1 1 calc(100% - 50px);
+  }
+
+  .gmBanner button {
+    width: 100%;
+  }
+
+  .tabs {
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+
+  .tabs button {
+    min-height: 37px;
+    padding: 8px 10px;
+
+    font-size: 10px;
+  }
+
+  .contentCard {
+    border-radius: 13px;
+  }
+
+  .contentHeader {
+    padding: 15px;
+  }
+
+  .contentHeader h2 {
+    font-size: 16px;
+  }
+
+  .contentHeader p {
+    font-size: 10px;
+  }
+
+  .headerTools {
     flex-direction: column;
     align-items: stretch;
   }
-  .page .headerLeft {
-    justify-content: center;
+
+  .search {
+    width: 100%;
   }
-  .page .budgetPanel {
-    justify-content: center;
-    gap: 1.5rem;
+
+  .headerTools select {
+    width: 100%;
   }
-  .page .budgetPanel > div {
-    text-align: center;
+
+  .contractGrid {
+    grid-template-columns: 1fr;
+    padding: 12px;
   }
-  .page .summaryGrid {
-    grid-template-columns: repeat(2, 1fr);
+
+  .suggestionGrid {
+    grid-template-columns: 1fr;
+    padding: 12px;
   }
-  .page .transferTable th,
-  .page .transferTable td {
-    padding: 0.4rem 0.3rem;
-    font-size: 0.7rem;
+
+  .modalOverlay {
+    align-items: flex-end;
+
+    padding: 8px;
   }
-  .page .transferTable th:last-child,
-  .page .transferTable td:last-child {
-    min-width: 80px;
+
+  .modal {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+
+    padding: 19px;
+
+    border-radius: 16px;
   }
-  .page .playerButton span strong {
-    font-size: 0.75rem;
+
+  .bidSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .bidMeta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bidMeta > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .modalActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .modalActions button {
+    width: 100%;
+  }
+
+  .modalActions .secondaryButton {
+    grid-column: 1 / -1;
+  }
+
+  .contractPrompt {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contractPrompt button {
+    width: 100%;
+  }
+
+  .contractForm {
+    grid-template-columns: 1fr;
+  }
+
+  .contractForm label:last-child {
+    grid-column: auto;
   }
 }
 
-/* --- Mobile (<= 600px) --- */
-@media (max-width: 600px) {
+
+/* =========================================================
+   VERY SMALL PHONES
+========================================================= */
+
+@media (max-width: 420px) {
   .page {
-    padding: 0.8rem 0.6rem 2.5rem;
+    padding: 7px;
   }
-  .page .header {
-    padding: 1rem 0.8rem;
+
+  .header {
+    padding: 13px;
+    gap: 12px;
   }
-  .page .clubLogo {
+
+  .headerLeft {
+    gap: 10px;
+  }
+
+  .clubLogo {
+    width: 42px;
+    height: 42px;
+
+    border-radius: 10px;
+  }
+
+  .header h1 {
+    font-size: 19px;
+  }
+
+  .headerLeft p {
+    margin-top: 3px;
+    font-size: 10px;
+  }
+
+  .budgetPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .budgetPanel > div {
+    min-width: 0;
+    padding: 9px;
+  }
+
+  .budgetPanel strong {
+    font-size: 13px;
+  }
+
+  .summaryGrid {
+    gap: 6px;
+  }
+
+  .summaryCard {
+    padding: 10px;
+
+    gap: 7px;
+  }
+
+  .summaryCard > span {
+    width: 30px;
+    height: 30px;
+
+    font-size: 13px;
+  }
+
+  .summaryCard small {
+    font-size: 7px;
+  }
+
+  .summaryCard strong {
+    font-size: 18px;
+  }
+
+  .summaryCard p {
+    font-size: 8px;
+    line-height: 1.3;
+  }
+
+  .gmBanner {
+    padding: 11px;
+  }
+
+  .gmBanner strong {
+    font-size: 11px;
+  }
+
+  .gmBanner p {
+    font-size: 9px;
+  }
+
+  .tabs {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .tabs button {
+    padding: 7px 8px;
+    font-size: 9px;
+  }
+
+  .contentHeader {
+    padding: 13px;
+  }
+
+  .contentHeader h2 {
+    font-size: 15px;
+  }
+
+  .contractGrid,
+  .suggestionGrid {
+    padding: 9px;
+    gap: 8px;
+  }
+
+  .contractCard,
+  .suggestionCard {
+    padding: 12px;
+  }
+
+  .contractStats {
+    gap: 5px;
+  }
+
+  .contractStats > div {
+    padding: 8px;
+  }
+
+  .contractStats small {
+    font-size: 7px;
+  }
+
+  .contractStats strong {
+    font-size: 9px;
+  }
+
+  .suggestionActions {
+    grid-template-columns: 1fr;
+  }
+
+  .suggestionActions button {
+    width: 100%;
+  }
+
+  .modalOverlay {
+    padding: 5px;
+  }
+
+  .modal {
+    padding: 16px;
+
+    border-radius: 14px;
+  }
+
+  .modal h2 {
+    font-size: 19px;
+  }
+
+  .modalSubtitle {
+    font-size: 10px;
+  }
+
+  .bidMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .bidMeta > div:last-child {
+    grid-column: auto;
+  }
+
+  .modalActions {
+    grid-template-columns: 1fr;
+  }
+
+  .modalActions .secondaryButton {
+    grid-column: auto;
+  }
+
+  .contractTop h3 {
+    font-size: 12px;
+  }
+
+  .avatarLarge {
     width: 44px;
     height: 44px;
-    font-size: 1.2rem;
-  }
-  .page .headerTitle {
-    font-size: 1.2rem;
-  }
-  .page .budgetPanel strong {
-    font-size: 1rem;
-  }
-  .page .summaryGrid {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-  }
-  .page .summaryCard {
-    padding: 0.6rem 0.8rem;
-  }
-  .page .summaryCard strong {
-    font-size: 1.1rem;
-  }
-  .page .tabs {
-    justify-content: center;
-    padding: 0.2rem 0.3rem;
-  }
-  .page .tabButton {
-    font-size: 0.7rem;
-    padding: 0.3rem 0.7rem;
-    min-height: 34px;
-  }
-  .page .contentHeader {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .page .headerTools {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .page .search {
-    min-width: unset;
-  }
-  .page .filterSelect {
-    min-width: unset;
-    width: 100%;
-  }
-  .page .transferTable {
-    font-size: 0.65rem;
-    min-width: 550px;
-  }
-  .page .transferTable th,
-  .page .transferTable td {
-    padding: 0.3rem 0.25rem;
-  }
-  .page .transferTable td:first-child {
-    min-width: 100px;
-  }
-  .page .transferTable td:nth-child(3),
-  .page .transferTable th:nth-child(3) {
-    display: none; /* Hide Offer column? Actually we keep offer and asking, but we can hide asking? Better keep all but we can reduce. We'll keep both but they may wrap */
-  }
-  .page .actions button {
-    font-size: 0.55rem;
-    padding: 0.1rem 0.4rem;
-    min-height: 24px;
-  }
-  .page .contractGrid {
-    grid-template-columns: 1fr;
-  }
-  .page .suggestionGrid {
-    grid-template-columns: 1fr;
-  }
-  .page .gmBanner {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: center;
-  }
-  .page .gmBanner button {
-    width: 100%;
-  }
-  .page .modal {
-    padding: 1.2rem;
-    max-width: 100%;
-    margin: 0.5rem;
-  }
-  .page .bidSummary {
-    grid-template-columns: 1fr 1fr;
-  }
-  .page .bidMeta {
-    grid-template-columns: 1fr;
-  }
-  .page .modalActions {
-    flex-direction: column;
-  }
-  .page .modalActions button {
-    min-width: unset;
-  }
-  .page .contractPrompt {
-    flex-direction: column;
-    text-align: center;
-  }
-  .page .contractPrompt button {
-    width: 100%;
   }
 }
 
-/* --- Small phones (<= 420px) --- */
-@media (max-width: 420px) {
-  .page .summaryGrid {
-    grid-template-columns: 1fr;
-  }
-  .page .budgetPanel {
-    flex-direction: column;
-    gap: 0.3rem;
-  }
-  .page .transferTable th:nth-child(3),
-  .page .transferTable td:nth-child(3) {
-    display: none; /* Hide Offer amount? Actually we want to keep it, but we can hide asking price (col 4) */
-  }
-  .page .transferTable th:nth-child(4),
-  .page .transferTable td:nth-child(4) {
-    display: none; /* Hide Asking Price */
-  }
-  .page .contractStats {
-    grid-template-columns: 1fr 1fr;
-  }
-  .page .suggestionInfo {
-    grid-template-columns: 1fr 1fr;
-  }
-  .page .suggestionCard {
-    padding: 0.8rem;
-  }
-  .page .suggestionActions {
-    flex-direction: column;
-  }
-  .page .bidSummary {
-    grid-template-columns: 1fr;
-  }
-}
 
-/* --- Very small phones (<= 360px) --- */
-@media (max-width: 360px) {
+/* =========================================================
+   EXTREMELY SMALL PHONES
+   ~320px and below
+========================================================= */
+
+@media (max-width: 340px) {
   .page {
-    padding: 0.5rem 0.4rem 2rem;
+    padding: 5px;
   }
-  .page .header {
-    padding: 0.8rem 0.5rem;
+
+  .header {
+    padding: 10px;
   }
-  .page .clubLogo {
-    width: 36px;
-    height: 36px;
-    font-size: 1rem;
+
+  .clubLogo {
+    width: 37px;
+    height: 37px;
   }
-  .page .headerTitle {
-    font-size: 1rem;
+
+  .header h1 {
+    font-size: 17px;
   }
-  .page .budgetPanel strong {
-    font-size: 0.9rem;
+
+  .summaryCard {
+    padding: 8px;
   }
-  .page .summaryCard {
-    padding: 0.4rem 0.6rem;
+
+  .summaryCard > span {
+    display: none;
   }
-  .page .summaryCard > span {
-    font-size: 1.2rem;
+
+  .summaryCard strong {
+    font-size: 17px;
   }
-  .page .summaryCard strong {
-    font-size: 0.9rem;
+
+  .summaryCard p {
+    font-size: 7px;
   }
-  .page .tabButton {
-    font-size: 0.6rem;
-    padding: 0.2rem 0.5rem;
-    min-height: 30px;
+
+  .gmBanner > div:nth-child(2) {
+    flex-basis: 100%;
   }
-  .page .transferTable {
-    font-size: 0.55rem;
-    min-width: 420px;
+
+  .gmAvatar {
+    width: 34px;
+    height: 34px;
   }
-  .page .transferTable th,
-  .page .transferTable td {
-    padding: 0.2rem 0.15rem;
+
+  .tabs button {
+    font-size: 8px;
+    padding: 6px;
   }
-  .page .transferTable td:first-child {
-    min-width: 70px;
+
+  .contentHeader {
+    padding: 10px;
   }
-  .page .playerButton span strong {
-    font-size: 0.65rem;
+
+  .contentHeader h2 {
+    font-size: 14px;
   }
-  .page .playerButton span small {
-    font-size: 0.5rem;
+
+  .contractGrid,
+  .suggestionGrid {
+    padding: 6px;
   }
-  .page .actions button {
-    font-size: 0.5rem;
-    padding: 0.05rem 0.3rem;
-    min-height: 20px;
+
+  .contractCard,
+  .suggestionCard {
+    padding: 10px;
   }
-  .page .modal {
-    padding: 1rem;
+
+  .contractStats {
+    grid-template-columns: 1fr;
   }
-  .page .close {
-    font-size: 1.5rem;
-    top: 0.2rem;
-    right: 0.5rem;
+
+  .contractStatus {
+    align-items: flex-start;
+    flex-direction: column;
   }
-  .page .primaryButton {
-    font-size: 0.8rem;
-    padding: 0.5rem;
-    min-height: 38px;
+
+  .contractStatus > span:last-child {
+    text-align: left;
+  }
+
+  .suggestionInfo {
+    grid-template-columns: 1fr;
+  }
+
+  .modal {
+    padding: 13px;
+  }
+
+  .close {
+    top: 9px;
+    right: 9px;
+
+    width: 28px;
+    height: 28px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
