@@ -1,1429 +1,1708 @@
-/* ============================================================
-   PLAYERS.MODULE.CSS
-   Dark theme · Responsive · Touch-friendly
-   All styles use class selectors only
-   Optimized for very small screens (320px+)
-   Disabled zoom & text selection for better UI control
-============================================================ */
+/* =========================================================
+   PLAYERS PAGE
+   Responsive Football Manager UI
+========================================================= */
 
 .page {
-  /* ----- COLORS ----- */
-  --bg-primary: #0b0e14;
-  --bg-secondary: #131821;
-  --bg-card: #1a212c;
-  --bg-card-hover: #222b3a;
-  --bg-input: #0f141e;
-  --bg-modal: #11171f;
-
-  --text-primary: #f0f4f8;
-  --text-secondary: #a8b9d0;
-  --text-muted: #6a7f9a;
-
-  --accent-blue: #4f8cff;
-  --accent-blue-glow: rgba(79, 140, 255, 0.25);
-  --accent-green: #2ecc71;
-  --accent-green-glow: rgba(46, 204, 113, 0.2);
-  --accent-yellow: #f1c40f;
-  --accent-yellow-glow: rgba(241, 196, 15, 0.2);
-  --accent-red: #e74c3c;
-  --accent-red-glow: rgba(231, 76, 60, 0.2);
-  --accent-orange: #f39c12;
-  --accent-purple: #9b59b6;
-
-  --border-color: #2a3444;
-  --shadow-color: rgba(0, 0, 0, 0.6);
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
-
-  --transition: 0.25s ease;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-
-  /* Disable zoom and text selection */
-  touch-action: pan-x pan-y;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-
-  font-family: var(--font-sans);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  width: 100%;
+  max-width: 1600px;
   min-height: 100vh;
-  padding: 1rem 0.8rem 3rem;
-  max-width: 1400px;
   margin: 0 auto;
+  padding: 24px;
+  overflow-x: hidden;
+  color: var(--text-primary, #ffffff);
 }
 
-/* Allow text selection in inputs and textareas */
-.page .inputField,
-.page .textAreaField,
-.page .contentEditable {
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-/* ----- SCROLLBAR (subtle) ----- */
-.page::-webkit-scrollbar {
-  width: 4px;
-}
-.page::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-.page::-webkit-scrollbar-thumb {
-  background: var(--accent-blue);
-  border-radius: 10px;
-}
-.page::-webkit-scrollbar-thumb:hover {
-  background: #3a7be0;
-}
-
-/* ============================================================
+/* =========================================================
    LOADING
-============================================================ */
-.page .loadingContainer {
+========================================================= */
+
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 80vh;
-  gap: 1.5rem;
+  gap: 16px;
+  background: var(--background, #0a0a0a);
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  padding: 20px;
   text-align: center;
 }
-.page .loadingText {
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  letter-spacing: 0.3px;
+
+.spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.12);
+  border-top-color: var(--primary, #0ea5e9);
+  animation: spin .8s linear infinite;
 }
 
-.page .spinner {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 4px solid var(--border-color);
-  border-top-color: var(--accent-blue);
-  animation: spin 0.85s linear infinite;
-  box-shadow: 0 0 24px var(--accent-blue-glow);
+.loading p {
+  margin: 0;
+  font-size: 14px;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* ============================================================
-   EMPTY STATE (no club)
-============================================================ */
-.page .emptyPage {
+/* =========================================================
+   EMPTY PAGE
+========================================================= */
+
+.emptyPage {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 70vh;
   text-align: center;
-  gap: 1rem;
-  padding: 1rem;
-}
-.page .emptyIcon {
-  font-size: 4.5rem;
-  filter: drop-shadow(0 0 32px var(--accent-yellow-glow));
-}
-.page .emptyTitle {
-  font-size: 2rem;
-  font-weight: 800;
-  margin: 0.2rem 0;
-}
-.page .emptyDescription {
-  color: var(--text-secondary);
-  font-size: 1.05rem;
-  max-width: 400px;
-}
-.page .emptyButton {
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.7rem 2.2rem;
-  font-weight: 700;
-  font-size: 1rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition), transform var(--transition);
-  min-height: 44px;
-}
-.page .emptyButton:hover {
-  background: #3a7be0;
-  transform: scale(1.03);
+  background: var(--background, #0a0a0a);
 }
 
-/* ============================================================
-   HEADER
-============================================================ */
-.page .header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  padding: 1.2rem 1.5rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-  gap: 1rem;
-}
-
-.page .headerIdentity {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex: 1 1 200px;
-}
-
-.page .clubLogo {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--bg-input);
+.emptyIcon {
+  width: 84px;
+  height: 84px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  flex-shrink: 0;
+  border-radius: 24px;
+  background: rgba(14,165,233,.1);
+  border: 1px solid rgba(14,165,233,.2);
+  font-size: 38px;
+  margin-bottom: 20px;
 }
-.page .clubLogo img {
+
+.emptyPage h1 {
+  margin: 0 0 10px;
+  font-size: clamp(24px, 5vw, 36px);
+}
+
+.emptyPage p {
+  max-width: 500px;
+  margin: 0 0 24px;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  line-height: 1.6;
+}
+
+.emptyPage button {
+  min-height: 46px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    var(--primary, #0ea5e9),
+    var(--secondary, #6366f1)
+  );
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.header {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  margin-bottom: 20px;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: var(--radius-lg, 16px);
+  background: var(--glass, rgba(255,255,255,.05));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow, 0 8px 32px rgba(0,0,0,.4));
+}
+
+.headerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.clubLogo {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14,165,233,.1);
+  border: 1px solid rgba(14,165,233,.2);
+  font-size: 30px;
+}
+
+.clubLogo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.page .eyebrow {
-  display: inline-block;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--accent-blue);
-  background: rgba(79, 140, 255, 0.12);
-  padding: 0.2rem 0.8rem;
-  border-radius: 40px;
-  margin-bottom: 0.2rem;
+.headerIdentity > div:last-child {
+  min-width: 0;
 }
 
-.page .headerTitle {
-  font-size: 1.5rem;
+.eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--primary, #0ea5e9);
+  font-size: 11px;
   font-weight: 800;
-  margin: 0 0 0.1rem;
-}
-.page .headerSubtitle {
-  color: var(--text-secondary);
-  margin: 0;
-  font-weight: 500;
-  font-size: 0.9rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
 
-.page .headerBudgets {
+.header h1 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 34px);
+  line-height: 1.1;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.headerIdentity p {
+  margin: 7px 0 0;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.headerBudgets {
   display: flex;
-  gap: 1.5rem;
   flex-wrap: wrap;
-  flex: 1 1 auto;
   justify-content: flex-end;
-}
-.page .budgetItem {
-  text-align: right;
-}
-.page .budgetLabel {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-}
-.page .budgetValue {
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: var(--accent-green);
+  gap: 12px;
 }
 
-/* ============================================================
-   STATS ROW
-============================================================ */
-.page .stats {
+.headerBudgets > div {
+  min-width: 150px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.headerBudgets span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.headerBudgets strong {
+  display: block;
+  color: #fff;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   STATS
+========================================================= */
+
+.stats {
+  width: 100%;
+  min-width: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.8rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
-.page .statCard {
+.statCard {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 0.8rem 1rem;
-  border: 1px solid var(--border-color);
-  transition: background var(--transition);
-}
-.page .statCard:hover {
-  background: var(--bg-card-hover);
-}
-.page .statIcon {
-  font-size: 1.6rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.page .statLabel {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-}
-.page .statNumber {
-  display: block;
-  font-size: 1.3rem;
-  font-weight: 800;
-}
-.page .statDescription {
-  margin: 0;
-  font-size: 0.65rem;
-  color: var(--text-secondary);
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: var(--radius-lg, 16px);
+  background: var(--glass, rgba(255,255,255,.05));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform .25s ease, box-shadow .25s ease;
 }
 
-/* ============================================================
-   TABS
-============================================================ */
-.page .tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-}
-.page .tabButton {
-  background: transparent;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 40px;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: inherit;
-  min-height: 40px;
-  white-space: nowrap;
-}
-.page .tabButton:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
-}
-.page .tabButtonActive {
-  background: var(--accent-blue);
-  color: #fff;
-  box-shadow: 0 0 16px var(--accent-blue-glow);
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow, 0 0 40px rgba(14,165,233,.15));
 }
 
-/* ============================================================
-   FILTERS
-============================================================ */
-.page .filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 0.6rem 1rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-}
-
-.page .searchBox {
-  flex: 1 1 180px;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--bg-input);
-  border-radius: 40px;
-  padding: 0 0.8rem;
-  border: 1px solid var(--border-color);
-  transition: border var(--transition), box-shadow var(--transition);
-}
-.page .searchBox:focus-within {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--accent-blue-glow);
-}
-.page .searchIcon {
-  font-size: 0.9rem;
-  opacity: 0.6;
-}
-.page .searchInput {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  padding: 0.5rem 0;
-  width: 100%;
-  font-family: inherit;
-  min-height: 40px;
-}
-.page .searchInput::placeholder {
-  color: var(--text-muted);
-}
-
-.page .filterSelect {
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 40px;
-  padding: 0.5rem 1rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
-  transition: border var(--transition), box-shadow var(--transition);
-  min-width: 110px;
-  min-height: 40px;
-}
-.page .filterSelect:focus {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--accent-blue-glow);
-}
-.page .filterOption {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-/* ============================================================
-   TABLE CARD (player list)
-============================================================ */
-.page .tableCard {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
-
-.page .tableHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.2rem;
-  border-bottom: 1px solid var(--border-color);
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.page .tableHeaderLabel {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-}
-.page .tableHeaderTitle {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin: 0.1rem 0 0;
-}
-.page .tableCount {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  background: var(--bg-input);
-  padding: 0.2rem 0.8rem;
-  border-radius: 40px;
-}
-
-.page .tableWrapper {
-  overflow-x: auto;
-  padding: 0 0.2rem 0.2rem;
-  -webkit-overflow-scrolling: touch;
-}
-
-.page .playersTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
-  min-width: 600px;
-}
-.page .tableHead {
-  background: var(--bg-input);
-  border-bottom: 1px solid var(--border-color);
-}
-.page .tableHeaderCell {
-  padding: 0.6rem 0.6rem;
-  text-align: left;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.page .tableRowCell {
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--border-color);
-  vertical-align: middle;
-}
-.page .tableRow:hover .tableRowCell {
-  background: var(--bg-card-hover);
-}
-
-.page .playerCell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.page .playerAvatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bg-input);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.7rem;
-  color: var(--text-primary);
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 1px solid var(--border-color);
-}
-.page .playerAvatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.page .playerName {
-  display: block;
-  font-size: 0.85rem;
-}
-.page .playerNationality {
-  font-size: 0.6rem;
-  color: var(--text-muted);
-}
-
-.page .positionBadge {
-  font-weight: 500;
-  color: var(--accent-blue);
-  background: rgba(79, 140, 255, 0.1);
-  padding: 0.1rem 0.5rem;
-  border-radius: 20px;
-  font-size: 0.7rem;
-  display: inline-block;
-}
-
-.page .overallRating {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: var(--accent-yellow);
-}
-
-.page .clubNameText {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-}
-
-.page .statusBadge {
-  display: inline-block;
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.15rem 0.6rem;
-  border-radius: 40px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-}
-.page .statusAvailable {
-  background: rgba(46, 204, 113, 0.15);
-  color: var(--accent-green);
-}
-.page .statusListed {
-  background: rgba(241, 196, 15, 0.15);
-  color: var(--accent-yellow);
-}
-.page .statusLoan {
-  background: rgba(79, 140, 255, 0.15);
-  color: var(--accent-blue);
-}
-.page .statusUnavailable {
-  background: rgba(231, 76, 60, 0.15);
-  color: var(--accent-red);
-}
-.page .statusFree {
-  background: rgba(155, 89, 182, 0.15);
-  color: var(--accent-purple);
-}
-
-.page .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-.page .actionButton {
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition);
-  font-family: inherit;
-  white-space: nowrap;
-  min-height: 28px;
-}
-.page .actionButton:hover {
-  background: var(--accent-blue);
-  color: #fff;
-  border-color: var(--accent-blue);
-}
-.page .actionDanger {
-  color: var(--accent-red);
-  border-color: var(--accent-red);
-}
-.page .actionDanger:hover {
-  background: var(--accent-red);
-  color: #fff;
-}
-.page .actionLoan {
-  color: var(--accent-blue);
-  border-color: var(--accent-blue);
-}
-.page .actionLoan:hover {
-  background: var(--accent-blue);
-  color: #fff;
-}
-.page .actionBuy {
-  color: var(--accent-green);
-  border-color: var(--accent-green);
-}
-.page .actionBuy:hover {
-  background: var(--accent-green);
-  color: #fff;
-}
-
-.page .noPlayers {
-  text-align: center;
-  padding: 2rem !important;
-  color: var(--text-muted);
-  font-size: 0.95rem;
-}
-
-/* ============================================================
-   SCOUTING
-============================================================ */
-.page .scouting {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  padding: 1.2rem 1.2rem;
-  margin-bottom: 1.5rem;
-}
-
-.page .sectionHeading {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1.2rem;
-  gap: 1rem;
-}
-.page .sectionLabel {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-}
-.page .sectionTitle {
-  font-size: 1.2rem;
-  font-weight: 800;
-  margin: 0.1rem 0 0.2rem;
-}
-.page .sectionDescription {
-  color: var(--text-secondary);
-  margin: 0;
-  font-size: 0.85rem;
-}
-.page .sectionIcon {
-  font-size: 2.4rem;
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-
-.page .scoutGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.page .scoutCard {
-  background: var(--bg-input);
-  border-radius: var(--radius-md);
-  padding: 1rem 1rem 0.8rem;
-  border: 1px solid var(--border-color);
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-.page .scoutCard:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.page .scoutTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.4rem;
-}
-.page .largeAvatar {
+.statCard > span {
   width: 44px;
   height: 44px;
-  border-radius: 50%;
-  background: var(--bg-card);
+  min-width: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 1rem;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(14,165,233,.1);
+  font-size: 21px;
 }
-.page .largeAvatar img {
+
+.statCard > div {
+  min-width: 0;
+}
+
+.statCard small {
+  display: block;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.statCard strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 25px;
+  line-height: 1.1;
+}
+
+.statCard p {
+  margin: 4px 0 0;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   TABS
+========================================================= */
+
+.tabs {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.tabs button:hover {
+  background: rgba(255,255,255,.06);
+  color: #fff;
+}
+
+.tabs .activeTab {
+  background: linear-gradient(
+    135deg,
+    rgba(14,165,233,.2),
+    rgba(99,102,241,.2)
+  );
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(14,165,233,.25);
+}
+
+/* =========================================================
+   FILTERS
+========================================================= */
+
+.filters {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(200px, 1.8fr) repeat(3, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.search {
+  min-width: 0;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 13px;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: 11px;
+  background: rgba(255,255,255,.045);
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.search input::placeholder {
+  color: var(--text-muted, rgba(255,255,255,.4));
+}
+
+.filters select,
+.negotiationModal select {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: 11px;
+  outline: 0;
+  background-color: rgba(255,255,255,.045);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filters select option,
+.negotiationModal select option {
+  background: #111827;
+  color: #fff;
+}
+
+/* =========================================================
+   TABLE CARD
+========================================================= */
+
+.tableCard {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: var(--radius-lg, 16px);
+  background: var(--glass, rgba(255,255,255,.05));
+  box-shadow: var(--shadow, 0 8px 32px rgba(0,0,0,.4));
+}
+
+.tableHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.tableHeader > div {
+  min-width: 0;
+}
+
+.tableHeader span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--primary, #0ea5e9);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.tableHeader h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.tableHeader > strong {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 12px;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+========================================================= */
+
+.tableWrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.playersTable {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.playersTable th {
+  padding: 13px 14px;
+  background: rgba(255,255,255,.025);
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.playersTable td {
+  padding: 14px;
+  border-top: 1px solid rgba(255,255,255,.055);
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.playersTable tbody tr {
+  transition: background .2s ease;
+}
+
+.playersTable tbody tr:hover {
+  background: rgba(255,255,255,.025);
+}
+
+/* =========================================================
+   PLAYER CELL
+========================================================= */
+
+.playerCell {
+  min-width: 190px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.playerCell > div:last-child {
+  min-width: 0;
+}
+
+.playerCell strong {
+  display: block;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  font-size: 13px;
+}
+
+.playerCell small {
+  display: block;
+  margin-top: 3px;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 10px;
+}
+
+.playerAvatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    rgba(14,165,233,.2),
+    rgba(99,102,241,.2)
+  );
+  border: 1px solid rgba(255,255,255,.1);
+  color: #fff;
+  font-weight: 800;
+}
+
+.playerAvatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.page .scoutScoreWrap {
+
+.position {
+  display: inline-block;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.overall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgba(14,165,233,.12);
+  color: #38bdf8;
+}
+
+.clubName {
+  display: inline-block;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.available {
+  background: rgba(16,185,129,.1);
+  color: #34d399;
+}
+
+.listed {
+  background: rgba(14,165,233,.12);
+  color: #38bdf8;
+}
+
+.loan {
+  background: rgba(245,158,11,.12);
+  color: #fbbf24;
+}
+
+.unavailable {
+  background: rgba(239,68,68,.12);
+  color: #f87171;
+}
+
+.free {
+  background: rgba(168,85,247,.12);
+  color: #c084fc;
+}
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actions button {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 7px;
+  background: rgba(255,255,255,.05);
+  color: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.actions button:hover {
+  background: rgba(14,165,233,.14);
+  border-color: rgba(14,165,233,.3);
+}
+
+.actions .dangerAction {
+  color: #f87171;
+}
+
+.actions .loanAction {
+  color: #fbbf24;
+}
+
+.actions .buyAction {
+  color: #38bdf8;
+}
+
+.noPlayers {
+  padding: 50px 20px !important;
+  text-align: center;
+  color: var(--text-muted, rgba(255,255,255,.4)) !important;
+}
+
+/* =========================================================
+   SCOUTING
+========================================================= */
+
+.scouting {
+  width: 100%;
+  min-width: 0;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+  margin-bottom: 16px;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: var(--radius-lg, 16px);
+  background: var(--glass, rgba(255,255,255,.05));
+}
+
+.sectionHeading > div {
+  min-width: 0;
+}
+
+.sectionHeading span {
+  display: block;
+  color: var(--primary, #0ea5e9);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.sectionHeading h2 {
+  margin: 5px 0;
+  font-size: 24px;
+}
+
+.sectionHeading p {
+  margin: 0;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.scoutIcon {
+  width: 54px !important;
+  height: 54px;
+  min-width: 54px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(14,165,233,.1);
+  font-size: 25px !important;
+}
+
+.scoutGrid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scoutCard {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+  border-radius: var(--radius-lg, 16px);
+  background: var(--glass, rgba(255,255,255,.05));
+  overflow: hidden;
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+
+.scoutCard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-glow, 0 0 40px rgba(14,165,233,.15));
+}
+
+.scoutTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.largeAvatar {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: rgba(14,165,233,.1);
+  border: 1px solid rgba(255,255,255,.1);
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.largeAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scoutTop > div:last-child {
   text-align: right;
 }
-.page .scoutScoreLabel {
+
+.scoutTop span {
   display: block;
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-}
-.page .scoutScoreValue {
-  font-size: 1.4rem;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 9px;
   font-weight: 800;
-  color: var(--accent-yellow);
 }
 
-.page .scoutName {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin: 0.2rem 0 0.1rem;
-}
-.page .scoutPosition {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin: 0 0 0.5rem;
+.scoutTop strong {
+  display: block;
+  margin-top: 3px;
+  color: #38bdf8;
+  font-size: 24px;
 }
 
-.page .scoutStats {
+.scoutCard h3 {
+  margin: 15px 0 4px;
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoutCard > p {
+  margin: 0;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 11px;
+}
+
+.scoutStats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.2rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  padding: 0.4rem 0.2rem;
-  margin-bottom: 0.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 15px;
 }
-.page .scoutStatItem {
-  text-align: center;
+
+.scoutStats > div {
+  min-width: 0;
+  padding: 9px 6px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
 }
-.page .scoutStatLabel {
+
+.scoutStats span {
   display: block;
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  margin-bottom: 4px;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 8px;
+  font-weight: 800;
 }
-.page .scoutStatValue {
+
+.scoutStats strong {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
 
-.page .scoutReason {
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border-radius: 20px;
-  padding: 0.15rem 0.7rem;
-  display: inline-block;
-  margin-bottom: 0.6rem;
-}
-
-.page .scoutButton {
-  width: 100%;
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.4rem;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition), transform var(--transition);
-  min-height: 40px;
-}
-.page .scoutButton:hover {
-  background: #3a7be0;
-  transform: scale(1.02);
-}
-
-/* ============================================================
-   CONTRACT MONITOR
-============================================================ */
-.page .contractList {
-  padding: 0.5rem 1rem 1.2rem;
+.scoutReason {
+  min-height: 38px;
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.page .contractRow {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
   align-items: center;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.8rem;
-  border: 1px solid var(--border-color);
-  gap: 0.3rem;
-}
-.page .contractPlayer {
-  display: flex;
-  flex-direction: column;
-}
-.page .contractPlayerName {
-  font-size: 0.85rem;
-}
-.page .contractPlayerPosition {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-}
-.page .contractLabel {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.page .contractValue {
-  font-size: 0.8rem;
-}
-.page .contractWarning {
-  color: var(--accent-red) !important;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 10px;
+  line-height: 1.4;
 }
 
-/* ============================================================
-   MODAL OVERLAY
-============================================================ */
-.page .modalOverlay {
+.scoutCard > button {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(
+    135deg,
+    var(--primary, #0ea5e9),
+    var(--secondary, #6366f1)
+  );
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* =========================================================
+   CONTRACTS
+========================================================= */
+
+.contractList {
+  width: 100%;
+}
+
+.contractRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(150px, 1fr) minmax(120px, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.contractRow:last-child {
+  border-bottom: 0;
+}
+
+.contractRow > div {
+  min-width: 0;
+}
+
+.contractRow > div:first-child strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contractRow > div:first-child span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 11px;
+}
+
+.contractRow small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.contractRow strong {
+  font-size: 12px;
+}
+
+.contractWarning {
+  color: #f87171 !important;
+}
+
+/* =========================================================
+   MODALS
+========================================================= */
+
+.modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  z-index: 1000;
-  animation: fadeIn 0.25s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { transform: translateY(30px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
-}
-
-/* ----- Player Detail Modal ----- */
-.page .playerModal {
-  background: var(--bg-modal);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  max-width: 480px;
+  z-index: 9999;
   width: 100%;
-  padding: 1.5rem 1.5rem 1.8rem;
-  position: relative;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-  animation: slideUp 0.3s ease;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.page .closeButton {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.8rem;
-  background: transparent;
-  border: none;
-  font-size: 1.8rem;
-  line-height: 1;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color var(--transition), transform var(--transition);
-  padding: 0.2rem 0.5rem;
-}
-.page .closeButton:hover {
-  color: var(--text-primary);
-  transform: rotate(90deg);
-}
-
-.page .modalPlayerHeader {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.2rem;
-}
-.page .modalAvatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--bg-input);
+  height: 100%;
+  height: 100dvh;
+  padding: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
-  font-weight: 700;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  flex-shrink: 0;
+  overflow-y: auto;
+  background: rgba(0,0,0,.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
-.page .modalAvatar img {
+
+.playerModal,
+.negotiationModal {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 26px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 20px;
+  background: #111318;
+  box-shadow: 0 25px 80px rgba(0,0,0,.65);
+  animation: modalIn .22s ease-out;
+}
+
+.negotiationModal {
+  max-width: 480px;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 9px;
+  background: rgba(255,255,255,.05);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: rgba(239,68,68,.12);
+  color: #f87171;
+}
+
+.modalPlayerHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-right: 38px;
+  margin-bottom: 22px;
+}
+
+.modalAvatar {
+  width: 74px;
+  height: 74px;
+  min-width: 74px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    rgba(14,165,233,.2),
+    rgba(99,102,241,.2)
+  );
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.modalAvatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.page .modalPlayerPosition {
-  display: block;
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--accent-blue);
-}
-.page .modalPlayerName {
-  font-size: 1.2rem;
+
+.modalPlayerHeader span {
+  color: var(--primary, #0ea5e9);
+  font-size: 10px;
   font-weight: 800;
-  margin: 0.1rem 0 0.2rem;
+  text-transform: uppercase;
 }
-.page .modalPlayerClub {
+
+.modalPlayerHeader h2 {
+  margin: 5px 0;
+  font-size: 25px;
+  overflow-wrap: anywhere;
+}
+
+.modalPlayerHeader p {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 12px;
 }
 
-.page .detailsGrid {
+.detailsGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem 0.8rem;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  padding: 0.8rem 1rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.2rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 20px;
 }
-.page .detailItem {
+
+.detailsGrid > div {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.06);
+}
+
+.detailsGrid span {
   display: block;
-}
-.page .detailLabel {
-  display: block;
-  font-size: 0.55rem;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  color: var(--text-muted);
-}
-.page .detailValue {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.page .modalActions {
-  display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-.page .modalActionButton {
-  flex: 1;
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 40px;
-  padding: 0.5rem;
-  font-weight: 700;
-  color: #fff;
-  cursor: pointer;
-  transition: background var(--transition);
-  font-family: inherit;
-  min-width: 100px;
-  min-height: 44px;
-  font-size: 0.85rem;
-}
-.page .modalActionButton:hover {
-  background: #3a7be0;
-}
-.page .modalActionLoan {
-  background: transparent;
-  border: 1px solid var(--accent-blue);
-  color: var(--accent-blue);
-}
-.page .modalActionLoan:hover {
-  background: var(--accent-blue);
-  color: #fff;
-}
-
-/* ----- Negotiation / Loan Modal ----- */
-.page .negotiationModal {
-  background: var(--bg-modal);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  max-width: 420px;
-  width: 100%;
-  padding: 1.5rem 1.5rem 1.8rem;
-  position: relative;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-  animation: slideUp 0.3s ease;
-}
-
-.page .negotiationEyebrow {
-  font-size: 0.55rem;
-  margin-bottom: 0.3rem;
-}
-.page .negotiationTitle {
-  font-size: 1.2rem;
+  margin-bottom: 5px;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 9px;
   font-weight: 800;
-  margin: 0.2rem 0 0.1rem;
-}
-.page .negotiationSubtitle {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  margin: 0 0 1rem;
 }
 
-.page .negotiationSummary {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.8rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1rem;
-}
-.page .summaryLabel {
+.detailsGrid strong {
   display: block;
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  color: #fff;
+  font-size: 12px;
 }
-.page .summaryValue {
-  font-size: 0.9rem;
+
+.modalActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.modalActions button,
+.primaryButton {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(
+    135deg,
+    var(--primary, #0ea5e9),
+    var(--secondary, #6366f1)
+  );
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.modalActions .loanAction {
+  border: 1px solid rgba(245,158,11,.2);
+  background: rgba(245,158,11,.08);
+  color: #fbbf24;
+}
+
+/* =========================================================
+   NEGOTIATION
+========================================================= */
+
+.negotiationModal .eyebrow {
+  margin-bottom: 7px;
+}
+
+.negotiationModal h2 {
+  margin: 0;
+  padding-right: 38px;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+
+.negotiationModal > p {
+  margin: 7px 0 20px;
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 12px;
+}
+
+.negotiationSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 20px;
+}
+
+.negotiationSummary > div {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+}
+
+.negotiationSummary span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted, rgba(255,255,255,.4));
+  font-size: 9px;
+}
+
+.negotiationSummary strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.negotiationModal label {
+  display: block;
+  margin-bottom: 15px;
+  color: #fff;
+  font-size: 12px;
   font-weight: 700;
 }
 
-.page .negotiationLabel {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 0.6rem;
-}
-.page .negotiationSelect {
+.moneyInput {
   width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 40px;
-  padding: 0.5rem 1rem;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  margin-top: 0.2rem;
-  outline: none;
-  font-family: inherit;
-  transition: border var(--transition);
-  min-height: 40px;
-}
-.page .negotiationSelect:focus {
-  border-color: var(--accent-blue);
-}
-
-.page .moneyInput {
+  min-height: 46px;
   display: flex;
   align-items: center;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 40px;
-  padding: 0 0.8rem;
-  margin-top: 0.2rem;
-  transition: border var(--transition);
-}
-.page .moneyInput:focus-within {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--accent-blue-glow);
-}
-.page .moneySymbol {
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-right: 0.2rem;
-}
-.page .moneyInputField {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  padding: 0.5rem 0;
-  width: 100%;
-  font-family: inherit;
-  min-height: 40px;
-}
-.page .moneyInputField::-webkit-outer-spin-button,
-.page .moneyInputField::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.page .moneyInputField[type='number'] {
-  -moz-appearance: textfield;
+  margin-top: 7px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  overflow: hidden;
 }
 
-.page .negotiationHint {
+.moneyInput > span {
+  width: 44px;
+  min-width: 44px;
+  height: 46px;
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  background: rgba(79, 140, 255, 0.06);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.8rem;
-  border-left: 3px solid var(--accent-blue);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,.04);
+  color: var(--primary, #0ea5e9);
+  font-weight: 800;
 }
 
-.page .primaryButton {
+.moneyInput input {
   width: 100%;
-  background: var(--accent-green);
-  border: none;
-  border-radius: 40px;
-  padding: 0.6rem;
-  font-weight: 800;
-  font-size: 0.95rem;
+  min-width: 0;
+  height: 46px;
+  padding: 0 12px;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: #fff;
-  cursor: pointer;
-  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
-  font-family: inherit;
-  min-height: 44px;
+  font: inherit;
 }
-.page .primaryButton:hover:not(:disabled) {
-  background: #27ae60;
-  transform: scale(1.02);
-  box-shadow: 0 0 24px var(--accent-green-glow);
+
+.negotiationHint {
+  margin-bottom: 15px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  background: rgba(14,165,233,.07);
+  border: 1px solid rgba(14,165,233,.12);
+  color: var(--text-secondary, rgba(255,255,255,.7));
+  font-size: 11px;
+  line-height: 1.5;
 }
-.page .primaryButton:disabled {
-  opacity: 0.5;
+
+.primaryButton {
+  width: 100%;
+}
+
+.primaryButton:disabled {
+  opacity: .5;
   cursor: not-allowed;
 }
 
-/* ============================================================
-   RESPONSIVE – Enhanced for very small screens
-============================================================ */
+/* =========================================================
+   LARGE TABLETS
+========================================================= */
 
-/* --- Tablets and small laptops --- */
-@media (max-width: 860px) {
-  .page .header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .page .headerIdentity {
-    justify-content: center;
-  }
-  .page .headerBudgets {
-    justify-content: center;
-    gap: 1.5rem;
-  }
-  .page .budgetItem {
-    text-align: center;
-  }
-  .page .stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .page .tableHeaderCell,
-  .page .tableRowCell {
-    padding: 0.4rem 0.3rem;
-    font-size: 0.7rem;
-  }
-  .page .tableHeaderCell:last-child,
-  .page .tableRowCell:last-child {
-    min-width: 80px;
-  }
-  .page .playerName {
-    font-size: 0.75rem;
-  }
-  .page .contractRow {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-}
-
-/* --- Mobile (<= 600px) --- */
-@media (max-width: 600px) {
+@media (max-width: 1200px) {
   .page {
-    padding: 0.8rem 0.6rem 2.5rem;
+    padding: 20px;
   }
-  .page .header {
-    padding: 1rem 0.8rem;
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .page .clubLogo {
-    width: 44px;
-    height: 44px;
-    font-size: 1.2rem;
+
+  .scoutGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .page .headerTitle {
-    font-size: 1.2rem;
+
+  .filters {
+    grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(130px, 1fr));
   }
-  .page .budgetValue {
-    font-size: 1rem;
-  }
-  .page .stats {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-  }
-  .page .statCard {
-    padding: 0.6rem 0.8rem;
-  }
-  .page .statNumber {
-    font-size: 1.1rem;
-  }
-  .page .tabs {
-    justify-content: center;
-    padding: 0.2rem 0.3rem;
-  }
-  .page .tabButton {
-    font-size: 0.7rem;
-    padding: 0.3rem 0.7rem;
-    min-height: 34px;
-  }
-  .page .filters {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 0.6rem;
-  }
-  .page .filterSelect {
-    min-width: unset;
-    width: 100%;
-  }
-  .page .tableHeader {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.3rem;
-    padding: 0.8rem 1rem;
-  }
-  .page .tableHeaderTitle {
-    font-size: 1rem;
-  }
-  .page .playersTable {
-    font-size: 0.65rem;
-    min-width: 480px;
-  }
-  .page .tableHeaderCell,
-  .page .tableRowCell {
-    padding: 0.3rem 0.25rem;
-  }
-  .page .tableRowCell:first-child {
-    min-width: 80px;
-  }
-  .page .tableRowCell:nth-child(4),
-  .page .tableRowCell:nth-child(5),
-  .page .tableRowCell:nth-child(6) {
-    display: none;
-  }
-  .page .tableHeaderCell:nth-child(4),
-  .page .tableHeaderCell:nth-child(5),
-  .page .tableHeaderCell:nth-child(6) {
-    display: none;
-  }
-  .page .actionButton {
-    font-size: 0.55rem;
-    padding: 0.1rem 0.4rem;
-    min-height: 24px;
-  }
-  .page .scoutGrid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .page .scoutCard {
-    padding: 0.8rem;
-  }
-  .page .contractRow {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.2rem 0.5rem;
-    padding: 0.4rem 0.6rem;
-  }
-  .page .contractPlayer {
+
+  .filters .search {
     grid-column: 1 / -1;
   }
-  .page .detailsGrid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .page .modalActions {
+}
+
+/* =========================================================
+   TABLETS
+========================================================= */
+
+@media (max-width: 900px) {
+  .header {
+    align-items: flex-start;
     flex-direction: column;
   }
-  .page .modalActionButton {
-    min-width: unset;
+
+  .headerBudgets {
+    width: 100%;
+    justify-content: flex-start;
   }
-  .page .negotiationModal {
-    padding: 1.2rem;
+
+  .headerBudgets > div {
+    flex: 1;
   }
-  .page .playerModal {
-    padding: 1.2rem;
+
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters .search {
+    grid-column: 1 / -1;
+  }
+
+  .contractRow {
+    grid-template-columns: 1.5fr 1fr 1fr;
   }
 }
 
-/* --- Small phones (<= 420px) --- */
-@media (max-width: 420px) {
-  .page .stats {
-    grid-template-columns: 1fr;
-  }
-  .page .tableRowCell:nth-child(3),
-  .page .tableHeaderCell:nth-child(3) {
-    display: none;
-  }
-  .page .tableRowCell:nth-child(7),
-  .page .tableHeaderCell:nth-child(7) {
-    display: none;
-  }
-  .page .headerBudgets {
-    flex-direction: column;
-    gap: 0.3rem;
-  }
-  .page .scoutGrid {
-    grid-template-columns: 1fr;
-  }
-  .page .scoutButton {
-    font-size: 0.75rem;
-    min-height: 38px;
-  }
-  .page .contractRow {
-    grid-template-columns: 1fr;
-    gap: 0.1rem;
-  }
-  .page .contractPlayer {
-    grid-column: 1;
-  }
-  .page .contractRow .contractItem {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .page .contractLabel {
-    display: inline;
-    margin-right: 0.3rem;
-  }
-  .page .playerModal {
-    padding: 1rem;
-    max-width: 100%;
-    margin: 0.5rem;
-  }
-  .page .negotiationModal {
-    padding: 1rem;
-    max-width: 100%;
-    margin: 0.5rem;
-  }
-  .page .modalPlayerHeader {
-    flex-direction: column;
-    text-align: center;
-  }
-  .page .detailsGrid {
-    grid-template-columns: 1fr;
-  }
-  .page .modalActionButton {
-    min-height: 40px;
-    font-size: 0.8rem;
-  }
-}
+/* =========================================================
+   MOBILE
+========================================================= */
 
-/* --- Very small phones (<= 360px) --- */
-@media (max-width: 360px) {
+@media (max-width: 768px) {
   .page {
-    padding: 0.5rem 0.4rem 2rem;
+    width: 100%;
+    padding: 12px;
   }
-  .page .header {
-    padding: 0.8rem 0.5rem;
+
+  .header {
+    padding: 17px;
+    border-radius: 14px;
+    gap: 17px;
   }
-  .page .clubLogo {
+
+  .clubLogo {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    border-radius: 13px;
+    font-size: 24px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+  }
+
+  .headerBudgets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .headerBudgets > div {
+    min-width: 0;
+    padding: 11px;
+  }
+
+  .headerBudgets strong {
+    font-size: 15px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .statCard {
+    padding: 12px;
+    gap: 9px;
+    border-radius: 12px;
+  }
+
+  .statCard > span {
     width: 36px;
     height: 36px;
-    font-size: 1rem;
+    min-width: 36px;
+    font-size: 17px;
   }
-  .page .headerTitle {
-    font-size: 1rem;
+
+  .statCard strong {
+    font-size: 21px;
   }
-  .page .budgetValue {
-    font-size: 0.9rem;
+
+  .statCard p {
+    font-size: 10px;
   }
-  .page .statCard {
-    padding: 0.4rem 0.6rem;
+
+  .tabs {
+    margin-bottom: 12px;
   }
-  .page .statIcon {
-    font-size: 1.2rem;
+
+  .tabs button {
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 11px;
   }
-  .page .statNumber {
-    font-size: 0.9rem;
+
+  .filters {
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
   }
-  .page .tabButton {
-    font-size: 0.6rem;
-    padding: 0.2rem 0.5rem;
-    min-height: 30px;
+
+  .search {
+    min-height: 42px;
   }
-  .page .playersTable {
-    font-size: 0.55rem;
-    min-width: 360px;
+
+  .filters select {
+    min-height: 42px;
+    font-size: 11px;
   }
-  .page .tableHeaderCell,
-  .page .tableRowCell {
-    padding: 0.2rem 0.15rem;
+
+  .tableCard {
+    border-radius: 13px;
   }
-  .page .tableRowCell:first-child {
-    min-width: 60px;
+
+  .tableHeader {
+    padding: 15px;
   }
-  .page .playerName {
-    font-size: 0.65rem;
+
+  .tableHeader h2 {
+    font-size: 18px;
   }
-  .page .playerNationality {
-    font-size: 0.5rem;
+
+  .tableHeader > strong {
+    font-size: 10px;
   }
-  .page .actionButton {
-    font-size: 0.5rem;
-    padding: 0.05rem 0.3rem;
-    min-height: 20px;
+
+  .playersTable {
+    min-width: 1050px;
   }
-  .page .scoutCard {
-    padding: 0.6rem;
+
+  .sectionHeading {
+    padding: 17px;
+    border-radius: 13px;
   }
-  .page .scoutName {
-    font-size: 0.8rem;
+
+  .sectionHeading h2 {
+    font-size: 20px;
   }
-  .page .scoutButton {
-    font-size: 0.7rem;
-    min-height: 34px;
+
+  .scoutGrid {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
-  .page .primaryButton {
-    font-size: 0.8rem;
-    padding: 0.5rem;
-    min-height: 38px;
+
+  .scoutCard {
+    padding: 15px;
   }
-  .page .closeButton {
-    font-size: 1.5rem;
-    top: 0.2rem;
-    right: 0.5rem;
+
+  .contractRow {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .contractRow > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .modalOverlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .playerModal,
+  .negotiationModal {
+    max-height: calc(100dvh - 24px);
+    margin-top: 12px;
+    padding: 20px;
+    border-radius: 16px;
+  }
+}
+
+/* =========================================================
+   SMALL PHONES
+========================================================= */
+
+@media (max-width: 480px) {
+  .page {
+    padding: 8px;
+  }
+
+  .header {
+    padding: 14px;
+  }
+
+  .headerIdentity {
+    gap: 10px;
+  }
+
+  .clubLogo {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 11px;
+  }
+
+  .header h1 {
+    font-size: 19px;
+  }
+
+  .headerIdentity p {
+    font-size: 11px;
+  }
+
+  .eyebrow {
+    font-size: 8px;
+  }
+
+  .headerBudgets {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .headerBudgets span {
+    font-size: 8px;
+  }
+
+  .headerBudgets strong {
+    font-size: 13px;
+  }
+
+  .stats {
+    gap: 6px;
+  }
+
+  .statCard {
+    padding: 10px;
+    gap: 7px;
+  }
+
+  .statCard > span {
+    width: 31px;
+    height: 31px;
+    min-width: 31px;
+    font-size: 14px;
+  }
+
+  .statCard small {
+    font-size: 8px;
+  }
+
+  .statCard strong {
+    font-size: 18px;
+  }
+
+  .statCard p {
+    font-size: 8px;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filters .search {
+    grid-column: auto;
+  }
+
+  .filters select,
+  .search {
+    min-height: 40px;
+  }
+
+  .tableHeader {
+    padding: 13px;
+  }
+
+  .tableHeader h2 {
+    font-size: 16px;
+  }
+
+  .sectionHeading {
+    padding: 14px;
+  }
+
+  .sectionHeading h2 {
+    font-size: 18px;
+  }
+
+  .sectionHeading p {
+    font-size: 11px;
+  }
+
+  .scoutIcon {
+    width: 42px !important;
+    height: 42px;
+    min-width: 42px;
+    font-size: 19px !important;
+  }
+
+  .contractRow {
+    grid-template-columns: 1fr;
+    gap: 9px;
+    padding: 14px;
+  }
+
+  .contractRow > div:first-child {
+    grid-column: auto;
+  }
+
+  .modalOverlay {
+    padding: 8px;
+  }
+
+  .playerModal,
+  .negotiationModal {
+    max-height: calc(100dvh - 16px);
+    margin-top: 8px;
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .modalPlayerHeader {
+    gap: 10px;
+  }
+
+  .modalAvatar {
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+    border-radius: 14px;
+  }
+
+  .modalPlayerHeader h2 {
+    font-size: 19px;
+  }
+
+  .detailsGrid {
+    gap: 6px;
+  }
+
+  .detailsGrid > div {
+    padding: 10px;
+  }
+
+  .detailsGrid strong {
+    font-size: 10px;
+  }
+
+  .modalActions {
+    grid-template-columns: 1fr;
+  }
+
+  .negotiationSummary {
+    gap: 6px;
+  }
+
+  .negotiationSummary > div {
+    padding: 10px;
+  }
+}
+
+/* =========================================================
+   EXTRA SMALL DEVICES
+========================================================= */
+
+@media (max-width: 360px) {
+  .page {
+    padding: 6px;
+  }
+
+  .header {
+    padding: 12px;
+  }
+
+  .headerBudgets strong {
+    font-size: 12px;
+  }
+
+  .statCard {
+    padding: 8px;
+  }
+
+  .statCard > span {
+    display: none;
+  }
+
+  .statCard strong {
+    font-size: 17px;
+  }
+
+  .tabs button {
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
+  .playerModal,
+  .negotiationModal {
+    padding: 14px;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY / REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .scoutCard,
+  .statCard,
+  .modalOverlay,
+  .playerModal,
+  .negotiationModal {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print {
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .tabs,
+  .filters,
+  .actions,
+  .modalOverlay {
+    display: none !important;
+  }
+
+  .tableCard,
+  .statCard,
+  .header {
+    background: #fff !important;
+    color: #000 !important;
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+  }
+
+  .playersTable {
+    min-width: 0;
   }
 }
