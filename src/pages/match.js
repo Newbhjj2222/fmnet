@@ -38,10 +38,10 @@ import styles from './match.module.css';
    CONSTANTS
 ========================================================= */
 
-const MATCH_DURATION = 90; // Standard 90 minutes
-const FIRST_HALF_END = 45; // Standard 45 minutes
-const INJURY_TIME_MIN = 1; // Minimum injury time
-const INJURY_TIME_MAX = 5; // Maximum injury time
+const MATCH_DURATION = 90;
+const FIRST_HALF_END = 45;
+const INJURY_TIME_MIN = 1;
+const INJURY_TIME_MAX = 5;
 
 const MAX_SQUAD_SIZE = 25;
 const PLAYERS_ON_PITCH = 11;
@@ -299,7 +299,7 @@ function playerId(player) {
 }
 
 /* =========================================================
-   LOAD CLUB PLAYERS
+   LOAD CLUB PLAYERS FROM FIRESTORE
 ========================================================= */
 
 async function loadClubPlayers(clubId) {
@@ -311,7 +311,18 @@ async function loadClubPlayers(clubId) {
       where('clubId', '==', clubId)
     );
     const snapshot = await getDocs(playersQuery);
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+
+    const players = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }));
+
+    // Filter out youth players for first team
+    const firstTeamPlayers = players.filter(
+      (player) => player.squadType !== 'youth' && player.isYouth !== true
+    );
+
+    return firstTeamPlayers;
   } catch (error) {
     console.error('clubId player query failed:', error);
   }
@@ -323,7 +334,8 @@ async function loadClubPlayers(clubId) {
       .filter((player) => {
         const id = player.clubId || player.currentClub || player.teamId;
         return String(id) === String(clubId);
-      });
+      })
+      .filter((player) => player.squadType !== 'youth' && player.isYouth !== true);
   } catch (error) {
     console.error('Fallback players query failed:', error);
     return [];
@@ -331,24 +343,30 @@ async function loadClubPlayers(clubId) {
 }
 
 /* =========================================================
-   GENERATE PLAYERS
+   GENERATE PLAYERS IF SQUAD IS LESS THAN 25
 ========================================================= */
 
 function createGeneratedPlayer(club, position, index) {
   const baseName = getClubName(club, 'Club').replace(/[^a-zA-Z0-9 ]/g, '').trim() || 'Club';
-  const overall = 55 + ((index * 7 + (club.id?.length || 0)) % 21);
+  const overall = 45 + ((index * 7 + (club.id?.length || 0)) % 15); // 45-59 for youth fillers
 
   return {
     id: `gen-${club.id}-${position}-${index}`,
-    name: `${baseName} Youth ${index + 1}`,
+    name: `${baseName} Academy ${index + 1}`,
     position,
     overall,
     isGenerated: true,
+    squadType: 'first-team',
   };
 }
 
-function generateClubPlayers(club, existingPlayers, targetCount = 16) {
+function ensureSquadSize(club, existingPlayers, targetCount = MAX_SQUAD_SIZE) {
   const players = [...existingPlayers];
+
+  if (players.length >= targetCount) {
+    return players;
+  }
+
   const counts = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
 
   players.forEach((player) => {
@@ -356,11 +374,12 @@ function generateClubPlayers(club, existingPlayers, targetCount = 16) {
     if (counts[pos] !== undefined) counts[pos] += 1;
   });
 
-  const requiredPositions = [['GK', 1], ['DEF', 4], ['MID', 4], ['ATT', 2]];
+  const requiredPositions = [['GK', 2], ['DEF', 8], ['MID', 8], ['ATT', 6]];
   let generatedIndex = 0;
 
+  // First, ensure minimum positions
   requiredPositions.forEach(([pos, requiredCount]) => {
-    while (counts[pos] < requiredCount) {
+    while (counts[pos] < requiredCount && players.length < targetCount) {
       const newPlayer = createGeneratedPlayer(club, pos, generatedIndex);
       players.push(newPlayer);
       counts[pos] += 1;
@@ -368,9 +387,10 @@ function generateClubPlayers(club, existingPlayers, targetCount = 16) {
     }
   });
 
-  const extraPositions = ['MID', 'ATT', 'DEF', 'MID', 'ATT', 'DEF', 'MID', 'GK'];
+  // Then fill remaining slots to reach 25
+  const extraPositions = ['MID', 'DEF', 'ATT', 'MID', 'DEF', 'ATT', 'GK'];
   while (players.length < targetCount) {
-    const pos = extraPositions[(players.length - 11) % extraPositions.length] || 'MID';
+    const pos = extraPositions[generatedIndex % extraPositions.length] || 'MID';
     players.push(createGeneratedPlayer(club, pos, generatedIndex));
     generatedIndex += 1;
   }
@@ -597,8 +617,10 @@ export default function MatchPage() {
 
         if (cancelled) return;
 
-        const preparedHome = generateClubPlayers(home, rawHomePlayers);
-        const preparedAway = generateClubPlayers(away, rawAwayPlayers);
+        // Ensure 25 players per squad (generate if needed)
+        const preparedHome = ensureSquadSize(home, rawHomePlayers);
+        const preparedAway = ensureSquadSize(away, rawAwayPlayers);
+
         setHomeSquad(preparedHome);
         setAwaySquad(preparedAway);
 
@@ -634,6 +656,58 @@ export default function MatchPage() {
     loadMatch();
     return () => { cancelled = true; };
   }, [loading, user, matchId, router, applyMatchState, formation]);
+
+  /* =======================================================
+     STARTING XI SELECTION
+  ======================================================= */
+
+  function selectStartingXI(squad, formationName = '4-4-2') {
+    const safeSquad = Array.isArray(squad) ? [...squad] : [];
+    const formationRequirements = {
+      '4-4-2': { GK: 1, DEF: 4, MID: 4, ATT: 2 },
+      '4-3-3': { GK: 1, DEF: 4, MID: 3, ATT: 3 },
+      '3-5-2': { GK: 1, DEF: 3, MID: 5, ATT: 2 },
+      '5-3-2': { GK: 1, DEF: 5, MID: 3, ATT: 2 },
+      '4-2-3-1': { GK: 1, DEF: 4, MID: 5, ATT: 1 },
+    };
+
+    const requirements = formationRequirements[formationName] || formationRequirements['4-4-2'];
+
+    const goalkeepers = safeSquad.filter((p) => normalizePosition(getPlayerPosition(p)) === 'GK');
+    const defenders = safeSquad.filter((p) => normalizePosition(getPlayerPosition(p)) === 'DEF');
+    const midfielders = safeSquad.filter((p) => normalizePosition(getPlayerPosition(p)) === 'MID');
+    const attackers = safeSquad.filter((p) => normalizePosition(getPlayerPosition(p)) === 'ATT');
+
+    const used = new Set();
+    const result = [];
+
+    function addBest(list, count) {
+      [...list]
+        .sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a))
+        .slice(0, count)
+        .forEach((player) => {
+          if (!used.has(player.id)) {
+            used.add(player.id);
+            result.push(player);
+          }
+        });
+    }
+
+    addBest(goalkeepers, requirements.GK);
+    addBest(defenders, requirements.DEF);
+    addBest(midfielders, requirements.MID);
+    addBest(attackers, requirements.ATT);
+
+    const remaining = safeSquad
+      .filter((player) => !used.has(player.id))
+      .sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a));
+
+    while (result.length < PLAYERS_ON_PITCH && remaining.length) {
+      result.push(remaining.shift());
+    }
+
+    return result.slice(0, PLAYERS_ON_PITCH);
+  }
 
   /* =======================================================
      THREE.JS SCENE
@@ -836,7 +910,6 @@ export default function MatchPage() {
     const tacticData = TACTICS[tactic] || TACTICS['Tiki-Taka'];
     const random = Math.random();
 
-    // Update possession with 2 decimal places
     const homeStatsData = statsRef.current.home;
     const awayStatsData = statsRef.current.away;
 
@@ -865,7 +938,6 @@ export default function MatchPage() {
       if (team === 'home') homeStatsData.shots += 1;
       else awayStatsData.shots += 1;
 
-      const goalZ = randomBetweenSafe(-2, 2);
       const saveChance = 0.3;
 
       if (Math.random() > saveChance) {
@@ -1080,7 +1152,7 @@ export default function MatchPage() {
   }, [fixture, userIsParticipant, homeXI, awayXI, matchStatus, homeScore, awayScore, events, homeStats, awayStats, substitutionsUsed, mentality, formation, tactic, injuryTimeFirstHalf, injuryTimeSecondHalf, saveMatchState]);
 
   /* =======================================================
-     MATCH TIMER (90 mins + injury time)
+     MATCH TIMER
   ======================================================= */
 
   useEffect(() => {
@@ -1090,7 +1162,6 @@ export default function MatchPage() {
       setMatchMinute((previous) => {
         const next = previous + TICK_SECONDS;
 
-        // First half ends at 45 + injury time
         const firstHalfTotal = FIRST_HALF_END + injuryTimeFirstHalf;
 
         if (next === firstHalfTotal && previous < firstHalfTotal) {
@@ -1099,7 +1170,6 @@ export default function MatchPage() {
           return next;
         }
 
-        // Full match ends at 90 + injury time (first + second)
         const fullMatchTotal = MATCH_DURATION + injuryTimeFirstHalf + injuryTimeSecondHalf;
 
         if (next >= fullMatchTotal) {
