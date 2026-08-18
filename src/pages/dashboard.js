@@ -13,6 +13,8 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  updateDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import {
   Bar,
@@ -54,9 +56,7 @@ function safeNumber(value, fallback = 0) {
   if (value === null || value === undefined || value === '') {
     return fallback;
   }
-
   const number = Number(value);
-
   return Number.isFinite(number) ? number : fallback;
 }
 
@@ -64,12 +64,20 @@ function safeString(value, fallback = '') {
   if (value === null || value === undefined) {
     return fallback;
   }
-
   if (typeof value === 'object') {
     return value.name || value.title || value.label || value.id || fallback;
   }
-
   return String(value);
+}
+
+function getClubName(club, fallback = 'Unknown Club') {
+  return (
+    club?.shortName ||
+    club?.name ||
+    club?.clubName ||
+    club?.title ||
+    fallback
+  );
 }
 
 /* =========================================================
@@ -97,6 +105,7 @@ export default function Dashboard() {
   const [upcomingFixtures, setUpcomingFixtures] = useState([]);
   const [allMatches, setAllMatches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClubOccupied, setIsClubOccupied] = useState(false);
 
   /* =======================================================
      AUTH
@@ -141,18 +150,49 @@ export default function Dashboard() {
       }
 
       if (careerData.currentClub) {
-        const clubDoc = await getDoc(doc(db, 'clubs', careerData.currentClub));
+        const clubRef = doc(db, 'clubs', careerData.currentClub);
+        const clubDoc = await getDoc(clubRef);
 
         if (clubDoc.exists()) {
+          const clubData = clubDoc.data();
+
+          // Check if club is occupied by another manager
+          if (clubData.managerId && clubData.managerId !== user.uid) {
+            setIsClubOccupied(true);
+            setClubInfo(null);
+            toast.error('This club has been taken by another manager. Please choose a different club.');
+            return;
+          }
+
+          setIsClubOccupied(false);
+
+          // Ensure club is marked as occupied by this user
+          if (clubData.managerId !== user.uid) {
+            await updateDoc(clubRef, {
+              managerId: user.uid,
+              managerName:
+                userData?.displayName ||
+                user?.email?.split('@')[0] ||
+                'Manager',
+              managerStatus: 'active',
+              updatedAt: serverTimestamp(),
+            });
+          }
+
           setClubInfo({
             id: clubDoc.id,
-            ...clubDoc.data(),
+            ...clubData,
           });
+        } else {
+          toast.error('Your assigned club no longer exists. Please choose a new club.');
+          setClubInfo(null);
         }
+      } else {
+        setClubInfo(null);
       }
 
       // Load matches for current club
-      if (careerData.currentClub) {
+      if (careerData.currentClub && !isClubOccupied) {
         await loadClubMatches(careerData.currentClub);
       }
     } catch (error) {
@@ -164,7 +204,7 @@ export default function Dashboard() {
   };
 
   /* =======================================================
-     LOAD CLUB MATCHES
+     LOAD CLUB MATCHES (REAL-TIME)
   ======================================================= */
 
   const loadClubMatches = useCallback(async (clubId) => {
@@ -174,29 +214,38 @@ export default function Dashboard() {
         where('seasonYear', '==', getSeasonYear())
       );
 
-      const matchesSnapshot = await getDocs(matchesQuery);
-      const allLeagueMatches = [];
+      const unsubscribe = onSnapshot(
+        matchesQuery,
+        (snapshot) => {
+          const allLeagueMatches = [];
 
-      matchesSnapshot.forEach((docItem) => {
-        const match = docItem.data();
+          snapshot.forEach((docItem) => {
+            const match = docItem.data();
 
-        const isClubMatch =
-          match.homeClubId === clubId ||
-          match.awayClubId === clubId ||
-          match.homeTeamId === clubId ||
-          match.awayTeamId === clubId;
+            const isClubMatch =
+              match.homeClubId === clubId ||
+              match.awayClubId === clubId ||
+              match.homeTeamId === clubId ||
+              match.awayTeamId === clubId;
 
-        if (isClubMatch) {
-          allLeagueMatches.push({
-            id: docItem.id,
-            ...match,
+            if (isClubMatch) {
+              allLeagueMatches.push({
+                id: docItem.id,
+                ...match,
+              });
+            }
           });
-        }
-      });
 
-      setAllMatches(allLeagueMatches);
-      calculateStats(allLeagueMatches, clubId);
-      separateMatches(allLeagueMatches);
+          setAllMatches(allLeagueMatches);
+          calculateStats(allLeagueMatches, clubId);
+          separateMatches(allLeagueMatches);
+        },
+        (error) => {
+          console.error('Error loading club matches:', error);
+        }
+      );
+
+      return unsubscribe;
     } catch (error) {
       console.error('Error loading club matches:', error);
     }
@@ -232,7 +281,6 @@ export default function Dashboard() {
       const teamScore = isHome ? homeScore : awayScore;
       const opponentScore = isHome ? awayScore : homeScore;
 
-      // Skip matches without results
       if (!match.result && match.status !== 'finished') {
         return;
       }
@@ -319,6 +367,48 @@ export default function Dashboard() {
   }
 
   /* =======================================================
+     CLUB OCCUPIED
+  ======================================================= */
+
+  if (isClubOccupied) {
+    return (
+      <div className={styles.loadingContainer}>
+        <div className={styles.emptyIcon}>⚠️</div>
+        <h2>Club Already Taken</h2>
+        <p>This club has been taken by another manager.</p>
+        <button
+          type="button"
+          className={styles.chooseClubButton}
+          onClick={() => router.push('/club')}
+        >
+          Choose Another Club
+        </button>
+      </div>
+    );
+  }
+
+  /* =======================================================
+     NO CLUB
+  ======================================================= */
+
+  if (!clubInfo) {
+    return (
+      <div className={styles.loadingContainer}>
+        <div className={styles.emptyIcon}>⚽</div>
+        <h2>No Club Assigned</h2>
+        <p>You need to choose a club before viewing the dashboard.</p>
+        <button
+          type="button"
+          className={styles.chooseClubButton}
+          onClick={() => router.push('/club')}
+        >
+          Choose Club
+        </button>
+      </div>
+    );
+  }
+
+  /* =======================================================
      DERIVED DATA
   ======================================================= */
 
@@ -329,28 +419,45 @@ export default function Dashboard() {
 
   const goalDifference = stats.goals - stats.conceded;
 
-  const getMatchOpponent = (match, clubId) => {
+  const getMatchOpponent = (match, clubIdValue) => {
     const isHome =
-      match.homeClubId === clubId ||
-      match.homeTeamId === clubId;
+      match.homeClubId === clubIdValue ||
+      match.homeTeamId === clubIdValue;
 
     return isHome
       ? match.awayClubName || match.awayTeam || 'Away'
       : match.homeClubName || match.homeTeam || 'Home';
   };
 
-  const getMatchScore = (match, clubId) => {
+  const getMatchScore = (match, clubIdValue) => {
     const result = match.result || {};
     const homeScore = safeNumber(result.homeScore ?? match.homeScore);
     const awayScore = safeNumber(result.awayScore ?? match.awayScore);
 
     const isHome =
-      match.homeClubId === clubId ||
-      match.homeTeamId === clubId;
+      match.homeClubId === clubIdValue ||
+      match.homeTeamId === clubIdValue;
 
     return isHome
       ? `${homeScore} - ${awayScore}`
       : `${awayScore} - ${homeScore}`;
+  };
+
+  const getMatchResult = (match, clubIdValue) => {
+    const result = match.result || {};
+    const homeScore = safeNumber(result.homeScore ?? match.homeScore);
+    const awayScore = safeNumber(result.awayScore ?? match.awayScore);
+
+    const isHome =
+      match.homeClubId === clubIdValue ||
+      match.homeTeamId === clubIdValue;
+
+    const teamScore = isHome ? homeScore : awayScore;
+    const opponentScore = isHome ? awayScore : homeScore;
+
+    if (teamScore > opponentScore) return 'W';
+    if (teamScore < opponentScore) return 'L';
+    return 'D';
   };
 
   /* =======================================================
@@ -446,27 +553,27 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {clubInfo && (
-          <div className={styles.clubInfo}>
-            <div className={styles.clubHeader}>
-              <span className={styles.clubLogo}>
-                {clubInfo.logo ? (
-                  <img src={clubInfo.logo} alt={clubInfo.name} />
-                ) : (
-                  '⚽'
-                )}
-              </span>
-              <div>
-                <h2 className={styles.clubName}>{clubInfo.name}</h2>
-                <p className={styles.clubDetails}>
-                  {safeString(clubInfo.leagueName, clubInfo.league)} •{' '}
-                  {clubInfo.stadium || 'No stadium'}
-                </p>
-              </div>
+        {/* CLUB INFO */}
+        <div className={styles.clubInfo}>
+          <div className={styles.clubHeader}>
+            <span className={styles.clubLogo}>
+              {clubInfo.logo ? (
+                <img src={clubInfo.logo} alt={clubInfo.name} />
+              ) : (
+                '⚽'
+              )}
+            </span>
+            <div>
+              <h2 className={styles.clubName}>{getClubName(clubInfo)}</h2>
+              <p className={styles.clubDetails}>
+                {safeString(clubInfo.leagueName, clubInfo.league)} •{' '}
+                {clubInfo.stadium || 'No stadium'}
+              </p>
             </div>
           </div>
-        )}
+        </div>
 
+        {/* CHARTS */}
         <div className={styles.chartsGrid}>
           <div className={styles.chartCard}>
             <h3 className={styles.chartTitle}>Match Results</h3>
@@ -489,20 +596,30 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* FEED */}
         <div className={styles.feedGrid}>
           <div className={styles.feedCard}>
             <h3 className={styles.feedTitle}>Recent Matches</h3>
             <div className={styles.feedList}>
               {recentMatches.length > 0 ? (
                 recentMatches.map((match) => {
-                  const opponent = getMatchOpponent(
-                    match,
-                    clubInfo?.id
-                  );
+                  const opponent = getMatchOpponent(match, clubInfo?.id);
                   const score = getMatchScore(match, clubInfo?.id);
+                  const result = getMatchResult(match, clubInfo?.id);
 
                   return (
                     <div key={match.id} className={styles.feedItem}>
+                      <span
+                        className={`${styles.resultBadge} ${
+                          result === 'W'
+                            ? styles.resultWin
+                            : result === 'L'
+                              ? styles.resultLoss
+                              : styles.resultDraw
+                        }`}
+                      >
+                        {result}
+                      </span>
                       <span className={styles.matchResult}>
                         vs {opponent}{' '}
                         <strong>{score}</strong>
@@ -524,10 +641,7 @@ export default function Dashboard() {
             <div className={styles.feedList}>
               {upcomingFixtures.length > 0 ? (
                 upcomingFixtures.map((fixture) => {
-                  const opponent = getMatchOpponent(
-                    fixture,
-                    clubInfo?.id
-                  );
+                  const opponent = getMatchOpponent(fixture, clubInfo?.id);
 
                   return (
                     <div key={fixture.id} className={styles.feedItem}>
