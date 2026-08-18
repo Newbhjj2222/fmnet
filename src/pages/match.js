@@ -38,8 +38,10 @@ import styles from './match.module.css';
    CONSTANTS
 ========================================================= */
 
-const MATCH_DURATION = 96;
-const FIRST_HALF_END = 48;
+const MATCH_DURATION = 90; // Standard 90 minutes
+const FIRST_HALF_END = 45; // Standard 45 minutes
+const INJURY_TIME_MIN = 1; // Minimum injury time
+const INJURY_TIME_MAX = 5; // Maximum injury time
 
 const MAX_SQUAD_SIZE = 25;
 const PLAYERS_ON_PITCH = 11;
@@ -100,6 +102,14 @@ function randomBetweenSafe(min, max) {
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
+}
+
+/* =========================================================
+   FORMAT POSSESSION WITH 2 DECIMALS
+========================================================= */
+
+function formatPossession(value) {
+  return `${Number(value).toFixed(2)}%`;
 }
 
 /* =========================================================
@@ -267,7 +277,7 @@ function createDefaultStats() {
   return {
     shots: 0,
     shotsOnTarget: 0,
-    possession: 50,
+    possession: 50.00,
     passes: 0,
     fouls: 0,
     corners: 0,
@@ -411,6 +421,8 @@ export default function MatchPage() {
   const [matchMinute, setMatchMinute] = useState(0);
   const [matchStatus, setMatchStatus] = useState('loading');
   const [events, setEvents] = useState([]);
+  const [injuryTimeFirstHalf, setInjuryTimeFirstHalf] = useState(0);
+  const [injuryTimeSecondHalf, setInjuryTimeSecondHalf] = useState(0);
 
   const [homeStats, setHomeStats] = useState(createDefaultStats());
   const [awayStats, setAwayStats] = useState(createDefaultStats());
@@ -448,8 +460,6 @@ export default function MatchPage() {
   const ballPossessionRef = useRef(null);
   const playerTargetsRef = useRef({ home: [], away: [] });
   const staminaRef = useRef({ home: {}, away: {} });
-
-  // Stats refs for real-time tracking
   const statsRef = useRef({ home: createDefaultStats(), away: createDefaultStats() });
 
   const isHomeUser = String(userClubId || '') === String(homeClub?.id || '');
@@ -497,17 +507,35 @@ export default function MatchPage() {
     setMatchMinute(safeNumber(data.minute ?? data.matchMinute, 0));
     setEvents(Array.isArray(data.events) ? data.events : []);
 
-    setHomeStats({ ...createDefaultStats(), ...(data.homeStats || {}) });
-    setAwayStats({ ...createDefaultStats(), ...(data.awayStats || {}) });
+    setHomeStats({
+      ...createDefaultStats(),
+      ...(data.homeStats || {}),
+      possession: safeNumber(data.homeStats?.possession, 50.00),
+    });
+    setAwayStats({
+      ...createDefaultStats(),
+      ...(data.awayStats || {}),
+      possession: safeNumber(data.awayStats?.possession, 50.00),
+    });
     statsRef.current = {
-      home: { ...createDefaultStats(), ...(data.homeStats || {}) },
-      away: { ...createDefaultStats(), ...(data.awayStats || {}) },
+      home: {
+        ...createDefaultStats(),
+        ...(data.homeStats || {}),
+        possession: safeNumber(data.homeStats?.possession, 50.00),
+      },
+      away: {
+        ...createDefaultStats(),
+        ...(data.awayStats || {}),
+        possession: safeNumber(data.awayStats?.possession, 50.00),
+      },
     };
 
     setSubstitutionsUsed(safeNumber(data.substitutionsUsed, 0));
     if (data.mentality) setMentality(data.mentality);
     if (data.formation) setFormation(data.formation);
     if (data.tactic) setTactic(data.tactic);
+    if (data.injuryTimeFirstHalf) setInjuryTimeFirstHalf(data.injuryTimeFirstHalf);
+    if (data.injuryTimeSecondHalf) setInjuryTimeSecondHalf(data.injuryTimeSecondHalf);
 
     const status = normalize(data.status);
     if (status === 'finished' || status === 'completed') setMatchStatus('finished');
@@ -587,6 +615,14 @@ export default function MatchPage() {
         startingAway.forEach((p) => { awayStamina[playerId(p)] = 100; });
         staminaRef.current = { home: homeStamina, away: awayStamina };
         setPlayerStamina({ home: homeStamina, away: awayStamina });
+
+        // Generate injury time if not set
+        if (!match.injuryTimeFirstHalf) {
+          setInjuryTimeFirstHalf(randomBetweenSafe(INJURY_TIME_MIN, INJURY_TIME_MAX));
+        }
+        if (!match.injuryTimeSecondHalf) {
+          setInjuryTimeSecondHalf(randomBetweenSafe(INJURY_TIME_MIN, INJURY_TIME_MAX));
+        }
       } catch (error) {
         console.error('Match loading error:', error);
         toast.error('Could not load match');
@@ -800,19 +836,19 @@ export default function MatchPage() {
     const tacticData = TACTICS[tactic] || TACTICS['Tiki-Taka'];
     const random = Math.random();
 
-    // Update possession
+    // Update possession with 2 decimal places
     const homeStatsData = statsRef.current.home;
     const awayStatsData = statsRef.current.away;
+
     if (team === 'home') {
-      homeStatsData.possession = Math.min(70, homeStatsData.possession + 0.1);
-      awayStatsData.possession = 100 - homeStatsData.possession;
+      homeStatsData.possession = Number(Math.min(70.00, homeStatsData.possession + 0.01).toFixed(2));
+      awayStatsData.possession = Number((100 - homeStatsData.possession).toFixed(2));
     } else {
-      awayStatsData.possession = Math.min(70, awayStatsData.possession + 0.1);
-      homeStatsData.possession = 100 - awayStatsData.possession;
+      awayStatsData.possession = Number(Math.min(70.00, awayStatsData.possession + 0.01).toFixed(2));
+      homeStatsData.possession = Number((100 - awayStatsData.possession).toFixed(2));
     }
 
     if (random < tacticData.passChance) {
-      // PASS EVENT
       const teammateIndex = Math.floor(Math.random() * 11);
       if (teammateIndex !== playerIndex && playerMeshes[teammateIndex]) {
         ballPossessionRef.current = { team, playerIndex: teammateIndex };
@@ -826,7 +862,6 @@ export default function MatchPage() {
     const distanceToGoal = Math.abs(currentPlayer.position.x - goalX);
 
     if (random < tacticData.shootChance && distanceToGoal < 10) {
-      // SHOT EVENT
       if (team === 'home') homeStatsData.shots += 1;
       else awayStatsData.shots += 1;
 
@@ -834,7 +869,6 @@ export default function MatchPage() {
       const saveChance = 0.3;
 
       if (Math.random() > saveChance) {
-        // GOAL!
         if (team === 'home') {
           homeStatsData.shotsOnTarget += 1;
           setHomeScore((prev) => prev + 1);
@@ -856,7 +890,6 @@ export default function MatchPage() {
         setEvents((prev) => [goalEvent, ...prev]);
         ballPossessionRef.current = null;
       } else {
-        // SAVE!
         if (team === 'home') homeStatsData.shotsOnTarget += 1;
         else awayStatsData.shotsOnTarget += 1;
 
@@ -878,13 +911,11 @@ export default function MatchPage() {
       return;
     }
 
-    // Dribble
     const direction = team === 'home' ? 1 : -1;
     const newX = clamp(currentPlayer.position.x + direction * randomBetweenSafe(1, 3), -14, 14);
     const newZ = clamp(currentPlayer.position.z + randomBetweenSafe(-2, 2), -9, 9);
     playerTargetsRef.current[team][playerIndex] = { x: newX, z: newZ };
 
-    // Defenders press
     opposingMeshes.forEach((opponent, index) => {
       playerTargetsRef.current[opposingTeam][index] = {
         x: currentPlayer.position.x + (Math.random() - 0.5) * 2,
@@ -892,7 +923,6 @@ export default function MatchPage() {
       };
     });
 
-    // Tackle chance
     if (Math.random() < 0.05) {
       if (opposingTeam === 'home') homeStatsData.tackles += 1;
       else awayStatsData.tackles += 1;
@@ -901,7 +931,6 @@ export default function MatchPage() {
       ballPossessionRef.current = { team: opposingTeam, playerIndex: opponentIndex };
     }
 
-    // Foul chance
     if (Math.random() < 0.03) {
       if (team === 'home') homeStatsData.fouls += 1;
       else awayStatsData.fouls += 1;
@@ -918,13 +947,11 @@ export default function MatchPage() {
       setEvents((prev) => [foulEvent, ...prev]);
     }
 
-    // Corner chance
     if (Math.random() < 0.02) {
       if (team === 'home') homeStatsData.corners += 1;
       else awayStatsData.corners += 1;
     }
 
-    // Update stamina
     const currentPlayerData = players[playerIndex];
     if (currentPlayerData) {
       const pid = playerId(currentPlayerData);
@@ -935,7 +962,6 @@ export default function MatchPage() {
       }
     }
 
-    // Sync stats state
     setHomeStats({ ...statsRef.current.home });
     setAwayStats({ ...statsRef.current.away });
   }, [homeXI, awayXI, tactic, matchMinute]);
@@ -948,6 +974,7 @@ export default function MatchPage() {
     minute, homeScoreValue, awayScoreValue, eventsValue,
     homeStatsValue, awayStatsValue, statusValue,
     substitutionsValue, mentalityValue, formationValue, tacticValue,
+    injuryFirstHalf, injurySecondHalf,
     extra = {},
   }) => {
     if (!matchId) return;
@@ -967,6 +994,8 @@ export default function MatchPage() {
       mentality: mentalityValue || 'balanced',
       formation: formationValue || '4-4-2',
       tactic: tacticValue || 'Tiki-Taka',
+      injuryTimeFirstHalf: injuryFirstHalf || 0,
+      injuryTimeSecondHalf: injurySecondHalf || 0,
       updatedAt: serverTimestamp(),
       ...extra,
     }, { merge: true });
@@ -997,6 +1026,8 @@ export default function MatchPage() {
         mentalityValue: mentality,
         formationValue: formation,
         tacticValue: tactic,
+        injuryFirstHalf: injuryTimeFirstHalf,
+        injurySecondHalf: injuryTimeSecondHalf,
       });
     } catch (error) {
       console.error('Simulation error:', error);
@@ -1006,6 +1037,7 @@ export default function MatchPage() {
   }, [
     homeXI, awayXI, mentality, formation, tactic,
     homeScore, awayScore, events, substitutionsUsed,
+    injuryTimeFirstHalf, injuryTimeSecondHalf,
     saveMatchState, simulatePlayerMovement,
   ]);
 
@@ -1034,6 +1066,7 @@ export default function MatchPage() {
         eventsValue: events, homeStatsValue: homeStats, awayStatsValue: awayStats,
         statusValue: 'live', substitutionsValue: substitutionsUsed,
         mentalityValue: mentality, formationValue: formation, tacticValue: tactic,
+        injuryFirstHalf: injuryTimeFirstHalf, injurySecondHalf: injuryTimeSecondHalf,
       });
       setMatchStatus('live');
       setPaused(false);
@@ -1044,10 +1077,10 @@ export default function MatchPage() {
     } finally {
       setSavingMatch(false);
     }
-  }, [fixture, userIsParticipant, homeXI, awayXI, matchStatus, homeScore, awayScore, events, homeStats, awayStats, substitutionsUsed, mentality, formation, tactic, saveMatchState]);
+  }, [fixture, userIsParticipant, homeXI, awayXI, matchStatus, homeScore, awayScore, events, homeStats, awayStats, substitutionsUsed, mentality, formation, tactic, injuryTimeFirstHalf, injuryTimeSecondHalf, saveMatchState]);
 
   /* =======================================================
-     MATCH TIMER
+     MATCH TIMER (90 mins + injury time)
   ======================================================= */
 
   useEffect(() => {
@@ -1056,12 +1089,23 @@ export default function MatchPage() {
     timerRef.current = setInterval(() => {
       setMatchMinute((previous) => {
         const next = previous + TICK_SECONDS;
-        if (next === FIRST_HALF_END) {
+
+        // First half ends at 45 + injury time
+        const firstHalfTotal = FIRST_HALF_END + injuryTimeFirstHalf;
+
+        if (next === firstHalfTotal && previous < firstHalfTotal) {
           setMatchStatus('half-time');
           setHalfTimeShown(true);
           return next;
         }
-        if (next >= MATCH_DURATION) return MATCH_DURATION;
+
+        // Full match ends at 90 + injury time (first + second)
+        const fullMatchTotal = MATCH_DURATION + injuryTimeFirstHalf + injuryTimeSecondHalf;
+
+        if (next >= fullMatchTotal) {
+          return fullMatchTotal;
+        }
+
         return next;
       });
     }, MATCH_TICK_MS);
@@ -1072,16 +1116,18 @@ export default function MatchPage() {
         timerRef.current = null;
       }
     };
-  }, [matchStatus, paused]);
+  }, [matchStatus, paused, injuryTimeFirstHalf, injuryTimeSecondHalf]);
 
   /* =======================================================
      SIMULATE CURRENT MINUTE
   ======================================================= */
 
+  const fullMatchDuration = MATCH_DURATION + injuryTimeFirstHalf + injuryTimeSecondHalf;
+
   useEffect(() => {
-    if (matchStatus !== 'live' || paused || matchMinute <= 0 || matchMinute >= MATCH_DURATION) return;
+    if (matchStatus !== 'live' || paused || matchMinute <= 0 || matchMinute >= fullMatchDuration) return;
     simulateMinute(matchMinute);
-  }, [matchMinute, matchStatus, paused, simulateMinute]);
+  }, [matchMinute, matchStatus, paused, simulateMinute, fullMatchDuration]);
 
   /* =======================================================
      HALF TIME
@@ -1091,10 +1137,19 @@ export default function MatchPage() {
     try {
       setSavingMatch(true);
       await saveMatchState({
-        minute: FIRST_HALF_END, homeScoreValue: homeScore, awayScoreValue: awayScore,
-        eventsValue: events, homeStatsValue: homeStats, awayStatsValue: awayStats,
-        statusValue: 'live', substitutionsValue: substitutionsUsed,
-        mentalityValue: mentality, formationValue: formation, tacticValue: tactic,
+        minute: FIRST_HALF_END + injuryTimeFirstHalf,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
+        statusValue: 'live',
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
+        formationValue: formation,
+        tacticValue: tactic,
+        injuryFirstHalf: injuryTimeFirstHalf,
+        injurySecondHalf: injuryTimeSecondHalf,
       });
       setHalfTimeShown(false);
       setMatchStatus('live');
@@ -1115,16 +1170,26 @@ export default function MatchPage() {
     try {
       setSavingMatch(true);
       const finalResult = { homeScore, awayScore };
+      const finalMinute = MATCH_DURATION + injuryTimeFirstHalf + injuryTimeSecondHalf;
 
       await saveMatchState({
-        minute: MATCH_DURATION, homeScoreValue: homeScore, awayScoreValue: awayScore,
-        eventsValue: events, homeStatsValue: homeStats, awayStatsValue: awayStats,
-        statusValue: 'finished', substitutionsValue: substitutionsUsed,
-        mentalityValue: mentality, formationValue: formation, tacticValue: tactic,
+        minute: finalMinute,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
+        statusValue: 'finished',
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: mentality,
+        formationValue: formation,
+        tacticValue: tactic,
+        injuryFirstHalf: injuryTimeFirstHalf,
+        injurySecondHalf: injuryTimeSecondHalf,
         extra: { result: finalResult, finishedAt: serverTimestamp(), playedBy: user?.uid || null },
       });
 
-      setMatchMinute(MATCH_DURATION);
+      setMatchMinute(finalMinute);
       setMatchStatus('finished');
       setPaused(true);
       toast.success(`Full time: ${homeScore} - ${awayScore}`);
@@ -1134,13 +1199,14 @@ export default function MatchPage() {
     } finally {
       setSavingMatch(false);
     }
-  }, [homeScore, awayScore, events, homeStats, awayStats, substitutionsUsed, mentality, formation, tactic, user, saveMatchState]);
+  }, [homeScore, awayScore, events, homeStats, awayStats, substitutionsUsed, mentality, formation, tactic, injuryTimeFirstHalf, injuryTimeSecondHalf, user, saveMatchState]);
 
   useEffect(() => {
-    if (matchStatus === 'live' && matchMinute >= MATCH_DURATION) {
+    const fullMatchTotal = MATCH_DURATION + injuryTimeFirstHalf + injuryTimeSecondHalf;
+    if (matchStatus === 'live' && matchMinute >= fullMatchTotal) {
       finishMatch();
     }
-  }, [matchMinute, matchStatus, finishMatch]);
+  }, [matchMinute, matchStatus, finishMatch, injuryTimeFirstHalf, injuryTimeSecondHalf]);
 
   /* =======================================================
      PAUSE
@@ -1183,11 +1249,19 @@ export default function MatchPage() {
     setMentality(value);
     try {
       await saveMatchState({
-        minute: matchMinute, homeScoreValue: homeScore, awayScoreValue: awayScore,
-        eventsValue: events, homeStatsValue: homeStats, awayStatsValue: awayStats,
+        minute: matchMinute,
+        homeScoreValue: homeScore,
+        awayScoreValue: awayScore,
+        eventsValue: events,
+        homeStatsValue: homeStats,
+        awayStatsValue: awayStats,
         statusValue: matchStatus === 'ready' ? 'ready' : matchStatus,
-        substitutionsValue: substitutionsUsed, mentalityValue: value,
-        formationValue: formation, tacticValue: tactic,
+        substitutionsValue: substitutionsUsed,
+        mentalityValue: value,
+        formationValue: formation,
+        tacticValue: tactic,
+        injuryFirstHalf: injuryTimeFirstHalf,
+        injurySecondHalf: injuryTimeSecondHalf,
       });
     } catch (error) {
       console.error(error);
@@ -1256,10 +1330,19 @@ export default function MatchPage() {
     setSelectedSubOut('');
 
     await saveMatchState({
-      minute: matchMinute, homeScoreValue: homeScore, awayScoreValue: awayScore,
-      eventsValue: nextEvents, homeStatsValue: homeStats, awayStatsValue: awayStats,
-      statusValue: matchStatus, substitutionsValue: nextSubCount,
-      mentalityValue: mentality, formationValue: formation, tacticValue: tactic,
+      minute: matchMinute,
+      homeScoreValue: homeScore,
+      awayScoreValue: awayScore,
+      eventsValue: nextEvents,
+      homeStatsValue: homeStats,
+      awayStatsValue: awayStats,
+      statusValue: matchStatus,
+      substitutionsValue: nextSubCount,
+      mentalityValue: mentality,
+      formationValue: formation,
+      tacticValue: tactic,
+      injuryFirstHalf: injuryTimeFirstHalf,
+      injurySecondHalf: injuryTimeSecondHalf,
       extra: { [`${team}XI`]: nextXI.map((p) => playerId(p)) },
     });
 
@@ -1284,6 +1367,10 @@ export default function MatchPage() {
       default: return 'LOADING';
     }
   }, [matchStatus, paused]);
+
+  const displayMinute = matchMinute > MATCH_DURATION
+    ? `${MATCH_DURATION}+${matchMinute - MATCH_DURATION}`
+    : matchMinute;
 
   /* =======================================================
      LOADING
@@ -1357,7 +1444,7 @@ export default function MatchPage() {
               <span>-</span>
               <strong>{awayScore}</strong>
             </div>
-            <div className={styles.matchClock}>{matchMinute}'</div>
+            <div className={styles.matchClock}>{displayMinute}'</div>
             <small>{statusLabel}</small>
           </div>
 
@@ -1375,6 +1462,7 @@ export default function MatchPage() {
           <div><span>FORMATION</span><strong>{formation}</strong></div>
           <div><span>TACTIC</span><strong>{tactic}</strong></div>
           <div><span>MENTALITY</span><strong>{mentality}</strong></div>
+          <div><span>INJURY TIME</span><strong>+{injuryTimeFirstHalf} / +{injuryTimeSecondHalf}</strong></div>
         </section>
 
         {/* ACCESS WARNING */}
@@ -1493,7 +1581,7 @@ export default function MatchPage() {
             <strong>{homeScore} - {awayScore}</strong>
           </div>
           {[
-            ['Possession', `${homeStats.possession}%`, `${awayStats.possession}%`],
+            ['Possession', formatPossession(homeStats.possession), formatPossession(awayStats.possession)],
             ['Shots', homeStats.shots, awayStats.shots],
             ['Shots on Target', homeStats.shotsOnTarget, awayStats.shotsOnTarget],
             ['Passes', homeStats.passes, awayStats.passes],
@@ -1526,7 +1614,7 @@ export default function MatchPage() {
               {sortedEvents.length > 0 ? (
                 sortedEvents.map((event) => (
                   <article key={event.id} className={styles.event}>
-                    <span className={styles.eventMinute}>{event.minute}'</span>
+                    <span className={styles.eventMinute}>{event.minute > MATCH_DURATION ? `${MATCH_DURATION}+${event.minute - MATCH_DURATION}` : event.minute}'</span>
                     <span className={styles.eventIcon}>{eventIcon(event)}</span>
                     <div>
                       <strong>{eventLabel(event)}</strong>
