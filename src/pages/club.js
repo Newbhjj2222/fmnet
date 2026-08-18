@@ -40,9 +40,7 @@ function safeNumber(value, fallback = 0) {
   if (value === null || value === undefined || value === '') {
     return fallback;
   }
-
   const number = Number(value);
-
   return Number.isFinite(number) ? number : fallback;
 }
 
@@ -50,7 +48,6 @@ function safeString(value, fallback = '') {
   if (value === null || value === undefined) {
     return fallback;
   }
-
   if (typeof value === 'object') {
     return (
       value.name ||
@@ -61,7 +58,6 @@ function safeString(value, fallback = '') {
       fallback
     );
   }
-
   return String(value);
 }
 
@@ -73,18 +69,12 @@ function formatMoney(value) {
 
 function formatDate(value) {
   if (!value) return '-';
-
   try {
     if (typeof value === 'object' && typeof value.toDate === 'function') {
       return value.toDate().toLocaleDateString();
     }
-
     const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return '-';
-    }
-
+    if (Number.isNaN(date.getTime())) return '-';
     return date.toLocaleDateString();
   } catch {
     return '-';
@@ -92,33 +82,22 @@ function formatDate(value) {
 }
 
 function dateToISOString(value) {
-  if (!value) {
-    return new Date().toISOString();
-  }
-
+  if (!value) return new Date().toISOString();
   if (typeof value === 'object' && typeof value.toDate === 'function') {
     return value.toDate().toISOString();
   }
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return new Date().toISOString();
-  }
-
+  if (Number.isNaN(date.getTime())) return new Date().toISOString();
   return date.toISOString();
 }
 
 function daysBetween(start, end) {
   if (!start || !end) return 0;
-
   const startDate = new Date(start);
   const endDate = new Date(end);
-
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return 0;
   }
-
   return Math.ceil(
     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
   );
@@ -134,12 +113,10 @@ function getContractStatus(contract) {
   if (!contract) return 'none';
   if (contract.status === 'terminated') return 'terminated';
   if (!contract.endDate) return 'active';
-
   const remaining = daysBetween(
     new Date().toISOString(),
     dateToISOString(contract.endDate)
   );
-
   if (remaining <= 0) return 'expired';
   if (remaining <= CONTRACT_WARNING_DAYS) return 'expiring';
   return 'active';
@@ -184,7 +161,6 @@ function getPlayerClubId(player) {
 
 function allocatePrizeMoney(totalPrize) {
   const amount = safeNumber(totalPrize, 0);
-
   return {
     balance: Math.round(amount * 0.4),
     transferBudget: Math.round(amount * 0.35),
@@ -202,14 +178,12 @@ function generateYouthPlayer(club, index, seasonYear) {
     'Daniel', 'James', 'John', 'Paul', 'Mark', 'Luke', 'Ethan', 'Noah',
     'Liam', 'Mason', 'Lucas', 'Oliver', 'Aiden', 'Caleb', 'Elijah', 'Isaiah',
   ];
-
   const lastNames = [
     'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller',
     'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez',
     'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
     'Lee', 'Perez', 'Thompson', 'White',
   ];
-
   const positions = ['GK', 'DEF', 'DEF', 'MID', 'MID', 'ATT'];
 
   const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
@@ -271,14 +245,8 @@ function calculateTeamRecord(matches, clubId) {
   matches.forEach((match) => {
     if (!match.result) return;
 
-    const homeScore = safeNumber(
-      match.result.homeScore ?? match.homeScore,
-      0
-    );
-    const awayScore = safeNumber(
-      match.result.awayScore ?? match.awayScore,
-      0
-    );
+    const homeScore = safeNumber(match.result.homeScore ?? match.homeScore, 0);
+    const awayScore = safeNumber(match.result.awayScore ?? match.awayScore, 0);
 
     const isHome = match.homeClubId === clubId;
     const isAway = match.awayClubId === clubId;
@@ -326,7 +294,6 @@ function calculateLeaguePosition(clubId, clubLeagueId, allMatches, allClubs) {
 
   const standings = leagueClubs.map((club) => {
     const record = calculateTeamRecord(allMatches, club.id);
-
     return {
       clubId: club.id,
       clubName: club.name || club.clubName,
@@ -343,7 +310,6 @@ function calculateLeaguePosition(clubId, clubLeagueId, allMatches, allClubs) {
   });
 
   const position = standings.findIndex((s) => s.clubId === clubId);
-
   return position >= 0 ? position + 1 : '-';
 }
 
@@ -354,9 +320,7 @@ function calculateLeaguePosition(clubId, clubLeagueId, allMatches, allClubs) {
 export async function getServerSideProps() {
   try {
     const clubsSnapshot = await getDocs(collection(db, 'clubs'));
-
     const countriesSnapshot = await getDocs(collection(db, 'countries'));
-
     const countriesMap = {};
 
     countriesSnapshot.forEach((countryDoc) => {
@@ -369,7 +333,6 @@ export async function getServerSideProps() {
     });
 
     const leaguesSnapshot = await getDocs(collection(db, 'leagues'));
-
     const leaguesMap = {};
 
     leaguesSnapshot.forEach((leagueDoc) => {
@@ -382,12 +345,10 @@ export async function getServerSideProps() {
     });
 
     const playersSnapshot = await getDocs(collection(db, 'players'));
-
     const allPlayers = [];
 
     playersSnapshot.forEach((playerDoc) => {
       const data = playerDoc.data();
-
       allPlayers.push({
         id: playerDoc.id,
         ...data,
@@ -475,6 +436,9 @@ export async function getServerSideProps() {
         description: data.description || '',
         history: data.history || {},
         social: data.social || {},
+        managerId: data.managerId || null,
+        managerName: data.managerName || null,
+        managerStatus: data.managerStatus || 'available',
       });
     });
 
@@ -487,7 +451,6 @@ export async function getServerSideProps() {
     };
   } catch (error) {
     console.error('SSR CLUB PAGE ERROR:', error);
-
     return {
       props: {
         initialClubs: [],
@@ -516,14 +479,12 @@ export default function ClubPage({ initialClubs = [] }) {
   const [leagueFilter, setLeagueFilter] = useState('all');
   const [playerSearch, setPlayerSearch] = useState('');
 
-  // Youth states
   const [youthSquad, setYouthSquad] = useState([]);
   const [showYouthContract, setShowYouthContract] = useState(false);
   const [selectedYouthPlayer, setSelectedYouthPlayer] = useState(null);
   const [youthContractType, setYouthContractType] = useState('youth');
   const [isGeneratingYouth, setIsGeneratingYouth] = useState(false);
 
-  // Match data
   const [allMatches, setAllMatches] = useState([]);
   const [teamRecord, setTeamRecord] = useState({
     matches: 0,
@@ -567,7 +528,6 @@ export default function ClubPage({ initialClubs = [] }) {
     const gameDate = careerData?.currentDate
       ? new Date(careerData.currentDate)
       : new Date();
-
     return gameDate.getMonth() >= 6
       ? gameDate.getFullYear()
       : gameDate.getFullYear() - 1;
@@ -593,7 +553,6 @@ export default function ClubPage({ initialClubs = [] }) {
 
       const data = snapshot.data();
       const career = data.careerData || {};
-
       setCareerData(career);
 
       if (career.currentClub) {
@@ -603,6 +562,15 @@ export default function ClubPage({ initialClubs = [] }) {
         if (clubSnapshot.exists()) {
           const clubData = clubSnapshot.data();
 
+          // Check if club is occupied by another manager
+          if (clubData.managerId && clubData.managerId !== user.uid) {
+            toast.error('This club has been taken by another manager.');
+            setClubInfo(null);
+            setCareerData((prev) => ({ ...prev, currentClub: null }));
+            setIsLoading(false);
+            return;
+          }
+
           let currentPlayers = [];
           let youthPlayers = [];
 
@@ -611,7 +579,6 @@ export default function ClubPage({ initialClubs = [] }) {
               collection(db, 'players'),
               where('clubId', '==', career.currentClub)
             );
-
             const playerSnapshot = await getDocs(playersQuery);
 
             playerSnapshot.forEach((playerDoc) => {
@@ -641,11 +608,9 @@ export default function ClubPage({ initialClubs = [] }) {
           if (currentPlayers.length === 0 && youthPlayers.length === 0) {
             try {
               const allPlayersSnapshot = await getDocs(collection(db, 'players'));
-
               allPlayersSnapshot.forEach((playerDoc) => {
                 const player = playerDoc.data();
                 const playerClub = getPlayerClubId(player);
-
                 if (String(playerClub || '') === String(career.currentClub)) {
                   const normalizedPlayer = {
                     id: playerDoc.id,
@@ -672,7 +637,6 @@ export default function ClubPage({ initialClubs = [] }) {
           }
 
           setYouthSquad(youthPlayers);
-
           setClubInfo({
             id: clubSnapshot.id,
             ...clubData,
@@ -724,7 +688,6 @@ export default function ClubPage({ initialClubs = [] }) {
     if (!user || !careerData?.currentClub) return;
 
     const clubId = careerData.currentClub;
-
     const matchesQuery = query(
       collection(db, 'matches'),
       where('seasonYear', '==', seasonYear)
@@ -739,19 +702,11 @@ export default function ClubPage({ initialClubs = [] }) {
         }));
 
         setAllMatches(matches);
-
-        // Calculate team record
         const record = calculateTeamRecord(matches, clubId);
         setTeamRecord(record);
 
-        // Calculate league position
         const clubLeagueId = clubInfo?.leagueId || clubInfo?.league || null;
-        const position = calculateLeaguePosition(
-          clubId,
-          clubLeagueId,
-          matches,
-          clubs
-        );
+        const position = calculateLeaguePosition(clubId, clubLeagueId, matches, clubs);
         setLeaguePosition(position);
       },
       (error) => {
@@ -814,7 +769,6 @@ export default function ClubPage({ initialClubs = [] }) {
         clubInfo.totalPrizeMoney ?? clubInfo.prizeMoney,
         0
       );
-
       if (totalPrize > 0) {
         applyPrizeMoneyAllocation();
       }
@@ -830,15 +784,11 @@ export default function ClubPage({ initialClubs = [] }) {
       (total, player) => total + safeNumber(player.salary ?? player.wage, 0),
       0
     );
-
     const youthWages = youthSquad.reduce(
       (total, player) => total + safeNumber(player.salary ?? player.wage, 0),
       0
     );
-
-    const monthlyWage = Math.round((squadWages + youthWages) * 4.33);
-
-    return monthlyWage;
+    return Math.round((squadWages + youthWages) * 4.33);
   }, [clubInfo?.players, youthSquad]);
 
   /* =======================================================
@@ -855,26 +805,20 @@ export default function ClubPage({ initialClubs = [] }) {
         (player) => player.seasonYear === seasonYear
       );
 
-      if (existingYouth.length > 0) {
-        return;
-      }
+      if (existingYouth.length > 0) return;
 
       const batch = writeBatch(db);
       const newYouthPlayers = [];
 
       for (let i = 0; i < 8; i++) {
         const youthPlayer = generateYouthPlayer(clubInfo, i, seasonYear);
-
         newYouthPlayers.push(youthPlayer);
-
         const playerRef = doc(db, 'players', youthPlayer.id);
         batch.set(playerRef, youthPlayer);
       }
 
       await batch.commit();
-
       setYouthSquad((prev) => [...prev, ...newYouthPlayers]);
-
       toast.success('Youth squad generated: 8 new players added');
     } catch (error) {
       console.error('Youth generation error:', error);
@@ -886,11 +830,9 @@ export default function ClubPage({ initialClubs = [] }) {
 
   useEffect(() => {
     if (!clubInfo || !clubInfo.id) return;
-
     const hasYouthForSeason = youthSquad.some(
       (player) => player.seasonYear === seasonYear
     );
-
     if (!hasYouthForSeason && !isGeneratingYouth) {
       generateYouthSquad();
     }
@@ -911,7 +853,6 @@ export default function ClubPage({ initialClubs = [] }) {
 
     try {
       setSaving(true);
-
       const contractEnd = new Date(
         Date.now() + 3 * 365 * 24 * 60 * 60 * 1000
       ).toISOString();
@@ -920,7 +861,7 @@ export default function ClubPage({ initialClubs = [] }) {
       await updateDoc(doc(db, 'players', player.id), {
         contractEnd,
         wage,
-        squadType: squadType,
+        squadType,
         isYouth: squadType === 'youth',
         transferStatus: 'available',
         status: 'available',
@@ -936,7 +877,7 @@ export default function ClubPage({ initialClubs = [] }) {
                 ...p,
                 contractEnd,
                 wage,
-                squadType: squadType,
+                squadType,
                 isYouth: squadType === 'youth',
                 transferStatus: 'available',
                 status: 'available',
@@ -948,7 +889,6 @@ export default function ClubPage({ initialClubs = [] }) {
 
       setShowYouthContract(false);
       setSelectedYouthPlayer(null);
-
       toast.success(
         `${player.name} signed a ${squadType === 'youth' ? 'youth' : 'first team'} contract`
       );
@@ -965,7 +905,6 @@ export default function ClubPage({ initialClubs = [] }) {
 
     try {
       setSaving(true);
-
       await updateDoc(doc(db, 'players', player.id), {
         clubId: null,
         currentClub: null,
@@ -981,10 +920,8 @@ export default function ClubPage({ initialClubs = [] }) {
       });
 
       setYouthSquad((prev) => prev.filter((p) => p.id !== player.id));
-
       setShowYouthContract(false);
       setSelectedYouthPlayer(null);
-
       toast.success(`${player.name} released as free agent`);
     } catch (error) {
       console.error('Release player error:', error);
@@ -999,17 +936,13 @@ export default function ClubPage({ initialClubs = [] }) {
   ======================================================= */
 
   const currentClubId = careerData?.currentClub || null;
-
   const contract = careerData?.clubContract || null;
-
   const contractStatus = getContractStatus(contract);
-
   const boardConfidence = safeNumber(careerData?.boardConfidence, 70);
-
   const objectives = careerData?.clubObjectives || clubInfo?.objectives || [];
 
   /* =======================================================
-     CLUB FILTER
+     CLUB FILTER - Only show available clubs
   ======================================================= */
 
   const leagues = useMemo(() => {
@@ -1029,6 +962,11 @@ export default function ClubPage({ initialClubs = [] }) {
     const value = search.trim().toLowerCase();
 
     return clubs.filter((club) => {
+      // Skip clubs that are already occupied by another manager
+      if (club.managerId && club.managerId !== user?.uid) {
+        return false;
+      }
+
       const name = safeString(club.name).toLowerCase();
       const league = safeString(club.leagueName).toLowerCase();
       const country = safeString(club.countryName).toLowerCase();
@@ -1044,7 +982,7 @@ export default function ClubPage({ initialClubs = [] }) {
 
       return matchesSearch && matchesLeague;
     });
-  }, [clubs, search, leagueFilter]);
+  }, [clubs, search, leagueFilter, user?.uid]);
 
   /* =======================================================
      PLAYERS
@@ -1054,9 +992,7 @@ export default function ClubPage({ initialClubs = [] }) {
 
   const filteredPlayers = useMemo(() => {
     const value = playerSearch.trim().toLowerCase();
-
     if (!value) return squad;
-
     return squad.filter(
       (player) =>
         getPlayerName(player).toLowerCase().includes(value) ||
@@ -1070,16 +1006,22 @@ export default function ClubPage({ initialClubs = [] }) {
   );
 
   /* =======================================================
-     SELECT CLUB
+     SELECT CLUB - Check availability
   ======================================================= */
 
   const openClubSelection = (club) => {
+    // Double-check club is available
+    if (club.managerId && club.managerId !== user?.uid) {
+      toast.error('This club has already been taken by another manager.');
+      return;
+    }
+
     setSelectedClub(club);
     setShowContract(true);
   };
 
   /* =======================================================
-     ACCEPT CONTRACT
+     ACCEPT CONTRACT - Check availability before signing
   ======================================================= */
 
   const acceptClubContract = async () => {
@@ -1087,6 +1029,24 @@ export default function ClubPage({ initialClubs = [] }) {
 
     try {
       setSaving(true);
+
+      // Re-check club availability from database
+      const clubRef = doc(db, 'clubs', selectedClub.id);
+      const clubSnapshot = await getDoc(clubRef);
+
+      if (!clubSnapshot.exists()) {
+        toast.error('This club no longer exists.');
+        setShowContract(false);
+        return;
+      }
+
+      const clubData = clubSnapshot.data();
+
+      if (clubData.managerId && clubData.managerId !== user.uid) {
+        toast.error('This club has already been taken by another manager.');
+        setShowContract(false);
+        return;
+      }
 
       const startDate = new Date().toISOString();
       const endDate = addYears(startDate, DEFAULT_CONTRACT_YEARS);
@@ -1154,7 +1114,7 @@ export default function ClubPage({ initialClubs = [] }) {
         updatedAt: serverTimestamp(),
       });
 
-      await updateDoc(doc(db, 'clubs', selectedClub.id), {
+      await updateDoc(clubRef, {
         managerId: user.uid,
         managerName: managerName,
         managerStatus: 'active',
@@ -1178,7 +1138,6 @@ export default function ClubPage({ initialClubs = [] }) {
 
       setShowContract(false);
       setSelectedClub(null);
-
       toast.success(`Contract signed with ${selectedClub.name}`);
       setActiveTab('overview');
     } catch (error) {
@@ -1293,7 +1252,6 @@ export default function ClubPage({ initialClubs = [] }) {
       setCareerData(updatedCareer);
       setClubInfo(null);
       setYouthSquad([]);
-
       toast.success('You have left the club');
     } catch (error) {
       console.error(error);
@@ -1336,7 +1294,6 @@ export default function ClubPage({ initialClubs = [] }) {
         <main className={styles.page}>
           <section className={styles.selectionHero}>
             <div className={styles.heroBall}>⚽</div>
-
             <div>
               <span className={styles.eyebrow}>CLUB MANAGEMENT</span>
               <h1>Choose Your Club</h1>
@@ -1375,54 +1332,72 @@ export default function ClubPage({ initialClubs = [] }) {
 
             <div className={styles.clubGrid}>
               {filteredClubs.length > 0 ? (
-                filteredClubs.map((club) => (
-                  <article key={club.id} className={styles.clubSelectCard}>
-                    <div className={styles.clubCardTop}>
-                      <div className={styles.clubLogo}>
-                        {club.logo ? (
-                          <img src={club.logo} alt={club.name} />
-                        ) : (
-                          '⚽'
-                        )}
-                      </div>
+                filteredClubs.map((club) => {
+                  const isOccupied =
+                    club.managerId && club.managerId !== user?.uid;
 
-                      <div>
-                        <h2>{club.name}</h2>
-                        <span>{club.leagueName}</span>
-                        <small>🌍 {club.countryName}</small>
-                      </div>
-                    </div>
-
-                    <p className={styles.clubDescription}>
-                      {club.description ||
-                        `${club.name} are looking for a manager capable of leading the club to success.`}
-                    </p>
-
-                    <div className={styles.clubQuickStats}>
-                      <div>
-                        <span>Reputation</span>
-                        <strong>{club.reputation}</strong>
-                      </div>
-                      <div>
-                        <span>Players</span>
-                        <strong>{club.squadSize}</strong>
-                      </div>
-                      <div>
-                        <span>Transfer</span>
-                        <strong>€{formatMoney(club.transferBudget)}</strong>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className={styles.chooseButton}
-                      onClick={() => openClubSelection(club)}
+                  return (
+                    <article
+                      key={club.id}
+                      className={`${styles.clubSelectCard} ${
+                        isOccupied ? styles.occupiedCard : ''
+                      }`}
                     >
-                      <span>Take Job</span>
-                      <span>→</span>
-                    </button>
-                  </article>
-                ))
+                      <div className={styles.clubCardTop}>
+                        <div className={styles.clubLogo}>
+                          {club.logo ? (
+                            <img src={club.logo} alt={club.name} />
+                          ) : (
+                            '⚽'
+                          )}
+                        </div>
+
+                        <div>
+                          <h2>{club.name}</h2>
+                          <span>{club.leagueName}</span>
+                          <small>🌍 {club.countryName}</small>
+                        </div>
+                      </div>
+
+                      {isOccupied ? (
+                        <div className={styles.occupiedBadge}>
+                          🔒 Taken by {club.managerName || 'another manager'}
+                        </div>
+                      ) : (
+                        <>
+                          <p className={styles.clubDescription}>
+                            {club.description ||
+                              `${club.name} are looking for a manager capable of leading the club to success.`}
+                          </p>
+
+                          <div className={styles.clubQuickStats}>
+                            <div>
+                              <span>Reputation</span>
+                              <strong>{club.reputation}</strong>
+                            </div>
+                            <div>
+                              <span>Players</span>
+                              <strong>{club.squadSize}</strong>
+                            </div>
+                            <div>
+                              <span>Transfer</span>
+                              <strong>€{formatMoney(club.transferBudget)}</strong>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={styles.chooseButton}
+                            onClick={() => openClubSelection(club)}
+                          >
+                            <span>Take Job</span>
+                            <span>→</span>
+                          </button>
+                        </>
+                      )}
+                    </article>
+                  );
+                })
               ) : (
                 <div className={styles.noResults}>
                   <span>🔎</span>
