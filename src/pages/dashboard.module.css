@@ -1,33 +1,36 @@
-.dashboard {
-  padding: 1.5rem;
-  animation: fadeIn 0.4s ease-out;
-}
+/* =========================================================
+   dashboard.module.css
+   Dark theme + responsive + attractive
+========================================================= */
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* =========================================================
+   LOADING
+========================================================= */
 
 .loadingContainer {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 60vh;
-  gap: 1rem;
+  gap: 16px;
+  background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+  color: #fff;
+  padding: 20px;
+  text-align: center;
+}
+
+.loadingContainer p {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 14px;
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--glass-border);
-  border-top: 3px solid var(--primary);
+  width: 42px;
+  height: 42px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #38bdf8;
+  border-right-color: #6366f1;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -38,262 +41,518 @@
   }
 }
 
+.emptyIcon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.loadingContainer h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.loadingContainer p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+}
+
+.chooseClubButton {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #0b1120;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 8px;
+}
+
+.chooseClubButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(56, 189, 248, 0.35);
+}
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
+.dashboard {
+  width: 100%;
+  max-width: 1200px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+  color: #e5e7eb;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
 .header {
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
 }
 
 .title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin: 0;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #f1f5f9, #cbd5e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .subtitle {
-  color: var(--text-secondary);
-  font-size: 1rem;
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  line-height: 1.5;
 }
+
+/* =========================================================
+   STATS GRID
+========================================================= */
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .statCard {
-  background: var(--glass);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  padding: 1.25rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
   transition: all 0.3s ease;
 }
 
 .statCard:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .statIcon {
-  font-size: 2rem;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.primary .statIcon {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.success .statIcon {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.warning .statIcon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.info .statIcon {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
 }
 
 .statInfo {
-  flex: 1;
+  min-width: 0;
 }
 
 .statLabel {
   display: block;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
+  letter-spacing: 0.07em;
 }
 
 .statValue {
   display: block;
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  margin-top: 4px;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
 }
 
-.primary .statValue {
-  color: var(--primary);
-}
-.success .statValue {
-  color: #10b981;
-}
-.warning .statValue {
-  color: #f59e0b;
-}
-.info .statValue {
-  color: #3b82f6;
-}
+/* =========================================================
+   CLUB INFO
+========================================================= */
 
 .clubInfo {
-  background: var(--glass);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.06), rgba(99, 102, 241, 0.04));
 }
 
 .clubHeader {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 14px;
 }
 
 .clubLogo {
-  font-size: 3rem;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 24px;
+}
+
+.clubLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .clubName {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .clubDetails {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
 }
+
+/* =========================================================
+   CHARTS
+========================================================= */
 
 .chartsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
 .chartCard {
-  background: var(--glass);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  padding: 1.5rem;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .chartTitle {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 1rem;
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .chartContainer {
-  height: 250px;
+  height: 220px;
   position: relative;
 }
 
+/* =========================================================
+   FEED
+========================================================= */
+
 .feedGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
 .feedCard {
-  background: var(--glass);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  padding: 1.5rem;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .feedTitle {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 1rem;
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .feedList {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 8px;
 }
 
 .feedItem {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
-  transition: background 0.3s ease;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
-.feedItem:hover {
-  background: rgba(255, 255, 255, 0.06);
+.resultBadge {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
-.matchResult {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+.resultWin {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
 }
 
-.matchStatus {
-  font-size: 0.75rem;
+.resultLoss {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
 }
 
-.played {
-  color: #10b981;
-}
-
-.upcoming {
+.resultDraw {
+  background: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
 }
 
+.matchResult {
+  flex: 1;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchResult strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+.matchStatus {
+  flex-shrink: 0;
+}
+
+.played {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .fixtureInfo {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fixtureDate {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .empty {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
   text-align: center;
-  color: var(--text-muted);
-  padding: 1rem 0;
-  font-size: 0.875rem;
+  padding: 20px 0;
+  margin: 0;
 }
 
-/* Mobile */
-@media (max-width: 768px) {
-  .dashboard {
-    padding: 1rem;
-  }
-  
-  .title {
-    font-size: 1.5rem;
-  }
-  
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1024px) {
   .statsGrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  
+
   .chartsGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .feedGrid {
     grid-template-columns: 1fr;
   }
-  
-  .statCard {
-    padding: 1rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 20px 12px 40px;
   }
-  
+
+  .title {
+    font-size: 26px;
+  }
+
+  .statCard {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .statIcon {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    border-radius: 9px;
+  }
+
   .statValue {
-    font-size: 1.25rem;
+    font-size: 20px;
+  }
+
+  .chartContainer {
+    height: 180px;
   }
 }
 
 @media (max-width: 480px) {
+  .dashboard {
+    padding: 14px 8px 30px;
+  }
+
+  .title {
+    font-size: 22px;
+  }
+
   .statsGrid {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
-  
-  .clubHeader {
-    flex-direction: column;
-    text-align: center;
-  }
-  
+
   .statCard {
-    padding: 0.875rem;
+    padding: 12px;
+  }
+
+  .statValue {
+    font-size: 18px;
+  }
+
+  .clubInfo {
+    padding: 12px;
+  }
+
+  .clubLogo {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+
+  .clubName {
+    font-size: 15px;
+  }
+
+  .chartCard,
+  .feedCard {
+    padding: 14px;
+  }
+
+  .chartContainer {
+    height: 150px;
+  }
+
+  .feedItem {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 360px) {
+  .title {
+    font-size: 20px;
+  }
+
+  .statIcon {
+    display: none;
+  }
+
+  .statCard {
+    padding: 10px;
+  }
+
+  .statValue {
+    font-size: 16px;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .statCard,
+  .chooseClubButton {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print {
+  .dashboard {
+    background: #fff;
+    color: #000;
+    padding: 0;
+    max-width: none;
+  }
+
+  .chooseClubButton,
+  .chartsGrid {
+    display: none;
+  }
+
+  .statCard,
+  .clubInfo,
+  .feedCard {
+    border: 1px solid #ddd;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .title,
+  .statValue,
+  .clubName,
+  .chartTitle,
+  .feedTitle {
+    color: #000;
   }
 }
