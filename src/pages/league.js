@@ -35,21 +35,7 @@ import styles from './league.module.css';
 ========================================================= */
 
 const MAX_LEAGUES = 500;
-
-const LEAGUE_TYPES = [
-  'all',
-  'league',
-  'national',
-  'continental',
-  'cup',
-];
-
-const SORT_OPTIONS = [
-  'name',
-  'country',
-  'teams',
-  'level',
-];
+const FIRESTORE_BATCH_SIZE = 450;
 
 /* =========================================================
    PRIZE MONEY CONFIGURATION
@@ -189,10 +175,6 @@ function getClubLogo(club) {
   return club.logo || club.logoUrl || club.image || club.imageUrl || null;
 }
 
-function getClubCountryId(club) {
-  return club.countryId || club.countryID || club.nationId || null;
-}
-
 function getClubLeagueName(club) {
   return club.leagueName || club.currentLeagueName || '';
 }
@@ -214,119 +196,91 @@ function getClubLeague(club, league) {
   );
 }
 
-function getStandingValue(standing, ...keys) {
-  for (const key of keys) {
-    if (standing[key] !== undefined && standing[key] !== null) {
-      return safeNumber(standing[key]);
+/* =========================================================
+   CALCULATE STANDINGS FROM MATCHES
+========================================================= */
+
+function calculateStandingsFromMatches(matches, leagueClubs, leagueId) {
+  const standingsMap = {};
+
+  // Initialize all clubs with zero stats
+  leagueClubs.forEach((club) => {
+    standingsMap[String(club.id)] = {
+      clubId: club.id,
+      clubName: getClubName(club),
+      logo: getClubLogo(club),
+      played: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      goalDifference: 0,
+      points: 0,
+      form: [],
+    };
+  });
+
+  // Process all matches for this league
+  matches.forEach((match) => {
+    if (!match.result && match.status !== 'finished') return;
+
+    const result = match.result || {};
+    const homeScore = safeNumber(result.homeScore ?? match.homeScore, 0);
+    const awayScore = safeNumber(result.awayScore ?? match.awayScore, 0);
+
+    const homeId = String(match.homeClubId || match.homeTeamId || '');
+    const awayId = String(match.awayClubId || match.awayTeamId || '');
+
+    const homeStanding = standingsMap[homeId];
+    const awayStanding = standingsMap[awayId];
+
+    if (!homeStanding || !awayStanding) return;
+
+    // Update played
+    homeStanding.played += 1;
+    awayStanding.played += 1;
+
+    // Update goals
+    homeStanding.goalsFor += homeScore;
+    homeStanding.goalsAgainst += awayScore;
+    awayStanding.goalsFor += awayScore;
+    awayStanding.goalsAgainst += homeScore;
+
+    // Update goal difference
+    homeStanding.goalDifference = homeStanding.goalsFor - homeStanding.goalsAgainst;
+    awayStanding.goalDifference = awayStanding.goalsFor - awayStanding.goalsAgainst;
+
+    // Update wins/draws/losses
+    if (homeScore > awayScore) {
+      homeStanding.wins += 1;
+      homeStanding.points += 3;
+      awayStanding.losses += 1;
+      homeStanding.form.push('W');
+      awayStanding.form.push('L');
+    } else if (homeScore < awayScore) {
+      awayStanding.wins += 1;
+      awayStanding.points += 3;
+      homeStanding.losses += 1;
+      homeStanding.form.push('L');
+      awayStanding.form.push('W');
+    } else {
+      homeStanding.draws += 1;
+      homeStanding.points += 1;
+      awayStanding.draws += 1;
+      awayStanding.points += 1;
+      homeStanding.form.push('D');
+      awayStanding.form.push('D');
     }
-  }
-  return 0;
-}
+  });
 
-function getStandingTeamId(standing) {
-  return (
-    standing.clubId ||
-    standing.clubID ||
-    standing.teamId ||
-    standing.teamID ||
-    standing.club ||
-    standing.team ||
-    null
-  );
-}
+  // Limit form to last 5
+  Object.values(standingsMap).forEach((standing) => {
+    standing.form = standing.form.slice(-5);
+  });
 
-function getStandingTeamName(standing) {
-  return (
-    standing.clubName ||
-    standing.teamName ||
-    standing.name ||
-    standing.team ||
-    'Unknown Club'
-  );
-}
-
-function calculateGoalDifference(standing) {
-  const explicit = standing.goalDifference ?? standing.goalDiff ?? standing.gd;
-
-  if (explicit !== undefined && explicit !== null) {
-    return safeNumber(explicit);
-  }
-
-  const goalsFor = getStandingValue(standing, 'goalsFor', 'gf', 'scored');
-  const goalsAgainst = getStandingValue(standing, 'goalsAgainst', 'ga', 'conceded');
-
-  return goalsFor - goalsAgainst;
-}
-
-function calculatePoints(standing) {
-  if (standing.points !== undefined) {
-    return safeNumber(standing.points);
-  }
-
-  const wins = getStandingValue(standing, 'wins', 'won', 'w');
-  const draws = getStandingValue(standing, 'draws', 'drawn', 'd');
-
-  return wins * 3 + draws;
-}
-
-function buildStandingFromClub(club) {
-  const wins = getStandingValue(club, 'wins', 'won', 'w');
-  const draws = getStandingValue(club, 'draws', 'drawn', 'd');
-  const losses = getStandingValue(club, 'losses', 'lost', 'l');
-  const played = getStandingValue(club, 'played', 'matchesPlayed', 'gamesPlayed', 'p');
-  const goalsFor = getStandingValue(club, 'goalsFor', 'gf', 'scored');
-  const goalsAgainst = getStandingValue(club, 'goalsAgainst', 'ga', 'conceded');
-
-  return {
-    clubId: club.id,
-    clubName: getClubName(club),
-    logo: getClubLogo(club),
-    played,
-    wins,
-    draws,
-    losses,
-    goalsFor,
-    goalsAgainst,
-    goalDifference: goalsFor - goalsAgainst,
-    points: wins * 3 + draws,
-    form: club.form || club.recentForm || [],
-  };
-}
-
-function normalizeStanding(standing, clubs) {
-  const teamId = getStandingTeamId(standing);
-
-  let club = teamId
-    ? clubs.find((item) => String(item.id) === String(teamId))
-    : null;
-
-  if (!club) {
-    const name = normalize(getStandingTeamName(standing));
-    club = clubs.find((item) => normalize(getClubName(item)) === name);
-  }
-
-  const clubName =
-    getStandingTeamName(standing) !== 'Unknown Club'
-      ? getStandingTeamName(standing)
-      : club
-        ? getClubName(club)
-        : 'Unknown Club';
-
-  return {
-    ...standing,
-    clubId: teamId || club?.id || null,
-    clubName,
-    logo: standing.logo || standing.clubLogo || standing.teamLogo || getClubLogo(club),
-    played: getStandingValue(standing, 'played', 'matchesPlayed', 'gamesPlayed', 'p'),
-    wins: getStandingValue(standing, 'wins', 'won', 'w'),
-    draws: getStandingValue(standing, 'draws', 'drawn', 'd'),
-    losses: getStandingValue(standing, 'losses', 'lost', 'l'),
-    goalsFor: getStandingValue(standing, 'goalsFor', 'gf', 'scored'),
-    goalsAgainst: getStandingValue(standing, 'goalsAgainst', 'ga', 'conceded'),
-    goalDifference: calculateGoalDifference(standing),
-    points: calculatePoints(standing),
-    form: standing.form || standing.recentForm || [],
-  };
+  // Convert to array and sort
+  return sortStandings(Object.values(standingsMap));
 }
 
 function sortStandings(standings) {
@@ -350,8 +304,10 @@ function processSeasonCompletion(leagues, clubs, standings) {
   const cafConfederation = [];
 
   leagues.forEach((league) => {
-    const leagueStandings = getLeagueStandings(league, clubs, standings);
-    const sorted = sortStandings(leagueStandings);
+    const leagueClubs = clubs.filter((club) => getClubLeague(club, league));
+    const sorted = sortStandings(standings.filter((s) => {
+      return leagueClubs.some((club) => String(club.id) === String(s.clubId));
+    }));
 
     if (sorted.length === 0) return;
 
@@ -391,14 +347,12 @@ function processSeasonCompletion(leagues, clubs, standings) {
       if (!relegationMap[countryId]) relegationMap[countryId] = {};
 
       if (leagueLevel === 2) {
-        // Promote top 2 from second division
         const promoted = sorted.slice(0, 2).map((team) => team.clubId).filter(Boolean);
         promotionMap[countryId].fromLeagueId = league.id;
         promotionMap[countryId].clubs = promoted;
       }
 
       if (leagueLevel === 1) {
-        // Relegate bottom 2 from first division
         const relegated = sorted.slice(-2).map((team) => team.clubId).filter(Boolean);
         relegationMap[countryId].fromLeagueId = league.id;
         relegationMap[countryId].clubs = relegated;
@@ -421,12 +375,12 @@ function processSeasonCompletion(leagues, clubs, standings) {
 
 export async function getServerSideProps() {
   try {
-    const [leaguesSnapshot, clubsSnapshot, countriesSnapshot, standingsSnapshot] =
+    const [leaguesSnapshot, clubsSnapshot, countriesSnapshot, matchesSnapshot] =
       await Promise.all([
         getDocs(collection(db, 'leagues')),
         getDocs(collection(db, 'clubs')),
         getDocs(collection(db, 'countries')),
-        getDocs(collection(db, 'standings')),
+        getDocs(collection(db, 'matches')),
       ]);
 
     const leagues = leaguesSnapshot.docs
@@ -443,7 +397,7 @@ export async function getServerSideProps() {
       ...docItem.data(),
     }));
 
-    const standings = standingsSnapshot.docs.map((docItem) => ({
+    const matches = matchesSnapshot.docs.map((docItem) => ({
       id: docItem.id,
       ...docItem.data(),
     }));
@@ -453,7 +407,7 @@ export async function getServerSideProps() {
         initialLeagues: JSON.parse(JSON.stringify(leagues)),
         initialClubs: JSON.parse(JSON.stringify(clubs)),
         initialCountries: JSON.parse(JSON.stringify(countries)),
-        initialStandings: JSON.parse(JSON.stringify(standings)),
+        initialMatches: JSON.parse(JSON.stringify(matches)),
       },
     };
   } catch (error) {
@@ -464,7 +418,7 @@ export async function getServerSideProps() {
         initialLeagues: [],
         initialClubs: [],
         initialCountries: [],
-        initialStandings: [],
+        initialMatches: [],
       },
     };
   }
@@ -478,7 +432,7 @@ export default function LeaguePage({
   initialLeagues = [],
   initialClubs = [],
   initialCountries = [],
-  initialStandings = [],
+  initialMatches = [],
 }) {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -486,7 +440,7 @@ export default function LeaguePage({
   const [leagues] = useState(initialLeagues);
   const [clubs] = useState(initialClubs);
   const [countries] = useState(initialCountries);
-  const [standings] = useState(initialStandings);
+  const [matches, setMatches] = useState(initialMatches);
 
   const [selectedLeague, setSelectedLeague] = useState(null);
   const [search, setSearch] = useState('');
@@ -508,6 +462,88 @@ export default function LeaguePage({
   }, [loading, user, router]);
 
   /* =======================================================
+     REALTIME MATCHES
+  ======================================================= */
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'matches'),
+      (snapshot) => {
+        const matchList = snapshot.docs.map((docItem) => ({
+          id: docItem.id,
+          ...docItem.data(),
+        }));
+        setMatches(matchList);
+      },
+      (error) => {
+        console.error('Matches realtime error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  /* =======================================================
+     GET LEAGUE STANDINGS FROM MATCHES
+  ======================================================= */
+
+  function getLeagueStandings(league) {
+    if (!league) return [];
+
+    const leagueClubs = clubs.filter((club) => getClubLeague(club, league));
+
+    if (leagueClubs.length === 0) return [];
+
+    const leagueMatches = matches.filter((match) => {
+      return (
+        match.leagueId === league.id ||
+        match.leagueID === league.id ||
+        match.competitionId === league.id
+      );
+    });
+
+    // If no matches found by leagueId, try matching by club IDs
+    if (leagueMatches.length === 0) {
+      const clubIds = new Set(leagueClubs.map((club) => String(club.id)));
+      const clubMatches = matches.filter((match) => {
+        const homeId = String(match.homeClubId || match.homeTeamId || '');
+        const awayId = String(match.awayClubId || match.awayTeamId || '');
+        return clubIds.has(homeId) || clubIds.has(awayId);
+      });
+      return calculateStandingsFromMatches(clubMatches, leagueClubs, league.id);
+    }
+
+    return calculateStandingsFromMatches(leagueMatches, leagueClubs, league.id);
+  }
+
+  /* =======================================================
+     GET ALL LEAGUE STANDINGS (for season completion)
+  ======================================================= */
+
+  const allLeagueStandings = useMemo(() => {
+    const standingsMap = {};
+
+    leagues.forEach((league) => {
+      const leagueClubs = clubs.filter((club) => getClubLeague(club, league));
+      if (leagueClubs.length === 0) return;
+
+      const leagueMatches = matches.filter((match) => {
+        const homeId = String(match.homeClubId || match.homeTeamId || '');
+        const awayId = String(match.awayClubId || match.awayTeamId || '');
+        const clubIds = new Set(leagueClubs.map((club) => String(club.id)));
+        return clubIds.has(homeId) || clubIds.has(awayId);
+      });
+
+      const standings = calculateStandingsFromMatches(leagueMatches, leagueClubs, league.id);
+      standingsMap[league.id] = standings;
+    });
+
+    return standingsMap;
+  }, [leagues, clubs, matches]);
+
+  /* =======================================================
      COUNTRY OPTIONS
   ======================================================= */
 
@@ -520,37 +556,6 @@ export default function LeaguePage({
 
     return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [leagues, countries]);
-
-  /* =======================================================
-     GET LEAGUE STANDINGS
-  ======================================================= */
-
-  function getLeagueStandings(league, allClubs = clubs, allStandings = standings) {
-    if (!league) return [];
-
-    const direct = Array.isArray(league.standings) ? league.standings : [];
-
-    const collectionRows = allStandings.filter((standing) => {
-      const id =
-        standing.leagueId ||
-        standing.leagueID ||
-        standing.competitionId;
-
-      return id && String(id) === String(league.id);
-    });
-
-    let rows = direct.length ? direct : collectionRows;
-
-    if (!rows.length) {
-      rows = allClubs
-        .filter((club) => getClubLeague(club, league))
-        .map(buildStandingFromClub);
-    }
-
-    return sortStandings(
-      rows.map((row) => normalizeStanding(row, allClubs))
-    );
-  }
 
   /* =======================================================
      GET LEAGUE TEAMS
@@ -629,7 +634,7 @@ export default function LeaguePage({
 
   const selectedStandings = useMemo(
     () => getLeagueStandings(selectedLeague),
-    [selectedLeague, clubs, standings]
+    [selectedLeague, clubs, matches]
   );
 
   const selectedTeams = useMemo(
@@ -642,23 +647,22 @@ export default function LeaguePage({
       return { teams: 0, matches: 0, goals: 0, leader: null };
     }
 
-    const teams =
-      selectedTeams.length || safeNumber(selectedLeague.teamCount);
+    const teams = selectedTeams.length || safeNumber(selectedLeague.teamCount);
 
-    const matches = safeNumber(
-      selectedLeague.matchesPlayed ??
-        selectedLeague.playedMatches ??
-        selectedLeague.totalMatches
+    const totalGoals = selectedStandings.reduce(
+      (total, team) => total + team.goalsFor,
+      0
     );
 
-    const goals = safeNumber(
-      selectedLeague.totalGoals ?? selectedLeague.goals
-    );
+    const totalMatches = selectedStandings.reduce(
+      (total, team) => total + team.played,
+      0
+    ) / 2;
 
     return {
       teams,
-      matches,
-      goals,
+      matches: Math.round(totalMatches),
+      goals: totalGoals,
       leader: selectedStandings[0] || null,
     };
   }, [selectedLeague, selectedTeams, selectedStandings]);
@@ -688,43 +692,57 @@ export default function LeaguePage({
     try {
       setIsProcessingSeason(true);
 
-      const result = processSeasonCompletion(leagues, clubs, standings);
+      const allStandings = [];
+      Object.values(allLeagueStandings).forEach((standings) => {
+        allStandings.push(...standings);
+      });
 
-      const batch = writeBatch(db);
+      const result = processSeasonCompletion(leagues, clubs, allStandings);
 
-      // Update prize money
+      // Process in batches
+      const allUpdates = [];
+
+      // Prize money updates
       result.updates.forEach((update) => {
-        const clubRef = doc(db, 'clubs', update.clubId);
-        batch.update(clubRef, {
-          prizeMoney: update.prizeMoney,
-          lastSeasonPosition: update.position,
-          totalPrizeMoney: update.prizeMoney,
-          updatedAt: serverTimestamp(),
+        allUpdates.push({
+          type: 'prize',
+          clubId: update.clubId,
+          data: {
+            prizeMoney: update.prizeMoney,
+            lastSeasonPosition: update.position,
+            totalPrizeMoney: update.prizeMoney,
+            updatedAt: serverTimestamp(),
+          },
         });
       });
 
-      // Promotion
+      // Promotion updates
       Object.values(result.promotionMap).forEach((info) => {
         if (info.clubs && info.clubs.length > 0) {
           info.clubs.forEach((clubId) => {
-            const clubRef = doc(db, 'clubs', clubId);
-            batch.update(clubRef, {
-              leagueId: null, // Will be set to first division
-              promotedFrom: info.fromLeagueId,
-              updatedAt: serverTimestamp(),
+            allUpdates.push({
+              type: 'promotion',
+              clubId,
+              data: {
+                promotedFrom: info.fromLeagueId,
+                updatedAt: serverTimestamp(),
+              },
             });
           });
         }
       });
 
-      // Relegation
+      // Relegation updates
       Object.values(result.relegationMap).forEach((info) => {
         if (info.clubs && info.clubs.length > 0) {
           info.clubs.forEach((clubId) => {
-            const clubRef = doc(db, 'clubs', clubId);
-            batch.update(clubRef, {
-              relegatedFrom: info.fromLeagueId,
-              updatedAt: serverTimestamp(),
+            allUpdates.push({
+              type: 'relegation',
+              clubId,
+              data: {
+                relegatedFrom: info.fromLeagueId,
+                updatedAt: serverTimestamp(),
+              },
             });
           });
         }
@@ -732,32 +750,51 @@ export default function LeaguePage({
 
       // CAF Champions League
       result.cafChampions.forEach((clubId) => {
-        const clubRef = doc(db, 'clubs', clubId);
-        batch.update(clubRef, {
-          cafCompetition: 'champions-league',
-          updatedAt: serverTimestamp(),
+        allUpdates.push({
+          type: 'caf',
+          clubId,
+          data: {
+            cafCompetition: 'champions-league',
+            updatedAt: serverTimestamp(),
+          },
         });
       });
 
       // CAF Confederation Cup
       result.cafConfederation.forEach((clubId) => {
-        const clubRef = doc(db, 'clubs', clubId);
-        batch.update(clubRef, {
-          cafCompetition: 'confederation-cup',
-          updatedAt: serverTimestamp(),
+        allUpdates.push({
+          type: 'caf',
+          clubId,
+          data: {
+            cafCompetition: 'confederation-cup',
+            updatedAt: serverTimestamp(),
+          },
         });
       });
 
-      await batch.commit();
+      // Batch update
+      for (let i = 0; i < allUpdates.length; i += FIRESTORE_BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = allUpdates.slice(i, i + FIRESTORE_BATCH_SIZE);
 
-      toast.success('Season completed: Prize money, promotions, relegations, and CAF qualifications updated');
+        chunk.forEach((update) => {
+          const clubRef = doc(db, 'clubs', update.clubId);
+          batch.update(clubRef, update.data);
+        });
+
+        await batch.commit();
+      }
+
+      toast.success(
+        `Season completed: ${result.updates.length} prize payments, ${result.cafChampions.length} CAF CL, ${result.cafConfederation.length} CAF Confed, promotions and relegations processed`
+      );
     } catch (error) {
       console.error('Season processing error:', error);
       toast.error('Could not process season end');
     } finally {
       setIsProcessingSeason(false);
     }
-  }, [user, isProcessingSeason, leagues, clubs, standings]);
+  }, [user, isProcessingSeason, leagues, clubs, allLeagueStandings]);
 
   /* =======================================================
      LOADING
@@ -1095,7 +1132,7 @@ export default function LeaguePage({
                                   ? team.form
                                   : String(team.form || '').split('')
                                 )
-                                  .slice(0, 5)
+                                  .slice(-5)
                                   .map((result, formIndex) => {
                                     const r = normalize(result);
                                     return (
@@ -1261,9 +1298,9 @@ export default function LeaguePage({
           <div className={styles.statCard}>
             <span>📊</span>
             <div>
-              <small>STANDINGS</small>
-              <strong>{standings.length}</strong>
-              <p>Ranking records</p>
+              <small>MATCHES</small>
+              <strong>{matches.length}</strong>
+              <p>Matches recorded</p>
             </div>
           </div>
         </section>
