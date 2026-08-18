@@ -395,13 +395,12 @@ export default function TrainingPage() {
 
       playersSnapshot.forEach((playerDoc) => {
         const player = playerDoc.data();
-
-        if (player.squadType !== 'youth' && player.isYouth !== true) {
-          playerList.push({
-            id: playerDoc.id,
-            ...player,
-          });
-        }
+        
+        // IMPINDUKA: Nta filtre ikibagira abayouth - bose baragaragara
+        playerList.push({
+          id: playerDoc.id,
+          ...player,
+        });
       });
 
       playerList.sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a));
@@ -769,12 +768,11 @@ export default function TrainingPage() {
         playersSnapshot.forEach((playerDoc) => {
           const player = playerDoc.data();
 
-          if (player.squadType !== 'youth' && player.isYouth !== true) {
-            clubPlayers.push({
-              id: playerDoc.id,
-              ...player,
-            });
-          }
+          // IMPINDUKA: Nta filtre ikibagira abayouth - bose baragaragara
+          clubPlayers.push({
+            id: playerDoc.id,
+            ...player,
+          });
         });
 
         if (clubPlayers.length === 0) continue;
