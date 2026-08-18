@@ -495,8 +495,6 @@ export default function FixturesPage({
 
   /* =======================================================
      SIMULATE OTHER TEAM MATCHES
-     This runs when Advance Day is pressed.
-     It simulates ALL matches for today (including missed ones).
   ======================================================= */
 
   const simulateOtherTeamMatches = useCallback(async () => {
@@ -505,7 +503,6 @@ export default function FixturesPage({
     try {
       const today = isoDate(gameDate);
 
-      // Find ALL matches scheduled for today that don't have results yet
       const matchesToSimulate = allFixtures.filter((fixture) => {
         if (simulatedMatchesRef.current.has(fixture.id)) return false;
 
@@ -513,14 +510,12 @@ export default function FixturesPage({
         if (!fixtureDate) return false;
         if (isoDate(fixtureDate) !== today) return false;
 
-        // Skip matches that already have results
         if (fixture.result || fixture.status === 'finished') return false;
 
         const isMyMatch =
           fixture.homeClubId === currentClub.id ||
           fixture.awayClubId === currentClub.id;
 
-        // Skip my own matches (user must play them manually)
         if (isMyMatch) return false;
 
         return true;
@@ -560,6 +555,7 @@ export default function FixturesPage({
 
   /* =======================================================
      ADVANCE DAY
+     Button always works, even without upcoming match.
   ======================================================= */
 
   const advanceDay = async () => {
@@ -958,53 +954,64 @@ export default function FixturesPage({
             <div className={styles.noNextMatch}>No scheduled match.</div>
           )}
 
-          {nextMatch && (
-            <div className={styles.nextMatchActions}>
-              {nextMatchState === 'upcoming' && (
-                <>
-                  {daysBetween(gameDate, parseDate(nextMatch.date)) === 0 ? (
-                    <button
-                      type="button"
-                      className={styles.advanceButton}
-                      onClick={() => advanceToKickoff(nextMatch)}
-                      disabled={saving}
-                    >
-                      ⏭ Advance to Kickoff ({formatTime(parseDate(nextMatch.date))})
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.advanceButton}
-                      onClick={advanceDay}
-                      disabled={saving}
-                    >
-                      ⏭ Advance to Next Day
-                    </button>
-                  )}
+          {/* ADVANCE BUTTON - Always visible */}
+          <div className={styles.nextMatchActions}>
+            {nextMatchState === 'upcoming' && nextMatch && (
+              <>
+                {daysBetween(gameDate, parseDate(nextMatch.date)) === 0 ? (
+                  <button
+                    type="button"
+                    className={styles.advanceButton}
+                    onClick={() => advanceToKickoff(nextMatch)}
+                    disabled={saving}
+                  >
+                    ⏭ Advance to Kickoff ({formatTime(parseDate(nextMatch.date))})
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.advanceButton}
+                    onClick={advanceDay}
+                    disabled={saving}
+                  >
+                    ⏭ Advance to Next Day
+                  </button>
+                )}
 
-                  <span>
-                    Match in{' '}
-                    {Math.max(0, daysBetween(gameDate, parseDate(nextMatch.date)))}{' '}
-                    day(s)
-                  </span>
-                </>
-              )}
+                <span>
+                  Match in{' '}
+                  {Math.max(0, daysBetween(gameDate, parseDate(nextMatch.date)))}{' '}
+                  day(s)
+                </span>
+              </>
+            )}
 
-              {nextMatchState === 'live' && (
-                <button
-                  type="button"
-                  className={styles.playButton}
-                  onClick={() => playMatch(nextMatch)}
-                >
-                  ▶ PLAY MATCH
-                </button>
-              )}
+            {nextMatchState === 'live' && (
+              <button
+                type="button"
+                className={styles.playButton}
+                onClick={() => playMatch(nextMatch)}
+              >
+                ▶ PLAY MATCH
+              </button>
+            )}
 
-              {nextMatchState === 'missed' && (
-                <span className={styles.missed}>MISSED</span>
-              )}
-            </div>
-          )}
+            {nextMatchState === 'missed' && (
+              <span className={styles.missed}>MISSED</span>
+            )}
+
+            {/* ALWAYS show Advance Day button when no next match or after missed */}
+            {(!nextMatch || nextMatchState === 'missed') && (
+              <button
+                type="button"
+                className={styles.advanceButton}
+                onClick={advanceDay}
+                disabled={saving}
+              >
+                ⏭ Advance to Next Day
+              </button>
+            )}
+          </div>
         </section>
 
         {/* CONTROLS */}
