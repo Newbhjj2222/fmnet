@@ -318,8 +318,6 @@ export default function TrainingPage() {
   const [schedule, setSchedule] = useState({});
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [showDrillPicker, setShowDrillPicker] = useState(false);
-  const [showPlayerPicker, setShowPlayerPicker] = useState(false);
   const [drillFilter, setDrillFilter] = useState('all');
 
   const scheduleRef = useRef({});
@@ -506,7 +504,6 @@ export default function TrainingPage() {
         };
       });
 
-      setShowDrillPicker(false);
       toast.success(`${TRAINING_DRILLS[drillId].name} added to ${DAY_NAMES[dayIndex]}`);
     },
     [updateSchedule]
@@ -548,8 +545,6 @@ export default function TrainingPage() {
           ),
         };
       });
-
-      setShowPlayerPicker(false);
     },
     [updateSchedule]
   );
@@ -740,7 +735,7 @@ export default function TrainingPage() {
   ======================================================= */
 
   const processSystemAITraining = useCallback(async () => {
-    if (!user || isSaving) return;
+    if (!user || saving) return;
 
     try {
       const clubsSnapshot = await getDocs(collection(db, 'clubs'));
@@ -784,11 +779,9 @@ export default function TrainingPage() {
 
         if (clubPlayers.length === 0) continue;
 
-        // Pick random players to train (up to 11)
         const shuffled = [...clubPlayers].sort(() => Math.random() - 0.5);
         const selectedPlayers = shuffled.slice(0, Math.min(11, shuffled.length));
 
-        // Pick random drills
         const drillIds = Object.keys(TRAINING_DRILLS);
         const selectedDrills = drillIds
           .sort(() => Math.random() - 0.5)
@@ -833,7 +826,7 @@ export default function TrainingPage() {
     } catch (error) {
       console.error('System AI training error:', error);
     }
-  }, [user, isSaving]);
+  }, [user, saving]);
 
   /* =======================================================
      RUN SYSTEM AI TRAINING
