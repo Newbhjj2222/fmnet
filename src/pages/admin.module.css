@@ -1,693 +1,38 @@
-.page {
-  min-height: 100vh;
-  min-height: 100dvh;
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(37, 99, 235, 0.12),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at bottom left,
-      rgba(16, 185, 129, 0.08),
-      transparent 28%
-    ),
-    #080b12;
-  color: #e5e7eb;
-  padding: 28px;
-}
-
-/* ============================================================
-   HEADER
-   ============================================================ */
-
-.header {
-  max-width: 1450px;
-  margin: 0 auto 25px;
-  padding: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 20px;
-  background: rgba(17, 24, 39, 0.78);
-  backdrop-filter: blur(14px);
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 25px;
-}
-
-.adminBadge {
-  display: inline-flex;
-  padding: 6px 11px;
-  margin-bottom: 10px;
-  border-radius: 999px;
-
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-
-  color: #fca5a5;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.title {
-  margin: 0;
-  font-size: clamp(25px, 4vw, 38px);
-  font-weight: 850;
-  color: #f9fafb;
-}
-
-.subtitle {
-  margin: 8px 0 0;
-  color: #9ca3af;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.subtitle strong {
-  color: #60a5fa;
-}
-
-.adminUser {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  padding: 10px 14px;
-  border-radius: 14px;
-
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.adminUser strong {
-  display: block;
-  color: #f9fafb;
-}
-
-.adminUser span {
-  display: block;
-  margin-top: 3px;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.avatar {
-  width: 44px;
-  height: 44px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 50%;
-
-  background: linear-gradient(
-    135deg,
-    #2563eb,
-    #7c3aed
-  );
-
-  color: white;
-  font-weight: 800;
-  font-size: 18px;
-}
-
-/* ============================================================
-   TABS
-   ============================================================ */
-
-.tabs {
-  max-width: 1450px;
-  margin: 0 auto 25px;
-
-  display: flex;
-  gap: 8px;
-
-  padding: 8px;
-
-  overflow-x: auto;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
-
-  background: rgba(17, 24, 39, 0.78);
-}
-
-.tabs button {
-  flex: 0 0 auto;
-
-  border: 0;
-  border-radius: 10px;
-
-  padding: 11px 16px;
-
-  background: transparent;
-  color: #9ca3af;
-
-  cursor: pointer;
-
-  font-size: 13px;
-  font-weight: 700;
-
-  transition:
-    background 0.2s ease,
-    color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.tabs button:hover {
-  color: #f9fafb;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.tabs .activeTab {
-  color: white;
-  background: #2563eb;
-}
-
-/* ============================================================
-   CONTENT
-   ============================================================ */
-
-.content {
-  max-width: 1450px;
-  margin: 0 auto;
-}
-
-.sectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-
-  margin-bottom: 20px;
-}
-
-.sectionHeader h2 {
-  margin: 0;
-  color: #f9fafb;
-  font-size: 23px;
-}
-
-.sectionHeader p {
-  margin: 6px 0 0;
-  color: #9ca3af;
-  font-size: 13px;
-}
-
-.refreshButton {
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.05);
-  color: #d1d5db;
-
-  padding: 10px 15px;
-  border-radius: 10px;
-
-  cursor: pointer;
-}
-
-.refreshButton:hover {
-  background: rgba(255, 255, 255, 0.09);
-}
-
-/* ============================================================
-   STATS
-   ============================================================ */
-
-.statsGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.statCard {
-  padding: 20px;
-
-  min-height: 145px;
-
-  border-radius: 17px;
-
-  background: rgba(17, 24, 39, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.statIcon {
-  font-size: 24px;
-  margin-bottom: 12px;
-}
-
-.statLabel {
-  color: #9ca3af;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.statCard strong {
-  margin-top: 5px;
-
-  color: #f9fafb;
-  font-size: 30px;
-}
-
-/* ============================================================
-   QUICK ACTIONS
-   ============================================================ */
-
-.quickGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-
-  margin-bottom: 20px;
-}
-
-.quickCard {
-  text-align: left;
-
-  padding: 20px;
-
-  border-radius: 16px;
-
-  background: rgba(17, 24, 39, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
-  color: #e5e7eb;
-
-  cursor: pointer;
-
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease;
-}
-
-.quickCard:hover {
-  transform: translateY(-2px);
-  background: rgba(37, 99, 235, 0.1);
-  border-color: rgba(59, 130, 246, 0.35);
-}
-
-.quickCard span {
-  display: block;
-  font-size: 27px;
-  margin-bottom: 13px;
-}
-
-.quickCard strong {
-  display: block;
-  color: #f9fafb;
-  font-size: 14px;
-}
-
-.quickCard small {
-  display: block;
-  margin-top: 5px;
-  color: #9ca3af;
-  font-size: 11px;
-}
-
-/* ============================================================
-   FORM
-   ============================================================ */
-
-.formCard {
-  margin-bottom: 22px;
-  padding: 22px;
-
-  border-radius: 18px;
-
-  background: rgba(17, 24, 39, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.formSectionTitle {
-  margin: 0 0 15px;
-  padding-bottom: 10px;
-
-  color: #f3f4f6;
-
-  font-size: 15px;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.formSectionTitle:not(:first-child) {
-  margin-top: 28px;
-}
-
-.formGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.field label,
-.fullField label {
-  color: #d1d5db;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.field input,
-.field select,
-.fullField textarea {
-  width: 100%;
-  box-sizing: border-box;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  outline: none;
-
-  border-radius: 10px;
-
-  background: #0d111b;
-  color: #f3f4f6;
-
-  padding: 12px 13px;
-
-  font-size: 13px;
-
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.field input::placeholder,
-.fullField textarea::placeholder {
-  color: #5f6878;
-}
-
-.field input:focus,
-.field select:focus,
-.fullField textarea:focus {
-  border-color: #3b82f6;
-
-  box-shadow:
-    0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.field select {
-  cursor: pointer;
-}
-
-.fullField {
-  margin-top: 16px;
-}
-
-.fullField textarea {
-  resize: vertical;
-  min-height: 120px;
-  font-family: inherit;
-}
-
-.formActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-
-  margin-top: 22px;
-}
-
-.submitButton,
-.cancelButton {
-  border: 0;
-  border-radius: 10px;
-
-  padding: 11px 18px;
-
-  font-size: 13px;
-  font-weight: 800;
-
-  cursor: pointer;
-}
-
-.submitButton {
-  background: #2563eb;
-  color: white;
-}
-
-.submitButton:hover {
-  background: #1d4ed8;
-}
-
-.cancelButton {
-  background: rgba(255, 255, 255, 0.07);
-  color: #d1d5db;
-}
-
-.cancelButton:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.submitButton:disabled,
-.cancelButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ============================================================
-   TABLE
-   ============================================================ */
-
-.databaseCard {
-  overflow: hidden;
-
-  margin-top: 20px;
-
-  border-radius: 18px;
-
-  background: rgba(17, 24, 39, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.tableHeader {
-  padding: 18px 20px;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.tableHeader h3 {
-  margin: 0;
-  color: #f9fafb;
-  font-size: 15px;
-}
-
-.tableHeader span {
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.tableWrapper {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.table {
-  width: 100%;
-  min-width: 700px;
-
-  border-collapse: collapse;
-}
-
-.table th {
-  padding: 12px 18px;
-
-  text-align: left;
-
-  background: rgba(255, 255, 255, 0.025);
-
-  color: #9ca3af;
-
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.table td {
-  padding: 14px 18px;
-
-  color: #d1d5db;
-
-  font-size: 13px;
-
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.clubCell,
-.playerCell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.clubCell img {
-  width: 32px;
-  height: 32px;
-
-  object-fit: contain;
-
-  border-radius: 8px;
-}
-
-.clubCell > span {
-  width: 32px;
-  height: 32px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 8px;
-
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.playerCell img {
-  width: 36px;
-  height: 36px;
-
-  object-fit: cover;
-
-  border-radius: 50%;
-}
-
-.playerCell > span {
-  width: 36px;
-  height: 36px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 50%;
-
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.playerCell small {
-  display: block;
-  color: #6b7280;
-  margin-top: 2px;
-}
-
-.actions {
-  display: flex;
-  gap: 7px;
-}
-
-.editButton,
-.deleteButton {
-  width: 34px;
-  height: 34px;
-
-  border: 0;
-  border-radius: 8px;
-
-  cursor: pointer;
-}
-
-.editButton {
-  background: rgba(59, 130, 246, 0.12);
-}
-
-.deleteButton {
-  background: rgba(239, 68, 68, 0.12);
-}
-
-.editButton:hover {
-  background: rgba(59, 130, 246, 0.22);
-}
-
-.deleteButton:hover {
-  background: rgba(239, 68, 68, 0.22);
-}
-
-.rating {
-  display: inline-flex;
-
-  min-width: 34px;
-  height: 28px;
-
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 7px;
-
-  background: rgba(16, 185, 129, 0.12);
-  color: #6ee7b7;
-
-  font-weight: 800;
-}
-
-/* ============================================================
-   EMPTY
-   ============================================================ */
-
-.empty {
-  padding: 35px 20px;
-
-  text-align: center;
-
-  color: #6b7280;
-
-  font-size: 13px;
-}
-
-/* ============================================================
+/* =========================================================
+   admin.module.css
+   Dark theme + responsive + attractive
+========================================================= */
+
+/* =========================================================
    LOADING
-   ============================================================ */
+========================================================= */
 
-.loadingPage,
-.loadingBox {
+.loadingPage {
   min-height: 100vh;
-  min-height: 100dvh;
-
   display: flex;
   flex-direction: column;
-
   align-items: center;
   justify-content: center;
-
-  background: #080b12;
-  color: #9ca3af;
+  gap: 16px;
+  background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+  color: #fff;
+  padding: 20px;
+  text-align: center;
 }
 
-.loadingBox {
-  min-height: 300px;
+.loadingPage p {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 14px;
 }
 
 .spinner {
-  width: 35px;
-  height: 35px;
-
-  border-radius: 50%;
-
+  width: 42px;
+  height: 42px;
   border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #3b82f6;
-
+  border-top-color: #38bdf8;
+  border-right-color: #6366f1;
+  border-radius: 50%;
   animation: spin 0.8s linear infinite;
-
-  margin-bottom: 14px;
 }
 
 @keyframes spin {
@@ -696,124 +41,1027 @@
   }
 }
 
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
+/* =========================================================
+   PAGE
+========================================================= */
 
-@media (max-width: 1000px) {
-  .statsGrid {
-    grid-template-columns: repeat(2, 1fr);
+.page {
+  width: 100%;
+  max-width: 1400px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+  color: #e5e7eb;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.adminBadge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(245, 158, 11, 0.15));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #f1f5f9, #cbd5e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.subtitle strong {
+  color: #38bdf8;
+}
+
+.adminUser {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444, #f59e0b);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.adminUser strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.adminUser span {
+  display: block;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* =========================================================
+   NAVIGATION TABS
+========================================================= */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.025);
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs button {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.tabs button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.tabs .activeTab {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(99, 102, 241, 0.2));
+}
+
+/* =========================================================
+   CONTENT
+========================================================= */
+
+.content {
+  width: 100%;
+}
+
+.loadingBox {
+  text-align: center;
+  padding: 60px 20px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.loadingBox .spinner {
+  margin: 0 auto 16px;
+}
+
+/* =========================================================
+   SECTION HEADER
+========================================================= */
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.sectionHeader p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+}
+
+.refreshButton {
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refreshButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* =========================================================
+   STATS GRID
+========================================================= */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.statCard {
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.statCard:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.statIcon {
+  display: block;
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.statLabel {
+  display: block;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.statCard strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   QUICK GRID
+========================================================= */
+
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.quickCard {
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.quickCard:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+}
+
+.quickCard span {
+  display: block;
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.quickCard strong {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.quickCard small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+}
+
+/* =========================================================
+   DATABASE CARD
+========================================================= */
+
+.databaseCard {
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 16px;
+}
+
+.databaseCard h3 {
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.tableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.tableHeader h3 {
+  margin: 0;
+}
+
+.tableHeader span {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.clubCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clubCell img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.clubCell span {
+  font-size: 16px;
+}
+
+.clubCell strong {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.playerCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playerCell img {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.playerCell span {
+  font-size: 18px;
+}
+
+.playerCell strong {
+  display: block;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.playerCell small {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 9px;
+}
+
+.rating {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+
+.actions {
+  display: flex;
+  gap: 4px;
+}
+
+.editButton,
+.deleteButton {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.editButton {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.editButton:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.deleteButton {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.deleteButton:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* =========================================================
+   FORM CARD
+========================================================= */
+
+.formCard {
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 16px;
+}
+
+.formSectionTitle {
+  margin: 16px 0 12px;
+  color: #38bdf8;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.formSectionTitle:first-child {
+  margin-top: 0;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  min-width: 0;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.field select option {
+  background: #111827;
+  color: #fff;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.fullField {
+  margin-top: 12px;
+}
+
+.fullField label {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fullField textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  resize: vertical;
+}
+
+/* =========================================================
+   FORM BUTTONS
+========================================================= */
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.submitButton,
+.cancelButton {
+  padding: 9px 18px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.submitButton {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #0b1120;
+}
+
+.submitButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.3);
+}
+
+.cancelButton {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cancelButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.submitButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.empty {
+  text-align: center;
+  padding: 30px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+/* =========================================================
+   PLAYER TOOLS
+========================================================= */
+
+.playerTools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rplImportButton,
+.generateButton {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rplImportButton {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.15));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.rplImportButton:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.25));
+}
+
+.generateButton {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #0b1120;
+}
+
+.generateButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.3);
+}
+
+.rplImportButton:disabled,
+.generateButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =========================================================
+   IMPORT PROGRESS
+========================================================= */
+
+.importProgressCard {
+  padding: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.05);
+  margin-bottom: 16px;
+}
+
+.importProgressCard > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.importProgressCard strong {
+  color: #fff;
+  font-size: 12px;
+}
+
+.importProgressCard span {
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progressBar {
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  transition: width 0.3s ease;
+}
+
+.importProgressCard small {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+}
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+}
+
+.generateModal {
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #111a2e, #0f172a);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.modalEyebrow {
+  display: block;
+  color: #38bdf8;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.modalHeader h3 {
+  margin: 4px 0 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.modalHeader p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+}
+
+.modalClose {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modalClose:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.generateForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.generatorInfo {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+}
+
+.generatorInfo span {
+  display: block;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.generatorInfo strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.generatorInfo small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.modalActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modalActions button {
+  flex: 1;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1024px) {
+  .statsGrid,
+  .quickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .quickGrid {
-    grid-template-columns: repeat(2, 1fr);
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .page {
-    padding: 13px;
+    padding: 20px 12px 40px;
   }
 
   .header {
-    padding: 18px;
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .adminUser {
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .tabs {
-    border-radius: 13px;
+  .title {
+    font-size: 26px;
   }
 
   .tabs button {
-    padding: 10px 13px;
-  }
-
-  .sectionHeader {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .statsGrid {
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .statCard {
-    min-height: 115px;
-    padding: 15px;
-  }
-
-  .statCard strong {
-    font-size: 25px;
-  }
-
-  .quickGrid {
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .quickCard {
-    padding: 15px;
-  }
-
-  .formCard {
-    padding: 16px;
+    min-width: 80px;
+    font-size: 10px;
+    padding: 8px 10px;
   }
 
   .formGrid {
     grid-template-columns: 1fr;
   }
-
-  .formActions {
-    flex-direction: column-reverse;
-  }
-
-  .submitButton,
-  .cancelButton {
-    width: 100%;
-  }
 }
 
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   .page {
-    padding: 9px;
+    padding: 14px 8px 30px;
   }
 
   .title {
-    font-size: 24px;
+    font-size: 22px;
   }
 
-  .subtitle {
-    font-size: 12px;
-  }
-
-  .statsGrid {
-    grid-template-columns: 1fr 1fr;
-  }
-
+  .statsGrid,
   .quickGrid {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .statCard {
-    padding: 13px;
-  }
-
-  .statIcon {
-    font-size: 20px;
+    padding: 12px;
   }
 
   .statCard strong {
     font-size: 22px;
   }
 
-  .databaseCard {
-    border-radius: 13px;
+  .adminUser {
+    width: 100%;
+  }
+
+  .playerTools {
+    width: 100%;
+  }
+
+  .rplImportButton,
+  .generateButton {
+    flex: 1;
+    text-align: center;
+  }
+
+  .modalOverlay {
+    padding: 8px;
+  }
+
+  .generateModal {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .title {
+    font-size: 20px;
+  }
+
+  .tabs button {
+    min-width: 65px;
+    font-size: 9px;
+    padding: 6px 8px;
+  }
+
+  .formActions {
+    flex-direction: column;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .statCard,
+  .quickCard,
+  .submitButton,
+  .cancelButton,
+  .rplImportButton,
+  .generateButton {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print {
+  .page {
+    background: #fff;
+    color: #000;
+    padding: 0;
+    max-width: none;
+  }
+
+  .tabs,
+  .quickGrid,
+  .playerTools,
+  .adminUser,
+  .modalOverlay {
+    display: none;
+  }
+
+  .databaseCard,
+  .formCard,
+  .statCard {
+    border: 1px solid #ddd;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .title,
+  .sectionHeader h2,
+  .table th,
+  .table td,
+  .statCard strong {
+    color: #000;
   }
 }
