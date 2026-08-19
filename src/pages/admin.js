@@ -105,10 +105,436 @@ export default function Admin() {
   const [editingLeague, setEditingLeague] = useState(null);
   const [editingClub, setEditingClub] = useState(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
+const [isFetchingRplPlayers, setIsFetchingRplPlayers] = useState(false);
+const [rplFetchProgress, setRplFetchProgress] = useState({
+  current: 0,
+  total: 0,
+});
 
+const [showGeneratePlayers, setShowGeneratePlayers] = useState(false);
+
+const [generatePlayerForm, setGeneratePlayerForm] = useState({
+  clubId: "",
+  count: 20,
+});
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const normalizePlayerName = (value = "") => {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+};
 
+const normalizeClubName = (value = "") => {
+  return String(value)
+    .toLowerCase()
+    .replace(/\bfootball club\b/g, "")
+    .replace(/\bfc\b/g, "")
+    .replace(/\bsc\b/g, "")
+    .replace(/\bsports\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const findMatchingClub = (rplClubName) => {
+  const normalizedRplClub = normalizeClubName(rplClubName);
+
+  return (
+    clubs.find((club) => {
+      const normalizedClub = normalizeClubName(club.name);
+
+      return (
+        normalizedClub === normalizedRplClub ||
+        normalizedClub.includes(normalizedRplClub) ||
+        normalizedRplClub.includes(normalizedClub)
+      );
+    }) || null
+  );
+};
+
+const findCountryByName = (name) => {
+  const normalized = String(name || "").toLowerCase().trim();
+
+  return (
+    countries.find(
+      (country) =>
+        String(country.name || "")
+          .toLowerCase()
+          .trim() === normalized
+    ) || null
+  );
+};
+
+const convertRplPosition = (position) => {
+  const value = String(position || "")
+    .toLowerCase()
+    .trim();
+
+  if (
+    value.includes("goalkeeper") ||
+    value === "gk" ||
+    value.includes("keeper")
+  ) {
+    return "GK";
+  }
+
+  if (
+    value.includes("defender") ||
+    value.includes("defence") ||
+    value.includes("defense")
+  ) {
+    return "DEF";
+  }
+
+  if (
+    value.includes("midfielder") ||
+    value.includes("midfield")
+  ) {
+    return "MID";
+  }
+
+  if (
+    value.includes("forward") ||
+    value.includes("striker") ||
+    value.includes("attacker")
+  ) {
+    return "FWD";
+  }
+
+  return "MID";
+};
+
+const splitPlayerName = (fullName = "") => {
+  const parts = String(fullName)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return {
+      firstName: "",
+      lastName: "",
+    };
+  }
+
+  if (parts.length === 1) {
+    return {
+      firstName: parts[0],
+      lastName: "",
+    };
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
+};
+
+  const fetchAndImportRplPlayers = async () => {
+  if (isFetchingRplPlayers) return;
+
+  try {
+    setIsFetchingRplPlayers(true);
+
+    setRplFetchProgress({
+      current: 0,
+      total: 0,
+    });
+
+    toast.loading(
+      "Fetching Rwanda Premier League players...",
+      {
+        id: "rpl-import",
+      }
+    );
+
+    const response = await fetch("/api/rpl-players");
+
+    if (!response.ok) {
+      throw new Error(
+        `RPL API returned ${response.status}`
+      );
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(
+        result.message || "Failed to fetch RPL players."
+      );
+    }
+
+    const fetchedPlayers = Array.isArray(result.players)
+      ? result.players
+      : [];
+
+    if (fetchedPlayers.length === 0) {
+      throw new Error(
+        "No players were returned by Rwanda Premier League."
+      );
+    }
+
+    setRplFetchProgress({
+      current: 0,
+      total: fetchedPlayers.length,
+    });
+
+    /*
+     * ----------------------------------------------------------
+     * LOAD CURRENT PLAYERS AGAIN
+     * This prevents duplicates even if another admin action
+     * happened after the page was initially loaded.
+     * ----------------------------------------------------------
+     */
+
+    const existingSnapshot = await getDocs(
+      collection(db, "players")
+    );
+
+    const existingPlayers = existingSnapshot.docs.map(
+      (item) => ({
+        id: item.id,
+        ...item.data(),
+      })
+    );
+
+    /*
+     * ----------------------------------------------------------
+     * CREATE DUPLICATE INDEX
+     *
+     * Player identity:
+     *     player name + club
+     * ----------------------------------------------------------
+     */
+
+    const existingKeys = new Set(
+      existingPlayers.map((player) => {
+        return `${normalizePlayerName(
+          player.name
+        )}::${normalizeClubName(
+          player.clubName
+        )}`;
+      })
+    );
+
+    const playersToCreate = [];
+
+    let skippedDuplicates = 0;
+    let skippedUnknownClubs = 0;
+
+    for (let index = 0; index < fetchedPlayers.length; index++) {
+      const rplPlayer = fetchedPlayers[index];
+
+      const name = String(
+        rplPlayer.name || ""
+      ).trim();
+
+      const rplClubName = String(
+        rplPlayer.clubName ||
+          rplPlayer.club ||
+          ""
+      ).trim();
+
+      if (!name || !rplClubName) {
+        continue;
+      }
+
+      /*
+       * --------------------------------------------------------
+       * MATCH RPL CLUB TO FIRESTORE CLUB
+       * --------------------------------------------------------
+       */
+
+      const club = findMatchingClub(rplClubName);
+
+      if (!club) {
+        skippedUnknownClubs++;
+        continue;
+      }
+
+      const playerKey = `${normalizePlayerName(
+        name
+      )}::${normalizeClubName(club.name)}`;
+
+      if (existingKeys.has(playerKey)) {
+        skippedDuplicates++;
+        continue;
+      }
+
+      /*
+       * Prevent duplicates within this same import operation.
+       */
+
+      existingKeys.add(playerKey);
+
+      const countryName =
+        rplPlayer.nationality ||
+        rplPlayer.countryName ||
+        "";
+
+      const country =
+        findCountryByName(countryName);
+
+      const position = convertRplPosition(
+        rplPlayer.position
+      );
+
+      const {
+        firstName,
+        lastName,
+      } = splitPlayerName(name);
+
+      const payload = {
+        name,
+
+        firstName:
+          rplPlayer.firstName ||
+          firstName,
+
+        lastName:
+          rplPlayer.lastName ||
+          lastName,
+
+        clubId: club.id,
+        clubName: club.name,
+
+        countryId:
+          country?.id ||
+          "",
+
+        countryName:
+          country?.name ||
+          countryName,
+
+        position,
+
+        shirtNumber:
+          Number(rplPlayer.shirtNumber) || 0,
+
+        age:
+          Number(rplPlayer.age) ||
+          18,
+
+        nationality:
+          rplPlayer.nationality ||
+          countryName,
+
+        overall:
+          Number(rplPlayer.overall) ||
+          60,
+
+        value:
+          Number(rplPlayer.value) ||
+          0,
+
+        wage:
+          Number(rplPlayer.wage) ||
+          0,
+
+        contractYears:
+          Number(rplPlayer.contractYears) ||
+          3,
+
+        photo:
+          rplPlayer.photo ||
+          "",
+
+        status: "active",
+
+        goals:
+          Number(rplPlayer.goals) || 0,
+
+        assists:
+          Number(rplPlayer.assists) || 0,
+
+        appearances:
+          Number(rplPlayer.appearances) || 0,
+
+        yellowCards:
+          Number(rplPlayer.yellowCards) || 0,
+
+        redCards:
+          Number(rplPlayer.redCards) || 0,
+
+        source:
+          "rwanda-premier-league",
+
+        sourceClubName:
+          rplClubName,
+
+        importedAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+
+        createdAt:
+          serverTimestamp(),
+      };
+
+      playersToCreate.push(payload);
+
+      setRplFetchProgress({
+        current: index + 1,
+        total: fetchedPlayers.length,
+      });
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * WRITE TO FIRESTORE
+     *
+     * addDoc is intentionally used here because each player
+     * receives a Firestore document ID.
+     * ----------------------------------------------------------
+     */
+
+    let created = 0;
+
+    for (const player of playersToCreate) {
+      await addDoc(
+        collection(db, "players"),
+        player
+      );
+
+      created++;
+    }
+
+    toast.success(
+      `RPL import complete. ${created} players added, ${skippedDuplicates} duplicates skipped.${
+        skippedUnknownClubs
+          ? ` ${skippedUnknownClubs} players skipped because their club was not found in your Clubs database.`
+          : ""
+      }`,
+      {
+        id: "rpl-import",
+        duration: 6000,
+      }
+    );
+
+    await loadAllData();
+  } catch (error) {
+    console.error(
+      "RPL player import error:",
+      error
+    );
+
+    toast.error(
+      error?.message ||
+        "Failed to import RPL players.",
+      {
+        id: "rpl-import",
+        duration: 6000,
+      }
+    );
+  } finally {
+    setIsFetchingRplPlayers(false);
+  }
+};
   /*
    * ============================================================
    * USER NAME
@@ -399,7 +825,7 @@ export default function Admin() {
    * CLUB
    * ============================================================
    */
-
+  
   const saveClub = async (e) => {
     e.preventDefault();
 
@@ -1753,18 +2179,218 @@ export default function Admin() {
                 <div>
 
                   <div className={styles.sectionHeader}>
-                    <div>
-                      <h2>
-                        {editingPlayer
-                          ? "Edit Player"
-                          : "Add Player"}
-                      </h2>
+  <div>
+    <h2>
+      {editingPlayer
+        ? "Edit Player"
+        : "Players"}
+    </h2>
 
-                      <p>
-                        Add players and assign them to clubs.
-                      </p>
-                    </div>
-                  </div>
+    <p>
+      Add players, import Rwanda Premier League
+      players, or generate players for a club.
+    </p>
+  </div>
+
+  <div className={styles.playerTools}>
+
+    <button
+      type="button"
+      className={styles.rplImportButton}
+      onClick={fetchAndImportRplPlayers}
+      disabled={isFetchingRplPlayers}
+    >
+      {isFetchingRplPlayers
+        ? "⏳ Importing..."
+        : "🇷🇼 Import RPL Players"}
+    </button>
+
+    <button
+      type="button"
+      className={styles.generateButton}
+      onClick={() =>
+        setShowGeneratePlayers(true)
+      }
+      disabled={isFetchingRplPlayers}
+    >
+      ⚡ Generate Players
+    </button>
+
+  </div>
+</div>
+        {isFetchingRplPlayers && (
+  <div className={styles.importProgressCard}>
+
+    <div>
+      <strong>
+        Importing Rwanda Premier League players
+      </strong>
+
+      <span>
+        {rplFetchProgress.current} /{" "}
+        {rplFetchProgress.total || "..."}
+      </span>
+    </div>
+
+    <div className={styles.progressBar}>
+      <div
+        className={styles.progressFill}
+        style={{
+          width:
+            rplFetchProgress.total > 0
+              ? `${
+                  (rplFetchProgress.current /
+                    rplFetchProgress.total) *
+                  100
+                }%`
+              : "0%",
+        }}
+      />
+    </div>
+
+    <small>
+      Existing players are automatically skipped.
+    </small>
+
+  </div>
+)}
+  {showGeneratePlayers && (
+  <div
+    className={styles.modalOverlay}
+    onMouseDown={(e) => {
+      if (
+        e.target === e.currentTarget &&
+        !isSubmitting
+      ) {
+        setShowGeneratePlayers(false);
+      }
+    }}
+  >
+    <div className={styles.generateModal}>
+
+      <div className={styles.modalHeader}>
+        <div>
+          <span className={styles.modalEyebrow}>
+            PLAYER GENERATOR
+          </span>
+
+          <h3>
+            Generate Players
+          </h3>
+
+          <p>
+            Create a squad automatically and
+            save it directly to Firestore.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className={styles.modalClose}
+          onClick={() =>
+            !isSubmitting &&
+            setShowGeneratePlayers(false)
+          }
+        >
+          ×
+        </button>
+      </div>
+
+      <form
+        onSubmit={generatePlayers}
+        className={styles.generateForm}
+      >
+
+        <Select
+          label="Select Club"
+          value={
+            generatePlayerForm.clubId
+          }
+          onChange={(e) =>
+            setGeneratePlayerForm({
+              ...generatePlayerForm,
+              clubId: e.target.value,
+            })
+          }
+          options={clubs.map((club) => ({
+            value: club.id,
+            label: club.name,
+          }))}
+          placeholder="Choose a club"
+        />
+
+        <Input
+          label="Number of Players"
+          type="number"
+          min="1"
+          max="100"
+          value={
+            generatePlayerForm.count
+          }
+          onChange={(e) =>
+            setGeneratePlayerForm({
+              ...generatePlayerForm,
+              count: e.target.value,
+            })
+          }
+          placeholder="20"
+          required
+        />
+
+        {generatePlayerForm.clubId && (
+          <div className={styles.generatorInfo}>
+
+            <span>Selected Club</span>
+
+            <strong>
+              {
+                clubs.find(
+                  (club) =>
+                    club.id ===
+                    generatePlayerForm.clubId
+                )?.name
+              }
+            </strong>
+
+            <small>
+              Players will automatically receive
+              positions, shirt numbers, ages,
+              ratings, values and wages.
+            </small>
+
+          </div>
+        )}
+
+        <div className={styles.modalActions}>
+
+          <button
+            type="button"
+            className={styles.cancelButton}
+            onClick={() =>
+              setShowGeneratePlayers(false)
+            }
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className={styles.generateButton}
+            disabled={isSubmitting}
+          >
+            {isSubmitting
+              ? "Generating..."
+              : "⚡ Generate & Save"}
+          </button>
+
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+)}
 
                   <form
                     className={styles.formCard}
