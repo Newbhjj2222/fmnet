@@ -1,0 +1,6 @@
+# requirements.txt
+fastapi
+uvicorn
+websockets
+firebase-admin
+python-dotenv
