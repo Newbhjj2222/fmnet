@@ -645,28 +645,33 @@ export default function FixturesPage({
      PLAY MATCH
   ======================================================= */
 
-  const playMatch = (fixture) => {
-    if (!fixture) return;
+  /* =======================================================
+   PLAY MATCH
+======================================================= */
 
-    const state = getMatchState(fixture, gameDate);
+const playMatch = (fixture) => {
+  if (!fixture?.id) return;
 
-    if (state === 'finished') {
-      toast.error('This match has already been played.');
-      return;
-    }
+  const state = getMatchState(fixture, gameDate);
 
-    if (state === 'upcoming') {
-      toast.error('This match has not started yet.');
-      return;
-    }
+  if (state === 'finished') {
+    toast.error('This match has already been played.');
+    return;
+  }
 
-    if (state === 'missed') {
-      toast.error('This match can no longer be played.');
-      return;
-    }
+  if (state === 'upcoming') {
+    toast.error('This match has not started yet.');
+    return;
+  }
 
-    router.push(`/match?id=${encodeURIComponent(fixture.id)}`);
-  };
+  if (state === 'missed') {
+    toast.error('This match can no longer be played.');
+    return;
+  }
+
+  // Dynamic route: /match/[id]
+  router.push(`/match/${encodeURIComponent(fixture.id)}`);
+};
 
   /* =======================================================
      CREATE FRIENDLY
