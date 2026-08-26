@@ -1,17 +1,20 @@
 // components/ThreePitch.jsx
 
-import { useEffect, useRef, useCallback } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import {
+  useEffect,
+  useRef,
+  useCallback
+} from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 export default function ThreePitch({
   homeXI = [],
   awayXI = [],
-  homeColor = '#3b82f6',
-  awayColor = '#ef4444',
-  formation = '4-4-2',
-  lastAction = null,
-  isPaused = false,
+  homeColor = "#2563eb",
+  awayColor = "#dc2626",
+  formation = "4-4-2",
+  simulation = null,
 }) {
   const mountRef = useRef(null);
 
@@ -20,197 +23,216 @@ export default function ThreePitch({
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
 
-  const homePlayersRef = useRef([]);
-  const awayPlayersRef = useRef([]);
+  const homePlayersRef = useRef(new Map());
+  const awayPlayersRef = useRef(new Map());
+
+  const targetPlayersRef = useRef({
+    home: new Map(),
+    away: new Map(),
+  });
 
   const ballRef = useRef(null);
+  const ballStateRef = useRef(null);
 
   const animationFrameRef = useRef(null);
 
-  const actionRef = useRef(null);
-  const actionStartRef = useRef(0);
+  // ============================================================
+  // PLAYER NAME
+  // ============================================================
+
+  function getPlayerName(player) {
+    return (
+      player?.name ||
+      player?.fullName ||
+      `${player?.firstName || ""} ${player?.lastName || ""}`.trim() ||
+      "Player"
+    );
+  }
+
+  function getPlayerId(player, index) {
+    return (
+      player?.id ||
+      player?.playerId ||
+      player?.uid ||
+      `${getPlayerName(player)}-${index}`
+    );
+  }
 
   // ============================================================
   // FORMATIONS
   // ============================================================
 
-  const getFormationPositions = useCallback((formationName) => {
+  function getFormationPositions(name) {
     const formations = {
-      '4-4-2': [
-        { x: 8, y: 50 },
+      "4-4-2": [
+        [-13, 0],
+        [-9, -7],
+        [-9, -2.4],
+        [-9, 2.4],
+        [-9, 7],
 
-        { x: 23, y: 18 },
-        { x: 23, y: 39 },
-        { x: 23, y: 61 },
-        { x: 23, y: 82 },
+        [-3.5, -7],
+        [-3.5, -2.3],
+        [-3.5, 2.3],
+        [-3.5, 7],
 
-        { x: 42, y: 20 },
-        { x: 42, y: 42 },
-        { x: 42, y: 58 },
-        { x: 42, y: 80 },
-
-        { x: 62, y: 36 },
-        { x: 62, y: 64 },
+        [4.5, -3.2],
+        [4.5, 3.2],
       ],
 
-      '4-3-3': [
-        { x: 8, y: 50 },
+      "4-3-3": [
+        [-13, 0],
 
-        { x: 23, y: 18 },
-        { x: 23, y: 39 },
-        { x: 23, y: 61 },
-        { x: 23, y: 82 },
+        [-9, -7],
+        [-9, -2.4],
+        [-9, 2.4],
+        [-9, 7],
 
-        { x: 42, y: 30 },
-        { x: 42, y: 50 },
-        { x: 42, y: 70 },
+        [-3.2, -5.5],
+        [-3.2, 0],
+        [-3.2, 5.5],
 
-        { x: 64, y: 20 },
-        { x: 64, y: 50 },
-        { x: 64, y: 80 },
+        [5, -6.5],
+        [6, 0],
+        [5, 6.5],
       ],
 
-      '3-5-2': [
-        { x: 8, y: 50 },
+      "3-5-2": [
+        [-13, 0],
 
-        { x: 23, y: 30 },
-        { x: 23, y: 50 },
-        { x: 23, y: 70 },
+        [-9, -5.5],
+        [-9, 0],
+        [-9, 5.5],
 
-        { x: 42, y: 20 },
-        { x: 42, y: 39 },
-        { x: 42, y: 50 },
-        { x: 42, y: 61 },
-        { x: 42, y: 80 },
+        [-3.2, -8],
+        [-3.2, -4],
+        [-3.2, 0],
+        [-3.2, 4],
+        [-3.2, 8],
 
-        { x: 64, y: 36 },
-        { x: 64, y: 64 },
+        [5, -3.2],
+        [5, 3.2],
       ],
 
-      '5-3-2': [
-        { x: 8, y: 50 },
+      "5-3-2": [
+        [-13, 0],
 
-        { x: 20, y: 12 },
-        { x: 20, y: 31 },
-        { x: 20, y: 50 },
-        { x: 20, y: 69 },
-        { x: 20, y: 88 },
+        [-9, -8],
+        [-9, -4],
+        [-9, 0],
+        [-9, 4],
+        [-9, 8],
 
-        { x: 42, y: 30 },
-        { x: 42, y: 50 },
-        { x: 42, y: 70 },
+        [-3.2, -5],
+        [-3.2, 0],
+        [-3.2, 5],
 
-        { x: 64, y: 36 },
-        { x: 64, y: 64 },
+        [5, -3],
+        [5, 3],
+      ],
+
+      "4-2-3-1": [
+        [-13, 0],
+
+        [-9, -7],
+        [-9, -2.4],
+        [-9, 2.4],
+        [-9, 7],
+
+        [-3.5, -3],
+        [-3.5, 3],
+
+        [1, -6],
+        [2, 0],
+        [1, 6],
+
+        [5.5, 0],
       ],
     };
 
-    return formations[formationName] || formations['4-4-2'];
-  }, []);
-
-  // ============================================================
-  // PLAYER POSITION
-  // ============================================================
-
-  const convertPosition = useCallback((position, isHome) => {
-    let x = ((position.x - 50) / 50) * 15;
-    let z = ((position.y - 50) / 50) * 10;
-
-    if (!isHome) {
-      x = -x;
-      z = -z;
-    }
-
-    return {
-      x,
-      z,
-    };
-  }, []);
-
-  // ============================================================
-  // FIND PLAYER OBJECT
-  // ============================================================
-
-  const findPlayerObject = useCallback((team, playerId) => {
-    const players =
-      team === 'home'
-        ? homePlayersRef.current
-        : awayPlayersRef.current;
-
-    return players.find(
-      (player) => player.userData.playerId === playerId
-    );
-  }, []);
-
-  // ============================================================
-  // BALL TARGET
-  // ============================================================
-
-  const getGoalPosition = useCallback((team) => {
-    if (team === 'home') {
-      return new THREE.Vector3(15, 0.15, 0);
-    }
-
-    return new THREE.Vector3(-15, 0.15, 0);
-  }, []);
+    return formations[name] || formations["4-4-2"];
+  }
 
   // ============================================================
   // CREATE PLAYER
   // ============================================================
 
-  const createPlayer = useCallback((player, x, z, color, team, index) => {
+  function createPlayer(player, color, team, index) {
     const group = new THREE.Group();
 
     const bodyMaterial = new THREE.MeshStandardMaterial({
-      color,
+      color: new THREE.Color(color),
       roughness: 0.5,
+      metalness: 0.05,
     });
 
+    const skinMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffc79b,
+      roughness: 0.8,
+    });
+
+    // Body
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        0.3,
-        0.35,
-        0.6,
-        16
-      ),
+      new THREE.CapsuleGeometry(0.28, 0.48, 4, 10),
       bodyMaterial
     );
 
-    body.position.y = 0.3;
+    body.position.y = 0.48;
     body.castShadow = true;
 
     group.add(body);
 
+    // Head
     const head = new THREE.Mesh(
-      new THREE.SphereGeometry(
-        0.15,
-        16,
-        16
-      ),
-      new THREE.MeshStandardMaterial({
-        color: 0xffcc99,
-      })
+      new THREE.SphereGeometry(0.16, 16, 16),
+      skinMaterial
     );
 
-    head.position.y = 0.75;
+    head.position.y = 0.92;
     head.castShadow = true;
 
     group.add(head);
 
-    group.position.set(x, 0, z);
+    // Legs
+    const legMaterial = new THREE.MeshStandardMaterial({
+      color: 0x111827,
+    });
 
-    group.userData = {
-      playerId: player?.id || player?.playerId || `player-${team}-${index}`,
-      team,
-      index,
-      baseX: x,
-      baseZ: z,
-      targetX: x,
-      targetZ: z,
-    };
+    const leftLeg = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.08, 0.35, 8),
+      legMaterial
+    );
+
+    const rightLeg = leftLeg.clone();
+
+    leftLeg.position.set(-0.11, 0.15, 0);
+    rightLeg.position.set(0.11, 0.15, 0);
+
+    group.add(leftLeg);
+    group.add(rightLeg);
+
+    // Player ring
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.47, 24),
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(color),
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.65,
+      })
+    );
+
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.025;
+
+    group.add(ring);
+
+    group.userData.playerId = getPlayerId(player, index);
+    group.userData.team = team;
+    group.userData.name = getPlayerName(player);
 
     return group;
-  }, []);
+  }
 
   // ============================================================
   // CREATE PITCH
@@ -221,8 +243,8 @@ export default function ThreePitch({
 
     const mount = mountRef.current;
 
-    const width = mount.clientWidth || 800;
-    const height = mount.clientHeight || 500;
+    const width = mount.clientWidth || 900;
+    const height = mount.clientHeight || 520;
 
     // ----------------------------------------------------------
     // SCENE
@@ -230,7 +252,7 @@ export default function ThreePitch({
 
     const scene = new THREE.Scene();
 
-    scene.background = new THREE.Color(0x0b1120);
+    scene.background = new THREE.Color(0x07111f);
 
     sceneRef.current = scene;
 
@@ -239,14 +261,13 @@ export default function ThreePitch({
     // ----------------------------------------------------------
 
     const camera = new THREE.PerspectiveCamera(
-      45,
+      42,
       width / height,
       0.1,
-      100
+      200
     );
 
-    camera.position.set(0, 22, 28);
-
+    camera.position.set(0, 24, 25);
     camera.lookAt(0, 0, 0);
 
     cameraRef.current = camera;
@@ -257,6 +278,7 @@ export default function ThreePitch({
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
+      powerPreference: "high-performance",
     });
 
     renderer.setSize(width, height);
@@ -266,6 +288,9 @@ export default function ThreePitch({
     );
 
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     mount.appendChild(renderer.domElement);
 
@@ -281,123 +306,107 @@ export default function ThreePitch({
     );
 
     controls.enableDamping = true;
-
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = 0.06;
 
     controls.target.set(0, 0, 0);
 
-    controls.maxPolarAngle = Math.PI / 2.5;
-
     controls.minDistance = 15;
+    controls.maxDistance = 42;
 
-    controls.maxDistance = 45;
+    controls.maxPolarAngle = Math.PI / 2.25;
+
+    controls.enablePan = false;
 
     controls.update();
 
     controlsRef.current = controls;
 
     // ----------------------------------------------------------
-    // LIGHTING
+    // LIGHTS
     // ----------------------------------------------------------
 
-    const ambient = new THREE.AmbientLight(
+    const ambientLight = new THREE.AmbientLight(
       0xffffff,
-      0.65
+      1.1
     );
 
-    scene.add(ambient);
+    scene.add(ambientLight);
 
-    const directional = new THREE.DirectionalLight(
+    const directionalLight = new THREE.DirectionalLight(
       0xffffff,
-      1.2
+      1.6
     );
 
-    directional.position.set(
-      10,
-      20,
+    directionalLight.position.set(
+      5,
+      30,
       10
     );
 
-    directional.castShadow = true;
+    directionalLight.castShadow = true;
 
-    scene.add(directional);
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+
+    scene.add(directionalLight);
 
     // ----------------------------------------------------------
     // PITCH
     // ----------------------------------------------------------
 
-    const pitchGeometry = new THREE.PlaneGeometry(
-      30,
-      20
-    );
-
-    const pitchMaterial =
-      new THREE.MeshStandardMaterial({
-        color: 0x15803d,
-        roughness: 0.8,
-      });
-
     const pitch = new THREE.Mesh(
-      pitchGeometry,
-      pitchMaterial
+      new THREE.PlaneGeometry(30, 20),
+      new THREE.MeshStandardMaterial({
+        color: 0x166534,
+        roughness: 0.9,
+      })
     );
 
     pitch.rotation.x = -Math.PI / 2;
-
     pitch.receiveShadow = true;
 
     scene.add(pitch);
 
     // ----------------------------------------------------------
-    // FIELD LINES
+    // PITCH LINES
     // ----------------------------------------------------------
 
-    const lineMaterial =
-      new THREE.LineBasicMaterial({
-        color: 0xffffff,
-      });
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+    });
+
+    function addLine(points) {
+      const geometry =
+        new THREE.BufferGeometry().setFromPoints(points);
+
+      const line = new THREE.Line(
+        geometry,
+        lineMaterial
+      );
+
+      scene.add(line);
+
+      return line;
+    }
 
     // Outer border
+    addLine([
+      new THREE.Vector3(-15, 0.03, -10),
+      new THREE.Vector3(15, 0.03, -10),
+      new THREE.Vector3(15, 0.03, 10),
+      new THREE.Vector3(-15, 0.03, 10),
+      new THREE.Vector3(-15, 0.03, -10),
+    ]);
 
-    const borderGeometry =
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-15, 0.02, -10),
-        new THREE.Vector3(15, 0.02, -10),
-        new THREE.Vector3(15, 0.02, 10),
-        new THREE.Vector3(-15, 0.02, 10),
-        new THREE.Vector3(-15, 0.02, -10),
-      ]);
-
-    scene.add(
-      new THREE.Line(
-        borderGeometry,
-        lineMaterial
-      )
-    );
-
-    // Center line
-
-    const centerGeometry =
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0.02, -10),
-        new THREE.Vector3(0, 0.02, 10),
-      ]);
-
-    scene.add(
-      new THREE.Line(
-        centerGeometry,
-        lineMaterial
-      )
-    );
+    // Halfway line
+    addLine([
+      new THREE.Vector3(0, 0.03, -10),
+      new THREE.Vector3(0, 0.03, 10),
+    ]);
 
     // Center circle
-
     const centerCircle = new THREE.Mesh(
-      new THREE.RingGeometry(
-        3,
-        3.05,
-        64
-      ),
+      new THREE.RingGeometry(3, 3.05, 64),
       new THREE.MeshBasicMaterial({
         color: 0xffffff,
         side: THREE.DoubleSide,
@@ -405,107 +414,108 @@ export default function ThreePitch({
     );
 
     centerCircle.rotation.x = -Math.PI / 2;
-
-    centerCircle.position.y = 0.025;
+    centerCircle.position.y = 0.04;
 
     scene.add(centerCircle);
 
-    // ----------------------------------------------------------
-    // PENALTY BOXES
-    // ----------------------------------------------------------
+    // Center spot
+    const centerSpot = new THREE.Mesh(
+      new THREE.CircleGeometry(0.12, 16),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+      })
+    );
 
-    const createBox = (x) => {
-      const geometry =
-        new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(x, 0.025, -5),
-          new THREE.Vector3(
-            x > 0 ? x - 5 : x + 5,
-            0.025,
-            -5
-          ),
-          new THREE.Vector3(
-            x > 0 ? x - 5 : x + 5,
-            0.025,
-            5
-          ),
-          new THREE.Vector3(x, 0.025, 5),
-        ]);
+    centerSpot.rotation.x = -Math.PI / 2;
+    centerSpot.position.y = 0.04;
 
-      scene.add(
-        new THREE.LineLoop(
-          geometry,
-          lineMaterial
-        )
-      );
-    };
+    scene.add(centerSpot);
 
-    createBox(-15);
-    createBox(15);
+    // Penalty areas
+    function createPenaltyArea(side) {
+      const x1 = side === "left" ? -15 : 15;
+      const x2 = side === "left" ? -10.5 : 10.5;
+
+      addLine([
+        new THREE.Vector3(x1, 0.04, -5.5),
+        new THREE.Vector3(x2, 0.04, -5.5),
+        new THREE.Vector3(x2, 0.04, 5.5),
+        new THREE.Vector3(x1, 0.04, 5.5),
+      ]);
+    }
+
+    createPenaltyArea("left");
+    createPenaltyArea("right");
+
+    // Six-yard boxes
+    function createGoalBox(side) {
+      const x1 = side === "left" ? -15 : 15;
+      const x2 = side === "left" ? -13 : 13;
+
+      addLine([
+        new THREE.Vector3(x1, 0.04, -2.5),
+        new THREE.Vector3(x2, 0.04, -2.5),
+        new THREE.Vector3(x2, 0.04, 2.5),
+        new THREE.Vector3(x1, 0.04, 2.5),
+      ]);
+    }
+
+    createGoalBox("left");
+    createGoalBox("right");
 
     // ----------------------------------------------------------
     // GOALS
     // ----------------------------------------------------------
 
-    const goalMaterial =
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-      });
+    const goalMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+    });
 
-    const leftGoal = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.15,
-        1.5,
-        6
-      ),
-      goalMaterial
-    );
+    function createGoal(x) {
+      const goal = new THREE.Group();
 
-    leftGoal.position.set(
-      -15,
-      0.75,
-      0
-    );
+      const post1 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.07, 2.4, 10),
+        goalMaterial
+      );
 
-    scene.add(leftGoal);
+      post1.position.set(x, 1.2, -3);
 
-    const rightGoal = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.15,
-        1.5,
-        6
-      ),
-      goalMaterial
-    );
+      const post2 = post1.clone();
 
-    rightGoal.position.set(
-      15,
-      0.75,
-      0
-    );
+      post2.position.set(x, 1.2, 3);
 
-    scene.add(rightGoal);
+      const crossbar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.07, 6, 10),
+        goalMaterial
+      );
+
+      crossbar.rotation.x = Math.PI / 2;
+      crossbar.position.set(x, 2.4, 0);
+
+      goal.add(post1);
+      goal.add(post2);
+      goal.add(crossbar);
+
+      scene.add(goal);
+    }
+
+    createGoal(-15);
+    createGoal(15);
 
     // ----------------------------------------------------------
     // BALL
     // ----------------------------------------------------------
 
     const ball = new THREE.Mesh(
-      new THREE.SphereGeometry(
-        0.18,
-        24,
-        24
-      ),
+      new THREE.SphereGeometry(0.18, 20, 20),
       new THREE.MeshStandardMaterial({
         color: 0xffffff,
-        roughness: 0.25,
+        roughness: 0.35,
       })
     );
 
-    ball.position.set(
-      0,
-      0.18,
-      0
-    );
+    ball.position.set(0, 0.18, 0);
 
     ball.castShadow = true;
 
@@ -517,264 +527,202 @@ export default function ThreePitch({
     // ANIMATION
     // ----------------------------------------------------------
 
-    const animate = (time) => {
+    let lastTime = performance.now();
+
+    function animate(now) {
       animationFrameRef.current =
         requestAnimationFrame(animate);
 
+      const delta =
+        Math.min(now - lastTime, 50) / 1000;
+
+      lastTime = now;
+
       controls.update();
 
-      const currentAction = actionRef.current;
+      // --------------------------------------------------------
+      // PLAYERS
+      // --------------------------------------------------------
 
-      if (
-        currentAction &&
-        !isPaused
-      ) {
-        const elapsed =
-          time - actionStartRef.current;
+      const allTeams = [
+        homePlayersRef.current,
+        awayPlayersRef.current,
+      ];
 
-        const duration =
-          currentAction.duration || 900;
+      allTeams.forEach(playerMap => {
+        playerMap.forEach(playerMesh => {
+          const id = playerMesh.userData.playerId;
+          const team = playerMesh.userData.team;
 
-        const progress = Math.min(
-          elapsed / duration,
-          1
-        );
+          const target =
+            targetPlayersRef.current[team]?.get(id);
 
-        const eased =
-          progress < 0.5
-            ? 2 * progress * progress
-            : 1 -
-              Math.pow(
-                -2 * progress + 2,
-                2
-              ) / 2;
+          if (!target) return;
 
-        // ------------------------------------------------------
-        // BALL
-        // ------------------------------------------------------
+          const dx =
+            target.x - playerMesh.position.x;
+
+          const dz =
+            target.z - playerMesh.position.z;
+
+          const distance =
+            Math.sqrt(dx * dx + dz * dz);
+
+          if (distance > 0.02) {
+            const speed =
+              target.speed || 3.5;
+
+            const step =
+              speed * delta;
+
+            const ratio =
+              Math.min(step / distance, 1);
+
+            playerMesh.position.x += dx * ratio;
+            playerMesh.position.z += dz * ratio;
+
+            playerMesh.rotation.y =
+              Math.atan2(dx, dz);
+
+            // Small running animation
+            const running =
+              Math.min(distance / 2, 1);
+
+            playerMesh.position.y =
+              Math.sin(now * 0.015) *
+              0.035 *
+              running;
+          }
+        });
+      });
+
+      // --------------------------------------------------------
+      // BALL
+      // --------------------------------------------------------
+
+      const ballState =
+        ballStateRef.current;
+
+      if (ballState && ballRef.current) {
+        const ballMesh = ballRef.current;
 
         if (
-          ballRef.current &&
-          currentAction.from &&
-          currentAction.to
+          ballState.mode === "owner"
         ) {
-          const from =
-            currentAction.from;
+          const ownerMap =
+            ballState.team === "home"
+              ? homePlayersRef.current
+              : awayPlayersRef.current;
 
-          const to =
-            currentAction.to;
+          const owner =
+            ownerMap.get(ballState.ownerId);
+
+          if (owner) {
+            ballMesh.position.x =
+              owner.position.x;
+
+            ballMesh.position.z =
+              owner.position.z;
+
+            ballMesh.position.y =
+              0.22 +
+              Math.abs(
+                Math.sin(now * 0.01)
+              ) * 0.04;
+          }
+        }
+
+        if (
+          ballState.mode === "pass" ||
+          ballState.mode === "shot"
+        ) {
+          const elapsed =
+            now - ballState.startedAt;
+
+          const duration =
+            ballState.duration || 600;
+
+          const t =
+            Math.min(
+              elapsed / duration,
+              1
+            );
+
+          // Smooth interpolation
+          const eased =
+            t * t * (3 - 2 * t);
 
           const x =
-            from.x +
-            (to.x - from.x) *
+            ballState.from.x +
+            (ballState.to.x -
+              ballState.from.x) *
               eased;
 
           const z =
-            from.z +
-            (to.z - from.z) *
+            ballState.from.z +
+            (ballState.to.z -
+              ballState.from.z) *
               eased;
 
-          ballRef.current.position.x = x;
+          ballMesh.position.x = x;
+          ballMesh.position.z = z;
 
-          ballRef.current.position.z = z;
+          // Ball rises during pass/shot
+          const height =
+            ballState.mode === "shot"
+              ? Math.sin(t * Math.PI) * 1.2
+              : Math.sin(t * Math.PI) * 0.35;
 
-          // Ball jumps slightly while moving
+          ballMesh.position.y =
+            0.18 + height;
 
-          ballRef.current.position.y =
-            0.18 +
-            Math.sin(progress * Math.PI) *
-              0.18;
+          ballMesh.rotation.x +=
+            delta * 8;
 
-          ballRef.current.rotation.x +=
-            0.12;
-
-          ballRef.current.rotation.z +=
-            0.12;
+          ballMesh.rotation.z +=
+            delta * 6;
         }
-
-        // ------------------------------------------------------
-        // ACTIVE PLAYER MOVEMENT
-        // ------------------------------------------------------
-
-        const activePlayer =
-          currentAction.playerId
-            ? findPlayerObject(
-                currentAction.team,
-                currentAction.playerId
-              )
-            : null;
-
-        if (activePlayer) {
-          const target =
-            currentAction.to;
-
-          if (target) {
-            activePlayer.position.x =
-              activePlayer.userData.baseX +
-              (target.x -
-                activePlayer.userData.baseX) *
-                Math.min(eased * 1.4, 1);
-
-            activePlayer.position.z =
-              activePlayer.userData.baseZ +
-              (target.z -
-                activePlayer.userData.baseZ) *
-                Math.min(eased * 1.4, 1);
-          }
-        }
-
-        // ------------------------------------------------------
-        // TARGET PLAYER
-        // ------------------------------------------------------
-
-        if (
-          currentAction.targetPlayerId
-        ) {
-          const targetPlayer =
-            findPlayerObject(
-              currentAction.team,
-              currentAction.targetPlayerId
-            );
-
-          if (targetPlayer) {
-            targetPlayer.position.y =
-              Math.sin(
-                progress * Math.PI
-              ) * 0.08;
-          }
-        }
-
-        // ------------------------------------------------------
-        // SHOT / GOAL
-        // ------------------------------------------------------
-
-        if (
-          currentAction.type ===
-            'shot' ||
-          currentAction.type ===
-            'goal'
-        ) {
-          if (ballRef.current) {
-            ballRef.current.position.y =
-              0.18 +
-              Math.sin(
-                progress * Math.PI
-              ) *
-                0.5;
-          }
-        }
-
-        // ------------------------------------------------------
-        // FINISH ACTION
-        // ------------------------------------------------------
-
-        if (progress >= 1) {
-          actionRef.current = null;
-
-          if (ballRef.current) {
-            ballRef.current.position.y =
-              0.18;
-          }
-        }
-      }
-
-      // --------------------------------------------------------
-      // SMALL NATURAL MOVEMENT
-      // --------------------------------------------------------
-
-      if (!isPaused) {
-        const seconds =
-          time * 0.001;
-
-        homePlayersRef.current.forEach(
-          (player, index) => {
-            if (
-              currentAction?.playerId ===
-                player.userData.playerId &&
-              currentAction?.team === 'home'
-            ) {
-              return;
-            }
-
-            player.position.x =
-              player.userData.baseX +
-              Math.sin(
-                seconds * 0.7 + index
-              ) *
-                0.08;
-
-            player.position.z =
-              player.userData.baseZ +
-              Math.cos(
-                seconds * 0.6 + index
-              ) *
-                0.08;
-          }
-        );
-
-        awayPlayersRef.current.forEach(
-          (player, index) => {
-            if (
-              currentAction?.playerId ===
-                player.userData.playerId &&
-              currentAction?.team === 'away'
-            ) {
-              return;
-            }
-
-            player.position.x =
-              player.userData.baseX +
-              Math.sin(
-                seconds * 0.65 + index
-              ) *
-                0.08;
-
-            player.position.z =
-              player.userData.baseZ +
-              Math.cos(
-                seconds * 0.55 + index
-              ) *
-                0.08;
-          }
-        );
       }
 
       renderer.render(
         scene,
         camera
       );
-    };
+    }
 
-    animationFrameRef.current =
-      requestAnimationFrame(animate);
+    animate(performance.now());
 
     // ----------------------------------------------------------
     // RESIZE
     // ----------------------------------------------------------
 
-    const handleResize = () => {
+    function handleResize() {
       if (!mountRef.current) return;
 
       const w =
         mountRef.current.clientWidth ||
-        800;
+        900;
 
       const h =
         mountRef.current.clientHeight ||
-        500;
+        520;
 
       camera.aspect = w / h;
 
       camera.updateProjectionMatrix();
 
-      renderer.setSize(
-        w,
-        h
+      renderer.setSize(w, h);
+
+      renderer.setPixelRatio(
+        Math.min(
+          window.devicePixelRatio || 1,
+          2
+        )
       );
-    };
+    }
 
     window.addEventListener(
-      'resize',
+      "resize",
       handleResize
     );
 
@@ -784,13 +732,11 @@ export default function ThreePitch({
 
     return () => {
       window.removeEventListener(
-        'resize',
+        "resize",
         handleResize
       );
 
-      if (
-        animationFrameRef.current
-      ) {
+      if (animationFrameRef.current) {
         cancelAnimationFrame(
           animationFrameRef.current
         );
@@ -798,242 +744,220 @@ export default function ThreePitch({
 
       controls.dispose();
 
-      scene.traverse(
-        (object) => {
-          if (
-            object.geometry
-          ) {
-            object.geometry.dispose();
-          }
-
-          if (
-            object.material
-          ) {
-            if (
-              Array.isArray(
-                object.material
-              )
-            ) {
-              object.material.forEach(
-                (material) =>
-                  material.dispose()
-              );
-            } else {
-              object.material.dispose();
-            }
-          }
-        }
-      );
-
       renderer.dispose();
 
       if (
-        mount &&
-        renderer.domElement.parentNode ===
-          mount
+        mount.contains(
+          renderer.domElement
+        )
       ) {
         mount.removeChild(
           renderer.domElement
         );
       }
 
+      scene.traverse(object => {
+        if (object.geometry) {
+          object.geometry.dispose();
+        }
+
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach(
+              material => material.dispose()
+            );
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+
       scene.clear();
 
       sceneRef.current = null;
-      rendererRef.current = null;
-      cameraRef.current = null;
-      controlsRef.current = null;
-      ballRef.current = null;
     };
-  }, [findPlayerObject, isPaused]);
+  }, []);
 
   // ============================================================
   // CREATE / UPDATE PLAYERS
   // ============================================================
 
   useEffect(() => {
-    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
 
-    const scene =
-      sceneRef.current;
+    if (!scene) return;
 
     const positions =
-      getFormationPositions(
-        formation
-      );
+      getFormationPositions(formation);
 
     // ----------------------------------------------------------
     // REMOVE OLD PLAYERS
     // ----------------------------------------------------------
 
-    homePlayersRef.current.forEach(
-      (player) => {
-        scene.remove(player);
+    homePlayersRef.current.forEach(mesh => {
+      scene.remove(mesh);
+    });
 
-        player.traverse(
-          (object) => {
-            if (
-              object.geometry
-            ) {
-              object.geometry.dispose();
-            }
+    awayPlayersRef.current.forEach(mesh => {
+      scene.remove(mesh);
+    });
 
-            if (
-              object.material
-            ) {
-              object.material.dispose();
-            }
+    homePlayersRef.current.clear();
+    awayPlayersRef.current.clear();
+
+    targetPlayersRef.current.home.clear();
+    targetPlayersRef.current.away.clear();
+
+    // ----------------------------------------------------------
+    // HOME
+    // ----------------------------------------------------------
+
+    homeXI.slice(0, 11).forEach(
+      (player, index) => {
+        const [x, z] =
+          positions[index] || [-5, 0];
+
+        const mesh = createPlayer(
+          player,
+          homeColor,
+          "home",
+          index
+        );
+
+        mesh.position.set(
+          x,
+          0,
+          z
+        );
+
+        scene.add(mesh);
+
+        const id =
+          getPlayerId(
+            player,
+            index
+          );
+
+        homePlayersRef.current.set(
+          id,
+          mesh
+        );
+
+        targetPlayersRef.current.home.set(
+          id,
+          {
+            x,
+            z,
+            speed: 3.5,
           }
         );
       }
     );
 
-    awayPlayersRef.current.forEach(
-      (player) => {
-        scene.remove(player);
+    // ----------------------------------------------------------
+    // AWAY
+    // ----------------------------------------------------------
 
-        player.traverse(
-          (object) => {
-            if (
-              object.geometry
-            ) {
-              object.geometry.dispose();
-            }
+    awayXI.slice(0, 11).forEach(
+      (player, index) => {
+        const [homeX, homeZ] =
+          positions[index] || [-5, 0];
 
-            if (
-              object.material
-            ) {
-              object.material.dispose();
-            }
+        const x = -homeX;
+        const z = -homeZ;
+
+        const mesh = createPlayer(
+          player,
+          awayColor,
+          "away",
+          index
+        );
+
+        mesh.position.set(
+          x,
+          0,
+          z
+        );
+
+        scene.add(mesh);
+
+        const id =
+          getPlayerId(
+            player,
+            index
+          );
+
+        awayPlayersRef.current.set(
+          id,
+          mesh
+        );
+
+        targetPlayersRef.current.away.set(
+          id,
+          {
+            x,
+            z,
+            speed: 3.5,
           }
         );
       }
     );
-
-    homePlayersRef.current = [];
-    awayPlayersRef.current = [];
-
-    // ----------------------------------------------------------
-    // HOME XI
-    // ----------------------------------------------------------
-
-    positions.forEach(
-      (position, index) => {
-        const player =
-          homeXI[index];
-
-        if (!player) return;
-
-        const converted =
-          convertPosition(
-            position,
-            true
-          );
-
-        const object =
-          createPlayer(
-            player,
-            converted.x,
-            converted.z,
-            new THREE.Color(
-              homeColor
-            ),
-            'home',
-            index
-          );
-
-        scene.add(object);
-
-        homePlayersRef.current.push(
-          object
-        );
-      }
-    );
-
-    // ----------------------------------------------------------
-    // AWAY XI
-    // ----------------------------------------------------------
-
-    positions.forEach(
-      (position, index) => {
-        const player =
-          awayXI[index];
-
-        if (!player) return;
-
-        const converted =
-          convertPosition(
-            position,
-            false
-          );
-
-        const object =
-          createPlayer(
-            player,
-            converted.x,
-            converted.z,
-            new THREE.Color(
-              awayColor
-            ),
-            'away',
-            index
-          );
-
-        scene.add(object);
-
-        awayPlayersRef.current.push(
-          object
-        );
-      }
-    );
-
   }, [
     homeXI,
     awayXI,
     homeColor,
     awayColor,
     formation,
-    getFormationPositions,
-    convertPosition,
-    createPlayer,
   ]);
 
   // ============================================================
-  // RECEIVE MATCH ACTION
+  // RECEIVE SIMULATION
   // ============================================================
 
   useEffect(() => {
-    if (!lastAction) return;
+    if (!simulation) return;
 
-    actionRef.current =
-      lastAction;
+    // Player targets
+    if (simulation.players) {
+      ["home", "away"].forEach(team => {
+        const teamPlayers =
+          simulation.players[team] || [];
 
-    actionStartRef.current =
-      performance.now();
+        teamPlayers.forEach(player => {
+          if (!player.id) return;
 
-    // Move ball immediately to action start
-
-    if (
-      ballRef.current &&
-      lastAction.from
-    ) {
-      ballRef.current.position.set(
-        lastAction.from.x,
-        0.18,
-        lastAction.from.z
-      );
+          targetPlayersRef.current[
+            team
+          ].set(
+            player.id,
+            {
+              x: player.x,
+              z: player.z,
+              speed:
+                player.speed || 3.5,
+            }
+          );
+        });
+      });
     }
-  }, [lastAction]);
+
+    // Ball
+    if (simulation.ball) {
+      ballStateRef.current =
+        simulation.ball;
+    }
+  }, [simulation]);
 
   return (
     <div
       ref={mountRef}
-      className="three-pitch"
       style={{
-        width: '100%',
-        height: '500px',
-        overflow: 'hidden',
-        borderRadius: '16px',
+        width: "100%",
+        height: "520px",
+        minHeight: "420px",
+        overflow: "hidden",
+        borderRadius: "18px",
+        background: "#07111f",
       }}
     />
   );
