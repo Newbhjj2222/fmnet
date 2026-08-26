@@ -1,42 +1,56 @@
 // components/ThreePitch.jsx
 
-import { useEffect, useRef, useCallback } from 'react';
-import * as THREE from "three";
+import {
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
+
+import * as THREE from 'three';
 
 import { OrbitControls } from
-  "three/examples/jsm/controls/OrbitControls";
+  'three/examples/jsm/controls/OrbitControls';
+
+import {
+  FORMATIONS,
+  normalizePosition,
+  getPlayerId,
+  getPlayerName,
+} from './MatchEngine';
 
 export default function ThreePitch({
-  playerStates = {
-    home: [],
-    away: [],
-  },
+  homeXI = [],
+  awayXI = [],
+  homeColor = '#2563eb',
+  awayColor = '#dc2626',
+  formation = '4-4-2',
 
-  ballState = null,
-
-  homeColor = "#2563eb",
-
-  awayColor = "#dc2626",
-
-  lastAction = null,
+  matchStarted = false,
+  ballTeam = null,
+  activePlayerId = null,
+  action = null,
 }) {
+
   const mountRef =
     useRef(null);
 
   const sceneRef =
     useRef(null);
 
-  const rendererRef =
+  const cameraRef =
     useRef(null);
 
-  const cameraRef =
+  const rendererRef =
     useRef(null);
 
   const controlsRef =
     useRef(null);
 
-  const playerMeshesRef =
-    useRef(new Map());
+  const homePlayersRef =
+    useRef([]);
+
+  const awayPlayersRef =
+    useRef([]);
 
   const ballRef =
     useRef(null);
@@ -44,17 +58,61 @@ export default function ThreePitch({
   const animationRef =
     useRef(null);
 
-  const ballTargetRef =
+  const targetRef =
     useRef({
       x: 0,
       z: 0,
     });
 
-  // ==========================================================
-  // CREATE SCENE
-  // ==========================================================
+  /*
+   * Formation coordinates.
+   */
+  const getPositions =
+    useCallback(
+      (formationName, team) => {
 
+        const formationData =
+          FORMATIONS[
+            formationName
+          ] ||
+          FORMATIONS['4-4-2'];
+
+        return formationData.map(
+          (slot, index) => {
+
+            let x =
+              ((slot.x - 50) / 50) *
+              13;
+
+            let z =
+              ((slot.y - 50) / 50) *
+              8;
+
+            /*
+             * Away team is mirrored.
+             */
+            if (team === 'away') {
+              x = -x;
+              z = -z;
+            }
+
+            return {
+              x,
+              z,
+              role: slot.role,
+              index,
+            };
+          }
+        );
+      },
+      []
+    );
+
+  /*
+   * Create 3D scene.
+   */
   useEffect(() => {
+
     if (!mountRef.current) {
       return;
     }
@@ -63,34 +121,37 @@ export default function ThreePitch({
       mountRef.current;
 
     const width =
-      mount.clientWidth || 900;
+      mount.clientWidth || 800;
 
     const height =
-      mount.clientHeight || 560;
+      mount.clientHeight || 500;
 
     const scene =
       new THREE.Scene();
 
     scene.background =
       new THREE.Color(
-        0x07111f
+        0x08111f
       );
 
-    sceneRef.current = scene;
+    sceneRef.current =
+      scene;
 
-    // Camera
+    /*
+     * CAMERA
+     */
     const camera =
       new THREE.PerspectiveCamera(
-        45,
+        42,
         width / height,
         0.1,
-        100
+        200
       );
 
     camera.position.set(
       0,
-      22,
-      25
+      24,
+      30
     );
 
     camera.lookAt(
@@ -102,22 +163,24 @@ export default function ThreePitch({
     cameraRef.current =
       camera;
 
-    // Renderer
+    /*
+     * RENDERER
+     */
     const renderer =
       new THREE.WebGLRenderer({
         antialias: true,
       });
-
-    renderer.setSize(
-      width,
-      height
-    );
 
     renderer.setPixelRatio(
       Math.min(
         window.devicePixelRatio || 1,
         2
       )
+    );
+
+    renderer.setSize(
+      width,
+      height
     );
 
     renderer.shadowMap.enabled =
@@ -130,7 +193,9 @@ export default function ThreePitch({
     rendererRef.current =
       renderer;
 
-    // Controls
+    /*
+     * CONTROLS
+     */
     const controls =
       new OrbitControls(
         camera,
@@ -141,7 +206,16 @@ export default function ThreePitch({
       true;
 
     controls.dampingFactor =
-      0.07;
+      0.06;
+
+    controls.minDistance =
+      15;
+
+    controls.maxDistance =
+      42;
+
+    controls.maxPolarAngle =
+      Math.PI / 2.35;
 
     controls.target.set(
       0,
@@ -149,31 +223,23 @@ export default function ThreePitch({
       0
     );
 
-    controls.minDistance =
-      16;
-
-    controls.maxDistance =
-      42;
-
-    controls.maxPolarAngle =
-      Math.PI / 2.15;
-
     controls.update();
 
     controlsRef.current =
       controls;
 
-    // ========================================================
-    // LIGHTS
-    // ========================================================
-
+    /*
+     * LIGHTING
+     */
     const ambient =
       new THREE.AmbientLight(
         0xffffff,
-        0.8
+        0.75
       );
 
-    scene.add(ambient);
+    scene.add(
+      ambient
+    );
 
     const light =
       new THREE.DirectionalLight(
@@ -182,19 +248,21 @@ export default function ThreePitch({
       );
 
     light.position.set(
-      5,
-      25,
+      8,
+      20,
       10
     );
 
-    light.castShadow = true;
+    light.castShadow =
+      true;
 
-    scene.add(light);
+    scene.add(
+      light
+    );
 
-    // ========================================================
-    // PITCH
-    // ========================================================
-
+    /*
+     * PITCH
+     */
     const pitch =
       new THREE.Mesh(
         new THREE.PlaneGeometry(
@@ -202,7 +270,7 @@ export default function ThreePitch({
           20
         ),
         new THREE.MeshStandardMaterial({
-          color: 0x15803d,
+          color: 0x176b35,
           roughness: 0.85,
         })
       );
@@ -213,61 +281,55 @@ export default function ThreePitch({
     pitch.receiveShadow =
       true;
 
-    scene.add(pitch);
+    scene.add(
+      pitch
+    );
 
-    // ========================================================
-    // FIELD LINES
-    // ========================================================
-
+    /*
+     * PITCH LINES
+     */
     const lineMaterial =
       new THREE.LineBasicMaterial({
         color: 0xffffff,
       });
 
-    const addLine = (
-      points
-    ) => {
+    function addLine(points) {
+
       const geometry =
         new THREE.BufferGeometry()
           .setFromPoints(
             points
           );
 
-      const line =
+      scene.add(
         new THREE.Line(
           geometry,
           lineMaterial
-        );
+        )
+      );
+    }
 
-      scene.add(line);
-    };
-
-    // Border
     addLine([
       new THREE.Vector3(
         -15,
         0.03,
         -10
       ),
-
       new THREE.Vector3(
         15,
         0.03,
         -10
       ),
-
       new THREE.Vector3(
         15,
         0.03,
         10
       ),
-
       new THREE.Vector3(
         -15,
         0.03,
         10
       ),
-
       new THREE.Vector3(
         -15,
         0.03,
@@ -275,14 +337,12 @@ export default function ThreePitch({
       ),
     ]);
 
-    // Center line
     addLine([
       new THREE.Vector3(
         0,
         0.03,
         -10
       ),
-
       new THREE.Vector3(
         0,
         0.03,
@@ -290,8 +350,10 @@ export default function ThreePitch({
       ),
     ]);
 
-    // Center circle
-    const centerCircle =
+    /*
+     * CENTER CIRCLE
+     */
+    const circle =
       new THREE.Mesh(
         new THREE.RingGeometry(
           3,
@@ -304,112 +366,101 @@ export default function ThreePitch({
         })
       );
 
-    centerCircle.rotation.x =
+    circle.rotation.x =
       -Math.PI / 2;
 
-    centerCircle.position.y =
+    circle.position.y =
       0.04;
 
-    scene.add(centerCircle);
+    scene.add(
+      circle
+    );
 
-    // ========================================================
-    // PENALTY AREAS
-    // ========================================================
+    /*
+     * PENALTY BOXES
+     */
+    function createBox(
+      x,
+      width,
+      depth
+    ) {
 
-    addLine([
-      new THREE.Vector3(
-        -15,
-        0.04,
-        -5
-      ),
-
-      new THREE.Vector3(
-        -9,
-        0.04,
-        -5
-      ),
-
-      new THREE.Vector3(
-        -9,
-        0.04,
-        5
-      ),
-
-      new THREE.Vector3(
-        -15,
-        0.04,
-        5
-      ),
-    ]);
-
-    addLine([
-      new THREE.Vector3(
-        15,
-        0.04,
-        -5
-      ),
-
-      new THREE.Vector3(
-        9,
-        0.04,
-        -5
-      ),
-
-      new THREE.Vector3(
-        9,
-        0.04,
-        5
-      ),
-
-      new THREE.Vector3(
-        15,
-        0.04,
-        5
-      ),
-    ]);
-
-    // ========================================================
-    // GOALS
-    // ========================================================
-
-    const goalMaterial =
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-      });
-
-    const createGoal = (
-      x
-    ) => {
-      const goal =
-        new THREE.Mesh(
+      const geometry =
+        new THREE.EdgesGeometry(
           new THREE.BoxGeometry(
-            0.5,
-            1.2,
-            6
-          ),
-          goalMaterial
+            width,
+            0.02,
+            depth
+          )
         );
 
-      goal.position.set(
+      const line =
+        new THREE.LineSegments(
+          geometry,
+          lineMaterial
+        );
+
+      line.position.set(
         x,
-        0.6,
+        0.04,
         0
       );
 
-      scene.add(goal);
-    };
+      scene.add(line);
+    }
 
-    createGoal(-15.2);
-    createGoal(15.2);
+    createBox(
+      -12,
+      6,
+      12
+    );
 
-    // ========================================================
-    // BALL
-    // ========================================================
+    createBox(
+      12,
+      6,
+      12
+    );
 
+    /*
+     * GOALS
+     */
+    const goalMaterial =
+      new THREE.MeshStandardMaterial({
+        color: 0xe5e7eb,
+      });
+
+    [-15, 15].forEach(
+      x => {
+
+        const goal =
+          new THREE.Mesh(
+            new THREE.BoxGeometry(
+              0.3,
+              1.5,
+              6
+            ),
+            goalMaterial
+          );
+
+        goal.position.set(
+          x,
+          0.75,
+          0
+        );
+
+        scene.add(
+          goal
+        );
+      }
+    );
+
+    /*
+     * BALL
+     */
     const ball =
       new THREE.Mesh(
         new THREE.SphereGeometry(
-          0.18,
+          0.22,
           24,
           24
         ),
@@ -421,112 +472,155 @@ export default function ThreePitch({
 
     ball.position.set(
       0,
-      0.18,
+      0.22,
       0
     );
 
     ball.castShadow =
       true;
 
-    scene.add(ball);
+    scene.add(
+      ball
+    );
 
     ballRef.current =
       ball;
 
-    // ========================================================
-    // ANIMATION
-    // ========================================================
+    /*
+     * ANIMATION LOOP
+     */
+    let running = true;
 
-    const animate = () => {
+    function animate() {
+
+      if (!running) {
+        return;
+      }
+
       animationRef.current =
         requestAnimationFrame(
           animate
         );
 
-      controls.update();
-
-      // --------------------------------
-      // Player interpolation
-      // --------------------------------
-
-      for (const mesh of
-        playerMeshesRef.current.values()) {
-
-        const target =
-          mesh.userData.target;
-
-        if (!target) continue;
-
-        mesh.position.x +=
-          (target.x -
-            mesh.position.x) *
-          0.09;
-
-        mesh.position.z +=
-          (target.z -
-            mesh.position.z) *
-          0.09;
-
-        // Small running animation
-        if (
-          mesh.userData.running
-        ) {
-          mesh.rotation.y +=
-            0.025;
-        }
-      }
-
-      // --------------------------------
-      // Ball interpolation
-      // --------------------------------
-
+      /*
+       * Move ball smoothly.
+       */
       if (ballRef.current) {
-        const ball =
-          ballRef.current;
 
-        ball.position.x +=
-          (
-            ballTargetRef.current.x -
-            ball.position.x
-          ) * 0.22;
+        const dx =
+          targetRef.current.x -
+          ballRef.current.position.x;
 
-        ball.position.z +=
-          (
-            ballTargetRef.current.z -
-            ball.position.z
-          ) * 0.22;
+        const dz =
+          targetRef.current.z -
+          ballRef.current.position.z;
 
-        ball.position.y =
-          0.18 +
-          Math.sin(
-            Date.now() * 0.01
-          ) * 0.025;
+        ballRef.current.position.x +=
+          dx * 0.08;
+
+        ballRef.current.position.z +=
+          dz * 0.08;
+
+        ballRef.current.position.y =
+          0.22 +
+          Math.abs(
+            Math.sin(
+              Date.now() * 0.01
+            )
+          ) * 0.03;
       }
+
+      /*
+       * Move players toward targets.
+       */
+      [
+        ...homePlayersRef.current,
+        ...awayPlayersRef.current,
+      ].forEach(
+        item => {
+
+          if (!item?.group) {
+            return;
+          }
+
+          const group =
+            item.group;
+
+          const target =
+            item.target;
+
+          if (!target) {
+            return;
+          }
+
+          const dx =
+            target.x -
+            group.position.x;
+
+          const dz =
+            target.z -
+            group.position.z;
+
+          const distance =
+            Math.sqrt(
+              dx * dx +
+              dz * dz
+            );
+
+          if (distance > 0.03) {
+
+            const speed =
+              0.025;
+
+            group.position.x +=
+              (dx / distance) *
+              Math.min(
+                speed,
+                distance
+              );
+
+            group.position.z +=
+              (dz / distance) *
+              Math.min(
+                speed,
+                distance
+              );
+
+            group.rotation.y =
+              Math.atan2(
+                dx,
+                dz
+              );
+          }
+        }
+      );
+
+      controls.update();
 
       renderer.render(
         scene,
         camera
       );
-    };
+    }
 
     animate();
 
-    // ========================================================
-    // RESIZE
-    // ========================================================
+    /*
+     * RESIZE
+     */
+    function resize() {
 
-    const handleResize = () => {
       if (!mountRef.current) {
         return;
       }
 
       const w =
-        mountRef.current
-          .clientWidth || 900;
+        mountRef.current.clientWidth ||
+        800;
 
       const h =
-        mountRef.current
-          .clientHeight || 560;
+        mountRef.current.clientHeight ||
+        500;
 
       camera.aspect =
         w / h;
@@ -537,22 +631,19 @@ export default function ThreePitch({
         w,
         h
       );
-    };
+    }
 
     window.addEventListener(
-      "resize",
-      handleResize
+      'resize',
+      resize
     );
 
-    // ========================================================
-    // CLEANUP
-    // ========================================================
-
+    /*
+     * CLEANUP
+     */
     return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
+
+      running = false;
 
       if (
         animationRef.current
@@ -562,9 +653,47 @@ export default function ThreePitch({
         );
       }
 
+      window.removeEventListener(
+        'resize',
+        resize
+      );
+
       controls.dispose();
 
       renderer.dispose();
+
+      scene.traverse(
+        object => {
+
+          if (
+            object.geometry
+          ) {
+            object.geometry.dispose();
+          }
+
+          if (
+            object.material
+          ) {
+
+            if (
+              Array.isArray(
+                object.material
+              )
+            ) {
+
+              object.material.forEach(
+                material =>
+                  material.dispose()
+              );
+
+            } else {
+
+              object.material.dispose();
+
+            }
+          }
+        }
+      );
 
       if (
         renderer.domElement.parentNode ===
@@ -575,42 +704,60 @@ export default function ThreePitch({
         );
       }
 
-      playerMeshesRef.current.clear();
-
       scene.clear();
+
     };
+
   }, []);
 
-  // ==========================================================
-  // CREATE / UPDATE PLAYERS
-  // ==========================================================
-
+  /*
+   * Create players.
+   */
   useEffect(() => {
+
     const scene =
       sceneRef.current;
 
-    if (!scene) return;
+    if (!scene) {
+      return;
+    }
 
-    const allPlayers = [
-      ...(playerStates.home || []),
-      ...(playerStates.away || []),
-    ];
+    /*
+     * Remove old players.
+     */
+    [
+      ...homePlayersRef.current,
+      ...awayPlayersRef.current,
+    ].forEach(
+      item => {
 
-    const activeKeys =
-      new Set();
+        if (item?.group) {
+          scene.remove(
+            item.group
+          );
+        }
+      }
+    );
 
-    const createPlayer = (
-      player
-    ) => {
+    homePlayersRef.current =
+      [];
+
+    awayPlayersRef.current =
+      [];
+
+    function createPlayer(
+      player,
+      position,
+      color,
+      team
+    ) {
+
       const group =
         new THREE.Group();
 
-      const color =
-        player.team === "home"
-          ? homeColor
-          : awayColor;
-
-      // Body
+      /*
+       * BODY
+       */
       const body =
         new THREE.Mesh(
           new THREE.CylinderGeometry(
@@ -626,14 +773,18 @@ export default function ThreePitch({
         );
 
       body.position.y =
-        0.35;
+        0.33;
 
       body.castShadow =
         true;
 
-      group.add(body);
+      group.add(
+        body
+      );
 
-      // Head
+      /*
+       * HEAD
+       */
       const head =
         new THREE.Mesh(
           new THREE.SphereGeometry(
@@ -642,166 +793,357 @@ export default function ThreePitch({
             16
           ),
           new THREE.MeshStandardMaterial({
-            color: 0xf2c29b,
+            color: 0xf0b48b,
           })
         );
 
       head.position.y =
-        0.82;
+        0.78;
 
       head.castShadow =
         true;
 
-      group.add(head);
+      group.add(
+        head
+      );
+
+      /*
+       * Player number/name marker.
+       */
+      group.userData = {
+        player,
+        team,
+      };
 
       group.position.set(
-        player.x,
+        position.x,
         0,
-        player.z
+        position.z
       );
 
-      group.userData.target = {
-        x: player.x,
-        z: player.z,
-      };
-
-      group.userData.running =
-        false;
-
-      return group;
-    };
-
-    for (const player of
-      allPlayers) {
-
-      const key =
-        `${player.team}-${player.id}`;
-
-      activeKeys.add(key);
-
-      let mesh =
-        playerMeshesRef.current.get(
-          key
-        );
-
-      if (!mesh) {
-        mesh =
-          createPlayer(player);
-
-        scene.add(mesh);
-
-        playerMeshesRef.current.set(
-          key,
-          mesh
-        );
-      }
-
-      mesh.userData.target = {
-        x: player.x,
-        z: player.z,
-      };
-
-      mesh.userData.running =
-        true;
-
-      // Update jersey color
-      const body =
-        mesh.children[0];
-
-      if (
-        body?.material?.color
-      ) {
-        body.material.color.set(
-          player.team === "home"
-            ? homeColor
-            : awayColor
-        );
-      }
-
-      // If player has ball,
-      // make him slightly bigger.
-      const scale =
-        player.hasBall
-          ? 1.12
-          : 1;
-
-      mesh.scale.set(
-        scale,
-        scale,
-        scale
+      scene.add(
+        group
       );
+
+      return {
+        group,
+        player,
+        target: {
+          x: position.x,
+          z: position.z,
+        },
+        base: {
+          x: position.x,
+          z: position.z,
+        },
+        team,
+      };
     }
 
-    // Remove players that
-    // are no longer in lineup.
-    for (
-      const [key, mesh] of
-      playerMeshesRef.current
-    ) {
-      if (!activeKeys.has(key)) {
-        scene.remove(mesh);
-        playerMeshesRef.current.delete(
-          key
-        );
-      }
-    }
+    const homePositions =
+      getPositions(
+        formation,
+        'home'
+      );
+
+    const awayPositions =
+      getPositions(
+        formation,
+        'away'
+      );
+
+    homeXI
+      .slice(0, 11)
+      .forEach(
+        (player, index) => {
+
+          const position =
+            homePositions[
+              index
+            ];
+
+          if (!position) {
+            return;
+          }
+
+          homePlayersRef.current.push(
+            createPlayer(
+              player,
+              position,
+              homeColor,
+              'home'
+            )
+          );
+        }
+      );
+
+    awayXI
+      .slice(0, 11)
+      .forEach(
+        (player, index) => {
+
+          const position =
+            awayPositions[
+              index
+            ];
+
+          if (!position) {
+            return;
+          }
+
+          awayPlayersRef.current.push(
+            createPlayer(
+              player,
+              position,
+              awayColor,
+              'away'
+            )
+          );
+        }
+      );
+
   }, [
-    playerStates,
+    homeXI,
+    awayXI,
     homeColor,
     awayColor,
+    formation,
+    getPositions,
   ]);
 
-  // ==========================================================
-  // BALL
-  // ==========================================================
-
+  /*
+   * REAL-TIME MOVEMENT.
+   */
   useEffect(() => {
-    if (!ballState) return;
-
-    ballTargetRef.current = {
-      x: Number(ballState.targetX ?? ballState.x ?? 0),
-      z: Number(ballState.targetZ ?? ballState.z ?? 0),
-    };
-  }, [ballState]);
-
-  // ==========================================================
-  // ACTION EFFECT
-  // ==========================================================
-
-  useEffect(() => {
-    if (!lastAction) return;
 
     if (
-      lastAction.toX !== undefined &&
-      lastAction.toZ !== undefined
+      !matchStarted
     ) {
-      ballTargetRef.current = {
-        x: Number(lastAction.toX),
-        z: Number(lastAction.toZ),
-      };
+      return;
     }
 
+    const allPlayers = [
+      ...homePlayersRef.current,
+      ...awayPlayersRef.current,
+    ];
+
+    /*
+     * Small positional movement around
+     * tactical positions.
+     */
+    allPlayers.forEach(
+      item => {
+
+        if (!item?.base) {
+          return;
+        }
+
+        const isActive =
+          getPlayerId(
+            item.player
+          ) ===
+          String(
+            activePlayerId || ''
+          );
+
+        let x =
+          item.base.x;
+
+        let z =
+          item.base.z;
+
+        /*
+         * Active player moves toward ball.
+         */
+        if (
+          isActive &&
+          ballRef.current
+        ) {
+
+          const ball =
+            ballRef.current.position;
+
+          x =
+            ball.x +
+            (
+              item.team === 'home'
+                ? 1.0
+                : -1.0
+            );
+
+          z =
+            ball.z;
+        }
+
+        /*
+         * Team in possession pushes forward.
+         */
+        else if (
+          item.team === ballTeam
+        ) {
+
+          x +=
+            item.team === 'home'
+              ? 1.2
+              : -1.2;
+
+          z +=
+            (
+              Math.random() -
+              0.5
+            ) * 1.5;
+        }
+
+        /*
+         * Players return toward formation.
+         */
+        item.target = {
+          x: Math.max(
+            -14,
+            Math.min(
+              14,
+              x
+            )
+          ),
+
+          z: Math.max(
+            -9,
+            Math.min(
+              9,
+              z
+            )
+          ),
+        };
+      }
+    );
+
+    /*
+     * Ball movement.
+     */
     if (
-      lastAction.targetX !== undefined &&
-      lastAction.targetZ !== undefined
+      ballRef.current
     ) {
-      ballTargetRef.current = {
-        x: Number(lastAction.targetX),
-        z: Number(lastAction.targetZ),
-      };
+
+      const teamPlayers =
+        ballTeam === 'home'
+          ? homePlayersRef.current
+          : awayPlayersRef.current;
+
+      if (
+        teamPlayers.length
+      ) {
+
+        const active =
+          teamPlayers.find(
+            item =>
+              getPlayerId(
+                item.player
+              ) ===
+              String(
+                activePlayerId || ''
+              )
+          ) ||
+          teamPlayers[
+            Math.floor(
+              Math.random() *
+              teamPlayers.length
+            )
+          ];
+
+        if (active) {
+
+          let tx =
+            active.group
+              .position.x;
+
+          let tz =
+            active.group
+              .position.z;
+
+          /*
+           * Different action types.
+           */
+          if (
+            action === 'pass'
+          ) {
+
+            tx +=
+              ballTeam === 'home'
+                ? 3
+                : -3;
+
+          } else if (
+            action === 'attack'
+          ) {
+
+            tx +=
+              ballTeam === 'home'
+                ? 5
+                : -5;
+
+          } else if (
+            action === 'shot' ||
+            action === 'goal'
+          ) {
+
+            tx =
+              ballTeam === 'home'
+                ? 14
+                : -14;
+
+          } else {
+
+            tx +=
+              (
+                Math.random() -
+                0.5
+              ) * 3;
+
+          }
+
+          tz +=
+            (
+              Math.random() -
+              0.5
+            ) * 4;
+
+          targetRef.current = {
+            x: Math.max(
+              -14,
+              Math.min(
+                14,
+                tx
+              )
+            ),
+
+            z: Math.max(
+              -9,
+              Math.min(
+                9,
+                tz
+              )
+            ),
+          };
+        }
+      }
     }
-  }, [lastAction]);
+
+  }, [
+    matchStarted,
+    ballTeam,
+    activePlayerId,
+    action,
+  ]);
 
   return (
     <div
       ref={mountRef}
       style={{
-        width: "100%",
-        height: "560px",
-        minHeight: "420px",
-        borderRadius: "18px",
-        overflow: "hidden",
-        background: "#07111f",
+        width: '100%',
+        height: '500px',
+        minHeight: '500px',
+        overflow: 'hidden',
+        borderRadius: '18px',
       }}
     />
   );
