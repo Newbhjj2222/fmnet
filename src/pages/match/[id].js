@@ -1,7 +1,6 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -45,81 +44,142 @@ const ThreePitch = dynamic(
 // ============================================================
 
 const MATCH_MINUTE_MS = 1000;
+
+const MATCH_MINUTE = 90;
+
 const MAX_SUBSTITUTIONS = 5;
+
 const PLAYERS_ON_PITCH = 11;
 
+const MIN_SQUAD_SIZE = 11;
+
+const FALLBACK_SQUAD_SIZE = 18;
+
 const FORMATIONS = {
-  "4-4-2": { GK: 1, DEF: 4, MID: 4, ATT: 2 },
-  "4-3-3": { GK: 1, DEF: 4, MID: 3, ATT: 3 },
-  "3-5-2": { GK: 1, DEF: 3, MID: 5, ATT: 2 },
-  "5-3-2": { GK: 1, DEF: 5, MID: 3, ATT: 2 },
-  "4-2-3-1": { GK: 1, DEF: 4, MID: 5, ATT: 1 },
+  "4-4-2": {
+    GK: 1,
+    DEF: 4,
+    MID: 4,
+    ATT: 2,
+  },
+
+  "4-3-3": {
+    GK: 1,
+    DEF: 4,
+    MID: 3,
+    ATT: 3,
+  },
+
+  "3-5-2": {
+    GK: 1,
+    DEF: 3,
+    MID: 5,
+    ATT: 2,
+  },
+
+  "5-3-2": {
+    GK: 1,
+    DEF: 5,
+    MID: 3,
+    ATT: 2,
+  },
+
+  "4-2-3-1": {
+    GK: 1,
+    DEF: 4,
+    MID: 5,
+    ATT: 1,
+  },
 };
+
+// ============================================================
+// FORMATION VISUAL POSITIONS
+// ============================================================
 
 const FORMATION_POINTS = {
   "4-4-2": [
     [-11.5, 0],
+
     [-8.5, -6.8],
     [-8.5, -2.3],
     [-8.5, 2.3],
     [-8.5, 6.8],
+
     [-3.0, -6.0],
     [-2.0, -2.0],
     [-2.0, 2.0],
     [-3.0, 6.0],
+
     [3.5, -3.2],
     [3.5, 3.2],
   ],
+
   "4-3-3": [
     [-11.5, 0],
+
     [-8.5, -6.8],
     [-8.5, -2.3],
     [-8.5, 2.3],
     [-8.5, 6.8],
+
     [-3.0, -5.0],
     [-2.0, 0],
     [-3.0, 5.0],
+
     [4.5, -6.0],
     [5.5, 0],
     [4.5, 6.0],
   ],
+
   "3-5-2": [
     [-11.5, 0],
+
     [-8.5, -4.8],
     [-8.5, 0],
     [-8.5, 4.8],
+
     [-3.5, -7.0],
     [-2.0, -3.5],
     [-1.0, 0],
     [-2.0, 3.5],
     [-3.5, 7.0],
+
     [4.0, -3.0],
     [4.0, 3.0],
   ],
+
   "5-3-2": [
     [-11.5, 0],
+
     [-8.5, -8.0],
     [-8.5, -4.0],
+    [-8.5, 0],
     [-8.5, 4.0],
     [-8.5, 8.0],
-    [-8.5, 0],
+
     [-3.0, -5.0],
     [-2.0, 0],
     [-3.0, 5.0],
+
     [4.0, -3.0],
     [4.0, 3.0],
   ],
+
   "4-2-3-1": [
     [-11.5, 0],
+
     [-8.5, -6.8],
     [-8.5, -2.3],
     [-8.5, 2.3],
     [-8.5, 6.8],
+
     [-3.5, -3.5],
     [-3.5, 3.5],
+
     [1.0, -5.0],
     [1.5, 0],
     [1.0, 5.0],
+
     [5.5, 0],
   ],
 };
@@ -129,12 +189,24 @@ const FORMATION_POINTS = {
 // ============================================================
 
 function safeNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : fallback;
 }
 
 function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+  return Math.max(
+    min,
+    Math.min(max, value)
+  );
+}
+
+function randomInt(min, max) {
+  return Math.floor(
+    Math.random() * (max - min + 1)
+  ) + min;
 }
 
 function playerName(player) {
@@ -142,18 +214,27 @@ function playerName(player) {
     player?.name ||
     player?.fullName ||
     `${player?.firstName || ""} ${player?.lastName || ""}`.trim() ||
-    "Unknown"
+    "Unknown Player"
   );
 }
 
 function playerId(player) {
-  return player?.id || player?.playerId || null;
+  return (
+    player?.id ||
+    player?.playerId ||
+    player?.uid ||
+    null
+  );
 }
 
 function overall(player) {
   return clamp(
     safeNumber(
-      player?.overall ?? player?.rating ?? player?.ovr ?? 60
+      player?.overall ??
+        player?.rating ??
+        player?.ovr ??
+        player?.overallRating ??
+        60
     ),
     35,
     99
@@ -161,15 +242,46 @@ function overall(player) {
 }
 
 function position(player) {
-  const p = String(
-    player?.position || player?.primaryPosition || "MID"
+  const raw = String(
+    player?.position ||
+      player?.primaryPosition ||
+      player?.role ||
+      "MID"
   ).toLowerCase();
 
-  if (p.includes("goal") || p === "gk") return "GK";
-  if (p.includes("def") || p.includes("back") || p === "cb" || p === "lb" || p === "rb")
+  if (
+    raw.includes("goalkeeper") ||
+    raw.includes("goal keeper") ||
+    raw === "gk" ||
+    raw.includes("keeper")
+  ) {
+    return "GK";
+  }
+
+  if (
+    raw.includes("def") ||
+    raw.includes("back") ||
+    raw === "cb" ||
+    raw === "lb" ||
+    raw === "rb" ||
+    raw === "lwb" ||
+    raw === "rwb"
+  ) {
     return "DEF";
-  if (p.includes("attack") || p.includes("forward") || p.includes("striker") || p === "st" || p === "cf")
+  }
+
+  if (
+    raw.includes("attack") ||
+    raw.includes("forward") ||
+    raw.includes("striker") ||
+    raw === "st" ||
+    raw === "cf" ||
+    raw === "lw" ||
+    raw === "rw"
+  ) {
     return "ATT";
+  }
+
   return "MID";
 }
 
@@ -204,102 +316,590 @@ function defaultTactics() {
 }
 
 function normalizeStats(stats) {
-  return { ...emptyStats(), ...(stats || {}) };
+  return {
+    ...emptyStats(),
+    ...(stats || {}),
+  };
 }
 
 function normalizeTactics(tactics) {
-  return { ...defaultTactics(), ...(tactics || {}) };
+  return {
+    ...defaultTactics(),
+    ...(tactics || {}),
+  };
 }
 
 // ============================================================
-// POSITION / LINEUP
+// STATUS NORMALIZATION
 // ============================================================
 
-function getFormationPlayers(squad, formation) {
-  if (!Array.isArray(squad)) return [];
+function normalizeMatchStatus(status) {
+  const value = String(
+    status || ""
+  ).toLowerCase();
 
-  const required = FORMATIONS[formation] || FORMATIONS["4-4-2"];
-  const remaining = [...squad];
-  const selected = [];
+  if (
+    [
+      "ready",
+      "scheduled",
+      "pending",
+      "upcoming",
+      "not-started",
+      "not_started",
+      "created",
+    ].includes(value)
+  ) {
+    return "ready";
+  }
 
-  const takeBest = (type, count) => {
-    const candidates = remaining
-      .filter((p) => position(p) === type)
-      .sort((a, b) => overall(b) - overall(a))
-      .slice(0, count);
+  if (
+    [
+      "live",
+      "playing",
+      "started",
+      "in-progress",
+      "in_progress",
+    ].includes(value)
+  ) {
+    return "live";
+  }
 
-    candidates.forEach((p) => {
-      const id = playerId(p);
-      const index = remaining.findIndex((x) => playerId(x) === id);
-      if (index >= 0) remaining.splice(index, 1);
-      selected.push(p);
-    });
+  if (
+    [
+      "half-time",
+      "halftime",
+      "half_time",
+    ].includes(value)
+  ) {
+    return "half-time";
+  }
+
+  if (
+    [
+      "finished",
+      "completed",
+      "full-time",
+      "full_time",
+      "ended",
+    ].includes(value)
+  ) {
+    return "finished";
+  }
+
+  return "ready";
+}
+
+// ============================================================
+// FORMATION
+// ============================================================
+
+function normalizeFormation(formation) {
+  return FORMATIONS[formation]
+    ? formation
+    : "4-4-2";
+}
+
+function formationModifier(formation) {
+  const values = {
+    "4-4-2": 1.0,
+    "4-3-3": 1.035,
+    "3-5-2": 1.02,
+    "5-3-2": 0.985,
+    "4-2-3-1": 1.03,
   };
 
-  takeBest("GK", required.GK);
-  takeBest("DEF", required.DEF);
-  takeBest("MID", required.MID);
-  takeBest("ATT", required.ATT);
-
-  while (selected.length < PLAYERS_ON_PITCH && remaining.length) {
-    remaining.sort((a, b) => overall(b) - overall(a));
-    selected.push(remaining.shift());
-  }
-
-  return selected.slice(0, PLAYERS_ON_PITCH);
+  return values[formation] || 1;
 }
 
-function lineupFromIds(squad, ids, formation) {
-  if (!Array.isArray(ids) || ids.length !== 11) {
-    return getFormationPlayers(squad, formation);
+// ============================================================
+// TACTICS
+// ============================================================
+
+function tacticModifier(tactics) {
+  const t = normalizeTactics(tactics);
+
+  let modifier = 1;
+
+  if (t.mentality === "attacking") {
+    modifier += 0.055;
   }
 
-  const map = new Map(squad.map((p) => [String(playerId(p)), p]));
-  const players = ids.map((id) => map.get(String(id))).filter(Boolean);
+  if (t.mentality === "defensive") {
+    modifier -= 0.025;
+  }
 
-  return players.length === 11 ? players : getFormationPlayers(squad, formation);
+  if (t.tempo === "fast") {
+    modifier += 0.025;
+  }
+
+  if (t.tempo === "slow") {
+    modifier -= 0.01;
+  }
+
+  if (t.pressing === "high") {
+    modifier += 0.03;
+  }
+
+  if (t.pressing === "low") {
+    modifier -= 0.012;
+  }
+
+  if (t.defensiveLine === "high") {
+    modifier += 0.018;
+  }
+
+  if (t.defensiveLine === "deep") {
+    modifier += 0.008;
+  }
+
+  if (t.width === "wide") {
+    modifier += 0.012;
+  }
+
+  if (t.width === "narrow") {
+    modifier -= 0.005;
+  }
+
+  return modifier;
 }
 
-function getBench(squad, xi) {
-  const selected = new Set(xi.map((p) => String(playerId(p))));
-  return squad.filter((p) => !selected.has(String(playerId(p))));
+// ============================================================
+// PLAYER STRENGTH
+// ============================================================
+
+function calculateTeamPower(
+  xi,
+  tactics,
+  formation
+) {
+  if (
+    !Array.isArray(xi) ||
+    xi.length === 0
+  ) {
+    return 60;
+  }
+
+  const total = xi.reduce(
+    (sum, player) =>
+      sum + overall(player),
+    0
+  );
+
+  const average =
+    total / xi.length;
+
+  const power =
+    average *
+    formationModifier(formation) *
+    tacticModifier(tactics);
+
+  return clamp(power, 35, 110);
+}
+
+// ============================================================
+// GET FORMATION PLAYERS
+// ============================================================
+
+function getFormationPlayers(
+  squad,
+  formation
+) {
+  if (
+    !Array.isArray(squad) ||
+    squad.length === 0
+  ) {
+    return [];
+  }
+
+  const normalizedFormation =
+    normalizeFormation(formation);
+
+  const required =
+    FORMATIONS[normalizedFormation];
+
+  const remaining = [...squad];
+
+  const selected = [];
+
+  const takeBest = (
+    type,
+    count
+  ) => {
+    const candidates = remaining
+      .filter(
+        (player) =>
+          position(player) === type
+      )
+      .sort(
+        (a, b) =>
+          overall(b) -
+          overall(a)
+      )
+      .slice(0, count);
+
+    candidates.forEach(
+      (player) => {
+        const id =
+          playerId(player);
+
+        const index =
+          remaining.findIndex(
+            (item) =>
+              String(
+                playerId(item)
+              ) ===
+              String(id)
+          );
+
+        if (index >= 0) {
+          remaining.splice(
+            index,
+            1
+          );
+        }
+
+        selected.push(player);
+      }
+    );
+  };
+
+  takeBest(
+    "GK",
+    required.GK
+  );
+
+  takeBest(
+    "DEF",
+    required.DEF
+  );
+
+  takeBest(
+    "MID",
+    required.MID
+  );
+
+  takeBest(
+    "ATT",
+    required.ATT
+  );
+
+  // Fill missing places with strongest remaining players.
+  while (
+    selected.length <
+      PLAYERS_ON_PITCH &&
+    remaining.length
+  ) {
+    remaining.sort(
+      (a, b) =>
+        overall(b) -
+        overall(a)
+    );
+
+    selected.push(
+      remaining.shift()
+    );
+  }
+
+  return selected.slice(
+    0,
+    PLAYERS_ON_PITCH
+  );
+}
+
+// ============================================================
+// LINEUP FROM IDS
+// ============================================================
+
+function lineupFromIds(
+  squad,
+  ids,
+  formation
+) {
+  if (
+    !Array.isArray(squad) ||
+    squad.length < PLAYERS_ON_PITCH
+  ) {
+    return [];
+  }
+
+  if (
+    !Array.isArray(ids) ||
+    ids.length !== PLAYERS_ON_PITCH
+  ) {
+    return getFormationPlayers(
+      squad,
+      formation
+    );
+  }
+
+  const map = new Map();
+
+  squad.forEach(
+    (player) => {
+      const id =
+        playerId(player);
+
+      if (id !== null) {
+        map.set(
+          String(id),
+          player
+        );
+      }
+    }
+  );
+
+  const players = ids
+    .map((id) =>
+      map.get(String(id))
+    )
+    .filter(Boolean);
+
+  if (
+    players.length ===
+    PLAYERS_ON_PITCH
+  ) {
+    return players;
+  }
+
+  return getFormationPlayers(
+    squad,
+    formation
+  );
+}
+
+// ============================================================
+// ENSURE XI
+// ============================================================
+
+function ensureStartingXI(
+  squad,
+  formation,
+  savedIds
+) {
+  if (
+    !Array.isArray(squad) ||
+    squad.length <
+      PLAYERS_ON_PITCH
+  ) {
+    return [];
+  }
+
+  const lineup =
+    lineupFromIds(
+      squad,
+      savedIds,
+      formation
+    );
+
+  if (
+    lineup.length ===
+    PLAYERS_ON_PITCH
+  ) {
+    return lineup;
+  }
+
+  return getFormationPlayers(
+    squad,
+    formation
+  ).slice(
+    0,
+    PLAYERS_ON_PITCH
+  );
+}
+
+// ============================================================
+// BENCH
+// ============================================================
+
+function getBench(
+  squad,
+  xi
+) {
+  if (!Array.isArray(squad)) {
+    return [];
+  }
+
+  const selected =
+    new Set(
+      xi
+        .map(playerId)
+        .filter(Boolean)
+        .map(String)
+    );
+
+  return squad.filter(
+    (player) =>
+      !selected.has(
+        String(playerId(player))
+      )
+  );
+}
+
+// ============================================================
+// FALLBACK PLAYERS
+// ============================================================
+
+function generateFallbackPlayers(
+  clubId,
+  count
+) {
+  const roles = [
+    "GK",
+    "DEF",
+    "DEF",
+    "DEF",
+    "DEF",
+    "DEF",
+    "MID",
+    "MID",
+    "MID",
+    "MID",
+    "MID",
+    "ATT",
+    "ATT",
+    "ATT",
+    "MID",
+    "DEF",
+    "MID",
+    "ATT",
+  ];
+
+  return Array.from(
+    { length: count },
+    (_, index) => {
+      const role =
+        roles[index] ||
+        "MID";
+
+      return {
+        id: `generated-${clubId}-${index + 1}`,
+        playerId: `generated-${clubId}-${index + 1}`,
+        name: `${role} Player ${index + 1}`,
+        position: role,
+        overall: randomInt(58, 72),
+        clubId,
+        generated: true,
+      };
+    }
+  );
+}
+
+function completeSquad(
+  squad,
+  clubId
+) {
+  const existing =
+    Array.isArray(squad)
+      ? [...squad]
+      : [];
+
+  if (
+    existing.length >=
+    FALLBACK_SQUAD_SIZE
+  ) {
+    return existing;
+  }
+
+  const needed =
+    FALLBACK_SQUAD_SIZE -
+    existing.length;
+
+  return [
+    ...existing,
+    ...generateFallbackPlayers(
+      clubId,
+      needed
+    ),
+  ];
 }
 
 // ============================================================
 // MANAGER DETECTION
 // ============================================================
 
-function isManagerOfClub(club, profile, authUser) {
-  if (!club) return false;
+function isManagerOfClub(
+  club,
+  profile,
+  authUser
+) {
+  if (!club) {
+    return false;
+  }
 
-  const uid = authUser?.uid || profile?.uid || null;
-  const username = profile?.username || authUser?.username || authUser?.displayName || null;
+  const uid =
+    authUser?.uid ||
+    profile?.uid ||
+    profile?.id ||
+    null;
+
+  const username =
+    profile?.username ||
+    authUser?.username ||
+    authUser?.displayName ||
+    null;
+
+  const possibleManagerIds = [
+    club.managerId,
+    club.managerUid,
+    club.managerUserId,
+    club.manager?.uid,
+    club.manager?.userId,
+    club.manager?.id,
+  ]
+    .filter(Boolean)
+    .map(String);
 
   if (
     uid &&
-    [club.managerId, club.managerUid, club.managerUserId]
-      .filter(Boolean)
-      .map(String)
-      .includes(String(uid))
+    possibleManagerIds.includes(
+      String(uid)
+    )
   ) {
     return true;
   }
+
+  const possibleUsernames = [
+    club.managerUsername,
+    club.manager,
+    club.managerName,
+    club.manager?.username,
+  ]
+    .filter(
+      (value) =>
+        typeof value ===
+        "string"
+    )
+    .map(String);
 
   if (
     username &&
-    [club.managerUsername, club.manager, club.managerName]
-      .filter(Boolean)
-      .map(String)
-      .includes(String(username))
+    possibleUsernames.includes(
+      String(username)
+    )
   ) {
     return true;
   }
 
-  const currentClub = profile?.careerData?.currentClub ?? profile?.currentClub;
+  const currentClub =
+    profile?.careerData
+      ?.currentClub ??
+    profile?.currentClub ??
+    null;
+
   if (currentClub) {
     const currentId =
-      typeof currentClub === "object" ? currentClub.id || currentClub.clubId : currentClub;
-    if (currentId && String(currentId) === String(club.id)) {
+      typeof currentClub ===
+      "object"
+        ? currentClub.id ||
+          currentClub.clubId ||
+          currentClub.currentClubId
+        : currentClub;
+
+    if (
+      currentId &&
+      String(currentId) ===
+        String(club.id)
+    ) {
       return true;
     }
   }
@@ -308,34 +908,90 @@ function isManagerOfClub(club, profile, authUser) {
 }
 
 // ============================================================
-// TEAM POWER
+// AI TACTICS
 // ============================================================
 
-function formationModifier(formation) {
-  const values = {
-    "4-4-2": 1.0,
-    "4-3-3": 1.04,
-    "3-5-2": 1.02,
-    "5-3-2": 0.97,
-    "4-2-3-1": 1.03,
+function calculateAITactics(
+  aiTeam,
+  score
+) {
+  const aiScore =
+    aiTeam === "home"
+      ? score.home
+      : score.away;
+
+  const opponentScore =
+    aiTeam === "home"
+      ? score.away
+      : score.home;
+
+  const difference =
+    aiScore -
+    opponentScore;
+
+  if (difference < 0) {
+    return {
+      mentality: "attacking",
+      tempo: "fast",
+      pressing: "high",
+      defensiveLine: "high",
+      width: "wide",
+    };
+  }
+
+  if (difference > 0) {
+    return {
+      mentality: "defensive",
+      tempo: "slow",
+      pressing: "low",
+      defensiveLine: "deep",
+      width: "normal",
+    };
+  }
+
+  return {
+    mentality: "balanced",
+    tempo: "normal",
+    pressing: "medium",
+    defensiveLine: "normal",
+    width: "normal",
   };
-  return values[formation] || 1;
 }
 
-function tacticModifier(tactics) {
-  let value = 1;
-  if (tactics.mentality === "attacking") value += 0.06;
-  if (tactics.mentality === "defensive") value -= 0.04;
-  if (tactics.tempo === "fast") value += 0.025;
-  if (tactics.pressing === "high") value += 0.035;
-  if (tactics.pressing === "low") value -= 0.015;
-  return value;
-}
+// ============================================================
+// AI FORMATION
+// ============================================================
 
-function calculateTeamPower(xi, tactics, formation) {
-  if (!xi?.length) return 60;
-  const average = xi.reduce((sum, player) => sum + overall(player), 0) / xi.length;
-  return average * formationModifier(formation) * tacticModifier(tactics);
+function calculateAIFormation(
+  aiTeam,
+  score,
+  currentFormation
+) {
+  const aiScore =
+    aiTeam === "home"
+      ? score.home
+      : score.away;
+
+  const opponentScore =
+    aiTeam === "home"
+      ? score.away
+      : score.home;
+
+  const difference =
+    aiScore -
+    opponentScore;
+
+  if (difference <= -2) {
+    return "4-3-3";
+  }
+
+  if (difference >= 2) {
+    return "5-3-2";
+  }
+
+  return normalizeFormation(
+    currentFormation
+  );
 }
 
 // ============================================================
@@ -344,82 +1000,206 @@ function calculateTeamPower(xi, tactics, formation) {
 
 export default function MatchPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+
+  const {
+    user,
+    loading: authLoading,
+  } = useAuth();
+
   const { id } = router.query;
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // STATE
-  // ----------------------------------------------------------
+  // ==========================================================
 
-  const [match, setMatch] = useState(null);
-  const [homeClub, setHomeClub] = useState(null);
-  const [awayClub, setAwayClub] = useState(null);
-  const [homeSquad, setHomeSquad] = useState([]);
-  const [awaySquad, setAwaySquad] = useState([]);
-  const [profile, setProfile] = useState(null);
+  const [match, setMatch] =
+    useState(null);
 
-  const [homeXI, setHomeXI] = useState([]);
-  const [awayXI, setAwayXI] = useState([]);
-  const [homeFormation, setHomeFormation] = useState("4-4-2");
-  const [awayFormation, setAwayFormation] = useState("4-4-2");
-  const [selectedLineup, setSelectedLineup] = useState([]);
-  const [lineupOpen, setLineupOpen] = useState(false);
+  const [homeClub, setHomeClub] =
+    useState(null);
 
-  const [managerTeam, setManagerTeam] = useState(null);
-  const [isManager, setIsManager] = useState(false);
+  const [awayClub, setAwayClub] =
+    useState(null);
 
-  const [matchStatus, setMatchStatus] = useState("loading");
-  const [matchMinute, setMatchMinute] = useState(0);
-  const [homeScore, setHomeScore] = useState(0);
-  const [awayScore, setAwayScore] = useState(0);
-  const [events, setEvents] = useState([]);
-  const [homeStats, setHomeStats] = useState(emptyStats());
-  const [awayStats, setAwayStats] = useState(emptyStats());
-  const [homeTactics, setHomeTactics] = useState(defaultTactics());
-  const [awayTactics, setAwayTactics] = useState(defaultTactics());
-  const [homeBench, setHomeBench] = useState([]);
-  const [awayBench, setAwayBench] = useState([]);
-  const [subsUsed, setSubsUsed] = useState({ home: 0, away: 0 });
-  const [selectedSubOut, setSelectedSubOut] = useState("");
-  const [selectedSubIn, setSelectedSubIn] = useState("");
-  const [isPaused, setIsPaused] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [homeSquad, setHomeSquad] =
+    useState([]);
 
-  const [playerPositions, setPlayerPositions] = useState({});
-  const [ballAction, setBallAction] = useState({
-    id: 0,
-    from: [0, 0],
-    to: [0, 0],
-    type: "idle",
-  });
+  const [awaySquad, setAwaySquad] =
+    useState([]);
 
-  // ----------------------------------------------------------
-  // REFS
-  // ----------------------------------------------------------
+  const [profile, setProfile] =
+    useState(null);
 
-  const matchRef = useRef(null);
-  const statusRef = useRef("loading");
-  const minuteRef = useRef(0);
-  const scoreRef = useRef({ home: 0, away: 0 });
-  const statsRef = useRef({ home: emptyStats(), away: emptyStats() });
-  const eventsRef = useRef([]);
-  const homeXIRef = useRef([]);
-  const awayXIRef = useRef([]);
-  const homeBenchRef = useRef([]);
-  const awayBenchRef = useRef([]);
-  const tacticsRef = useRef({ home: defaultTactics(), away: defaultTactics() });
-  const formationRef = useRef({ home: "4-4-2", away: "4-4-2" });
-  const positionsRef = useRef({});
-  const ballRef = useRef({ x: 0, z: 0 });
-  const subsRef = useRef({ home: 0, away: 0 });
-  const processingRef = useRef(false);
-  const timerRef = useRef(null);
-  const ballActionIdRef = useRef(0);
+  const [homeXI, setHomeXI] =
+    useState([]);
+
+  const [awayXI, setAwayXI] =
+    useState([]);
+
+  const [homeFormation, setHomeFormation] =
+    useState("4-4-2");
+
+  const [awayFormation, setAwayFormation] =
+    useState("4-4-2");
+
+  const [selectedLineup, setSelectedLineup] =
+    useState([]);
+
+  const [lineupOpen, setLineupOpen] =
+    useState(false);
+
+  const [managerTeam, setManagerTeam] =
+    useState(null);
+
+  const [isManager, setIsManager] =
+    useState(false);
+
+  const [matchStatus, setMatchStatus] =
+    useState("loading");
+
+  const [matchMinute, setMatchMinute] =
+    useState(0);
+
+  const [homeScore, setHomeScore] =
+    useState(0);
+
+  const [awayScore, setAwayScore] =
+    useState(0);
+
+  const [events, setEvents] =
+    useState([]);
+
+  const [homeStats, setHomeStats] =
+    useState(emptyStats());
+
+  const [awayStats, setAwayStats] =
+    useState(emptyStats());
+
+  const [homeTactics, setHomeTactics] =
+    useState(defaultTactics());
+
+  const [awayTactics, setAwayTactics] =
+    useState(defaultTactics());
+
+  const [homeBench, setHomeBench] =
+    useState([]);
+
+  const [awayBench, setAwayBench] =
+    useState([]);
+
+  const [subsUsed, setSubsUsed] =
+    useState({
+      home: 0,
+      away: 0,
+    });
+
+  const [selectedSubOut, setSelectedSubOut] =
+    useState("");
+
+  const [selectedSubIn, setSelectedSubIn] =
+    useState("");
+
+  const [isPaused, setIsPaused] =
+    useState(false);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  const [isSaving, setIsSaving] =
+    useState(false);
+
+  const [playerPositions, setPlayerPositions] =
+    useState({});
+
+  const [ballAction, setBallAction] =
+    useState({
+      id: 0,
+      from: [0, 0],
+      to: [0, 0],
+      type: "idle",
+    });
 
   // ==========================================================
-  // USER PROFILE
+  // REFS
+  // ==========================================================
+
+  const matchRef =
+    useRef(null);
+
+  const statusRef =
+    useRef("loading");
+
+  const minuteRef =
+    useRef(0);
+
+  const scoreRef =
+    useRef({
+      home: 0,
+      away: 0,
+    });
+
+  const statsRef =
+    useRef({
+      home: emptyStats(),
+      away: emptyStats(),
+    });
+
+  const eventsRef =
+    useRef([]);
+
+  const homeXIRef =
+    useRef([]);
+
+  const awayXIRef =
+    useRef([]);
+
+  const homeBenchRef =
+    useRef([]);
+
+  const awayBenchRef =
+    useRef([]);
+
+  const tacticsRef =
+    useRef({
+      home: defaultTactics(),
+      away: defaultTactics(),
+    });
+
+  const formationRef =
+    useRef({
+      home: "4-4-2",
+      away: "4-4-2",
+    });
+
+  const positionsRef =
+    useRef({});
+
+  const ballRef =
+    useRef({
+      x: 0,
+      z: 0,
+    });
+
+  const subsRef =
+    useRef({
+      home: 0,
+      away: 0,
+    });
+
+  const processingRef =
+    useRef(false);
+
+  const timerRef =
+    useRef(null);
+
+  const ballActionIdRef =
+    useRef(0);
+
+  // ==========================================================
+  // LOAD USER PROFILE
   // ==========================================================
 
   useEffect(() => {
@@ -429,26 +1209,157 @@ export default function MatchPage() {
     }
 
     let cancelled = false;
+
     async function loadProfile() {
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (!cancelled && snap.exists()) {
-          setProfile({ id: snap.id, ...snap.data() });
+        const profileSnap =
+          await getDoc(
+            doc(
+              db,
+              "users",
+              user.uid
+            )
+          );
+
+        if (
+          !cancelled &&
+          profileSnap.exists()
+        ) {
+          setProfile({
+            id: profileSnap.id,
+            ...profileSnap.data(),
+          });
         }
       } catch (err) {
-        console.error("Profile loading error:", err);
+        console.error(
+          "PROFILE LOAD ERROR:",
+          err
+        );
       }
     }
+
     loadProfile();
-    return () => { cancelled = true; };
-  }, [user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   // ==========================================================
-  // LOAD MATCH (with fixed status handling)
+  // LOAD PLAYERS
+  // ==========================================================
+
+  const loadPlayers = useCallback(
+    async (clubId) => {
+      if (!clubId) {
+        return [];
+      }
+
+      try {
+        const playersRef =
+          collection(
+            db,
+            "players"
+          );
+
+        const queries = [
+          query(
+            playersRef,
+            where(
+              "clubId",
+              "==",
+              clubId
+            )
+          ),
+
+          query(
+            playersRef,
+            where(
+              "currentClub",
+              "==",
+              clubId
+            )
+          ),
+
+          query(
+            playersRef,
+            where(
+              "teamId",
+              "==",
+              clubId
+            )
+          ),
+        ];
+
+        const snapshots =
+          await Promise.all(
+            queries.map(
+              async (playerQuery) => {
+                try {
+                  return await getDocs(
+                    playerQuery
+                  );
+                } catch (err) {
+                  console.warn(
+                    "PLAYER QUERY ERROR:",
+                    err
+                  );
+
+                  return null;
+                }
+              }
+            )
+          );
+
+        const uniquePlayers =
+          new Map();
+
+        snapshots.forEach(
+          (snapshot) => {
+            if (!snapshot) {
+              return;
+            }
+
+            snapshot.docs.forEach(
+              (playerDoc) => {
+                uniquePlayers.set(
+                  playerDoc.id,
+                  {
+                    id: playerDoc.id,
+                    ...playerDoc.data(),
+                  }
+                );
+              }
+            );
+          }
+        );
+
+        return Array.from(
+          uniquePlayers.values()
+        );
+      } catch (err) {
+        console.error(
+          "PLAYER LOADING ERROR:",
+          err
+        );
+
+        return [];
+      }
+    },
+    []
+  );
+
+  // ==========================================================
+  // LOAD MATCH
   // ==========================================================
 
   useEffect(() => {
-    if (authLoading || !id) return;
+    if (
+      authLoading ||
+      !id
+    ) {
+      return;
+    }
 
     let cancelled = false;
 
@@ -457,139 +1368,435 @@ export default function MatchPage() {
         setLoading(true);
         setError("");
 
-        const matchSnap = await getDoc(doc(db, "matches", id));
-        if (!matchSnap.exists()) {
-          throw new Error("Match not found.");
+        const matchSnap =
+          await getDoc(
+            doc(
+              db,
+              "matches",
+              id
+            )
+          );
+
+        if (
+          !matchSnap.exists()
+        ) {
+          throw new Error(
+            "Match not found."
+          );
         }
 
-        const matchData = { id: matchSnap.id, ...matchSnap.data() };
-        if (cancelled) return;
+        const matchData = {
+          id: matchSnap.id,
+          ...matchSnap.data(),
+        };
 
-        matchRef.current = matchData;
+        if (cancelled) {
+          return;
+        }
+
+        matchRef.current =
+          matchData;
+
         setMatch(matchData);
 
-        // Load clubs
-        const [homeSnap, awaySnap] = await Promise.all([
-          matchData.homeClubId ? getDoc(doc(db, "clubs", matchData.homeClubId)) : null,
-          matchData.awayClubId ? getDoc(doc(db, "clubs", matchData.awayClubId)) : null,
+        // ====================================================
+        // CLUBS
+        // ====================================================
+
+        const [
+          homeSnap,
+          awaySnap,
+        ] = await Promise.all([
+          matchData.homeClubId
+            ? getDoc(
+                doc(
+                  db,
+                  "clubs",
+                  matchData.homeClubId
+                )
+              )
+            : null,
+
+          matchData.awayClubId
+            ? getDoc(
+                doc(
+                  db,
+                  "clubs",
+                  matchData.awayClubId
+                )
+              )
+            : null,
         ]);
 
-        const home = homeSnap?.exists()
-          ? { id: homeSnap.id, ...homeSnap.data() }
-          : { id: matchData.homeClubId, name: matchData.homeClubName || "Home" };
+        const home =
+          homeSnap?.exists()
+            ? {
+                id: homeSnap.id,
+                ...homeSnap.data(),
+              }
+            : {
+                id:
+                  matchData.homeClubId,
+                name:
+                  matchData.homeClubName ||
+                  "Home",
+              };
 
-        const away = awaySnap?.exists()
-          ? { id: awaySnap.id, ...awaySnap.data() }
-          : { id: matchData.awayClubId, name: matchData.awayClubName || "Away" };
+        const away =
+          awaySnap?.exists()
+            ? {
+                id: awaySnap.id,
+                ...awaySnap.data(),
+              }
+            : {
+                id:
+                  matchData.awayClubId,
+                name:
+                  matchData.awayClubName ||
+                  "Away",
+              };
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
+
         setHomeClub(home);
         setAwayClub(away);
 
-        // Load players
-        const loadPlayers = async (clubId) => {
-          if (!clubId) return [];
-          try {
-            const q = query(collection(db, "players"), where("clubId", "==", clubId));
-            const snap = await getDocs(q);
-            return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-          } catch (err) {
-            console.error("Player query error:", err);
-            return [];
-          }
-        };
+        // ====================================================
+        // PLAYERS
+        // ====================================================
 
-        const [loadedHomeSquad, loadedAwaySquad] = await Promise.all([
+        const [
+          rawHomeSquad,
+          rawAwaySquad,
+        ] = await Promise.all([
           loadPlayers(home.id),
           loadPlayers(away.id),
         ]);
 
-        if (cancelled) return;
-        setHomeSquad(loadedHomeSquad);
-        setAwaySquad(loadedAwaySquad);
-
-        // Manager detection
-        const homeManager = isManagerOfClub(home, profile, user);
-        const awayManager = isManagerOfClub(away, profile, user);
-        const team = homeManager ? "home" : awayManager ? "away" : null;
-        setManagerTeam(team);
-        setIsManager(Boolean(team));
-
-        // Formations
-        const savedHomeFormation = matchData.homeFormation || matchData.formation || "4-4-2";
-        const savedAwayFormation = matchData.awayFormation || "4-4-2";
-        setHomeFormation(savedHomeFormation);
-        setAwayFormation(savedAwayFormation);
-        formationRef.current = { home: savedHomeFormation, away: savedAwayFormation };
-
-        // Lineups
-        let loadedHomeXI = lineupFromIds(loadedHomeSquad, matchData.homeLineupIds, savedHomeFormation);
-        let loadedAwayXI = lineupFromIds(loadedAwaySquad, matchData.awayLineupIds, savedAwayFormation);
-        if (!matchData.homeLineupIds) {
-          loadedHomeXI = getFormationPlayers(loadedHomeSquad, savedHomeFormation);
-        }
-        if (!matchData.awayLineupIds) {
-          loadedAwayXI = getFormationPlayers(loadedAwaySquad, savedAwayFormation);
+        if (cancelled) {
+          return;
         }
 
-        setHomeXI(loadedHomeXI);
-        setAwayXI(loadedAwayXI);
-        homeXIRef.current = loadedHomeXI;
-        awayXIRef.current = loadedAwayXI;
+        const finalHomeSquad =
+          completeSquad(
+            rawHomeSquad,
+            home.id
+          );
 
-        const homeBenchPlayers = getBench(loadedHomeSquad, loadedHomeXI);
-        const awayBenchPlayers = getBench(loadedAwaySquad, loadedAwayXI);
-        setHomeBench(homeBenchPlayers);
-        setAwayBench(awayBenchPlayers);
-        homeBenchRef.current = homeBenchPlayers;
-        awayBenchRef.current = awayBenchPlayers;
+        const finalAwaySquad =
+          completeSquad(
+            rawAwaySquad,
+            away.id
+          );
 
-        // Tactics
-        const loadedHomeTactics = normalizeTactics(matchData.homeTactics);
-        const loadedAwayTactics = normalizeTactics(matchData.awayTactics);
-        setHomeTactics(loadedHomeTactics);
-        setAwayTactics(loadedAwayTactics);
-        tacticsRef.current = { home: loadedHomeTactics, away: loadedAwayTactics };
+        setHomeSquad(
+          finalHomeSquad
+        );
 
-        // Match state
-        const loadedHomeStats = normalizeStats(matchData.homeStats);
-        const loadedAwayStats = normalizeStats(matchData.awayStats);
-        const loadedHomeScore = safeNumber(matchData.homeScore, 0);
-        const loadedAwayScore = safeNumber(matchData.awayScore, 0);
-        const loadedMinute = safeNumber(matchData.minute, 0);
-        const loadedEvents = Array.isArray(matchData.events) ? matchData.events : [];
+        setAwaySquad(
+          finalAwaySquad
+        );
 
-        statsRef.current = { home: loadedHomeStats, away: loadedAwayStats };
-        scoreRef.current = { home: loadedHomeScore, away: loadedAwayScore };
-        minuteRef.current = loadedMinute;
-        eventsRef.current = loadedEvents;
+        // ====================================================
+        // STATUS
+        // ====================================================
 
-        setHomeStats(loadedHomeStats);
-        setAwayStats(loadedAwayStats);
-        setHomeScore(loadedHomeScore);
-        setAwayScore(loadedAwayScore);
-        setMatchMinute(loadedMinute);
-        setEvents(loadedEvents);
+        const loadedStatus =
+          normalizeMatchStatus(
+            matchData.status
+          );
 
-        // ✅ STATUS – FIXED: ensure status is set correctly
-        const loadedStatus = matchData.status || "ready";
-        console.log("✅ Match status set to:", loadedStatus);
-        statusRef.current = loadedStatus;
-        setMatchStatus(loadedStatus);
+        statusRef.current =
+          loadedStatus;
 
-        // Substitutions
-        const loadedSubs = {
-          home: safeNumber(matchData.homeSubsUsed, 0),
-          away: safeNumber(matchData.awaySubsUsed, 0),
+        setMatchStatus(
+          loadedStatus
+        );
+
+        // ====================================================
+        // FORMATIONS
+        // ====================================================
+
+        const savedHomeFormation =
+          normalizeFormation(
+            matchData.homeFormation ||
+              matchData.formation ||
+              "4-4-2"
+          );
+
+        const savedAwayFormation =
+          normalizeFormation(
+            matchData.awayFormation ||
+              "4-4-2"
+          );
+
+        formationRef.current = {
+          home:
+            savedHomeFormation,
+          away:
+            savedAwayFormation,
         };
-        subsRef.current = loadedSubs;
-        setSubsUsed(loadedSubs);
 
+        setHomeFormation(
+          savedHomeFormation
+        );
+
+        setAwayFormation(
+          savedAwayFormation
+        );
+
+        // ====================================================
+        // LINEUPS
+        // ====================================================
+
+        const loadedHomeXI =
+          ensureStartingXI(
+            finalHomeSquad,
+            savedHomeFormation,
+            matchData.homeLineupIds
+          );
+
+        const loadedAwayXI =
+          ensureStartingXI(
+            finalAwaySquad,
+            savedAwayFormation,
+            matchData.awayLineupIds
+          );
+
+        setHomeXI(
+          loadedHomeXI
+        );
+
+        setAwayXI(
+          loadedAwayXI
+        );
+
+        homeXIRef.current =
+          loadedHomeXI;
+
+        awayXIRef.current =
+          loadedAwayXI;
+
+        // ====================================================
+        // BENCH
+        // ====================================================
+
+        const loadedHomeBench =
+          getBench(
+            finalHomeSquad,
+            loadedHomeXI
+          );
+
+        const loadedAwayBench =
+          getBench(
+            finalAwaySquad,
+            loadedAwayXI
+          );
+
+        homeBenchRef.current =
+          loadedHomeBench;
+
+        awayBenchRef.current =
+          loadedAwayBench;
+
+        setHomeBench(
+          loadedHomeBench
+        );
+
+        setAwayBench(
+          loadedAwayBench
+        );
+
+        // ====================================================
+        // TACTICS
+        // ====================================================
+
+        const loadedHomeTactics =
+          normalizeTactics(
+            matchData.homeTactics
+          );
+
+        const loadedAwayTactics =
+          normalizeTactics(
+            matchData.awayTactics
+          );
+
+        tacticsRef.current = {
+          home:
+            loadedHomeTactics,
+          away:
+            loadedAwayTactics,
+        };
+
+        setHomeTactics(
+          loadedHomeTactics
+        );
+
+        setAwayTactics(
+          loadedAwayTactics
+        );
+
+        // ====================================================
+        // MATCH STATE
+        // ====================================================
+
+        const loadedHomeStats =
+          normalizeStats(
+            matchData.homeStats
+          );
+
+        const loadedAwayStats =
+          normalizeStats(
+            matchData.awayStats
+          );
+
+        const loadedHomeScore =
+          safeNumber(
+            matchData.homeScore,
+            0
+          );
+
+        const loadedAwayScore =
+          safeNumber(
+            matchData.awayScore,
+            0
+          );
+
+        const loadedMinute =
+          clamp(
+            safeNumber(
+              matchData.minute,
+              0
+            ),
+            0,
+            90
+          );
+
+        const loadedEvents =
+          Array.isArray(
+            matchData.events
+          )
+            ? matchData.events
+            : [];
+
+        const loadedSubs = {
+          home: clamp(
+            safeNumber(
+              matchData.homeSubsUsed,
+              0
+            ),
+            0,
+            MAX_SUBSTITUTIONS
+          ),
+
+          away: clamp(
+            safeNumber(
+              matchData.awaySubsUsed,
+              0
+            ),
+            0,
+            MAX_SUBSTITUTIONS
+          ),
+        };
+
+        statsRef.current = {
+          home:
+            loadedHomeStats,
+          away:
+            loadedAwayStats,
+        };
+
+        scoreRef.current = {
+          home:
+            loadedHomeScore,
+          away:
+            loadedAwayScore,
+        };
+
+        minuteRef.current =
+          loadedMinute;
+
+        eventsRef.current =
+          loadedEvents;
+
+        subsRef.current =
+          loadedSubs;
+
+        setHomeStats(
+          loadedHomeStats
+        );
+
+        setAwayStats(
+          loadedAwayStats
+        );
+
+        setHomeScore(
+          loadedHomeScore
+        );
+
+        setAwayScore(
+          loadedAwayScore
+        );
+
+        setMatchMinute(
+          loadedMinute
+        );
+
+        setEvents(
+          loadedEvents
+        );
+
+        setSubsUsed(
+          loadedSubs
+        );
+
+        // ====================================================
+        // PAUSE STATE
+        // ====================================================
+
+        if (
+          loadedStatus ===
+          "half-time"
+        ) {
+          setIsPaused(true);
+        } else if (
+          loadedStatus ===
+          "finished"
+        ) {
+          setIsPaused(true);
+        } else {
+          setIsPaused(false);
+        }
+
+        console.log(
+          "MATCH LOADED:",
+          {
+            id,
+            status:
+              loadedStatus,
+            homePlayers:
+              finalHomeSquad.length,
+            awayPlayers:
+              finalAwaySquad.length,
+            homeXI:
+              loadedHomeXI.length,
+            awayXI:
+              loadedAwayXI.length,
+          }
+        );
       } catch (err) {
-        console.error("MATCH LOAD ERROR:", err);
+        console.error(
+          "MATCH LOAD ERROR:",
+          err
+        );
+
         if (!cancelled) {
-          setError(err?.message || "Failed to load match.");
-          setLoading(false); // Ensure loading stops on error
+          setError(
+            err?.message ||
+              "Failed to load match."
+          );
         }
       } finally {
         if (!cancelled) {
@@ -600,1110 +1807,3896 @@ export default function MatchPage() {
 
     loadMatch();
 
-    return () => { cancelled = true; };
-  }, [id, authLoading, user, profile]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    id,
+    authLoading,
+    loadPlayers,
+  ]);
 
   // ==========================================================
-  // MANAGER TEAM UPDATE AFTER PROFILE LOAD
+  // MANAGER DETECTION
   // ==========================================================
 
   useEffect(() => {
-    if (!homeClub || !awayClub) return;
-    const homeManager = isManagerOfClub(homeClub, profile, user);
-    const awayManager = isManagerOfClub(awayClub, profile, user);
-    const team = homeManager ? "home" : awayManager ? "away" : null;
+    if (
+      !homeClub ||
+      !awayClub
+    ) {
+      return;
+    }
+
+    const homeManager =
+      isManagerOfClub(
+        homeClub,
+        profile,
+        user
+      );
+
+    const awayManager =
+      isManagerOfClub(
+        awayClub,
+        profile,
+        user
+      );
+
+    const team =
+      homeManager
+        ? "home"
+        : awayManager
+        ? "away"
+        : null;
+
     setManagerTeam(team);
-    setIsManager(Boolean(team));
-  }, [homeClub, awayClub, profile, user]);
+    setIsManager(
+      Boolean(team)
+    );
+
+    console.log(
+      "MANAGER DETECTION:",
+      {
+        homeManager,
+        awayManager,
+        managerTeam:
+          team,
+      }
+    );
+  }, [
+    homeClub,
+    awayClub,
+    profile,
+    user,
+  ]);
 
   // ==========================================================
-  // INITIAL PLAYER POSITIONS
+  // INITIAL POSITIONS
   // ==========================================================
 
   useEffect(() => {
-    if (homeXI.length !== 11 || awayXI.length !== 11) return;
+    if (
+      homeXI.length !==
+        PLAYERS_ON_PITCH ||
+      awayXI.length !==
+        PLAYERS_ON_PITCH
+    ) {
+      return;
+    }
 
     const result = {};
-    const homePoints = FORMATION_POINTS[homeFormation] || FORMATION_POINTS["4-4-2"];
-    const awayPoints = FORMATION_POINTS[awayFormation] || FORMATION_POINTS["4-4-2"];
 
-    homeXI.forEach((player, index) => {
-      const point = homePoints[index] || homePoints[0];
-      result[`home-${playerId(player)}`] = { x: point[0], z: point[1] };
-    });
+    const homePoints =
+      FORMATION_POINTS[
+        homeFormation
+      ] ||
+      FORMATION_POINTS[
+        "4-4-2"
+      ];
 
-    awayXI.forEach((player, index) => {
-      const point = awayPoints[index] || awayPoints[0];
-      result[`away-${playerId(player)}`] = { x: -point[0], z: -point[1] };
-    });
+    const awayPoints =
+      FORMATION_POINTS[
+        awayFormation
+      ] ||
+      FORMATION_POINTS[
+        "4-4-2"
+      ];
 
-    positionsRef.current = result;
-    setPlayerPositions(result);
-  }, [homeXI, awayXI, homeFormation, awayFormation]);
+    homeXI.forEach(
+      (player, index) => {
+        const point =
+          homePoints[index] ||
+          homePoints[0];
+
+        result[
+          `home-${playerId(player)}`
+        ] = {
+          x: point[0],
+          z: point[1],
+        };
+      }
+    );
+
+    awayXI.forEach(
+      (player, index) => {
+        const point =
+          awayPoints[index] ||
+          awayPoints[0];
+
+        result[
+          `away-${playerId(player)}`
+        ] = {
+          x: -point[0],
+          z: -point[1],
+        };
+      }
+    );
+
+    positionsRef.current =
+      result;
+
+    setPlayerPositions(
+      result
+    );
+  }, [
+    homeXI,
+    awayXI,
+    homeFormation,
+    awayFormation,
+  ]);
 
   // ==========================================================
-  // SAVE MATCH STATE
+  // SAVE MATCH
   // ==========================================================
 
-  const saveMatchState = useCallback(async (statusOverride) => {
-    const currentMatch = matchRef.current;
-    if (!currentMatch?.id) return;
+  const saveMatchState =
+    useCallback(
+      async (
+        statusOverride
+      ) => {
+        const currentMatch =
+          matchRef.current;
 
-    try {
-      setIsSaving(true);
-      await updateDoc(doc(db, "matches", currentMatch.id), {
-        status: statusOverride || statusRef.current,
-        minute: minuteRef.current,
-        homeScore: scoreRef.current.home,
-        awayScore: scoreRef.current.away,
-        result: { homeScore: scoreRef.current.home, awayScore: scoreRef.current.away },
-        events: eventsRef.current,
-        homeStats: statsRef.current.home,
-        awayStats: statsRef.current.away,
-        homeTactics: tacticsRef.current.home,
-        awayTactics: tacticsRef.current.away,
-        homeFormation: formationRef.current.home,
-        awayFormation: formationRef.current.away,
-        homeLineupIds: homeXIRef.current.map(playerId),
-        awayLineupIds: awayXIRef.current.map(playerId),
-        homeSubsUsed: subsRef.current.home,
-        awaySubsUsed: subsRef.current.away,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("MATCH SAVE ERROR:", err);
-    } finally {
-      setIsSaving(false);
-    }
-  }, []);
+        if (
+          !currentMatch?.id
+        ) {
+          return;
+        }
+
+        try {
+          setIsSaving(true);
+
+          const status =
+            normalizeMatchStatus(
+              statusOverride ||
+                statusRef.current
+            );
+
+          await updateDoc(
+            doc(
+              db,
+              "matches",
+              currentMatch.id
+            ),
+            {
+              status,
+
+              minute:
+                minuteRef.current,
+
+              homeScore:
+                scoreRef.current
+                  .home,
+
+              awayScore:
+                scoreRef.current
+                  .away,
+
+              result: {
+                homeScore:
+                  scoreRef.current
+                    .home,
+
+                awayScore:
+                  scoreRef.current
+                    .away,
+              },
+
+              events:
+                eventsRef.current,
+
+              homeStats:
+                statsRef.current
+                  .home,
+
+              awayStats:
+                statsRef.current
+                  .away,
+
+              homeTactics:
+                tacticsRef.current
+                  .home,
+
+              awayTactics:
+                tacticsRef.current
+                  .away,
+
+              homeFormation:
+                formationRef.current
+                  .home,
+
+              awayFormation:
+                formationRef.current
+                  .away,
+
+              homeLineupIds:
+                homeXIRef.current
+                  .map(playerId)
+                  .filter(Boolean),
+
+              awayLineupIds:
+                awayXIRef.current
+                  .map(playerId)
+                  .filter(Boolean),
+
+              homeSubsUsed:
+                subsRef.current
+                  .home,
+
+              awaySubsUsed:
+                subsRef.current
+                  .away,
+
+              updatedAt:
+                serverTimestamp(),
+            }
+          );
+        } catch (err) {
+          console.error(
+            "MATCH SAVE ERROR:",
+            err
+          );
+        } finally {
+          setIsSaving(false);
+        }
+      },
+      []
+    );
 
   // ==========================================================
   // SYNC UI
   // ==========================================================
 
-  const syncUI = useCallback(() => {
-    setHomeScore(scoreRef.current.home);
-    setAwayScore(scoreRef.current.away);
-    setHomeStats({ ...statsRef.current.home });
-    setAwayStats({ ...statsRef.current.away });
-    setEvents([...eventsRef.current]);
-    setSubsUsed({ ...subsRef.current });
-    setPlayerPositions({ ...positionsRef.current });
-  }, []);
+  const syncUI =
+    useCallback(() => {
+      setHomeScore(
+        scoreRef.current.home
+      );
 
-  // ==========================================================
-  // GET VISUAL POSITION
-  // ==========================================================
+      setAwayScore(
+        scoreRef.current.away
+      );
 
-  const getVisualPosition = useCallback((team, player) => {
-    const key = `${team}-${playerId(player)}`;
-    return positionsRef.current[key] || { x: team === "home" ? -5 : 5, z: 0 };
-  }, []);
-
-  // ==========================================================
-  // UPDATE PLAYER MOVEMENT
-  // ==========================================================
-
-  const updatePlayerMovement = useCallback((teamWithBall, ballX, ballZ) => {
-    const newPositions = { ...positionsRef.current };
-
-    const updateTeam = (team, players, formation, direction) => {
-      const points = FORMATION_POINTS[formation] || FORMATION_POINTS["4-4-2"];
-      players.forEach((player, index) => {
-        const key = `${team}-${playerId(player)}`;
-        const point = points[index] || points[0];
-        const baseX = direction * point[0];
-        const baseZ = direction * point[1];
-        const current = newPositions[key] || { x: baseX, z: baseZ };
-        const distanceX = ballX - current.x;
-        const distanceZ = ballZ - current.z;
-        const attraction = team === teamWithBall ? 0.16 : 0.07;
-        const targetX = baseX + clamp(distanceX * attraction, -3.0, 3.0);
-        const targetZ = baseZ + clamp(distanceZ * attraction, -2.5, 2.5);
-        newPositions[key] = {
-          x: current.x + (targetX - current.x) * 0.22,
-          z: current.z + (targetZ - current.z) * 0.22,
-        };
+      setHomeStats({
+        ...statsRef.current.home,
       });
-    };
 
-    updateTeam("home", homeXIRef.current, formationRef.current.home, 1);
-    updateTeam("away", awayXIRef.current, formationRef.current.away, -1);
+      setAwayStats({
+        ...statsRef.current.away,
+      });
 
-    positionsRef.current = newPositions;
-    setPlayerPositions({ ...newPositions });
-  }, []);
+      setEvents([
+        ...eventsRef.current,
+      ]);
+
+      setSubsUsed({
+        ...subsRef.current,
+      });
+
+      setMatchMinute(
+        minuteRef.current
+      );
+
+      setPlayerPositions({
+        ...positionsRef.current,
+      });
+    }, []);
 
   // ==========================================================
-  // CREATE BALL ACTION
+  // VISUAL PLAYER POSITION
   // ==========================================================
 
-  const createBallAction = useCallback((from, to, type) => {
-    ballActionIdRef.current += 1;
-    setBallAction({
-      id: ballActionIdRef.current,
-      from: [from?.x || 0, from?.z || 0],
-      to: [to?.x || 0, to?.z || 0],
-      type,
-    });
-    ballRef.current = { x: to?.x || 0, z: to?.z || 0 };
-  }, []);
+  const getVisualPosition =
+    useCallback(
+      (
+        team,
+        player
+      ) => {
+        const key =
+          `${team}-${playerId(player)}`;
+
+        return (
+          positionsRef.current[
+            key
+          ] || {
+            x:
+              team === "home"
+                ? -5
+                : 5,
+            z: 0,
+          }
+        );
+      },
+      []
+    );
+
+  // ==========================================================
+  // PLAYER MOVEMENT
+  // ==========================================================
+
+  const updatePlayerMovement =
+    useCallback(
+      (
+        teamWithBall,
+        ballX,
+        ballZ
+      ) => {
+        const newPositions =
+          {
+            ...positionsRef.current,
+          };
+
+        const updateTeam =
+          (
+            team,
+            players,
+            formation,
+            direction
+          ) => {
+            const points =
+              FORMATION_POINTS[
+                formation
+              ] ||
+              FORMATION_POINTS[
+                "4-4-2"
+              ];
+
+            players.forEach(
+              (
+                player,
+                index
+              ) => {
+                const key =
+                  `${team}-${playerId(player)}`;
+
+                const point =
+                  points[index] ||
+                  points[0];
+
+                const baseX =
+                  direction *
+                  point[0];
+
+                const baseZ =
+                  direction *
+                  point[1];
+
+                const current =
+                  newPositions[
+                    key
+                  ] || {
+                    x: baseX,
+                    z: baseZ,
+                  };
+
+                const distanceX =
+                  ballX -
+                  current.x;
+
+                const distanceZ =
+                  ballZ -
+                  current.z;
+
+                const attraction =
+                  team ===
+                  teamWithBall
+                    ? 0.16
+                    : 0.07;
+
+                const targetX =
+                  baseX +
+                  clamp(
+                    distanceX *
+                      attraction,
+                    -3,
+                    3
+                  );
+
+                const targetZ =
+                  baseZ +
+                  clamp(
+                    distanceZ *
+                      attraction,
+                    -2.5,
+                    2.5
+                  );
+
+                newPositions[
+                  key
+                ] = {
+                  x:
+                    current.x +
+                    (targetX -
+                      current.x) *
+                      0.22,
+
+                  z:
+                    current.z +
+                    (targetZ -
+                      current.z) *
+                      0.22,
+                };
+              }
+            );
+          };
+
+        updateTeam(
+          "home",
+          homeXIRef.current,
+          formationRef.current
+            .home,
+          1
+        );
+
+        updateTeam(
+          "away",
+          awayXIRef.current,
+          formationRef.current
+            .away,
+          -1
+        );
+
+        positionsRef.current =
+          newPositions;
+
+        setPlayerPositions({
+          ...newPositions,
+        });
+      },
+      []
+    );
+
+  // ==========================================================
+  // BALL ACTION
+  // ==========================================================
+
+  const createBallAction =
+    useCallback(
+      (
+        from,
+        to,
+        type
+      ) => {
+        ballActionIdRef.current += 1;
+
+        const nextX =
+          to?.x || 0;
+
+        const nextZ =
+          to?.z || 0;
+
+        setBallAction({
+          id:
+            ballActionIdRef.current,
+
+          from: [
+            from?.x || 0,
+            from?.z || 0,
+          ],
+
+          to: [
+            nextX,
+            nextZ,
+          ],
+
+          type,
+        });
+
+        ballRef.current = {
+          x: nextX,
+          z: nextZ,
+        };
+      },
+      []
+    );
 
   // ==========================================================
   // AI TACTICS
   // ==========================================================
 
-  const runAITactics = useCallback(() => {
-    const scoreDifference = scoreRef.current.away - scoreRef.current.home;
-    let tactics;
-
-    if (managerTeam === "home") {
-      if (scoreDifference > 0) {
-        tactics = { mentality: "attacking", tempo: "fast", pressing: "high", defensiveLine: "high", width: "wide" };
-      } else if (scoreDifference < 0) {
-        tactics = { mentality: "defensive", tempo: "slow", pressing: "low", defensiveLine: "deep", width: "normal" };
-      } else {
-        tactics = defaultTactics();
+  const runAITactics =
+    useCallback(() => {
+      if (!managerTeam) {
+        return;
       }
-    } else {
-      if (scoreDifference < 0) {
-        tactics = { mentality: "attacking", tempo: "fast", pressing: "high", defensiveLine: "high", width: "wide" };
-      } else if (scoreDifference > 0) {
-        tactics = { mentality: "defensive", tempo: "slow", pressing: "low", defensiveLine: "deep", width: "normal" };
-      } else {
-        tactics = defaultTactics();
-      }
-    }
 
-    if (managerTeam === "home") {
-      tacticsRef.current.away = tactics;
-      setAwayTactics(tactics);
-    } else {
-      tacticsRef.current.home = tactics;
-      setHomeTactics(tactics);
-    }
-  }, [managerTeam]);
+      const aiTeam =
+        managerTeam === "home"
+          ? "away"
+          : "home";
+
+      const tactics =
+        calculateAITactics(
+          aiTeam,
+          scoreRef.current
+        );
+
+      tacticsRef.current[
+        aiTeam
+      ] = tactics;
+
+      if (
+        aiTeam === "home"
+      ) {
+        setHomeTactics({
+          ...tactics,
+        });
+      } else {
+        setAwayTactics({
+          ...tactics,
+        });
+      }
+
+      const currentFormation =
+        formationRef.current[
+          aiTeam
+        ];
+
+      const nextFormation =
+        calculateAIFormation(
+          aiTeam,
+          scoreRef.current,
+          currentFormation
+        );
+
+      if (
+        nextFormation !==
+        currentFormation
+      ) {
+        formationRef.current[
+          aiTeam
+        ] =
+          nextFormation;
+
+        if (
+          aiTeam ===
+          "home"
+        ) {
+          setHomeFormation(
+            nextFormation
+          );
+        } else {
+          setAwayFormation(
+            nextFormation
+          );
+        }
+
+        const squad =
+          aiTeam ===
+          "home"
+            ? homeSquad
+            : awaySquad;
+
+        const currentXI =
+          aiTeam ===
+          "home"
+            ? homeXIRef.current
+            : awayXIRef.current;
+
+        const newXI =
+          ensureStartingXI(
+            squad,
+            nextFormation,
+            currentXI.map(
+              playerId
+            )
+          );
+
+        if (
+          newXI.length ===
+          PLAYERS_ON_PITCH
+        ) {
+          if (
+            aiTeam ===
+            "home"
+          ) {
+            homeXIRef.current =
+              newXI;
+
+            setHomeXI([
+              ...newXI,
+            ]);
+
+            const bench =
+              getBench(
+                squad,
+                newXI
+              );
+
+            homeBenchRef.current =
+              bench;
+
+            setHomeBench([
+              ...bench,
+            ]);
+          } else {
+            awayXIRef.current =
+              newXI;
+
+            setAwayXI([
+              ...newXI,
+            ]);
+
+            const bench =
+              getBench(
+                squad,
+                newXI
+              );
+
+            awayBenchRef.current =
+              bench;
+
+            setAwayBench([
+              ...bench,
+            ]);
+          }
+        }
+      }
+    }, [
+      managerTeam,
+      homeSquad,
+      awaySquad,
+    ]);
 
   // ==========================================================
   // AI SUBSTITUTION
   // ==========================================================
 
-  const runAISubstitution = useCallback(() => {
-    if (minuteRef.current < 55) return;
+  const runAISubstitution =
+    useCallback(() => {
+      if (
+        minuteRef.current <
+        55
+      ) {
+        return;
+      }
 
-    const aiTeam = managerTeam === "home" ? "away" : "home";
-    if (subsRef.current[aiTeam] >= MAX_SUBSTITUTIONS) return;
+      if (!managerTeam) {
+        return;
+      }
 
-    const xi = aiTeam === "home" ? homeXIRef.current : awayXIRef.current;
-    const bench = aiTeam === "home" ? homeBenchRef.current : awayBenchRef.current;
-    if (!xi.length || !bench.length) return;
+      const aiTeam =
+        managerTeam ===
+        "home"
+          ? "away"
+          : "home";
 
-    const weakest = [...xi].sort((a, b) => overall(a) - overall(b))[0];
-    const bestBench = [...bench].sort((a, b) => overall(b) - overall(a))[0];
-    if (!weakest || !bestBench || overall(bestBench) <= overall(weakest)) return;
+      if (
+        subsRef.current[
+          aiTeam
+        ] >=
+        MAX_SUBSTITUTIONS
+      ) {
+        return;
+      }
 
-    const newXI = xi.map((player) =>
-      playerId(player) === playerId(weakest) ? bestBench : player
-    );
-    const newBench = bench.filter((player) => playerId(player) !== playerId(bestBench));
-    newBench.push(weakest);
+      const xi =
+        aiTeam === "home"
+          ? homeXIRef.current
+          : awayXIRef.current;
 
-    if (aiTeam === "home") {
-      homeXIRef.current = newXI;
-      homeBenchRef.current = newBench;
-      setHomeXI([...newXI]);
-      setHomeBench([...newBench]);
-    } else {
-      awayXIRef.current = newXI;
-      awayBenchRef.current = newBench;
-      setAwayXI([...newXI]);
-      setAwayBench([...newBench]);
-    }
+      const bench =
+        aiTeam === "home"
+          ? homeBenchRef.current
+          : awayBenchRef.current;
 
-    subsRef.current[aiTeam] += 1;
-    eventsRef.current = [
-      {
-        id: `sub-ai-${Date.now()}`,
-        type: "substitution",
-        team: aiTeam,
-        minute: minuteRef.current,
-        detail: `AI replaced ${playerName(weakest)} with ${playerName(bestBench)}.`,
-      },
-      ...eventsRef.current,
-    ];
-    syncUI();
-  }, [managerTeam, syncUI]);
+      if (
+        xi.length !==
+          PLAYERS_ON_PITCH ||
+        !bench.length
+      ) {
+        return;
+      }
+
+      const weakest =
+        [...xi].sort(
+          (a, b) =>
+            overall(a) -
+            overall(b)
+        )[0];
+
+      const bestBench =
+        [...bench].sort(
+          (a, b) =>
+            overall(b) -
+            overall(a)
+        )[0];
+
+      if (
+        !weakest ||
+        !bestBench
+      ) {
+        return;
+      }
+
+      const improvement =
+        overall(bestBench) -
+        overall(weakest);
+
+      if (
+        improvement < 2
+      ) {
+        return;
+      }
+
+      const newXI =
+        xi.map(
+          (player) =>
+            String(
+              playerId(player)
+            ) ===
+            String(
+              playerId(weakest)
+            )
+              ? bestBench
+              : player
+        );
+
+      const newBench =
+        bench.filter(
+          (player) =>
+            String(
+              playerId(player)
+            ) !==
+            String(
+              playerId(bestBench)
+            )
+        );
+
+      newBench.push(
+        weakest
+      );
+
+      if (
+        aiTeam === "home"
+      ) {
+        homeXIRef.current =
+          newXI;
+
+        homeBenchRef.current =
+          newBench;
+
+        setHomeXI([
+          ...newXI,
+        ]);
+
+        setHomeBench([
+          ...newBench,
+        ]);
+      } else {
+        awayXIRef.current =
+          newXI;
+
+        awayBenchRef.current =
+          newBench;
+
+        setAwayXI([
+          ...newXI,
+        ]);
+
+        setAwayBench([
+          ...newBench,
+        ]);
+      }
+
+      subsRef.current[
+        aiTeam
+      ] += 1;
+
+      eventsRef.current = [
+        {
+          id: `sub-ai-${Date.now()}-${Math.random()}`,
+
+          type:
+            "substitution",
+
+          team:
+            aiTeam,
+
+          minute:
+            minuteRef.current,
+
+          detail:
+            `AI replaced ${playerName(
+              weakest
+            )} with ${playerName(
+              bestBench
+            )}.`,
+        },
+
+        ...eventsRef.current,
+      ];
+
+      syncUI();
+    }, [
+      managerTeam,
+      syncUI,
+    ]);
 
   // ==========================================================
   // SIMULATE ONE PLAY
   // ==========================================================
 
-  const simulatePlay = useCallback(() => {
-    if (processingRef.current) return;
-    if (homeXIRef.current.length !== 11 || awayXIRef.current.length !== 11) return;
-
-    processingRef.current = true;
-
-    try {
-      const homePower = calculateTeamPower(
-        homeXIRef.current,
-        tacticsRef.current.home,
-        formationRef.current.home
-      );
-      const awayPower = calculateTeamPower(
-        awayXIRef.current,
-        tacticsRef.current.away,
-        formationRef.current.away
-      );
-
-      const homePossessionChance = clamp(0.5 + (homePower - awayPower) * 0.006, 0.30, 0.70);
-      const team = Math.random() < homePossessionChance ? "home" : "away";
-
-      const players = team === "home" ? homeXIRef.current : awayXIRef.current;
-      const opponent = team === "home" ? awayXIRef.current : homeXIRef.current;
-      const ownTactics = tacticsRef.current[team];
-      const teamPower = team === "home" ? homePower : awayPower;
-      const opponentPower = team === "home" ? awayPower : homePower;
-
-      // Attack
-      statsRef.current[team].attacks += 1;
-      if (Math.random() < 0.32 + (teamPower - opponentPower) * 0.003) {
-        statsRef.current[team].dangerousAttacks += 1;
-      }
-
-      // Possession
-      const possession = clamp(50 + (homePower - awayPower) * 0.55 + (Math.random() - 0.5) * 8, 25, 75);
-      statsRef.current.home.possession = Number(possession.toFixed(1));
-      statsRef.current.away.possession = Number((100 - possession).toFixed(1));
-
-      // Select player
-      const attackingPlayers = players.filter((player) => {
-        const p = position(player);
-        return p === "ATT" || p === "MID";
-      });
-      const pool = attackingPlayers.length ? attackingPlayers : players;
-      const actor = pool[Math.floor(Math.random() * pool.length)];
-      if (!actor) return;
-
-      const actorOVR = overall(actor);
-      const actorPosition = getVisualPosition(team, actor);
-
-      // Pass
-      const passChance = ownTactics.tempo === "fast" ? 0.58 : 0.68;
-      if (Math.random() < passChance) {
-        const targets = players.filter((p) => playerId(p) !== playerId(actor));
-        const target = targets[Math.floor(Math.random() * targets.length)];
-        if (target) {
-          statsRef.current[team].passes += 1;
-          const completionChance = clamp(
-            0.65 + (actorOVR - 60) * 0.008 + (teamPower - opponentPower) * 0.002,
-            0.45,
-            0.96
-          );
-          const completed = Math.random() < completionChance;
-          if (completed) {
-            statsRef.current[team].passesCompleted += 1;
-            const targetPosition = getVisualPosition(team, target);
-            ballRef.current = { x: targetPosition.x, z: targetPosition.z };
-            createBallAction(actorPosition, targetPosition, "pass");
-            updatePlayerMovement(team, targetPosition.x, targetPosition.z);
-            return;
-          } else {
-            statsRef.current[team].interceptions += 1;
-            const interceptionTeam = team === "home" ? "away" : "home";
-            const defenders = opponent.filter((p) => position(p) === "DEF" || position(p) === "MID");
-            const interceptor = defenders[Math.floor(Math.random() * defenders.length)];
-            if (interceptor) {
-              const interceptionPosition = getVisualPosition(interceptionTeam, interceptor);
-              createBallAction(actorPosition, interceptionPosition, "interception");
-              updatePlayerMovement(interceptionTeam, interceptionPosition.x, interceptionPosition.z);
-            }
-            return;
-          }
-        }
-      }
-
-      // Dribble
-      if (Math.random() < 0.18) {
-        statsRef.current[team].dribbles += 1;
-        const newX = clamp(actorPosition.x + (team === "home" ? 2 : -2), -13, 13);
-        const newZ = clamp(actorPosition.z + (Math.random() - 0.5) * 3, -8.5, 8.5);
-        const dribblePosition = { x: newX, z: newZ };
-        createBallAction(actorPosition, dribblePosition, "dribble");
-        updatePlayerMovement(team, newX, newZ);
+  const simulatePlay =
+    useCallback(() => {
+      if (
+        processingRef.current
+      ) {
         return;
       }
 
-      // Shot
-      const shotChance = clamp(
-        0.08 + (actorOVR - 60) * 0.002 + (teamPower - opponentPower) * 0.002 +
-        (ownTactics.mentality === "attacking" ? 0.025 : 0),
-        0.04,
-        0.22
-      );
-      if (Math.random() < shotChance) {
-        statsRef.current[team].shots += 1;
-        const goalX = team === "home" ? 14.7 : -14.7;
-        const goalPosition = { x: goalX, z: (Math.random() - 0.5) * 4.5 };
-        const onTargetChance = clamp(0.45 + (actorOVR - 60) * 0.008, 0.35, 0.85);
-        const onTarget = Math.random() < onTargetChance;
+      if (
+        homeXIRef.current
+          .length !==
+          PLAYERS_ON_PITCH ||
+        awayXIRef.current
+          .length !==
+          PLAYERS_ON_PITCH
+      ) {
+        return;
+      }
 
-        createBallAction(actorPosition, goalPosition, onTarget ? "shot" : "miss");
-        updatePlayerMovement(team, goalPosition.x, goalPosition.z);
+      processingRef.current =
+        true;
 
-        if (onTarget) {
-          statsRef.current[team].shotsOnTarget += 1;
-          const defensiveTactic = tacticsRef.current[team === "home" ? "away" : "home"];
-          let goalProbability = 0.11 + (teamPower - opponentPower) * 0.003 + (actorOVR - 60) * 0.002;
-          if (ownTactics.mentality === "attacking") goalProbability += 0.035;
-          if (defensiveTactic.mentality === "defensive") goalProbability -= 0.025;
-          goalProbability = clamp(goalProbability, 0.05, 0.35);
+      try {
+        const homePower =
+          calculateTeamPower(
+            homeXIRef.current,
+            tacticsRef.current
+              .home,
+            formationRef.current
+              .home
+          );
 
-          if (Math.random() < goalProbability) {
-            scoreRef.current[team] += 1;
+        const awayPower =
+          calculateTeamPower(
+            awayXIRef.current,
+            tacticsRef.current
+              .away,
+            formationRef.current
+              .away
+          );
+
+        // ====================================================
+        // POSSESSION
+        // ====================================================
+
+        const homePossessionChance =
+          clamp(
+            0.5 +
+              (homePower -
+                awayPower) *
+                0.006,
+            0.30,
+            0.70
+          );
+
+        const team =
+          Math.random() <
+          homePossessionChance
+            ? "home"
+            : "away";
+
+        const players =
+          team === "home"
+            ? homeXIRef.current
+            : awayXIRef.current;
+
+        const opponent =
+          team === "home"
+            ? awayXIRef.current
+            : homeXIRef.current;
+
+        const ownTactics =
+          tacticsRef.current[
+            team
+          ];
+
+        const opponentTactics =
+          tacticsRef.current[
+            team === "home"
+              ? "away"
+              : "home"
+          ];
+
+        const teamPower =
+          team === "home"
+            ? homePower
+            : awayPower;
+
+        const opponentPower =
+          team === "home"
+            ? awayPower
+            : homePower;
+
+        // ====================================================
+        // ATTACK
+        // ====================================================
+
+        statsRef.current[
+          team
+        ].attacks += 1;
+
+        const dangerousChance =
+          clamp(
+            0.30 +
+              (teamPower -
+                opponentPower) *
+                0.004 +
+              (ownTactics
+                .mentality ===
+              "attacking"
+                ? 0.08
+                : 0),
+            0.15,
+            0.65
+          );
+
+        if (
+          Math.random() <
+          dangerousChance
+        ) {
+          statsRef.current[
+            team
+          ].dangerousAttacks += 1;
+        }
+
+        // ====================================================
+        // POSSESSION STATS
+        // ====================================================
+
+        const possession =
+          clamp(
+            50 +
+              (homePower -
+                awayPower) *
+                0.55 +
+              (Math.random() -
+                0.5) *
+                8,
+            25,
+            75
+          );
+
+        statsRef.current.home.possession =
+          Number(
+            possession.toFixed(1)
+          );
+
+        statsRef.current.away.possession =
+          Number(
+            (
+              100 -
+              possession
+            ).toFixed(1)
+          );
+
+        // ====================================================
+        // PLAYER SELECTION
+        // ====================================================
+
+        const attackingPlayers =
+          players.filter(
+            (player) => {
+              const p =
+                position(
+                  player
+                );
+
+              return (
+                p === "ATT" ||
+                p === "MID"
+              );
+            }
+          );
+
+        const pool =
+          attackingPlayers.length
+            ? attackingPlayers
+            : players;
+
+        const actor =
+          pool[
+            Math.floor(
+              Math.random() *
+                pool.length
+            )
+          ];
+
+        if (!actor) {
+          return;
+        }
+
+        const actorOVR =
+          overall(actor);
+
+        const actorPosition =
+          getVisualPosition(
+            team,
+            actor
+          );
+
+        // ====================================================
+        // PASS
+        // ====================================================
+
+        let passChance = 0.68;
+
+        if (
+          ownTactics.tempo ===
+          "fast"
+        ) {
+          passChance -=
+            0.08;
+        }
+
+        if (
+          ownTactics.tempo ===
+          "slow"
+        ) {
+          passChance +=
+            0.08;
+        }
+
+        passChance = clamp(
+          passChance +
+            (actorOVR -
+              60) *
+              0.002,
+          0.45,
+          0.85
+        );
+
+        if (
+          Math.random() <
+          passChance
+        ) {
+          const targets =
+            players.filter(
+              (player) =>
+                playerId(
+                  player
+                ) !==
+                playerId(
+                  actor
+                )
+            );
+
+          const target =
+            targets[
+              Math.floor(
+                Math.random() *
+                  targets.length
+              )
+            ];
+
+          if (target) {
+            statsRef.current[
+              team
+            ].passes += 1;
+
+            const completionChance =
+              clamp(
+                0.65 +
+                  (actorOVR -
+                    60) *
+                    0.008 +
+                  (teamPower -
+                    opponentPower) *
+                    0.002 +
+                  (ownTactics
+                    .tempo ===
+                  "slow"
+                    ? 0.04
+                    : 0),
+                0.45,
+                0.96
+              );
+
+            const completed =
+              Math.random() <
+              completionChance;
+
+            if (completed) {
+              statsRef.current[
+                team
+              ].passesCompleted +=
+                1;
+
+              const targetPosition =
+                getVisualPosition(
+                  team,
+                  target
+                );
+
+              createBallAction(
+                actorPosition,
+                targetPosition,
+                "pass"
+              );
+
+              updatePlayerMovement(
+                team,
+                targetPosition.x,
+                targetPosition.z
+              );
+
+              return;
+            }
+
+            statsRef.current[
+              team
+            ].interceptions +=
+              1;
+
+            const interceptionTeam =
+              team === "home"
+                ? "away"
+                : "home";
+
+            const defenders =
+              opponent.filter(
+                (player) => {
+                  const p =
+                    position(
+                      player
+                    );
+
+                  return (
+                    p === "DEF" ||
+                    p === "MID"
+                  );
+                }
+              );
+
+            const interceptor =
+              defenders[
+                Math.floor(
+                  Math.random() *
+                    defenders.length
+                )
+              ];
+
+            if (
+              interceptor
+            ) {
+              const interceptionPosition =
+                getVisualPosition(
+                  interceptionTeam,
+                  interceptor
+                );
+
+              createBallAction(
+                actorPosition,
+                interceptionPosition,
+                "interception"
+              );
+
+              updatePlayerMovement(
+                interceptionTeam,
+                interceptionPosition.x,
+                interceptionPosition.z
+              );
+            }
+
+            return;
+          }
+        }
+
+        // ====================================================
+        // DRIBBLE
+        // ====================================================
+
+        let dribbleChance =
+          0.18;
+
+        if (
+          ownTactics.mentality ===
+          "attacking"
+        ) {
+          dribbleChance +=
+            0.05;
+        }
+
+        if (
+          Math.random() <
+          dribbleChance
+        ) {
+          statsRef.current[
+            team
+          ].dribbles += 1;
+
+          const newX =
+            clamp(
+              actorPosition.x +
+                (team ===
+                "home"
+                  ? 2
+                  : -2),
+              -13,
+              13
+            );
+
+          const newZ =
+            clamp(
+              actorPosition.z +
+                (Math.random() -
+                  0.5) *
+                  3,
+              -8.5,
+              8.5
+            );
+
+          const dribblePosition =
+            {
+              x: newX,
+              z: newZ,
+            };
+
+          createBallAction(
+            actorPosition,
+            dribblePosition,
+            "dribble"
+          );
+
+          updatePlayerMovement(
+            team,
+            newX,
+            newZ
+          );
+
+          return;
+        }
+
+        // ====================================================
+        // SHOT
+        // ====================================================
+
+        let shotChance =
+          0.075 +
+          (actorOVR - 60) *
+            0.0025 +
+          (teamPower -
+            opponentPower) *
+            0.002;
+
+        if (
+          ownTactics.mentality ===
+          "attacking"
+        ) {
+          shotChance +=
+            0.035;
+        }
+
+        if (
+          ownTactics.mentality ===
+          "defensive"
+        ) {
+          shotChance -=
+            0.025;
+        }
+
+        shotChance = clamp(
+          shotChance,
+          0.035,
+          0.24
+        );
+
+        if (
+          Math.random() <
+          shotChance
+        ) {
+          statsRef.current[
+            team
+          ].shots += 1;
+
+          const goalX =
+            team === "home"
+              ? 14.7
+              : -14.7;
+
+          const goalPosition =
+            {
+              x: goalX,
+              z:
+                (Math.random() -
+                  0.5) *
+                4.5,
+            };
+
+          const onTargetChance =
+            clamp(
+              0.42 +
+                (actorOVR -
+                  60) *
+                  0.009 +
+                (teamPower -
+                  opponentPower) *
+                  0.001,
+              0.30,
+              0.88
+            );
+
+          const onTarget =
+            Math.random() <
+            onTargetChance;
+
+          createBallAction(
+            actorPosition,
+            goalPosition,
+            onTarget
+              ? "shot"
+              : "miss"
+          );
+
+          updatePlayerMovement(
+            team,
+            goalPosition.x,
+            goalPosition.z
+          );
+
+          if (!onTarget) {
+            if (
+              Math.random() <
+              0.28
+            ) {
+              statsRef.current[
+                team
+              ].corners +=
+                1;
+            }
+
+            return;
+          }
+
+          statsRef.current[
+            team
+          ].shotsOnTarget +=
+            1;
+
+          // ================================================
+          // GOAL PROBABILITY
+          // ================================================
+
+          let goalProbability =
+            0.095;
+
+          goalProbability +=
+            (teamPower -
+              opponentPower) *
+            0.003;
+
+          goalProbability +=
+            (actorOVR -
+              60) *
+            0.002;
+
+          if (
+            ownTactics.mentality ===
+            "attacking"
+          ) {
+            goalProbability +=
+              0.03;
+          }
+
+          if (
+            ownTactics.mentality ===
+            "defensive"
+          ) {
+            goalProbability -=
+              0.02;
+          }
+
+          if (
+            opponentTactics
+              .mentality ===
+            "defensive"
+          ) {
+            goalProbability -=
+              0.025;
+          }
+
+          if (
+            opponentTactics
+              .defensiveLine ===
+            "high"
+          ) {
+            goalProbability +=
+              0.015;
+          }
+
+          if (
+            opponentTactics
+              .defensiveLine ===
+            "deep"
+          ) {
+            goalProbability -=
+              0.02;
+          }
+
+          goalProbability =
+            clamp(
+              goalProbability,
+              0.035,
+              0.34
+            );
+
+          if (
+            Math.random() <
+            goalProbability
+          ) {
+            scoreRef.current[
+              team
+            ] += 1;
+
             const event = {
               id: `goal-${Date.now()}-${Math.random()}`,
+
               type: "goal",
+
               team,
-              minute: minuteRef.current,
-              playerName: playerName(actor),
-              detail: `${playerName(actor)} scored a great goal!`,
+
+              minute:
+                minuteRef.current,
+
+              playerName:
+                playerName(
+                  actor
+                ),
+
+              detail:
+                `${playerName(
+                  actor
+                )} scored!`,
             };
-            eventsRef.current = [event, ...eventsRef.current];
-            toast.success(`⚽ ${playerName(actor)} SCORED!`);
+
+            eventsRef.current =
+              [
+                event,
+                ...eventsRef.current,
+              ];
+
+            toast.success(
+              `⚽ ${playerName(
+                actor
+              )} SCORED!`
+            );
           } else {
-            const defendingTeam = team === "home" ? "away" : "home";
-            statsRef.current[defendingTeam].saves += 1;
-            eventsRef.current = [
-              {
-                id: `save-${Date.now()}`,
-                type: "save",
-                team: defendingTeam,
-                minute: minuteRef.current,
-                detail: "Goalkeeper made an important save.",
-              },
-              ...eventsRef.current,
-            ];
+            const defendingTeam =
+              team === "home"
+                ? "away"
+                : "home";
+
+            statsRef.current[
+              defendingTeam
+            ].saves += 1;
+
+            eventsRef.current =
+              [
+                {
+                  id: `save-${Date.now()}-${Math.random()}`,
+
+                  type: "save",
+
+                  team:
+                    defendingTeam,
+
+                  minute:
+                    minuteRef.current,
+
+                  detail:
+                    "Goalkeeper made an important save.",
+                },
+
+                ...eventsRef.current,
+              ];
           }
-        } else {
-          if (Math.random() < 0.25) statsRef.current[team].corners += 1;
+
+          return;
         }
-        return;
-      }
 
-      // Tackle / Foul
-      if (Math.random() < 0.18) {
-        const defendingTeam = team === "home" ? "away" : "home";
-        statsRef.current[defendingTeam].tackles += 1;
-        if (Math.random() < 0.07) statsRef.current[team].fouls += 1;
-      }
+        // ====================================================
+        // TACKLE / FOUL
+        // ====================================================
 
-    } finally {
-      processingRef.current = false;
-    }
-  }, [createBallAction, getVisualPosition, updatePlayerMovement]);
+        if (
+          Math.random() <
+          0.18
+        ) {
+          const defendingTeam =
+            team === "home"
+              ? "away"
+              : "home";
+
+          statsRef.current[
+            defendingTeam
+          ].tackles += 1;
+
+          if (
+            Math.random() <
+            0.07
+          ) {
+            statsRef.current[
+              team
+            ].fouls += 1;
+          }
+        }
+      } finally {
+        processingRef.current =
+          false;
+      }
+    }, [
+      createBallAction,
+      getVisualPosition,
+      updatePlayerMovement,
+    ]);
 
   // ==========================================================
   // MATCH TIMER
   // ==========================================================
 
   useEffect(() => {
-    if (matchStatus !== "live" || isPaused || loading) return;
+    if (
+      matchStatus !== "live" ||
+      isPaused ||
+      loading
+    ) {
+      return;
+    }
 
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (
+      homeXIRef.current.length !==
+        PLAYERS_ON_PITCH ||
+      awayXIRef.current.length !==
+        PLAYERS_ON_PITCH
+    ) {
+      console.warn(
+        "MATCH TIMER WAITING FOR XI:",
+        {
+          home:
+            homeXIRef.current
+              .length,
 
-    timerRef.current = setInterval(() => {
-      const nextMinute = minuteRef.current + 1;
-      minuteRef.current = nextMinute;
+          away:
+            awayXIRef.current
+              .length,
+        }
+      );
 
-      simulatePlay();
+      return;
+    }
 
-      if (nextMinute > 0 && nextMinute % 10 === 0) runAITactics();
+    if (
+      timerRef.current
+    ) {
+      clearInterval(
+        timerRef.current
+      );
+    }
 
-      if (nextMinute >= 60 && nextMinute % 5 === 0) {
-        if (Math.random() < 0.18) runAISubstitution();
-      }
+    timerRef.current =
+      setInterval(() => {
+        if (
+          processingRef.current
+        ) {
+          return;
+        }
 
-      syncUI();
+        const nextMinute =
+          minuteRef.current +
+          1;
 
-      if (nextMinute === 45) {
-        statusRef.current = "half-time";
-        setMatchStatus("half-time");
-        setIsPaused(true);
-        saveMatchState("half-time");
-        return;
-      }
+        minuteRef.current =
+          nextMinute;
 
-      if (nextMinute >= 90) {
-        statusRef.current = "finished";
-        setMatchStatus("finished");
-        setIsPaused(true);
-        saveMatchState("finished");
-        toast.success(`FULL TIME ${scoreRef.current.home} - ${scoreRef.current.away}`);
-      }
+        simulatePlay();
 
-      if (nextMinute % 5 === 0) saveMatchState("live");
-    }, MATCH_MINUTE_MS);
+        // AI tactical decisions.
+        if (
+          nextMinute > 0 &&
+          nextMinute % 10 === 0
+        ) {
+          runAITactics();
+        }
+
+        // AI substitutions.
+        if (
+          nextMinute >= 55 &&
+          nextMinute % 5 === 0
+        ) {
+          if (
+            Math.random() <
+            0.22
+          ) {
+            runAISubstitution();
+          }
+        }
+
+        syncUI();
+
+        // ====================================================
+        // HALF TIME
+        // ====================================================
+
+        if (
+          nextMinute === 45
+        ) {
+          statusRef.current =
+            "half-time";
+
+          setMatchStatus(
+            "half-time"
+          );
+
+          setIsPaused(true);
+
+          saveMatchState(
+            "half-time"
+          );
+
+          return;
+        }
+
+        // ====================================================
+        // FULL TIME
+        // ====================================================
+
+        if (
+          nextMinute >=
+          MATCH_MINUTE
+        ) {
+          statusRef.current =
+            "finished";
+
+          setMatchStatus(
+            "finished"
+          );
+
+          setIsPaused(true);
+
+          saveMatchState(
+            "finished"
+          );
+
+          toast.success(
+            `FULL TIME ${scoreRef.current.home} - ${scoreRef.current.away}`
+          );
+
+          return;
+        }
+
+        // Save every 5 minutes.
+        if (
+          nextMinute % 5 ===
+          0
+        ) {
+          saveMatchState(
+            "live"
+          );
+        }
+      }, MATCH_MINUTE_MS);
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      if (
+        timerRef.current
+      ) {
+        clearInterval(
+          timerRef.current
+        );
+
+        timerRef.current =
+          null;
       }
     };
-  }, [matchStatus, isPaused, loading, simulatePlay, runAITactics, runAISubstitution, syncUI, saveMatchState]);
+  }, [
+    matchStatus,
+    isPaused,
+    loading,
+    simulatePlay,
+    runAITactics,
+    runAISubstitution,
+    syncUI,
+    saveMatchState,
+  ]);
 
   // ==========================================================
   // START MATCH
   // ==========================================================
 
-  const startMatch = useCallback(async () => {
-    if (matchStatus !== "ready" && matchStatus !== "half-time") return;
-    if (homeXIRef.current.length !== 11 || awayXIRef.current.length !== 11) {
-      toast.error("Both teams need 11 players.");
-      return;
-    }
+  const startMatch =
+    useCallback(
+      async () => {
+        if (
+          matchStatus !==
+            "ready" &&
+          matchStatus !==
+            "half-time"
+        ) {
+          return;
+        }
 
-    statusRef.current = "live";
-    setMatchStatus("live");
-    setIsPaused(false);
-    await saveMatchState("live");
-    toast.success(matchStatus === "half-time" ? "Second half started!" : "Match started!");
-  }, [matchStatus, saveMatchState]);
+        if (
+          homeXIRef.current
+            .length !==
+            PLAYERS_ON_PITCH ||
+          awayXIRef.current
+            .length !==
+            PLAYERS_ON_PITCH
+        ) {
+          toast.error(
+            "Both teams need 11 players."
+          );
+
+          return;
+        }
+
+        statusRef.current =
+          "live";
+
+        setMatchStatus(
+          "live"
+        );
+
+        setIsPaused(false);
+
+        await saveMatchState(
+          "live"
+        );
+
+        toast.success(
+          matchStatus ===
+            "half-time"
+            ? "Second half started!"
+            : "Match started!"
+        );
+      },
+      [
+        matchStatus,
+        saveMatchState,
+      ]
+    );
 
   // ==========================================================
   // PAUSE
   // ==========================================================
 
-  const togglePause = useCallback(() => {
-    if (matchStatus !== "live") return;
-    setIsPaused((prev) => !prev);
-  }, [matchStatus]);
+  const togglePause =
+    useCallback(() => {
+      if (
+        matchStatus !==
+        "live"
+      ) {
+        return;
+      }
+
+      setIsPaused(
+        (previous) =>
+          !previous
+      );
+    }, [
+      matchStatus,
+    ]);
 
   // ==========================================================
-  // FORMATION CHANGE
+  // CHANGE FORMATION
   // ==========================================================
 
-  const changeFormation = useCallback((formation) => {
-    if (!isManager || !FORMATIONS[formation]) return;
-    if (managerTeam === "home") {
-      formationRef.current.home = formation;
-      setHomeFormation(formation);
-    } else {
-      formationRef.current.away = formation;
-      setAwayFormation(formation);
-    }
-    toast.success(`Formation changed to ${formation}`);
-    saveMatchState();
-  }, [isManager, managerTeam, saveMatchState]);
+  const changeFormation =
+    useCallback(
+      (formation) => {
+        if (
+          !isManager ||
+          !managerTeam ||
+          !FORMATIONS[
+            formation
+          ]
+        ) {
+          return;
+        }
+
+        const normalized =
+          normalizeFormation(
+            formation
+          );
+
+        const squad =
+          managerTeam ===
+          "home"
+            ? homeSquad
+            : awaySquad;
+
+        const currentXI =
+          managerTeam ===
+          "home"
+            ? homeXIRef.current
+            : awayXIRef.current;
+
+        const newXI =
+          getFormationPlayers(
+            squad,
+            normalized
+          );
+
+        if (
+          newXI.length !==
+          PLAYERS_ON_PITCH
+        ) {
+          toast.error(
+            "Your team needs at least 11 players."
+          );
+
+          return;
+        }
+
+        formationRef.current[
+          managerTeam
+        ] = normalized;
+
+        if (
+          managerTeam ===
+          "home"
+        ) {
+          setHomeFormation(
+            normalized
+          );
+
+          homeXIRef.current =
+            currentXI.length ===
+            PLAYERS_ON_PITCH
+              ? currentXI
+              : newXI;
+
+          setHomeXI([
+            ...homeXIRef.current,
+          ]);
+
+          const bench =
+            getBench(
+              squad,
+              homeXIRef.current
+            );
+
+          homeBenchRef.current =
+            bench;
+
+          setHomeBench([
+            ...bench,
+          ]);
+        } else {
+          setAwayFormation(
+            normalized
+          );
+
+          awayXIRef.current =
+            currentXI.length ===
+            PLAYERS_ON_PITCH
+              ? currentXI
+              : newXI;
+
+          setAwayXI([
+            ...awayXIRef.current,
+          ]);
+
+          const bench =
+            getBench(
+              squad,
+              awayXIRef.current
+            );
+
+          awayBenchRef.current =
+            bench;
+
+          setAwayBench([
+            ...bench,
+          ]);
+        }
+
+        saveMatchState();
+
+        toast.success(
+          `Formation changed to ${normalized}`
+        );
+      },
+      [
+        isManager,
+        managerTeam,
+        homeSquad,
+        awaySquad,
+        saveMatchState,
+      ]
+    );
 
   // ==========================================================
-  // TACTIC CHANGE
+  // CHANGE TACTIC
   // ==========================================================
 
-  const changeTactic = useCallback((field, value) => {
-    if (!isManager || !managerTeam) return;
-    tacticsRef.current[managerTeam] = {
-      ...tacticsRef.current[managerTeam],
-      [field]: value,
-    };
-    if (managerTeam === "home") {
-      setHomeTactics({ ...tacticsRef.current.home });
-    } else {
-      setAwayTactics({ ...tacticsRef.current.away });
-    }
-    saveMatchState();
-  }, [isManager, managerTeam, saveMatchState]);
+  const changeTactic =
+    useCallback(
+      (
+        field,
+        value
+      ) => {
+        if (
+          !isManager ||
+          !managerTeam
+        ) {
+          return;
+        }
+
+        tacticsRef.current[
+          managerTeam
+        ] = {
+          ...tacticsRef.current[
+            managerTeam
+          ],
+
+          [field]:
+            value,
+        };
+
+        if (
+          managerTeam ===
+          "home"
+        ) {
+          setHomeTactics({
+            ...tacticsRef.current
+              .home,
+          });
+        } else {
+          setAwayTactics({
+            ...tacticsRef.current
+              .away,
+          });
+        }
+
+        saveMatchState();
+      },
+      [
+        isManager,
+        managerTeam,
+        saveMatchState,
+      ]
+    );
 
   // ==========================================================
-  // SAVE USER LINEUP
+  // SAVE LINEUP
   // ==========================================================
 
-  const saveUserLineup = useCallback(() => {
-    if (!isManager || !managerTeam) return;
-    if (selectedLineup.length !== 11) {
-      toast.error("Select exactly 11 players.");
-      return;
-    }
+  const saveUserLineup =
+    useCallback(() => {
+      if (
+        !isManager ||
+        !managerTeam
+      ) {
+        return;
+      }
 
-    const squad = managerTeam === "home" ? homeSquad : awaySquad;
-    const lineup = selectedLineup
-      .map((idValue) => squad.find((player) => String(playerId(player)) === String(idValue)))
-      .filter(Boolean);
+      if (
+        selectedLineup.length !==
+        PLAYERS_ON_PITCH
+      ) {
+        toast.error(
+          "Select exactly 11 players."
+        );
 
-    if (lineup.length !== 11) {
-      toast.error("Some selected players are no longer available.");
-      return;
-    }
+        return;
+      }
 
-    if (managerTeam === "home") {
-      homeXIRef.current = lineup;
-      setHomeXI([...lineup]);
-      const bench = getBench(homeSquad, lineup);
-      homeBenchRef.current = bench;
-      setHomeBench([...bench]);
-    } else {
-      awayXIRef.current = lineup;
-      setAwayXI([...lineup]);
-      const bench = getBench(awaySquad, lineup);
-      awayBenchRef.current = bench;
-      setAwayBench([...bench]);
-    }
+      const squad =
+        managerTeam ===
+        "home"
+          ? homeSquad
+          : awaySquad;
 
-    setLineupOpen(false);
-    toast.success("Lineup saved successfully.");
-    saveMatchState();
-  }, [isManager, managerTeam, selectedLineup, homeSquad, awaySquad, saveMatchState]);
+      const lineup =
+        selectedLineup
+          .map(
+            (idValue) =>
+              squad.find(
+                (player) =>
+                  String(
+                    playerId(
+                      player
+                    )
+                  ) ===
+                  String(
+                    idValue
+                  )
+              )
+          )
+          .filter(Boolean);
+
+      if (
+        lineup.length !==
+        PLAYERS_ON_PITCH
+      ) {
+        toast.error(
+          "Some selected players are no longer available."
+        );
+
+        return;
+      }
+
+      if (
+        managerTeam ===
+        "home"
+      ) {
+        homeXIRef.current =
+          lineup;
+
+        setHomeXI([
+          ...lineup,
+        ]);
+
+        const bench =
+          getBench(
+            homeSquad,
+            lineup
+          );
+
+        homeBenchRef.current =
+          bench;
+
+        setHomeBench([
+          ...bench,
+        ]);
+      } else {
+        awayXIRef.current =
+          lineup;
+
+        setAwayXI([
+          ...lineup,
+        ]);
+
+        const bench =
+          getBench(
+            awaySquad,
+            lineup
+          );
+
+        awayBenchRef.current =
+          bench;
+
+        setAwayBench([
+          ...bench,
+        ]);
+      }
+
+      setLineupOpen(
+        false
+      );
+
+      syncUI();
+
+      saveMatchState();
+
+      toast.success(
+        "Lineup saved successfully."
+      );
+    }, [
+      isManager,
+      managerTeam,
+      selectedLineup,
+      homeSquad,
+      awaySquad,
+      syncUI,
+      saveMatchState,
+    ]);
 
   // ==========================================================
   // AUTO LINEUP
   // ==========================================================
 
-  const autoLineup = useCallback(() => {
-    if (!isManager || !managerTeam) return;
-    const squad = managerTeam === "home" ? homeSquad : awaySquad;
-    const formation = managerTeam === "home" ? homeFormation : awayFormation;
-    const lineup = getFormationPlayers(squad, formation);
-    setSelectedLineup(lineup.map(playerId));
-  }, [isManager, managerTeam, homeSquad, awaySquad, homeFormation, awayFormation]);
+  const autoLineup =
+    useCallback(() => {
+      if (
+        !isManager ||
+        !managerTeam
+      ) {
+        return;
+      }
+
+      const squad =
+        managerTeam ===
+        "home"
+          ? homeSquad
+          : awaySquad;
+
+      const formation =
+        managerTeam ===
+        "home"
+          ? homeFormation
+          : awayFormation;
+
+      const lineup =
+        getFormationPlayers(
+          squad,
+          formation
+        );
+
+      if (
+        lineup.length !==
+        PLAYERS_ON_PITCH
+      ) {
+        toast.error(
+          "Not enough players."
+        );
+
+        return;
+      }
+
+      setSelectedLineup(
+        lineup.map(
+          playerId
+        )
+      );
+    }, [
+      isManager,
+      managerTeam,
+      homeSquad,
+      awaySquad,
+      homeFormation,
+      awayFormation,
+    ]);
 
   // ==========================================================
-  // OPEN LINEUP MODAL
+  // OPEN LINEUP
   // ==========================================================
 
-  const openLineup = useCallback(() => {
-    if (!isManager || !managerTeam) return;
-    const xi = managerTeam === "home" ? homeXIRef.current : awayXIRef.current;
-    setSelectedLineup(xi.map(playerId));
-    setLineupOpen(true);
-  }, [isManager, managerTeam]);
+  const openLineup =
+    useCallback(() => {
+      if (
+        !isManager ||
+        !managerTeam
+      ) {
+        return;
+      }
+
+      const xi =
+        managerTeam ===
+        "home"
+          ? homeXIRef.current
+          : awayXIRef.current;
+
+      setSelectedLineup(
+        xi.map(playerId)
+      );
+
+      setLineupOpen(
+        true
+      );
+    }, [
+      isManager,
+      managerTeam,
+    ]);
 
   // ==========================================================
-  // MAKE SUBSTITUTION
+  // USER SUBSTITUTION
   // ==========================================================
 
-  const makeSubstitution = useCallback(() => {
-    if (!isManager || !managerTeam) return;
-    if (subsRef.current[managerTeam] >= MAX_SUBSTITUTIONS) {
-      toast.error(`Maximum ${MAX_SUBSTITUTIONS} substitutions reached.`);
-      return;
-    }
-    if (!selectedSubOut || !selectedSubIn) {
-      toast.error("Select a player to replace and a substitute.");
-      return;
-    }
+  const makeSubstitution =
+    useCallback(() => {
+      if (
+        !isManager ||
+        !managerTeam
+      ) {
+        return;
+      }
 
-    const xi = managerTeam === "home" ? homeXIRef.current : awayXIRef.current;
-    const bench = managerTeam === "home" ? homeBenchRef.current : awayBenchRef.current;
+      if (
+        subsRef.current[
+          managerTeam
+        ] >=
+        MAX_SUBSTITUTIONS
+      ) {
+        toast.error(
+          `Maximum ${MAX_SUBSTITUTIONS} substitutions reached.`
+        );
 
-    const outgoing = xi.find((player) => String(playerId(player)) === String(selectedSubOut));
-    const incoming = bench.find((player) => String(playerId(player)) === String(selectedSubIn));
-    if (!outgoing || !incoming) return;
+        return;
+      }
 
-    const newXI = xi.map((player) =>
-      String(playerId(player)) === String(selectedSubOut) ? incoming : player
-    );
-    const newBench = bench.filter((player) => String(playerId(player)) !== String(selectedSubIn));
-    newBench.push(outgoing);
+      if (
+        matchStatus ===
+        "finished"
+      ) {
+        return;
+      }
 
-    if (managerTeam === "home") {
-      homeXIRef.current = newXI;
-      homeBenchRef.current = newBench;
-      setHomeXI([...newXI]);
-      setHomeBench([...newBench]);
-    } else {
-      awayXIRef.current = newXI;
-      awayBenchRef.current = newBench;
-      setAwayXI([...newXI]);
-      setAwayBench([...newBench]);
-    }
+      if (
+        !selectedSubOut ||
+        !selectedSubIn
+      ) {
+        toast.error(
+          "Select a player to replace and a substitute."
+        );
 
-    subsRef.current[managerTeam] += 1;
-    eventsRef.current = [
-      {
-        id: `sub-${Date.now()}`,
-        type: "substitution",
-        team: managerTeam,
-        minute: minuteRef.current,
-        detail: `${playerName(outgoing)} replaced by ${playerName(incoming)}.`,
-      },
-      ...eventsRef.current,
-    ];
+        return;
+      }
 
-    setSelectedSubOut("");
-    setSelectedSubIn("");
-    syncUI();
-    saveMatchState();
-    toast.success("Substitution completed.");
-  }, [isManager, managerTeam, selectedSubOut, selectedSubIn, syncUI, saveMatchState]);
+      const xi =
+        managerTeam ===
+        "home"
+          ? homeXIRef.current
+          : awayXIRef.current;
+
+      const bench =
+        managerTeam ===
+        "home"
+          ? homeBenchRef.current
+          : awayBenchRef.current;
+
+      const outgoing =
+        xi.find(
+          (player) =>
+            String(
+              playerId(player)
+            ) ===
+            String(
+              selectedSubOut
+            )
+        );
+
+      const incoming =
+        bench.find(
+          (player) =>
+            String(
+              playerId(player)
+            ) ===
+            String(
+              selectedSubIn
+            )
+        );
+
+      if (
+        !outgoing ||
+        !incoming
+      ) {
+        toast.error(
+          "Invalid substitution."
+        );
+
+        return;
+      }
+
+      const newXI =
+        xi.map(
+          (player) =>
+            String(
+              playerId(player)
+            ) ===
+            String(
+              selectedSubOut
+            )
+              ? incoming
+              : player
+        );
+
+      const newBench =
+        bench.filter(
+          (player) =>
+            String(
+              playerId(player)
+            ) !==
+            String(
+              selectedSubIn
+            )
+        );
+
+      newBench.push(
+        outgoing
+      );
+
+      if (
+        managerTeam ===
+        "home"
+      ) {
+        homeXIRef.current =
+          newXI;
+
+        homeBenchRef.current =
+          newBench;
+
+        setHomeXI([
+          ...newXI,
+        ]);
+
+        setHomeBench([
+          ...newBench,
+        ]);
+      } else {
+        awayXIRef.current =
+          newXI;
+
+        awayBenchRef.current =
+          newBench;
+
+        setAwayXI([
+          ...newXI,
+        ]);
+
+        setAwayBench([
+          ...newBench,
+        ]);
+      }
+
+      subsRef.current[
+        managerTeam
+      ] += 1;
+
+      eventsRef.current =
+        [
+          {
+            id: `sub-${Date.now()}-${Math.random()}`,
+
+            type:
+              "substitution",
+
+            team:
+              managerTeam,
+
+            minute:
+              minuteRef.current,
+
+            detail:
+              `${playerName(
+                outgoing
+              )} replaced by ${playerName(
+                incoming
+              )}.`,
+          },
+
+          ...eventsRef.current,
+        ];
+
+      setSelectedSubOut(
+        ""
+      );
+
+      setSelectedSubIn(
+        ""
+      );
+
+      syncUI();
+
+      saveMatchState();
+
+      toast.success(
+        "Substitution completed."
+      );
+    }, [
+      isManager,
+      managerTeam,
+      matchStatus,
+      selectedSubOut,
+      selectedSubIn,
+      syncUI,
+      saveMatchState,
+    ]);
 
   // ==========================================================
-  // DISPLAY HELPERS
+  // DISPLAY
   // ==========================================================
 
   const statusLabel =
-    matchStatus === "ready"
+    matchStatus ===
+    "ready"
       ? "READY"
-      : matchStatus === "live"
+      : matchStatus ===
+        "live"
       ? isPaused
         ? "PAUSED"
         : "LIVE"
-      : matchStatus === "half-time"
+      : matchStatus ===
+        "half-time"
       ? "HALF TIME"
-      : matchStatus === "finished"
+      : matchStatus ===
+        "finished"
       ? "FULL TIME"
       : "LOADING";
 
-  const displayMinute = matchMinute > 90 ? `90+${matchMinute - 90}` : `${matchMinute}`;
+  const displayMinute =
+    matchMinute > 90
+      ? `90+${matchMinute - 90}`
+      : `${matchMinute}`;
 
-  const activeSquad = managerTeam === "home" ? homeSquad : awaySquad;
-  const activeXI = managerTeam === "home" ? homeXI : awayXI;
-  const activeBench = managerTeam === "home" ? homeBench : awayBench;
-  const currentTactics = managerTeam === "home" ? homeTactics : awayTactics;
+  const activeSquad =
+    managerTeam === "home"
+      ? homeSquad
+      : awaySquad;
+
+  const activeXI =
+    managerTeam === "home"
+      ? homeXI
+      : awayXI;
+
+  const activeBench =
+    managerTeam === "home"
+      ? homeBench
+      : awayBench;
+
+  const currentTactics =
+    managerTeam === "home"
+      ? homeTactics
+      : awayTactics;
+
+  // ==========================================================
+  // LOADING
+  // ==========================================================
+
+  if (
+    authLoading ||
+    loading
+  ) {
+    return (
+      <div
+        className={
+          styles.loadingPage
+        }
+      >
+        <div
+          className={
+            styles.spinner
+          }
+        />
+
+        <h2>
+          Loading Match Centre
+        </h2>
+
+        <p>
+          Preparing teams,
+          players and match
+          engine...
+        </p>
+      </div>
+    );
+  }
+
+  // ==========================================================
+  // ERROR
+  // ==========================================================
+
+  if (error) {
+    return (
+      <div
+        className={
+          styles.errorPage
+        }
+      >
+        <div>⚠️</div>
+
+        <h1>
+          Match Error
+        </h1>
+
+        <p>{error}</p>
+
+        <button
+          onClick={() =>
+            router.push(
+              "/fixtures"
+            )
+          }
+        >
+          ← Back to Fixtures
+        </button>
+      </div>
+    );
+  }
+
+  // ==========================================================
+  // MATCH NOT FOUND
+  // ==========================================================
+
+  if (
+    !match ||
+    !homeClub ||
+    !awayClub
+  ) {
+    return (
+      <div
+        className={
+          styles.errorPage
+        }
+      >
+        <h1>
+          Match Not Found
+        </h1>
+
+        <button
+          onClick={() =>
+            router.push(
+              "/fixtures"
+            )
+          }
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
 
   // ==========================================================
   // RENDER
   // ==========================================================
 
-  if (authLoading || loading) {
-    return (
-      <div className={styles.loadingPage}>
-        <div className={styles.spinner} />
-        <h2>Loading Match Centre</h2>
-        <p>Preparing teams, players and match engine...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={styles.errorPage}>
-        <div>⚠️</div>
-        <h1>Match Error</h1>
-        <p>{error}</p>
-        <button onClick={() => router.push("/fixtures")}>← Back to Fixtures</button>
-      </div>
-    );
-  }
-
-  if (!match || !homeClub || !awayClub) {
-    return (
-      <div className={styles.errorPage}>
-        <h1>Match Not Found</h1>
-        <button onClick={() => router.push("/fixtures")}>Back</button>
-      </div>
-    );
-  }
-
   return (
     <>
       <Head>
         <title>
-          {homeClub.name} vs {awayClub.name} | Match Centre
+          {homeClub.name} vs{" "}
+          {awayClub.name} |
+          Match Centre
         </title>
-        <meta name="theme-color" content="#050816" />
+
+        <meta
+          name="theme-color"
+          content="#050816"
+        />
       </Head>
 
-      <main className={styles.page}>
-        {/* HEADER */}
-        <header className={styles.header}>
-          <button className={styles.backButton} onClick={() => router.push("/fixtures")}>
+      <main
+        className={
+          styles.page
+        }
+      >
+        {/* ====================================================
+            HEADER
+        ==================================================== */}
+
+        <header
+          className={
+            styles.header
+          }
+        >
+          <button
+            className={
+              styles.backButton
+            }
+            onClick={() =>
+              router.push(
+                "/fixtures"
+              )
+            }
+          >
             ← Fixtures
           </button>
+
           <div>
-            <h1>Match Centre</h1>
-            <span className={styles.liveCompetition}>
-              {match.leagueName || match.competition || "Football Match"}
+            <h1>
+              Match Centre
+            </h1>
+
+            <span
+              className={
+                styles.liveCompetition
+              }
+            >
+              {match.leagueName ||
+                match.competition ||
+                "Football Match"}
             </span>
           </div>
-          <div className={`${styles.status} ${matchStatus === "live" ? styles.statusLive : ""}`}>
+
+          <div
+            className={`${styles.status} ${
+              matchStatus ===
+              "live"
+                ? styles.statusLive
+                : ""
+            }`}
+          >
             {statusLabel}
           </div>
         </header>
 
-        {/* SCOREBOARD */}
-        <section className={styles.scoreboard}>
-          <div className={styles.teamBox}>
-            <div className={styles.logo}>
-              {homeClub.logo ? <img src={homeClub.logo} alt="" /> : "⚽"}
+        {/* ====================================================
+            SCOREBOARD
+        ==================================================== */}
+
+        <section
+          className={
+            styles.scoreboard
+          }
+        >
+          <div
+            className={
+              styles.teamBox
+            }
+          >
+            <div
+              className={
+                styles.logo
+              }
+            >
+              {homeClub.logo ? (
+                <img
+                  src={
+                    homeClub.logo
+                  }
+                  alt=""
+                />
+              ) : (
+                "⚽"
+              )}
             </div>
-            <strong>{homeClub.name}</strong>
-            <span>HOME</span>
+
+            <strong>
+              {homeClub.name}
+            </strong>
+
+            <span>
+              HOME
+            </span>
           </div>
 
-          <div className={styles.scoreCenter}>
-            <div className={styles.score}>
-              {homeScore} <span>-</span> {awayScore}
+          <div
+            className={
+              styles.scoreCenter
+            }
+          >
+            <div
+              className={
+                styles.score
+              }
+            >
+              {homeScore}
+
+              <span>
+                -
+              </span>
+
+              {awayScore}
             </div>
-            <div className={styles.minute}>{displayMinute}'</div>
-            <small>{statusLabel}</small>
+
+            <div
+              className={
+                styles.minute
+              }
+            >
+              {displayMinute}'
+            </div>
+
+            <small>
+              {statusLabel}
+            </small>
           </div>
 
-          <div className={styles.teamBox}>
-            <div className={styles.logo}>
-              {awayClub.logo ? <img src={awayClub.logo} alt="" /> : "⚽"}
+          <div
+            className={
+              styles.teamBox
+            }
+          >
+            <div
+              className={
+                styles.logo
+              }
+            >
+              {awayClub.logo ? (
+                <img
+                  src={
+                    awayClub.logo
+                  }
+                  alt=""
+                />
+              ) : (
+                "⚽"
+              )}
             </div>
-            <strong>{awayClub.name}</strong>
-            <span>AWAY</span>
+
+            <strong>
+              {awayClub.name}
+            </strong>
+
+            <span>
+              AWAY
+            </span>
           </div>
         </section>
 
-        {/* PITCH */}
-        <section className={styles.pitchCard}>
-          <ThreePitch
-            homeXI={homeXI}
-            awayXI={awayXI}
-            playerPositions={playerPositions}
-            ballAction={ballAction}
-            homeColor={homeClub.primaryColor || homeClub.color || "#2563eb"}
-            awayColor={awayClub.primaryColor || awayClub.color || "#ef4444"}
-          />
-          <div className={styles.pitchLegend}>
+        {/* ====================================================
+            PITCH
+        ==================================================== */}
+
+        <section
+          className={
+            styles.pitchCard
+          }
+        >
+          {homeXI.length ===
+            PLAYERS_ON_PITCH &&
+          awayXI.length ===
+            PLAYERS_ON_PITCH ? (
+            <ThreePitch
+              homeXI={
+                homeXI
+              }
+              awayXI={
+                awayXI
+              }
+              playerPositions={
+                playerPositions
+              }
+              ballAction={
+                ballAction
+              }
+              homeColor={
+                homeClub.primaryColor ||
+                homeClub.color ||
+                "#2563eb"
+              }
+              awayColor={
+                awayClub.primaryColor ||
+                awayClub.color ||
+                "#ef4444"
+              }
+            />
+          ) : (
+            <div
+              className={
+                styles.pitchLoading
+              }
+            >
+              <div
+                className={
+                  styles.spinner
+                }
+              />
+
+              <span>
+                Preparing starting
+                players...
+              </span>
+            </div>
+          )}
+
+          <div
+            className={
+              styles.pitchLegend
+            }
+          >
             <span>
-              <i style={{ background: homeClub.primaryColor || "#2563eb" }} />
+              <i
+                style={{
+                  background:
+                    homeClub.primaryColor ||
+                    homeClub.color ||
+                    "#2563eb",
+                }}
+              />
+
               {homeClub.name}
             </span>
+
             <span>
-              <i style={{ background: awayClub.primaryColor || "#ef4444" }} />
+              <i
+                style={{
+                  background:
+                    awayClub.primaryColor ||
+                    awayClub.color ||
+                    "#ef4444",
+                }}
+              />
+
               {awayClub.name}
             </span>
           </div>
         </section>
 
-        {/* MANAGER PANEL */}
+        {/* ====================================================
+            MANAGER PANEL
+        ==================================================== */}
+
         {isManager && (
-          <section className={styles.managerPanel}>
-            <div className={styles.panelTitle}>
+          <section
+            className={
+              styles.managerPanel
+            }
+          >
+            <div
+              className={
+                styles.panelTitle
+              }
+            >
               <div>
-                <span>MANAGER</span>
-                <h2>{managerTeam === "home" ? homeClub.name : awayClub.name}</h2>
+                <span>
+                  MANAGER
+                </span>
+
+                <h2>
+                  {managerTeam ===
+                  "home"
+                    ? homeClub.name
+                    : awayClub.name}
+                </h2>
               </div>
-              <span className={styles.managerBadge}>YOUR TEAM</span>
+
+              <span
+                className={
+                  styles.managerBadge
+                }
+              >
+                YOUR TEAM
+              </span>
             </div>
 
-            <div className={styles.managerActions}>
-              <button onClick={openLineup}>👥 Edit Lineup</button>
+            <div
+              className={
+                styles.managerActions
+              }
+            >
+              <button
+                onClick={
+                  openLineup
+                }
+              >
+                👥 Edit Lineup
+              </button>
+
               <label>
                 Formation
+
                 <select
-                  value={managerTeam === "home" ? homeFormation : awayFormation}
-                  onChange={(e) => changeFormation(e.target.value)}
+                  value={
+                    managerTeam ===
+                    "home"
+                      ? homeFormation
+                      : awayFormation
+                  }
+                  onChange={(event) =>
+                    changeFormation(
+                      event.target
+                        .value
+                    )
+                  }
                 >
-                  {Object.keys(FORMATIONS).map((formation) => (
-                    <option key={formation} value={formation}>
-                      {formation}
-                    </option>
-                  ))}
+                  {Object.keys(
+                    FORMATIONS
+                  ).map(
+                    (
+                      formation
+                    ) => (
+                      <option
+                        key={
+                          formation
+                        }
+                        value={
+                          formation
+                        }
+                      >
+                        {
+                          formation
+                        }
+                      </option>
+                    )
+                  )}
                 </select>
               </label>
             </div>
 
-            <div className={styles.tacticsGrid}>
+            <div
+              className={
+                styles.tacticsGrid
+              }
+            >
               <label>
                 Mentality
+
                 <select
-                  value={currentTactics.mentality}
-                  onChange={(e) => changeTactic("mentality", e.target.value)}
+                  value={
+                    currentTactics.mentality
+                  }
+                  onChange={(event) =>
+                    changeTactic(
+                      "mentality",
+                      event.target
+                        .value
+                    )
+                  }
                 >
-                  <option value="defensive">Defensive</option>
-                  <option value="balanced">Balanced</option>
-                  <option value="attacking">Attacking</option>
+                  <option value="defensive">
+                    Defensive
+                  </option>
+
+                  <option value="balanced">
+                    Balanced
+                  </option>
+
+                  <option value="attacking">
+                    Attacking
+                  </option>
                 </select>
               </label>
+
               <label>
                 Tempo
+
                 <select
-                  value={currentTactics.tempo}
-                  onChange={(e) => changeTactic("tempo", e.target.value)}
+                  value={
+                    currentTactics.tempo
+                  }
+                  onChange={(event) =>
+                    changeTactic(
+                      "tempo",
+                      event.target
+                        .value
+                    )
+                  }
                 >
-                  <option value="slow">Slow</option>
-                  <option value="normal">Normal</option>
-                  <option value="fast">Fast</option>
+                  <option value="slow">
+                    Slow
+                  </option>
+
+                  <option value="normal">
+                    Normal
+                  </option>
+
+                  <option value="fast">
+                    Fast
+                  </option>
                 </select>
               </label>
+
               <label>
                 Pressing
+
                 <select
-                  value={currentTactics.pressing}
-                  onChange={(e) => changeTactic("pressing", e.target.value)}
+                  value={
+                    currentTactics.pressing
+                  }
+                  onChange={(event) =>
+                    changeTactic(
+                      "pressing",
+                      event.target
+                        .value
+                    )
+                  }
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
+                  <option value="low">
+                    Low
+                  </option>
+
+                  <option value="medium">
+                    Medium
+                  </option>
+
+                  <option value="high">
+                    High
+                  </option>
                 </select>
               </label>
+
               <label>
                 Defensive Line
+
                 <select
-                  value={currentTactics.defensiveLine}
-                  onChange={(e) => changeTactic("defensiveLine", e.target.value)}
+                  value={
+                    currentTactics.defensiveLine
+                  }
+                  onChange={(event) =>
+                    changeTactic(
+                      "defensiveLine",
+                      event.target
+                        .value
+                    )
+                  }
                 >
-                  <option value="deep">Deep</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
+                  <option value="deep">
+                    Deep
+                  </option>
+
+                  <option value="normal">
+                    Normal
+                  </option>
+
+                  <option value="high">
+                    High
+                  </option>
                 </select>
               </label>
+
               <label>
                 Width
+
                 <select
-                  value={currentTactics.width}
-                  onChange={(e) => changeTactic("width", e.target.value)}
+                  value={
+                    currentTactics.width
+                  }
+                  onChange={(event) =>
+                    changeTactic(
+                      "width",
+                      event.target
+                        .value
+                    )
+                  }
                 >
-                  <option value="narrow">Narrow</option>
-                  <option value="normal">Normal</option>
-                  <option value="wide">Wide</option>
+                  <option value="narrow">
+                    Narrow
+                  </option>
+
+                  <option value="normal">
+                    Normal
+                  </option>
+
+                  <option value="wide">
+                    Wide
+                  </option>
                 </select>
               </label>
             </div>
           </section>
         )}
 
-        {/* CONTROLS */}
-        <section className={styles.controls}>
-          {matchStatus === "ready" && (
-            <button className={styles.primaryButton} onClick={startMatch} disabled={isSaving}>
+        {/* ====================================================
+            CONTROLS
+        ==================================================== */}
+
+        <section
+          className={
+            styles.controls
+          }
+        >
+          {matchStatus ===
+            "ready" && (
+            <button
+              className={
+                styles.primaryButton
+              }
+              onClick={
+                startMatch
+              }
+              disabled={
+                isSaving ||
+                homeXI.length !==
+                  11 ||
+                awayXI.length !==
+                  11
+              }
+            >
               ▶ START MATCH
             </button>
           )}
-          {matchStatus === "half-time" && (
-            <button className={styles.primaryButton} onClick={startMatch} disabled={isSaving}>
+
+          {matchStatus ===
+            "half-time" && (
+            <button
+              className={
+                styles.primaryButton
+              }
+              onClick={
+                startMatch
+              }
+              disabled={
+                isSaving
+              }
+            >
               ▶ START SECOND HALF
             </button>
           )}
-          {matchStatus === "live" && (
-            <button onClick={togglePause}>{isPaused ? "▶ Resume" : "⏸ Pause"}</button>
+
+          {matchStatus ===
+            "live" && (
+            <button
+              onClick={
+                togglePause
+              }
+            >
+              {isPaused
+                ? "▶ Resume"
+                : "⏸ Pause"}
+            </button>
           )}
-          {matchStatus === "finished" && (
-            <button onClick={() => router.push("/fixtures")}>← Fixtures</button>
+
+          {matchStatus ===
+            "finished" && (
+            <button
+              onClick={() =>
+                router.push(
+                  "/fixtures"
+                )
+              }
+            >
+              ← Fixtures
+            </button>
           )}
         </section>
 
-        {/* SUBSTITUTIONS */}
-        {isManager && matchStatus !== "finished" && (
-          <section className={styles.substitutionPanel}>
-            <div className={styles.panelTitle}>
-              <div>
-                <span>BENCH</span>
-                <h2>Substitutions</h2>
-              </div>
-              <strong>
-                {subsUsed[managerTeam]}/{MAX_SUBSTITUTIONS}
-              </strong>
-            </div>
+        {/* ====================================================
+            SUBSTITUTIONS
+        ==================================================== */}
 
-            <div className={styles.substitutionGrid}>
-              <label>
-                Player Out
-                <select value={selectedSubOut} onChange={(e) => setSelectedSubOut(e.target.value)}>
-                  <option value="">Select player</option>
-                  {activeXI.map((player) => (
-                    <option key={playerId(player)} value={playerId(player)}>
-                      {playerName(player)} · {overall(player)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Player In
-                <select value={selectedSubIn} onChange={(e) => setSelectedSubIn(e.target.value)}>
-                  <option value="">Select substitute</option>
-                  {activeBench.map((player) => (
-                    <option key={playerId(player)} value={playerId(player)}>
-                      {playerName(player)} · {overall(player)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                onClick={makeSubstitution}
-                disabled={subsUsed[managerTeam] >= MAX_SUBSTITUTIONS}
+        {isManager &&
+          matchStatus !==
+            "finished" && (
+            <section
+              className={
+                styles.substitutionPanel
+              }
+            >
+              <div
+                className={
+                  styles.panelTitle
+                }
               >
-                🔄 Make Substitution
-              </button>
-            </div>
-          </section>
-        )}
+                <div>
+                  <span>
+                    BENCH
+                  </span>
 
-        {/* STATS */}
-        <section className={styles.statsCard}>
-          <div className={styles.sectionHeader}>
+                  <h2>
+                    Substitutions
+                  </h2>
+                </div>
+
+                <strong>
+                  {
+                    subsUsed[
+                      managerTeam
+                    ]
+                  }
+                  /
+                  {
+                    MAX_SUBSTITUTIONS
+                  }
+                </strong>
+              </div>
+
+              <div
+                className={
+                  styles.substitutionGrid
+                }
+              >
+                <label>
+                  Player Out
+
+                  <select
+                    value={
+                      selectedSubOut
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setSelectedSubOut(
+                        event.target
+                          .value
+                      )
+                    }
+                  >
+                    <option value="">
+                      Select player
+                    </option>
+
+                    {activeXI.map(
+                      (
+                        player
+                      ) => (
+                        <option
+                          key={String(
+                            playerId(
+                              player
+                            )
+                          )}
+                          value={String(
+                            playerId(
+                              player
+                            )
+                          )}
+                        >
+                          {playerName(
+                            player
+                          )}{" "}
+                          ·{" "}
+                          {overall(
+                            player
+                          )}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+                <label>
+                  Player In
+
+                  <select
+                    value={
+                      selectedSubIn
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setSelectedSubIn(
+                        event.target
+                          .value
+                      )
+                    }
+                  >
+                    <option value="">
+                      Select substitute
+                    </option>
+
+                    {activeBench.map(
+                      (
+                        player
+                      ) => (
+                        <option
+                          key={String(
+                            playerId(
+                              player
+                            )
+                          )}
+                          value={String(
+                            playerId(
+                              player
+                            )
+                          )}
+                        >
+                          {playerName(
+                            player
+                          )}{" "}
+                          ·{" "}
+                          {overall(
+                            player
+                          )}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+                <button
+                  onClick={
+                    makeSubstitution
+                  }
+                  disabled={
+                    subsUsed[
+                      managerTeam
+                    ] >=
+                    MAX_SUBSTITUTIONS
+                  }
+                >
+                  🔄 Make
+                  Substitution
+                </button>
+              </div>
+            </section>
+          )}
+
+        {/* ====================================================
+            STATS
+        ==================================================== */}
+
+        <section
+          className={
+            styles.statsCard
+          }
+        >
+          <div
+            className={
+              styles.sectionHeader
+            }
+          >
             <div>
-              <span>LIVE DATA</span>
-              <h2>Match Statistics</h2>
+              <span>
+                LIVE DATA
+              </span>
+
+              <h2>
+                Match Statistics
+              </h2>
             </div>
+
             <strong>
-              {homeScore} - {awayScore}
+              {homeScore} -{" "}
+              {awayScore}
             </strong>
           </div>
 
           {[
-            ["Possession", `${homeStats.possession.toFixed(1)}%`, `${awayStats.possession.toFixed(1)}%`],
-            ["Shots", homeStats.shots, awayStats.shots],
-            ["Shots on Target", homeStats.shotsOnTarget, awayStats.shotsOnTarget],
-            ["Passes", homeStats.passes, awayStats.passes],
-            ["Passes Completed", homeStats.passesCompleted, awayStats.passesCompleted],
-            ["Tackles", homeStats.tackles, awayStats.tackles],
-            ["Interceptions", homeStats.interceptions, awayStats.interceptions],
-            ["Fouls", homeStats.fouls, awayStats.fouls],
-            ["Corners", homeStats.corners, awayStats.corners],
-            ["Saves", homeStats.saves, awayStats.saves],
-            ["Yellow Cards", homeStats.yellow, awayStats.yellow],
-            ["Red Cards", homeStats.red, awayStats.red],
-            ["Attacks", homeStats.attacks, awayStats.attacks],
-            ["Dangerous Attacks", homeStats.dangerousAttacks, awayStats.dangerousAttacks],
-            ["Dribbles", homeStats.dribbles, awayStats.dribbles],
-          ].map((row) => (
-            <div className={styles.statRow} key={row[0]}>
-              <strong>{row[1]}</strong>
-              <span>{row[0]}</span>
-              <strong>{row[2]}</strong>
-            </div>
-          ))}
+            [
+              "Possession",
+              `${homeStats.possession.toFixed(
+                1
+              )}%`,
+              `${awayStats.possession.toFixed(
+                1
+              )}%`,
+            ],
+
+            [
+              "Shots",
+              homeStats.shots,
+              awayStats.shots,
+            ],
+
+            [
+              "Shots on Target",
+              homeStats.shotsOnTarget,
+              awayStats.shotsOnTarget,
+            ],
+
+            [
+              "Passes",
+              homeStats.passes,
+              awayStats.passes,
+            ],
+
+            [
+              "Passes Completed",
+              homeStats.passesCompleted,
+              awayStats.passesCompleted,
+            ],
+
+            [
+              "Tackles",
+              homeStats.tackles,
+              awayStats.tackles,
+            ],
+
+            [
+              "Interceptions",
+              homeStats.interceptions,
+              awayStats.interceptions,
+            ],
+
+            [
+              "Fouls",
+              homeStats.fouls,
+              awayStats.fouls,
+            ],
+
+            [
+              "Corners",
+              homeStats.corners,
+              awayStats.corners,
+            ],
+
+            [
+              "Saves",
+              homeStats.saves,
+              awayStats.saves,
+            ],
+
+            [
+              "Yellow Cards",
+              homeStats.yellow,
+              awayStats.yellow,
+            ],
+
+            [
+              "Red Cards",
+              homeStats.red,
+              awayStats.red,
+            ],
+
+            [
+              "Attacks",
+              homeStats.attacks,
+              awayStats.attacks,
+            ],
+
+            [
+              "Dangerous Attacks",
+              homeStats.dangerousAttacks,
+              awayStats.dangerousAttacks,
+            ],
+
+            [
+              "Dribbles",
+              homeStats.dribbles,
+              awayStats.dribbles,
+            ],
+          ].map(
+            (row) => (
+              <div
+                className={
+                  styles.statRow
+                }
+                key={row[0]}
+              >
+                <strong>
+                  {row[1]}
+                </strong>
+
+                <span>
+                  {row[0]}
+                </span>
+
+                <strong>
+                  {row[2]}
+                </strong>
+              </div>
+            )
+          )}
         </section>
 
-        {/* EVENTS */}
-        <section className={styles.eventsCard}>
-          <div className={styles.sectionHeader}>
+        {/* ====================================================
+            EVENTS
+        ==================================================== */}
+
+        <section
+          className={
+            styles.eventsCard
+          }
+        >
+          <div
+            className={
+              styles.sectionHeader
+            }
+          >
             <div>
-              <span>LIVE MATCH PLAY</span>
-              <h2>Events</h2>
+              <span>
+                LIVE MATCH PLAY
+              </span>
+
+              <h2>
+                Events
+              </h2>
             </div>
-            <strong>{events.length}</strong>
+
+            <strong>
+              {events.length}
+            </strong>
           </div>
 
-          <div className={styles.eventsList}>
-            {events.length === 0 ? (
-              <div className={styles.emptyEvents}>The match is starting...</div>
+          <div
+            className={
+              styles.eventsList
+            }
+          >
+            {events.length ===
+            0 ? (
+              <div
+                className={
+                  styles.emptyEvents
+                }
+              >
+                The match is
+                starting...
+              </div>
             ) : (
-              events.slice(0, 40).map((event) => (
-                <div className={styles.event} key={event.id}>
-                  <b>{event.minute}'</b>
-                  <span>
-                    {event.type === "goal"
-                      ? "⚽"
-                      : event.type === "save"
-                      ? "🧤"
-                      : event.type === "substitution"
-                      ? "🔄"
-                      : event.type === "shot"
-                      ? "💥"
-                      : "•"}
-                  </span>
-                  <div>
-                    <strong>{event.type.toUpperCase()}</strong>
-                    <p>{event.detail || event.playerName}</p>
-                  </div>
-                  <small>{event.team === "home" ? homeClub.name : awayClub.name}</small>
-                </div>
-              ))
+              events
+                .slice(0, 40)
+                .map(
+                  (
+                    event
+                  ) => (
+                    <div
+                      className={
+                        styles.event
+                      }
+                      key={
+                        event.id
+                      }
+                    >
+                      <b>
+                        {
+                          event.minute
+                        }
+                        '
+                      </b>
+
+                      <span>
+                        {event.type ===
+                        "goal"
+                          ? "⚽"
+                          : event.type ===
+                            "save"
+                          ? "🧤"
+                          : event.type ===
+                            "substitution"
+                          ? "🔄"
+                          : event.type ===
+                            "shot"
+                          ? "💥"
+                          : "•"}
+                      </span>
+
+                      <div>
+                        <strong>
+                          {String(
+                            event.type
+                          ).toUpperCase()}
+                        </strong>
+
+                        <p>
+                          {event.detail ||
+                            event.playerName}
+                        </p>
+                      </div>
+
+                      <small>
+                        {event.team ===
+                        "home"
+                          ? homeClub.name
+                          : awayClub.name}
+                      </small>
+                    </div>
+                  )
+                )
             )}
           </div>
         </section>
 
-        {/* LINEUPS */}
-        <section className={styles.lineupsGrid}>
-          <div className={styles.lineupCard}>
-            <div className={styles.lineupHeader}>
+        {/* ====================================================
+            LINEUPS
+        ==================================================== */}
+
+        <section
+          className={
+            styles.lineupsGrid
+          }
+        >
+          <div
+            className={
+              styles.lineupCard
+            }
+          >
+            <div
+              className={
+                styles.lineupHeader
+              }
+            >
               <div>
-                <span>HOME</span>
-                <h3>{homeClub.name}</h3>
+                <span>
+                  HOME
+                </span>
+
+                <h3>
+                  {
+                    homeClub.name
+                  }
+                </h3>
               </div>
-              <b>{homeFormation}</b>
+
+              <b>
+                {
+                  homeFormation
+                }
+              </b>
             </div>
-            {homeXI.map((player, index) => (
-              <div key={playerId(player)} className={styles.playerRow}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{playerName(player)}</strong>
-                  <small>{position(player)}</small>
+
+            {homeXI.map(
+              (
+                player,
+                index
+              ) => (
+                <div
+                  key={String(
+                    playerId(
+                      player
+                    )
+                  )}
+                  className={
+                    styles.playerRow
+                  }
+                >
+                  <span>
+                    {index + 1}
+                  </span>
+
+                  <div>
+                    <strong>
+                      {playerName(
+                        player
+                      )}
+                    </strong>
+
+                    <small>
+                      {position(
+                        player
+                      )}
+                    </small>
+                  </div>
+
+                  <b>
+                    {overall(
+                      player
+                    )}
+                  </b>
                 </div>
-                <b>{overall(player)}</b>
-              </div>
-            ))}
+              )
+            )}
           </div>
 
-          <div className={styles.lineupCard}>
-            <div className={styles.lineupHeader}>
+          <div
+            className={
+              styles.lineupCard
+            }
+          >
+            <div
+              className={
+                styles.lineupHeader
+              }
+            >
               <div>
-                <span>AWAY</span>
-                <h3>{awayClub.name}</h3>
+                <span>
+                  AWAY
+                </span>
+
+                <h3>
+                  {
+                    awayClub.name
+                  }
+                </h3>
               </div>
-              <b>{awayFormation}</b>
+
+              <b>
+                {
+                  awayFormation
+                }
+              </b>
             </div>
-            {awayXI.map((player, index) => (
-              <div key={playerId(player)} className={styles.playerRow}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{playerName(player)}</strong>
-                  <small>{position(player)}</small>
+
+            {awayXI.map(
+              (
+                player,
+                index
+              ) => (
+                <div
+                  key={String(
+                    playerId(
+                      player
+                    )
+                  )}
+                  className={
+                    styles.playerRow
+                  }
+                >
+                  <span>
+                    {index + 1}
+                  </span>
+
+                  <div>
+                    <strong>
+                      {playerName(
+                        player
+                      )}
+                    </strong>
+
+                    <small>
+                      {position(
+                        player
+                      )}
+                    </small>
+                  </div>
+
+                  <b>
+                    {overall(
+                      player
+                    )}
+                  </b>
                 </div>
-                <b>{overall(player)}</b>
-              </div>
-            ))}
+              )
+            )}
           </div>
         </section>
 
-        {/* LINEUP MODAL */}
-        {lineupOpen && isManager && (
-          <div className={styles.modalBackdrop}>
-            <div className={styles.lineupModal}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <span>MANAGER</span>
-                  <h2>Select Starting XI</h2>
-                </div>
-                <button onClick={() => setLineupOpen(false)}>×</button>
-              </div>
+        {/* ====================================================
+            LINEUP MODAL
+        ==================================================== */}
 
-              <div className={styles.modalTools}>
-                <strong>{selectedLineup.length}/11 selected</strong>
-                <button onClick={autoLineup}>⭐ Best XI</button>
-              </div>
-
-              <div className={styles.squadList}>
-                {activeSquad.map((player) => {
-                  const idValue = String(playerId(player));
-                  const selected =
-                    selectedLineup.includes(idValue) || selectedLineup.includes(playerId(player));
-
-                  return (
-                    <button
-                      key={idValue}
-                      className={`${styles.squadPlayer} ${selected ? styles.selectedPlayer : ""}`}
-                      onClick={() => {
-                        if (selected) {
-                          setSelectedLineup(selectedLineup.filter((x) => String(x) !== idValue));
-                        } else if (selectedLineup.length < 11) {
-                          setSelectedLineup([...selectedLineup, idValue]);
-                        }
-                      }}
-                    >
-                      <span>{selected ? "✓" : "+"}</span>
-                      <div>
-                        <strong>{playerName(player)}</strong>
-                        <small>{position(player)}</small>
-                      </div>
-                      <b>{overall(player)}</b>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className={styles.modalFooter}>
-                <button onClick={() => setLineupOpen(false)}>Cancel</button>
-                <button
-                  className={styles.primaryButton}
-                  disabled={selectedLineup.length !== 11}
-                  onClick={saveUserLineup}
+        {lineupOpen &&
+          isManager && (
+            <div
+              className={
+                styles.modalBackdrop
+              }
+            >
+              <div
+                className={
+                  styles.lineupModal
+                }
+              >
+                <div
+                  className={
+                    styles.modalHeader
+                  }
                 >
-                  Save Starting XI
-                </button>
+                  <div>
+                    <span>
+                      MANAGER
+                    </span>
+
+                    <h2>
+                      Select Starting
+                      XI
+                    </h2>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      setLineupOpen(
+                        false
+                      )
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div
+                  className={
+                    styles.modalTools
+                  }
+                >
+                  <strong>
+                    {
+                      selectedLineup.length
+                    }
+                    /11 selected
+                  </strong>
+
+                  <button
+                    onClick={
+                      autoLineup
+                    }
+                  >
+                    ⭐ Best XI
+                  </button>
+                </div>
+
+                <div
+                  className={
+                    styles.squadList
+                  }
+                >
+                  {activeSquad.map(
+                    (
+                      player
+                    ) => {
+                      const idValue =
+                        String(
+                          playerId(
+                            player
+                          )
+                        );
+
+                      const selected =
+                        selectedLineup.some(
+                          (
+                            value
+                          ) =>
+                            String(
+                              value
+                            ) ===
+                            idValue
+                        );
+
+                      return (
+                        <button
+                          key={
+                            idValue
+                          }
+                          className={`${styles.squadPlayer} ${
+                            selected
+                              ? styles.selectedPlayer
+                              : ""
+                          }`}
+                          onClick={() => {
+                            if (
+                              selected
+                            ) {
+                              setSelectedLineup(
+                                (
+                                  previous
+                                ) =>
+                                  previous.filter(
+                                    (
+                                      value
+                                    ) =>
+                                      String(
+                                        value
+                                      ) !==
+                                      idValue
+                                  )
+                              );
+
+                              return;
+                            }
+
+                            if (
+                              selectedLineup.length <
+                              PLAYERS_ON_PITCH
+                            ) {
+                              setSelectedLineup(
+                                (
+                                  previous
+                                ) => [
+                                  ...previous,
+                                  idValue,
+                                ]
+                              );
+                            }
+                          }}
+                        >
+                          <span>
+                            {selected
+                              ? "✓"
+                              : "+"}
+                          </span>
+
+                          <div>
+                            <strong>
+                              {playerName(
+                                player
+                              )}
+                            </strong>
+
+                            <small>
+                              {position(
+                                player
+                              )}
+                            </small>
+                          </div>
+
+                          <b>
+                            {overall(
+                              player
+                            )}
+                          </b>
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                <div
+                  className={
+                    styles.modalFooter
+                  }
+                >
+                  <button
+                    onClick={() =>
+                      setLineupOpen(
+                        false
+                      )
+                    }
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    className={
+                      styles.primaryButton
+                    }
+                    disabled={
+                      selectedLineup.length !==
+                      PLAYERS_ON_PITCH
+                    }
+                    onClick={
+                      saveUserLineup
+                    }
+                  >
+                    Save Starting
+                    XI
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
       </main>
     </>
   );
