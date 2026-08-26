@@ -1,10 +1,6 @@
 // components/ThreePitch.jsx
 
-import {
-  useEffect,
-  useRef,
-} from "react";
-
+import { useEffect, useRef, useCallback } from 'react';
 import * as THREE from "three";
 
 import { OrbitControls } from
