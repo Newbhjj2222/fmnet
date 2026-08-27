@@ -1,90 +1,133 @@
-// pages/news.js
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+
 import { useAuth } from '../context/AuthContext';
 import { db } from '../components/firebase';
+
 import {
+  addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   doc,
   getDoc,
   getDocs,
-  query,
-  where,
+  increment,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  updateDoc,
+  where,
 } from 'firebase/firestore';
+
 import toast from 'react-hot-toast';
 import styles from './news.module.css';
 
 /* =========================================================
-   HELPERS
+   CONSTANTS
 ========================================================= */
 
-function safeNumber(value, fallback = 0) {
-  if (value === null || value === undefined || value === '') {
-    return fallback;
-  }
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
+const MAX_NEWS = 100;
+const MAX_POSTS = 50;
+const MAX_COMMENTS = 30;
 
-function safeString(value, fallback = '') {
-  if (value === null || value === undefined) {
-    return fallback;
-  }
-  if (typeof value === 'object') {
-    return value.name || value.title || value.label || value.id || fallback;
-  }
-  return String(value);
-}
+const AI_MIN_LIKE_DELAY = 45000;
+const AI_MAX_LIKE_DELAY = 180000;
 
-function timeAgo(date) {
-  if (!date) return 'Just now';
+const POST_COOLDOWN = 5000;
 
-  const now = new Date();
-  const target = new Date(date);
-  const diffMs = now.getTime() - target.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
+const MEDIA_OUTLETS = [
+  {
+    id: 'football_world_tv',
+    name: 'Football World TV',
+    shortName: 'FWTV',
+    icon: '📺',
+    color: '#38bdf8',
+    type: 'Television',
+  },
+  {
+    id: 'global_football_daily',
+    name: 'Global Football Daily',
+    shortName: 'GFD',
+    icon: '📰',
+    color: '#f59e0b',
+    type: 'Newspaper',
+  },
+  {
+    id: 'football_insider',
+    name: 'Football Insider',
+    shortName: 'FI',
+    icon: '🎙️',
+    color: '#22c55e',
+    type: 'Media',
+  },
+  {
+    id: 'stadium_press',
+    name: 'The Stadium Press',
+    shortName: 'TSP',
+    icon: '🏟️',
+    color: '#ef4444',
+    type: 'Newspaper',
+  },
+  {
+    id: 'football_focus',
+    name: 'Football Focus',
+    shortName: 'FF',
+    icon: '🎥',
+    color: '#8b5cf6',
+    type: 'Television',
+  },
+  {
+    id: 'transfer_central',
+    name: 'Transfer Central',
+    shortName: 'TC',
+    icon: '🔄',
+    color: '#ec4899',
+    type: 'Transfer Media',
+  },
+];
 
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-
-  return target.toLocaleDateString();
-}
-
-function formatDate(date) {
-  if (!date) return '-';
-  try {
-    return new Date(date).toLocaleDateString('en-US', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return '-';
-  }
-}
-
-function formatTime(date) {
-  if (!date) return '-';
-  try {
-    return new Date(date).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return '-';
-  }
-}
+const AI_PERSONAS = [
+  {
+    id: 'ai-john',
+    name: 'John Football',
+    avatar: '👨🏾‍💼',
+  },
+  {
+    id: 'ai-marc',
+    name: 'Marc Analyst',
+    avatar: '🧠',
+  },
+  {
+    id: 'ai-david',
+    name: 'David Fan',
+    avatar: '⚽',
+  },
+  {
+    id: 'ai-sarah',
+    name: 'Sarah Sports',
+    avatar: '🎙️',
+  },
+  {
+    id: 'ai-alex',
+    name: 'Alex Reporter',
+    avatar: '📰',
+  },
+];
 
 /* =========================================================
-   NEWS GENERATOR
+   NEWS TEMPLATES
 ========================================================= */
 
 const NEWS_TEMPLATES = {
@@ -93,51 +136,73 @@ const NEWS_TEMPLATES = {
     title: 'Match Result',
     color: '#38bdf8',
   },
+
   upcoming_match: {
     icon: '📅',
     title: 'Upcoming Fixture',
     color: '#f59e0b',
   },
+
   transfer: {
     icon: '🔄',
     title: 'Transfer News',
     color: '#22c55e',
   },
+
   loan: {
     icon: '📋',
     title: 'Loan Update',
     color: '#8b5cf6',
   },
-  youth: {
-    icon: '🌟',
-    title: 'Youth Academy',
-    color: '#ec4899',
-  },
-  finance: {
-    icon: '💰',
-    title: 'Financial News',
-    color: '#f59e0b',
-  },
-  board: {
-    icon: '👔',
-    title: 'Board Update',
-    color: '#6366f1',
-  },
+
   injury: {
     icon: '🩹',
     title: 'Injury Report',
     color: '#ef4444',
   },
+
+  youth: {
+    icon: '🌟',
+    title: 'Youth Academy',
+    color: '#ec4899',
+  },
+
+  finance: {
+    icon: '💰',
+    title: 'Financial News',
+    color: '#f59e0b',
+  },
+
+  board: {
+    icon: '👔',
+    title: 'Board Update',
+    color: '#6366f1',
+  },
+
   achievement: {
     icon: '🏆',
     title: 'Achievement',
     color: '#fbbf24',
   },
+
   league: {
     icon: '📊',
     title: 'League Update',
     color: '#0ea5e9',
   },
+
+  interview: {
+    icon: '🎤',
+    title: 'Exclusive Interview',
+    color: '#a855f7',
+  },
+
+  media: {
+    icon: '📺',
+    title: 'Media Report',
+    color: '#14b8a6',
+  },
+
   general: {
     icon: '📰',
     title: 'Club News',
@@ -145,37 +210,267 @@ const NEWS_TEMPLATES = {
   },
 };
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function safeNumber(value, fallback = 0) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    Number.isNaN(Number(value))
+  ) {
+    return fallback;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function safeString(value, fallback = '') {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value === 'object') {
+    return (
+      value.name ||
+      value.title ||
+      value.label ||
+      value.displayName ||
+      value.id ||
+      fallback
+    );
+  }
+
+  return String(value);
+}
+
+function getPlayerName(player) {
+  return (
+    player?.name ||
+    player?.fullName ||
+    player?.displayName ||
+    `${player?.firstName || ''} ${player?.lastName || ''}`.trim() ||
+    'Unknown Player'
+  );
+}
+
+function getPlayerPosition(player) {
+  return (
+    player?.position ||
+    player?.primaryPosition ||
+    player?.role ||
+    'MID'
+  );
+}
+
+function getPlayerOverall(player) {
+  return safeNumber(
+    player?.overall ??
+      player?.rating ??
+      player?.overallRating,
+    0
+  );
+}
+
+function toDate(value) {
+  if (!value) return null;
+
+  if (
+    typeof value === 'object' &&
+    typeof value.toDate === 'function'
+  ) {
+    return value.toDate();
+  }
+
+  if (
+    typeof value === 'object' &&
+    typeof value.seconds === 'number'
+  ) {
+    return new Date(value.seconds * 1000);
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function timeAgo(value) {
+  const date = toDate(value);
+
+  if (!date) {
+    return 'Just now';
+  }
+
+  const now = new Date();
+
+  const diffMs = now.getTime() - date.getTime();
+
+  if (diffMs < 0) {
+    return 'Upcoming';
+  }
+
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffMin < 1) return 'Just now';
+
+  if (diffMin < 60) {
+    return `${diffMin}m ago`;
+  }
+
+  if (diffHour < 24) {
+    return `${diffHour}h ago`;
+  }
+
+  if (diffDay < 7) {
+    return `${diffDay}d ago`;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function formatDate(value) {
+  const date = toDate(value);
+
+  if (!date) return '-';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatTime(value) {
+  const date = toDate(value);
+
+  if (!date) return '-';
+
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatMoney(value) {
+  return safeNumber(value).toLocaleString();
+}
+
+function getTimestampValue(value) {
+  const date = toDate(value);
+
+  return date ? date.getTime() : 0;
+}
+
+function getRandomItem(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return null;
+  }
+
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+/* =========================================================
+   SEASON
+========================================================= */
+
+function getSeasonYear() {
+  const now = new Date();
+
+  return now.getMonth() >= 6
+    ? now.getFullYear()
+    : now.getFullYear() - 1;
+}
+
+/* =========================================================
+   MATCH NEWS
+========================================================= */
+
 function generateMatchNews(matches, clubId, clubName) {
   const news = [];
 
   matches.forEach((match) => {
     const result = match.result || {};
-    const homeScore = safeNumber(result.homeScore ?? match.homeScore);
-    const awayScore = safeNumber(result.awayScore ?? match.awayScore);
-    const isHome = match.homeClubId === clubId || match.homeTeamId === clubId;
 
-    if (!isHome && match.awayClubId !== clubId && match.awayTeamId !== clubId) return;
+    const homeScore = safeNumber(
+      result.homeScore ?? match.homeScore
+    );
+
+    const awayScore = safeNumber(
+      result.awayScore ?? match.awayScore
+    );
+
+    const isHome =
+      match.homeClubId === clubId ||
+      match.homeTeamId === clubId;
+
+    const isAway =
+      match.awayClubId === clubId ||
+      match.awayTeamId === clubId;
+
+    if (!isHome && !isAway) {
+      return;
+    }
 
     const opponent = isHome
-      ? match.awayClubName || match.awayTeam || 'Opponent'
-      : match.homeClubName || match.homeTeam || 'Opponent';
+      ? safeString(
+          match.awayClubName ??
+            match.awayTeam ??
+            match.awayName,
+          'Opponent'
+        )
+      : safeString(
+          match.homeClubName ??
+            match.homeTeam ??
+            match.homeName,
+          'Opponent'
+        );
 
-    const teamScore = isHome ? homeScore : awayScore;
-    const opponentScore = isHome ? awayScore : homeScore;
+    const teamScore = isHome
+      ? homeScore
+      : awayScore;
 
-    if (match.result || match.status === 'finished') {
-      let headline = '';
-      let body = '';
+    const opponentScore = isHome
+      ? awayScore
+      : homeScore;
+
+    const isFinished =
+      match.status === 'finished' ||
+      match.finished === true ||
+      Boolean(match.result);
+
+    if (isFinished) {
+      let headline;
+      let body;
 
       if (teamScore > opponentScore) {
-        headline = `${clubName} defeat ${opponent} ${teamScore}-${opponentScore}`;
-        body = `${clubName} secured a convincing victory over ${opponent} in their latest fixture.`;
+        headline =
+          `${clubName} defeat ${opponent} ${teamScore}-${opponentScore}`;
+
+        body =
+          `${clubName} secured three points after beating ${opponent} ${teamScore}-${opponentScore}.`;
       } else if (teamScore < opponentScore) {
-        headline = `${clubName} fall to ${opponent} ${teamScore}-${opponentScore}`;
-        body = `${clubName} suffered a defeat against ${opponent} in a challenging encounter.`;
+        headline =
+          `${clubName} lose to ${opponent} ${teamScore}-${opponentScore}`;
+
+        body =
+          `${clubName} suffered defeat against ${opponent} in their latest fixture.`;
       } else {
-        headline = `${clubName} draw ${teamScore}-${opponentScore} with ${opponent}`;
-        body = `${clubName} and ${opponent} shared the points in a hard-fought draw.`;
+        headline =
+          `${clubName} draw ${teamScore}-${opponentScore} with ${opponent}`;
+
+        body =
+          `${clubName} and ${opponent} shared the points after a ${teamScore}-${opponentScore} draw.`;
       }
 
       news.push({
@@ -186,7 +481,10 @@ function generateMatchNews(matches, clubId, clubName) {
         color: NEWS_TEMPLATES.match_result.color,
         headline,
         body,
-        date: match.date || new Date().toISOString(),
+        date:
+          match.finishedAt ||
+          match.date ||
+          new Date().toISOString(),
         matchId: match.id,
       });
     } else {
@@ -196,9 +494,13 @@ function generateMatchNews(matches, clubId, clubName) {
         icon: NEWS_TEMPLATES.upcoming_match.icon,
         title: NEWS_TEMPLATES.upcoming_match.title,
         color: NEWS_TEMPLATES.upcoming_match.color,
-        headline: `${clubName} to face ${opponent}`,
-        body: `Upcoming fixture: ${clubName} will take on ${opponent} at ${formatTime(match.date)}.`,
-        date: new Date().toISOString(),
+        headline:
+          `${clubName} to face ${opponent}`,
+        body:
+          `Upcoming fixture between ${clubName} and ${opponent}.`,
+        date:
+          match.date ||
+          new Date().toISOString(),
         matchId: match.id,
       });
     }
@@ -207,35 +509,148 @@ function generateMatchNews(matches, clubId, clubName) {
   return news;
 }
 
+/* =========================================================
+   TRANSFER NEWS
+========================================================= */
+
 function generateTransferNews(players, clubId, clubName) {
   const news = [];
 
   players.forEach((player) => {
-    const status = safeString(player.transferStatus || player.status, '').toLowerCase();
+    const name = getPlayerName(player);
 
-    if (status.includes('transfer') || status.includes('listed')) {
+    const status = safeString(
+      player.transferStatus ||
+        player.status ||
+        player.transferState,
+      ''
+    ).toLowerCase();
+
+    const isListed =
+      player.transferListed === true ||
+      status.includes('listed') ||
+      status.includes('transfer');
+
+    const isCompleted =
+      player.transferCompleted === true ||
+      status.includes('completed') ||
+      status.includes('sold');
+
+    const transferTo =
+      player.transferToClubName ||
+      player.toClubName ||
+      player.newClubName ||
+      'another club';
+
+    const transferFrom =
+      player.transferFromClubName ||
+      player.fromClubName ||
+      'another club';
+
+    if (isCompleted) {
+      const fee =
+        player.transferFee ??
+        player.fee ??
+        player.transferAmount ??
+        player.askingPrice;
+
       news.push({
-        id: `news-transfer-${player.id}`,
+        id: `news-transfer-completed-${player.id}`,
         type: 'transfer',
         icon: NEWS_TEMPLATES.transfer.icon,
         title: NEWS_TEMPLATES.transfer.title,
         color: NEWS_TEMPLATES.transfer.color,
-        headline: `${player.name || player.fullName} transfer listed`,
-        body: `${clubName} have placed ${player.name || player.fullName} on the transfer list with an asking price of €${safeNumber(player.askingPrice || player.marketValue).toLocaleString()}.`,
-        date: player.transferListedAt || new Date().toISOString(),
+        headline:
+          `${name} completes transfer to ${transferTo}`,
+        body:
+          `${clubName} have completed the transfer of ${name} for €${formatMoney(fee)}.`,
+        date:
+          player.transferCompletedAt ||
+          player.updatedAt ||
+          new Date().toISOString(),
+        playerId: player.id,
+      });
+
+      return;
+    }
+
+    if (isListed) {
+      const askingPrice =
+        player.askingPrice ??
+        player.transferFee ??
+        player.marketValue ??
+        0;
+
+      news.push({
+        id: `news-transfer-listed-${player.id}`,
+        type: 'transfer',
+        icon: NEWS_TEMPLATES.transfer.icon,
+        title: NEWS_TEMPLATES.transfer.title,
+        color: NEWS_TEMPLATES.transfer.color,
+        headline:
+          `${name} placed on the transfer list`,
+        body:
+          `${clubName} are listening to offers for ${name}. Current asking price: €${formatMoney(askingPrice)}.`,
+        date:
+          player.transferListedAt ||
+          player.updatedAt ||
+          new Date().toISOString(),
+        playerId: player.id,
       });
     }
 
-    if (status.includes('loan')) {
+    const isLoan =
+      player.loanListed === true ||
+      status.includes('loan');
+
+    if (isLoan) {
       news.push({
         id: `news-loan-${player.id}`,
         type: 'loan',
         icon: NEWS_TEMPLATES.loan.icon,
         title: NEWS_TEMPLATES.loan.title,
         color: NEWS_TEMPLATES.loan.color,
-        headline: `${player.name || player.fullName} available for loan`,
-        body: `${clubName} have made ${player.name || player.fullName} available for a loan move to gain first-team experience.`,
-        date: player.loanListedAt || new Date().toISOString(),
+        headline:
+          `${name} available for loan`,
+        body:
+          `${clubName} are open to loan offers for ${name} to gain regular first-team experience.`,
+        date:
+          player.loanListedAt ||
+          player.updatedAt ||
+          new Date().toISOString(),
+        playerId: player.id,
+      });
+    }
+
+    if (
+      player.transferOfferReceived === true ||
+      player.hasTransferOffer === true
+    ) {
+      const offer =
+        player.transferOfferAmount ??
+        player.offerAmount ??
+        0;
+
+      const fromClub =
+        player.offerFromClubName ||
+        player.interestedClubName ||
+        'an interested club';
+
+      news.push({
+        id: `news-transfer-offer-${player.id}`,
+        type: 'transfer',
+        icon: '💼',
+        title: 'Transfer Offer',
+        color: '#10b981',
+        headline:
+          `${fromClub} make offer for ${name}`,
+        body:
+          `${fromClub} have submitted an offer of €${formatMoney(offer)} for ${name}.`,
+        date:
+          player.transferOfferAt ||
+          player.updatedAt ||
+          new Date().toISOString(),
+        playerId: player.id,
       });
     }
   });
@@ -243,78 +658,592 @@ function generateTransferNews(players, clubId, clubName) {
   return news;
 }
 
-function generateYouthNews(youthPlayers, clubName) {
+/* =========================================================
+   INJURY NEWS
+========================================================= */
+
+function generateInjuryNews(players, clubName) {
   const news = [];
 
-  youthPlayers
-    .filter((player) => player.isYouth === true || player.squadType === 'youth')
-    .slice(0, 3)
-    .forEach((player) => {
-      news.push({
+  players.forEach((player) => {
+    const name = getPlayerName(player);
+
+    const injured =
+      player.injured === true ||
+      player.isInjured === true ||
+      player.injuryStatus === 'injured' ||
+      Boolean(player.injury);
+
+    if (!injured) {
+      return;
+    }
+
+    const injuryName =
+      player.injuryName ||
+      player.injuryType ||
+      player.injury ||
+      'an injury';
+
+    const days =
+      player.injuryDaysRemaining ??
+      player.daysOut ??
+      player.injuryDuration ??
+      null;
+
+    let recoveryText = '';
+
+    if (days !== null) {
+      recoveryText =
+        ` Estimated recovery time: ${safeNumber(days)} day(s).`;
+    }
+
+    news.push({
+      id: `news-injury-${player.id}`,
+      type: 'injury',
+      icon: NEWS_TEMPLATES.injury.icon,
+      title: NEWS_TEMPLATES.injury.title,
+      color: NEWS_TEMPLATES.injury.color,
+      headline:
+        `${name sidelined with ${injuryName}`,
+      body:
+        `${clubName} will be without ${name} while the player recovers from ${injuryName}.${recoveryText}`,
+      date:
+        player.injuryReportedAt ||
+        player.injuredAt ||
+        player.updatedAt ||
+        new Date().toISOString(),
+      playerId: player.id,
+    });
+  });
+
+  return news;
+}
+
+/* =========================================================
+   YOUTH NEWS
+========================================================= */
+
+function generateYouthNews(players, clubName) {
+  return players
+    .filter(
+      (player) =>
+        player.isYouth === true ||
+        player.squadType === 'youth'
+    )
+    .slice(0, 5)
+    .map((player) => {
+      const name = getPlayerName(player);
+
+      return {
         id: `news-youth-${player.id}`,
         type: 'youth',
         icon: NEWS_TEMPLATES.youth.icon,
         title: NEWS_TEMPLATES.youth.title,
         color: NEWS_TEMPLATES.youth.color,
-        headline: `Young talent ${player.name || player.fullName} emerges from academy`,
-        body: `${clubName}'s youth academy has produced promising talent ${player.name || player.fullName} (${player.age || '?'} years old, OVR ${player.overall || '?'}, potential ${player.potential || '?'}).`,
-        date: player.createdAt || new Date().toISOString(),
-      });
+        headline:
+          `Young talent ${name} attracts attention`,
+        body:
+          `${clubName}'s academy prospect ${name} is showing promise with an OVR of ${getPlayerOverall(player)} and potential of ${safeNumber(player.potential, '?')}.`,
+        date:
+          player.createdAt ||
+          player.updatedAt ||
+          new Date().toISOString(),
+        playerId: player.id,
+      };
     });
-
-  return news;
 }
+
+/* =========================================================
+   FINANCE NEWS
+========================================================= */
 
 function generateFinanceNews(clubInfo, careerData) {
   const news = [];
 
-  if (clubInfo?.totalPrizeMoney || clubInfo?.prizeMoney) {
-    const prize = safeNumber(clubInfo.totalPrizeMoney ?? clubInfo.prizeMoney);
-    news.push({
-      id: `news-prize-${clubInfo.id}`,
-      type: 'finance',
-      icon: NEWS_TEMPLATES.finance.icon,
-      title: NEWS_TEMPLATES.finance.title,
-      color: NEWS_TEMPLATES.finance.color,
-      headline: `${clubInfo.name} receive €${prize.toLocaleString()} prize money`,
-      body: `The club has been awarded prize money of €${prize.toLocaleString()} for their league performance this season.`,
-      date: new Date().toISOString(),
-    });
+  if (
+    clubInfo?.totalPrizeMoney !== undefined ||
+    clubInfo?.prizeMoney !== undefined
+  ) {
+    const prize = safeNumber(
+      clubInfo.totalPrizeMoney ??
+        clubInfo.prizeMoney
+    );
+
+    if (prize > 0) {
+      news.push({
+        id: `news-prize-${clubInfo.id}`,
+        type: 'finance',
+        icon: NEWS_TEMPLATES.finance.icon,
+        title: NEWS_TEMPLATES.finance.title,
+        color: NEWS_TEMPLATES.finance.color,
+        headline:
+          `${clubInfo.name || 'The club'} receive €${formatMoney(prize)} prize money`,
+        body:
+          `The club has received prize money of €${formatMoney(prize)} for its competition performance.`,
+        date:
+          clubInfo.prizeMoneyAt ||
+          clubInfo.updatedAt ||
+          new Date().toISOString(),
+      });
+    }
   }
 
   if (careerData?.lastWagePayment) {
     news.push({
-      id: `news-wages-${Date.now()}`,
+      id: `news-wages-${careerData.lastWagePaymentAt || 'latest'}`,
       type: 'finance',
       icon: NEWS_TEMPLATES.finance.icon,
       title: NEWS_TEMPLATES.finance.title,
       color: NEWS_TEMPLATES.finance.color,
-      headline: `Monthly wages of €${safeNumber(careerData.lastWagePayment).toLocaleString()} paid`,
-      body: `The club has paid out €${safeNumber(careerData.lastWagePayment).toLocaleString()} in player salaries this month.`,
-      date: careerData.lastWagePaymentAt || new Date().toISOString(),
+      headline:
+        `Monthly wages of €${formatMoney(careerData.lastWagePayment)} paid`,
+      body:
+        `The club has processed its latest player wage payment.`,
+      date:
+        careerData.lastWagePaymentAt ||
+        new Date().toISOString(),
     });
   }
 
   return news;
 }
 
-function generateLeagueNews(clubInfo, stats) {
-  const news = [];
+/* =========================================================
+   LEAGUE NEWS
+========================================================= */
 
-  if (stats.matches > 0) {
-    news.push({
-      id: `news-league-position-${Date.now()}`,
+function generateLeagueNews(clubInfo, careerData) {
+  const matches = safeNumber(careerData?.totalMatches);
+
+  if (matches <= 0) {
+    return [];
+  }
+
+  const wins = safeNumber(careerData?.totalWins);
+  const draws = safeNumber(careerData?.totalDraws);
+  const losses = safeNumber(careerData?.totalLosses);
+  const points = safeNumber(careerData?.points);
+
+  return [
+    {
+      id: `news-league-${careerData?.currentPosition || 'current'}`,
       type: 'league',
       icon: NEWS_TEMPLATES.league.icon,
       title: NEWS_TEMPLATES.league.title,
       color: NEWS_TEMPLATES.league.color,
-      headline: `${clubInfo?.name || 'Your club'} in league position ${stats.position || '-'}`,
-      body: `Current standings show ${clubInfo?.name || 'your club'} with ${stats.points} points from ${stats.matches} matches (${stats.wins}W, ${stats.draws}D, ${stats.losses}L).`,
+      headline:
+        `${clubInfo?.name || 'Your club'} currently sit ${careerData?.currentPosition || '-'} in the league`,
+      body:
+        `${clubInfo?.name || 'Your club'} have ${points} points from ${matches} matches: ${wins} wins, ${draws} draws and ${losses} defeats.`,
+      date:
+        careerData?.lastMatchAt ||
+        new Date().toISOString(),
+    },
+  ];
+}
+
+/* =========================================================
+   MEDIA GENERATOR
+========================================================= */
+
+function generateMediaReports({
+  clubInfo,
+  careerData,
+  players,
+  matches,
+}) {
+  const clubName = clubInfo?.name || 'Your Club';
+
+  const media = [];
+
+  const outlet =
+    getRandomItem(MEDIA_OUTLETS) ||
+    MEDIA_OUTLETS[0];
+
+  if (players.length > 0) {
+    const player =
+      [...players].sort(
+        (a, b) =>
+          getPlayerOverall(b) -
+          getPlayerOverall(a)
+      )[0];
+
+    media.push({
+      id: `media-player-${player.id}`,
+      type: 'media',
+      icon: outlet.icon,
+      title: outlet.name,
+      color: outlet.color,
+      headline:
+        `${outlet.name}: ${getPlayerName(player)} becoming one to watch`,
+      body:
+        `${outlet.name} are monitoring ${getPlayerName(player)} after a series of promising performances for ${clubName}.`,
       date: new Date().toISOString(),
+      mediaOutletId: outlet.id,
     });
   }
 
-  return news;
+  if (matches.length > 0) {
+    const latest =
+      [...matches].sort(
+        (a, b) =>
+          getTimestampValue(b.date) -
+          getTimestampValue(a.date)
+      )[0];
+
+    const opponent =
+      latest?.homeClubId === clubInfo?.id
+        ? latest?.awayClubName ||
+          latest?.awayTeam ||
+          'the opposition'
+        : latest?.homeClubName ||
+          latest?.homeTeam ||
+          'the opposition';
+
+    media.push({
+      id: `media-match-${latest.id}`,
+      type: 'media',
+      icon: '📺',
+      title: 'Football World TV',
+      color: '#38bdf8',
+      headline:
+        `Football World TV: ${clubName} under the spotlight`,
+      body:
+        `Our analysts are reviewing ${clubName}'s latest fixture against ${opponent} and the manager's tactical decisions.`,
+      date:
+        latest.date ||
+        new Date().toISOString(),
+      mediaOutletId: 'football_world_tv',
+    });
+  }
+
+  if (
+    careerData?.boardConfidence !== undefined
+  ) {
+    const confidence = safeNumber(
+      careerData.boardConfidence,
+      70
+    );
+
+    media.push({
+      id: `media-board-${confidence}`,
+      type: 'media',
+      icon: '🎙️',
+      title: 'Football Insider',
+      color: '#22c55e',
+      headline:
+        `Football Insider analyse ${clubName}'s project`,
+      body:
+        `With board confidence currently at ${confidence}%, media analysts are debating whether the club is moving in the right direction.`,
+      date: new Date().toISOString(),
+      mediaOutletId: 'football_insider',
+    });
+  }
+
+  return media;
+}
+
+/* =========================================================
+   INTERVIEW GENERATOR
+========================================================= */
+
+function generateInterview({
+  clubInfo,
+  careerData,
+  players,
+}) {
+  const clubName = clubInfo?.name || 'Your Club';
+
+  const player =
+    getRandomItem(players) || null;
+
+  const confidence = safeNumber(
+    careerData?.boardConfidence,
+    70
+  );
+
+  const questions = [
+    `Your team has been under pressure recently. How do you assess the current situation?`,
+    `What are your priorities for the next part of the season?`,
+    `The supporters want results. What message do you have for them?`,
+    `Are you satisfied with the development of the squad?`,
+    `Will the club be active in the transfer market?`,
+    `How important is squad depth for your current campaign?`,
+  ];
+
+  const question =
+    getRandomItem(questions);
+
+  let answer;
+
+  if (confidence >= 75) {
+    answer =
+      `We are happy with the direction of the team. There is still work to do, but the players are responding well and we want to keep improving.`;
+  } else if (confidence >= 50) {
+    answer =
+      `We know there are areas we need to improve. The important thing is to stay focused, work together and respond on the pitch.`;
+  } else {
+    answer =
+      `We understand the concerns. The responsibility is ours, and we have to find solutions quickly and give the supporters something to believe in.`;
+  }
+
+  return {
+    id: `interview-${Date.now()}`,
+    type: 'interview',
+    icon: NEWS_TEMPLATES.interview.icon,
+    title: getRandomItem(MEDIA_OUTLETS)?.name ||
+      'Football Insider',
+    color: NEWS_TEMPLATES.interview.color,
+    headline:
+      `${clubName} manager speaks to the media`,
+    body:
+      `🎤 Interview question: "${question}"\n\nManager: "${answer}"`,
+    date: new Date().toISOString(),
+    featuredPlayerId: player?.id || null,
+  };
+}
+
+/* =========================================================
+   AI COMMENT GENERATOR
+========================================================= */
+
+function generateAIComment({
+  post,
+  clubInfo,
+}) {
+  const text = safeString(
+    post.content,
+    ''
+  ).toLowerCase();
+
+  const clubName =
+    clubInfo?.name || 'the club';
+
+  if (
+    text.includes('transfer') ||
+    text.includes('sign') ||
+    text.includes('player')
+  ) {
+    return getRandomItem([
+      `Interesting transfer development. ${clubName} need to get this decision right.`,
+      `This could become one of the most important moves of the season.`,
+      `The transfer market is getting interesting. I want to see how this develops.`,
+      `Squad building is never simple, but this move could make a difference.`,
+    ]);
+  }
+
+  if (
+    text.includes('win') ||
+    text.includes('victory') ||
+    text.includes('three points')
+  ) {
+    return getRandomItem([
+      `What a result. The team looked much more confident today.`,
+      `Three points that could be very important later in the season.`,
+      `Good performance. The manager deserves credit for this one.`,
+      `The supporters will definitely enjoy this result.`,
+    ]);
+  }
+
+  if (
+    text.includes('loss') ||
+    text.includes('lose') ||
+    text.includes('defeat')
+  ) {
+    return getRandomItem([
+      `Tough result, but there is still plenty of football left to play.`,
+      `The team needs to react quickly from this setback.`,
+      `Not the result they wanted. The next fixture will be important.`,
+      `A difficult afternoon. Tactical changes may be needed.`,
+    ]);
+  }
+
+  if (
+    text.includes('injury') ||
+    text.includes('injured')
+  ) {
+    return getRandomItem([
+      `Hopefully the player makes a quick recovery.`,
+      `Injuries can change a season very quickly. Squad depth will matter.`,
+      `Bad news for the team. Medical staff will be important here.`,
+    ]);
+  }
+
+  return getRandomItem([
+    `Interesting update. I will be watching this closely.`,
+    `The project is becoming interesting. Let's see what happens next.`,
+    `Football is unpredictable. This could go either way.`,
+    `There is definitely something to discuss here.`,
+    `The supporters will have plenty to say about this.`,
+    `Interesting decision from the manager.`,
+  ]);
+}
+
+/* =========================================================
+   AI ENGAGEMENT
+========================================================= */
+
+async function simulateAIEngagement({
+  postId,
+  post,
+  clubInfo,
+}) {
+  if (!postId || !post) {
+    return;
+  }
+
+  const postRef = doc(
+    db,
+    'posts',
+    postId
+  );
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshot =
+        await transaction.get(postRef);
+
+      if (!snapshot.exists()) {
+        return;
+      }
+
+      const current =
+        snapshot.data();
+
+      const lastAI =
+        getTimestampValue(
+          current.aiEngagedAt
+        );
+
+      const now = Date.now();
+
+      if (
+        lastAI &&
+        now - lastAI < AI_MIN_LIKE_DELAY
+      ) {
+        return;
+      }
+
+      const currentLikes =
+        Array.isArray(current.aiLikes)
+          ? current.aiLikes
+          : [];
+
+      const aiPool =
+        AI_PERSONAS.filter(
+          (ai) =>
+            !currentLikes.includes(ai.id)
+        );
+
+      const numberOfLikes =
+        Math.floor(
+          Math.random() * 3
+        );
+
+      const selectedAI =
+        aiPool
+          .sort(() => Math.random() - 0.5)
+          .slice(0, numberOfLikes);
+
+      const aiLikeIds =
+        selectedAI.map(
+          (ai) => ai.id
+        );
+
+      const updates = {
+        aiEngagedAt:
+          serverTimestamp(),
+      };
+
+      if (aiLikeIds.length > 0) {
+        updates.aiLikes =
+          arrayUnion(...aiLikeIds);
+
+        updates.likeCount =
+          increment(
+            aiLikeIds.length
+          );
+      }
+
+      transaction.update(
+        postRef,
+        updates
+      );
+    });
+
+    /*
+      AI comments are intentionally limited.
+      We do them separately so a single post
+      does not suddenly receive a stadium full
+      of robots shouting at it.
+    */
+
+    const shouldComment =
+      Math.random() < 0.35;
+
+    if (!shouldComment) {
+      return;
+    }
+
+    const commentsRef =
+      collection(
+        db,
+        'posts',
+        postId,
+        'comments'
+      );
+
+    const commentsSnapshot =
+      await getDocs(
+        query(
+          commentsRef,
+          limit(MAX_COMMENTS)
+        )
+      );
+
+    const existingAIComments =
+      commentsSnapshot.docs.filter(
+        (commentDoc) =>
+          commentDoc.data()?.isAI === true
+      );
+
+    if (
+      existingAIComments.length >= 3
+    ) {
+      return;
+    }
+
+    const ai =
+      getRandomItem(
+        AI_PERSONAS
+      );
+
+    if (!ai) return;
+
+    const comment =
+      generateAIComment({
+        post,
+        clubInfo,
+      });
+
+    await addDoc(
+      commentsRef,
+      {
+        userId: ai.id,
+        username: ai.name,
+        avatar: ai.avatar,
+        content: comment,
+        isAI: true,
+        createdAt:
+          serverTimestamp(),
+      }
+    );
+  } catch (error) {
+    console.error(
+      'AI engagement error:',
+      error
+    );
+  }
 }
 
 /* =========================================================
@@ -323,367 +1252,576 @@ function generateLeagueNews(clubInfo, stats) {
 
 export default function NewsPage() {
   const router = useRouter();
-  const { user, userData, loading } = useAuth();
 
-  const [careerData, setCareerData] = useState(null);
-  const [clubInfo, setClubInfo] = useState(null);
-  const [matches, setMatches] = useState([]);
-  const [players, setPlayers] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const {
+    user,
+    userData,
+    loading,
+  } = useAuth();
+
+  const [careerData, setCareerData] =
+    useState(null);
+
+  const [clubInfo, setClubInfo] =
+    useState(null);
+
+  const [matches, setMatches] =
+    useState([]);
+
+  const [players, setPlayers] =
+    useState([]);
+
+  const [posts, setPosts] =
+    useState([]);
+
+  const [comments, setComments] =
+    useState({});
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [activeFilter, setActiveFilter] =
+    useState('all');
+
+  const [searchTerm, setSearchTerm] =
+    useState('');
+
+  const [postText, setPostText] =
+    useState('');
+
+  const [posting, setPosting] =
+    useState(false);
+
+  const [commentText, setCommentText] =
+    useState({});
+
+  const [openComments, setOpenComments] =
+    useState({});
+
+  const [loadingComments, setLoadingComments] =
+    useState({});
+
+  const [selectedMedia, setSelectedMedia] =
+    useState(null);
+
+  const [mediaInterview, setMediaInterview] =
+    useState(null);
+
+  const aiTimers =
+    useRef({});
+
+  const lastPostTime =
+    useRef(0);
 
   /* =======================================================
      AUTH
   ======================================================= */
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
+    if (loading) {
       return;
     }
 
-    if (user) {
-      fetchNewsData();
+    if (!user) {
+      router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [
+    loading,
+    user,
+    router,
+  ]);
 
   /* =======================================================
-     SEASON YEAR
+     LOAD USER / CLUB / PLAYERS / MATCHES
   ======================================================= */
 
-  function getSeasonYear() {
-    const now = new Date();
-    return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-  }
-
-  /* =======================================================
-     FETCH DATA
-  ======================================================= */
-
-  const fetchNewsData = async () => {
-    try {
-      setIsLoading(true);
-
-      const userRef = doc(db, 'users', user.uid);
-      const userSnapshot = await getDoc(userRef);
-
-      let career = {};
-
-      if (userSnapshot.exists()) {
-        const data = userSnapshot.data();
-        career = data.careerData || {};
-        setCareerData(career);
+  const fetchBaseData =
+    useCallback(async () => {
+      if (!user) {
+        return;
       }
 
-      if (career.currentClub) {
-        const clubRef = doc(db, 'clubs', career.currentClub);
-        const clubSnapshot = await getDoc(clubRef);
+      try {
+        setIsLoading(true);
 
-        if (clubSnapshot.exists()) {
+        const userRef =
+          doc(
+            db,
+            'users',
+            user.uid
+          );
+
+        const userSnapshot =
+          await getDoc(userRef);
+
+        if (!userSnapshot.exists()) {
+          toast.error(
+            'User account not found'
+          );
+
+          return;
+        }
+
+        const data =
+          userSnapshot.data();
+
+        const career =
+          data.careerData || {};
+
+        setCareerData(career);
+
+        if (!career.currentClub) {
+          setMatches([]);
+          setPlayers([]);
+          setClubInfo(null);
+          return;
+        }
+
+        const clubRef =
+          doc(
+            db,
+            'clubs',
+            career.currentClub
+          );
+
+        const clubSnapshot =
+          await getDoc(clubRef);
+
+        if (
+          clubSnapshot.exists()
+        ) {
           setClubInfo({
-            id: clubSnapshot.id,
+            id:
+              clubSnapshot.id,
             ...clubSnapshot.data(),
           });
         }
 
-        // Load matches
-        const matchesQuery = query(
-          collection(db, 'matches'),
-          where('seasonYear', '==', getSeasonYear())
-        );
+        /* ---------------------------------------------
+           PLAYERS
+        --------------------------------------------- */
 
-        const matchesSnapshot = await getDocs(matchesQuery);
-        const matchList = [];
+        const playersQuery =
+          query(
+            collection(
+              db,
+              'players'
+            ),
+            where(
+              'clubId',
+              '==',
+              career.currentClub
+            )
+          );
 
-        matchesSnapshot.forEach((docItem) => {
-          const match = docItem.data();
+        const playersSnapshot =
+          await getDocs(
+            playersQuery
+          );
 
-          const isClubMatch =
-            match.homeClubId === career.currentClub ||
-            match.awayClubId === career.currentClub ||
-            match.homeTeamId === career.currentClub ||
-            match.awayTeamId === career.currentClub;
-
-          if (isClubMatch) {
-            matchList.push({
-              id: docItem.id,
-              ...match,
-            });
-          }
-        });
-
-        setMatches(matchList);
-
-        // Load players
-        const playersQuery = query(
-          collection(db, 'players'),
-          where('clubId', '==', career.currentClub)
-        );
-
-        const playersSnapshot = await getDocs(playersQuery);
         const playerList = [];
 
-        playersSnapshot.forEach((docItem) => {
-          playerList.push({
-            id: docItem.id,
-            ...docItem.data(),
-          });
-        });
+        playersSnapshot.forEach(
+          (playerDoc) => {
+            playerList.push({
+              id:
+                playerDoc.id,
+              ...playerDoc.data(),
+            });
+          }
+        );
 
-        setPlayers(playerList);
+        setPlayers(
+          playerList
+        );
+
+        /* ---------------------------------------------
+           MATCHES
+        --------------------------------------------- */
+
+        const matchesQuery =
+          query(
+            collection(
+              db,
+              'matches'
+            ),
+            where(
+              'seasonYear',
+              '==',
+              getSeasonYear()
+            )
+          );
+
+        const matchesSnapshot =
+          await getDocs(
+            matchesQuery
+          );
+
+        const matchList = [];
+
+        matchesSnapshot.forEach(
+          (matchDoc) => {
+            const match =
+              matchDoc.data();
+
+            const belongsToClub =
+              match.homeClubId ===
+                career.currentClub ||
+              match.awayClubId ===
+                career.currentClub ||
+              match.homeTeamId ===
+                career.currentClub ||
+              match.awayTeamId ===
+                career.currentClub;
+
+            if (
+              belongsToClub
+            ) {
+              matchList.push({
+                id:
+                  matchDoc.id,
+                ...match,
+              });
+            }
+          }
+        );
+
+        setMatches(
+          matchList
+        );
+      } catch (error) {
+        console.error(
+          'Fetch news error:',
+          error
+        );
+
+        toast.error(
+          'Failed to load football data'
+        );
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching news data:', error);
-      toast.error('Failed to load news');
-    } finally {
-      setIsLoading(false);
+    }, [user]);
+
+  useEffect(() => {
+    if (!loading && user) {
+      fetchBaseData();
     }
-  };
+  }, [
+    loading,
+    user,
+    fetchBaseData,
+  ]);
+
+  /* =======================================================
+     REAL-TIME COMMUNITY POSTS
+  ======================================================= */
+
+  useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+
+    const postsRef =
+      collection(
+        db,
+        'posts'
+      );
+
+    /*
+      We intentionally avoid orderBy here.
+      This means Firestore does not require
+      an extra composite index just to display
+      the community feed.
+    */
+
+    const postsQuery =
+      query(
+        postsRef,
+        limit(MAX_POSTS)
+      );
+
+    const unsubscribe =
+      onSnapshot(
+        postsQuery,
+        (snapshot) => {
+          const list =
+            snapshot.docs.map(
+              (postDoc) => ({
+                id:
+                  postDoc.id,
+                ...postDoc.data(),
+              })
+            );
+
+          list.sort(
+            (a, b) =>
+              getTimestampValue(
+                b.createdAt
+              ) -
+              getTimestampValue(
+                a.createdAt
+              )
+          );
+
+          setPosts(list);
+        },
+        (error) => {
+          console.error(
+            'Posts listener error:',
+            error
+          );
+        }
+      );
+
+    return () =>
+      unsubscribe();
+  }, [user]);
+
+  /* =======================================================
+     REAL-TIME COMMENTS
+  ======================================================= */
+
+  const subscribeComments =
+    useCallback(
+      (postId) => {
+        if (!postId) {
+          return () => {};
+        }
+
+        const commentsRef =
+          collection(
+            db,
+            'posts',
+            postId,
+            'comments'
+          );
+
+        const commentsQuery =
+          query(
+            commentsRef,
+            limit(MAX_COMMENTS)
+          );
+
+        const unsubscribe =
+          onSnapshot(
+            commentsQuery,
+            (snapshot) => {
+              const list =
+                snapshot.docs.map(
+                  (commentDoc) => ({
+                    id:
+                      commentDoc.id,
+                    ...commentDoc.data(),
+                  })
+                );
+
+              list.sort(
+                (a, b) =>
+                  getTimestampValue(
+                    a.createdAt
+                  ) -
+                  getTimestampValue(
+                    b.createdAt
+                  )
+              );
+
+              setComments(
+                (previous) => ({
+                  ...previous,
+                  [postId]: list,
+                })
+              );
+            },
+            (error) => {
+              console.error(
+                'Comments listener error:',
+                error
+              );
+            }
+          );
+
+        return unsubscribe;
+      },
+      []
+    );
+
+  const toggleComments =
+    useCallback(
+      (postId) => {
+        setOpenComments(
+          (previous) => ({
+            ...previous,
+            [postId]:
+              !previous[postId],
+          })
+        );
+
+        if (
+          !openComments[postId]
+        ) {
+          setLoadingComments(
+            (previous) => ({
+              ...previous,
+              [postId]: true,
+            })
+          );
+
+          subscribeComments(
+            postId
+          );
+
+          setTimeout(() => {
+            setLoadingComments(
+              (previous) => ({
+                ...previous,
+                [postId]: false,
+              })
+            );
+          }, 500);
+        }
+      },
+      [
+        openComments,
+        subscribeComments,
+      ]
+    );
+
+  /* =======================================================
+     AI ENGAGEMENT
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      !user ||
+      posts.length === 0 ||
+      !clubInfo
+    ) {
+      return undefined;
+    }
+
+    posts
+      .filter(
+        (post) =>
+          !post.isAIOnly
+      )
+      .slice(0, 15)
+      .forEach((post) => {
+        if (
+          aiTimers.current[
+            post.id
+          ]
+        ) {
+          return;
+        }
+
+        const delay =
+          AI_MIN_LIKE_DELAY +
+          Math.random() *
+            (
+              AI_MAX_LIKE_DELAY -
+              AI_MIN_LIKE_DELAY
+            );
+
+        aiTimers.current[
+          post.id
+        ] = setTimeout(
+          () => {
+            simulateAIEngagement({
+              postId:
+                post.id,
+              post,
+              clubInfo,
+            });
+
+            delete aiTimers.current[
+              post.id
+            ];
+          },
+          delay
+        );
+      });
+
+    return () => {
+      Object.values(
+        aiTimers.current
+      ).forEach(
+        (timer) =>
+          clearTimeout(timer)
+      );
+
+      aiTimers.current = {};
+    };
+  }, [
+    user,
+    posts,
+    clubInfo,
+  ]);
 
   /* =======================================================
      GENERATE NEWS
   ======================================================= */
 
-  const allNews = useMemo(() => {
-    if (!clubInfo) return [];
+  const generatedNews =
+    useMemo(() => {
+      if (!clubInfo) {
+        return [];
+      }
 
-    const clubName = clubInfo.name || 'Your Club';
-    const clubId = clubInfo.id;
+      const clubName =
+        clubInfo.name ||
+        'Your Club';
 
-    const newsItems = [];
+      const clubId =
+        clubInfo.id;
 
-    // Match news
-    newsItems.push(
-      ...generateMatchNews(matches, clubId, clubName)
-    );
+      const newsItems = [];
 
-    // Transfer/Loan news
-    newsItems.push(
-      ...generateTransferNews(players, clubId, clubName)
-    );
-
-    // Youth news
-    const youthPlayers = players.filter(
-      (player) => player.isYouth === true || player.squadType === 'youth'
-    );
-    newsItems.push(
-      ...generateYouthNews(youthPlayers, clubName)
-    );
-
-    // Finance news
-    newsItems.push(
-      ...generateFinanceNews(clubInfo, careerData)
-    );
-
-    // League news
-    const stats = {
-      matches: safeNumber(careerData?.totalMatches),
-      wins: safeNumber(careerData?.totalWins),
-      draws: safeNumber(careerData?.totalDraws),
-      losses: safeNumber(careerData?.totalLosses),
-      points: safeNumber(careerData?.points),
-      position: careerData?.currentPosition || '-',
-    };
-    newsItems.push(
-      ...generateLeagueNews(clubInfo, stats)
-    );
-
-    // Board news
-    if (careerData?.boardConfidence !== undefined) {
-      const confidence = safeNumber(careerData.boardConfidence, 70);
-
-      newsItems.push({
-        id: `news-board-${Date.now()}`,
-        type: 'board',
-        icon: NEWS_TEMPLATES.board.icon,
-        title: NEWS_TEMPLATES.board.title,
-        color: NEWS_TEMPLATES.board.color,
-        headline: `Board confidence at ${confidence}%`,
-        body:
-          confidence >= 70
-            ? 'The board is very pleased with the club\'s progress under your management.'
-            : confidence >= 50
-              ? 'The board is generally satisfied but expects better results soon.'
-              : 'The board is concerned about recent performances and results.',
-        date: new Date().toISOString(),
-      });
-    }
-
-    // Sort by date (newest first)
-    newsItems.sort((a, b) => {
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-
-    return newsItems;
-  }, [clubInfo, matches, players, careerData]);
-
-  /* =======================================================
-     FILTERED NEWS
-  ======================================================= */
-
-  const filteredNews = useMemo(() => {
-    let result = allNews;
-
-    if (activeFilter !== 'all') {
-      result = result.filter((item) => item.type === activeFilter);
-    }
-
-    if (searchTerm.trim()) {
-      const search = searchTerm.trim().toLowerCase();
-      result = result.filter(
-        (item) =>
-          (item.headline || '').toLowerCase().includes(search) ||
-          (item.body || '').toLowerCase().includes(search)
+      newsItems.push(
+        ...generateMatchNews(
+          matches,
+          clubId,
+          clubName
+        )
       );
-    }
 
-    return result;
-  }, [allNews, activeFilter, searchTerm]);
+      newsItems.push(
+        ...generateTransferNews(
+          players,
+          clubId,
+          clubName
+        )
+      );
 
-  /* =======================================================
-     FILTER TYPES
-  ======================================================= */
+      newsItems.push(
+        ...generateInjuryNews(
+          players,
+          clubName
+        )
+      );
 
-  const filterTypes = useMemo(() => {
-    const types = new Set(allNews.map((item) => item.type));
+      newsItems.push(
+        ...generateYouthNews(
+          players,
+          clubName
+        )
+      );
 
-    return [
-      { value: 'all', label: 'All News', icon: '📰' },
-      ...Array.from(types).map((type) => ({
-        value: type,
-        label: NEWS_TEMPLATES[type]?.title || type,
-        icon: NEWS_TEMPLATES[type]?.icon || '📰',
-      })),
-    ];
-  }, [allNews]);
+      newsItems.push(
+        ...generateFinanceNews(
+          clubInfo,
+          careerData
+        )
+      );
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
+      newsItems.push(
+        ...generateLeagueNews(
+          clubInfo,
+          careerData
+        )
+      );
 
-  if (loading || isLoading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.spinner}></div>
-        <p>Loading news feed...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  /* =======================================================
-     RENDER
-  ======================================================= */
-
-  return (
-    <>
-      <Head>
-        <title>News Feed - Virtual Football Manager</title>
-        <meta
-          name="description"
-          content="Latest football news, match results, transfers, and club updates."
-        />
-      </Head>
-
-      <main className={styles.page}>
-        {/* HEADER */}
-        <header className={styles.header}>
-          <div>
-            <span className={styles.eyebrow}>CLUB COMMUNICATIONS</span>
-            <h1>News Feed</h1>
-            <p>
-              Latest updates from {clubInfo?.name || 'your club'} and around
-              the football world.
-            </p>
-          </div>
-
-          <div className={styles.newsCount}>
-            <strong>{allNews.length}</strong>
-            <span>Stories</span>
-          </div>
-        </header>
-
-        {/* SEARCH */}
-        <section className={styles.searchSection}>
-          <div className={styles.searchBox}>
-            <span>🔎</span>
-            <input
-              type="text"
-              placeholder="Search news..."
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </div>
-        </section>
-
-        {/* FILTERS */}
-        <nav className={styles.filters}>
-          {filterTypes.map((filter) => (
-            <button
-              key={filter.value}
-              type="button"
-              className={
-                activeFilter === filter.value ? styles.activeFilter : ''
-              }
-              onClick={() => setActiveFilter(filter.value)}
-            >
-              <span>{filter.icon}</span>
-              {filter.label}
-            </button>
-          ))}
-        </nav>
-
-        {/* NEWS LIST */}
-        <section className={styles.newsList}>
-          {filteredNews.length > 0 ? (
-            filteredNews.map((news, index) => (
-              <article
-                key={news.id}
-                className={styles.newsCard}
-                style={{
-                  borderLeftColor: news.color,
-                }}
-              >
-                <div className={styles.newsIcon} style={{ background: `${news.color}15` }}>
-                  <span>{news.icon}</span>
-                </div>
-
-                <div className={styles.newsContent}>
-                  <div className={styles.newsHeader}>
-                    <span
-                      className={styles.newsType}
-                      style={{ color: news.color }}
-                    >
-                      {news.title}
-                    </span>
-                    <span className={styles.newsTime}>
-                      {timeAgo(news.date)}
-                    </span>
-                  </div>
-
-                  <h2 className={styles.newsHeadline}>{news.headline}</h2>
-                  <p className={styles.newsBody}>{news.body}</p>
-
-                  <div className={styles.newsFooter}>
-                    <span>{formatDate(news.date)}</span>
-                    <span>{formatTime(news.date)}</span>
-                  </div>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className={styles.emptyState}>
-              <span>📰</span>
-              <h3>No news found</h3>
-              <p>There are no news stories matching your filters.</p>
-            </div>
-          )}
-        </section>
-      </main>
-    </>
-  );
-}
+      newsItems.push(
+        ...generateMediaReports({
+          clubInfo,
+         
