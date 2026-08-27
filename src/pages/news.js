@@ -5,8 +5,10 @@ import {
   useRef,
   useState,
 } from 'react';
+
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+
 import { useAuth } from '../context/AuthContext';
 import { db } from '../components/firebase';
 
@@ -21,7 +23,6 @@ import {
   increment,
   limit,
   onSnapshot,
-  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -540,11 +541,6 @@ function generateTransferNews(players, clubId, clubName) {
       player.newClubName ||
       'another club';
 
-    const transferFrom =
-      player.transferFromClubName ||
-      player.fromClubName ||
-      'another club';
-
     if (isCompleted) {
       const fee =
         player.transferFee ??
@@ -702,7 +698,7 @@ function generateInjuryNews(players, clubName) {
       title: NEWS_TEMPLATES.injury.title,
       color: NEWS_TEMPLATES.injury.color,
       headline:
-        `${name sidelined with ${injuryName}`,
+        `${name} sidelined with ${injuryName}`,
       body:
         `${clubName} will be without ${name} while the player recovers from ${injuryName}.${recoveryText}`,
       date:
@@ -1311,6 +1307,9 @@ export default function NewsPage() {
   const lastPostTime =
     useRef(0);
 
+  // NEW: store comment unsubscribe functions
+  const commentUnsubscribes = useRef({});
+
   /* =======================================================
      AUTH
   ======================================================= */
@@ -1526,13 +1525,6 @@ export default function NewsPage() {
         'posts'
       );
 
-    /*
-      We intentionally avoid orderBy here.
-      This means Firestore does not require
-      an extra composite index just to display
-      the community feed.
-    */
-
     const postsQuery =
       query(
         postsRef,
@@ -1648,42 +1640,56 @@ export default function NewsPage() {
     useCallback(
       (postId) => {
         setOpenComments(
-          (previous) => ({
-            ...previous,
-            [postId]:
-              !previous[postId],
-          })
-        );
-
-        if (
-          !openComments[postId]
-        ) {
-          setLoadingComments(
-            (previous) => ({
+          (previous) => {
+            const isOpen = !!previous[postId];
+            const nextOpen = {
               ...previous,
-              [postId]: true,
-            })
-          );
+              [postId]: !isOpen,
+            };
 
-          subscribeComments(
-            postId
-          );
-
-          setTimeout(() => {
-            setLoadingComments(
-              (previous) => ({
-                ...previous,
-                [postId]: false,
-              })
-            );
-          }, 500);
-        }
+            // If opening, subscribe and store unsubscribe
+            if (!isOpen) {
+              const unsubscribe = subscribeComments(postId);
+              commentUnsubscribes.current[postId] = unsubscribe;
+              setLoadingComments((prev) => ({
+                ...prev,
+                [postId]: true,
+              }));
+              // Simulate loading delay
+              setTimeout(() => {
+                setLoadingComments((prev) => ({
+                  ...prev,
+                  [postId]: false,
+                }));
+              }, 500);
+            } else {
+              // If closing, unsubscribe and remove
+              const unsub = commentUnsubscribes.current[postId];
+              if (unsub) {
+                unsub();
+                delete commentUnsubscribes.current[postId];
+              }
+              // Also clear comments for this post
+              setComments((prev) => {
+                const newComments = { ...prev };
+                delete newComments[postId];
+                return newComments;
+              });
+            }
+            return nextOpen;
+          }
+        );
       },
-      [
-        openComments,
-        subscribeComments,
-      ]
+      [subscribeComments]
     );
+
+  // Cleanup all comment subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(commentUnsubscribes.current).forEach((unsub) => unsub());
+      commentUnsubscribes.current = {};
+    };
+  }, []);
 
   /* =======================================================
      AI ENGAGEMENT
