@@ -1,913 +1,522 @@
-/* =========================================================
-   ADMIN LEAGUES
-   Dark responsive dashboard
-========================================================= */
+/* pages/admin-leagues.module.css */
 
+/* =========================================================
+   BASE PAGE
+========================================================= */
 .page {
   min-height: 100vh;
-  width: 100%;
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(37, 99, 235, 0.14),
-      transparent 32%
-    ),
-    radial-gradient(
-      circle at top right,
-      rgba(124, 58, 237, 0.12),
-      transparent 30%
-    ),
-    #070b14;
-  color: #f8fafc;
-  padding: 24px;
-  box-sizing: border-box;
+  background: #0b0e14;
+  color: #e5e7eb;
+  padding: 1.5rem;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* =========================================================
-   MAIN CONTAINER
-========================================================= */
-
 .container {
-  width: 100%;
-  max-width: 1450px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
 /* =========================================================
-   HEADER
+   LOADING BOX & SPINNER
 ========================================================= */
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 24px;
-  padding: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.82);
-  box-shadow:
-    0 18px 50px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(14px);
-}
-
-.headerInfo {
-  min-width: 0;
-}
-
-.title {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.2;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-
-.subtitle {
-  margin: 7px 0 0;
-  color: #94a3b8;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.backButton {
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #111827;
-  color: #e5e7eb;
-  padding: 11px 16px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.backButton:hover {
-  background: #1e293b;
-  border-color: rgba(96, 165, 250, 0.45);
-  transform: translateY(-1px);
-}
-
-/* =========================================================
-   LAYOUT
-========================================================= */
-
-.layout {
-  display: grid;
-  grid-template-columns: 330px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-
-/* =========================================================
-   PANEL
-========================================================= */
-
-.panel {
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow:
-    0 15px 45px rgba(0, 0, 0, 0.24);
-}
-
-.panelHeader {
-  padding: 18px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.panelTitle {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 800;
-  color: #f8fafc;
-}
-
-.panelSubtitle {
-  margin: 5px 0 0;
-  color: #64748b;
-  font-size: 12px;
-}
-
-/* =========================================================
-   LEAGUE SELECTOR
-========================================================= */
-
-.leagueList {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 650px;
-  overflow-y: auto;
-}
-
-.leagueList::-webkit-scrollbar {
-  width: 6px;
-}
-
-.leagueList::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.leagueList::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 20px;
-}
-
-.leagueButton {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-align: left;
-  border: 1px solid transparent;
-  background: #0b1220;
-  color: #cbd5e1;
-  padding: 13px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.leagueButton:hover {
-  background: #111c31;
-  border-color: rgba(96, 165, 250, 0.22);
-  transform: translateX(2px);
-}
-
-.leagueButtonActive {
-  background:
-    linear-gradient(
-      135deg,
-      rgba(37, 99, 235, 0.25),
-      rgba(79, 70, 229, 0.18)
-    );
-  border-color: rgba(96, 165, 250, 0.5);
-  color: #ffffff;
-}
-
-.leagueLogo {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  object-fit: contain;
-  border-radius: 10px;
-  background: #020617;
-  padding: 5px;
-  box-sizing: border-box;
-}
-
-.leagueLogoPlaceholder {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: #1e293b;
-  color: #64748b;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.leagueInfo {
-  min-width: 0;
-  flex: 1;
-}
-
-.leagueName {
-  display: block;
-  font-size: 14px;
-  font-weight: 750;
-  color: inherit;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.leagueCountry {
-  display: block;
-  margin-top: 4px;
-  color: #64748b;
-  font-size: 11px;
-}
-
-.leagueCount {
-  min-width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: #172033;
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-/* =========================================================
-   CLUB AREA
-========================================================= */
-
-.clubArea {
-  min-width: 0;
-}
-
-.clubHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 15px;
-  padding: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.clubHeaderInfo {
-  min-width: 0;
-}
-
-.clubTitle {
-  margin: 0;
-  font-size: 21px;
-  font-weight: 800;
-}
-
-.clubDescription {
-  margin: 5px 0 0;
-  color: #64748b;
-  font-size: 13px;
-}
-
-/* =========================================================
-   SEARCH
-========================================================= */
-
-.searchWrapper {
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.search {
-  width: 100%;
-  height: 44px;
-  box-sizing: border-box;
-  border: 1px solid #263247;
-  border-radius: 10px;
-  outline: none;
-  background: #080f1d;
-  color: #f8fafc;
-  padding: 0 14px;
-  font-size: 14px;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.search::placeholder {
-  color: #475569;
-}
-
-.search:focus {
-  border-color: #3b82f6;
-  box-shadow:
-    0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-
-/* =========================================================
-   CLUB GRID
-========================================================= */
-
-.clubGrid {
-  display: grid;
-  grid-template-columns:
-    repeat(
-      auto-fill,
-      minmax(230px, 1fr)
-    );
-  gap: 14px;
-  padding: 20px;
-}
-
-.clubCard {
-  position: relative;
-  min-width: 0;
-  border: 1px solid #1e293b;
-  border-radius: 15px;
-  background:
-    linear-gradient(
-      145deg,
-      #111827,
-      #0b1220
-    );
-  padding: 16px;
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.clubCard:hover {
-  transform: translateY(-3px);
-  border-color: rgba(59, 130, 246, 0.45);
-  box-shadow:
-    0 14px 35px rgba(0, 0, 0, 0.3);
-}
-
-.clubCardActive {
-  border-color: rgba(59, 130, 246, 0.75);
-  box-shadow:
-    0 0 0 1px rgba(59, 130, 246, 0.2),
-    0 14px 35px rgba(0, 0, 0, 0.3);
-}
-
-.clubTop {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-}
-
-.clubLogo {
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
-  object-fit: contain;
-  border-radius: 12px;
-  padding: 6px;
-  background: #020617;
-}
-
-.clubLogoPlaceholder {
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: #1e293b;
-  color: #64748b;
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.clubInfo {
-  min-width: 0;
-  flex: 1;
-}
-
-.clubName {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  color: #f8fafc;
-  line-height: 1.35;
-  word-break: break-word;
-}
-
-.clubShortName {
-  margin-top: 4px;
-  color: #64748b;
-  font-size: 11px;
-}
-
-.clubStats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  margin-top: 15px;
-}
-
-.stat {
-  min-width: 0;
-  padding: 9px;
-  border-radius: 9px;
-  background: rgba(2, 6, 23, 0.7);
-}
-
-.statLabel {
-  display: block;
-  color: #64748b;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.statValue {
-  display: block;
-  margin-top: 4px;
-  color: #e2e8f0;
-  font-size: 13px;
-  font-weight: 750;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* =========================================================
-   EDIT SECTION
-========================================================= */
-
-.editPanel {
-  margin: 0 20px 20px;
-  padding: 20px;
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-radius: 15px;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(15, 23, 42, 0.98),
-      rgba(8, 15, 29, 0.98)
-    );
-}
-
-.editHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.editTitle {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.closeButton {
-  width: 34px;
-  height: 34px;
-  border: 1px solid #263247;
-  border-radius: 8px;
-  background: #111827;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 17px;
-}
-
-.closeButton:hover {
-  background: #1e293b;
-  color: #ffffff;
-}
-
-/* =========================================================
-   FORM
-========================================================= */
-
-.formGrid {
-  display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-  gap: 15px;
-}
-
-.field {
-  min-width: 0;
-}
-
-.fieldFull {
-  grid-column: 1 / -1;
-}
-
-.label {
-  display: block;
-  margin-bottom: 7px;
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.input {
-  width: 100%;
-  height: 44px;
-  box-sizing: border-box;
-  border: 1px solid #263247;
-  border-radius: 9px;
-  outline: none;
-  background: #070d19;
-  color: #f8fafc;
-  padding: 0 12px;
-  font-size: 14px;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.input:focus {
-  border-color: #3b82f6;
-  box-shadow:
-    0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-
-.input::placeholder {
-  color: #475569;
-}
-
-.input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.fieldHint {
-  display: block;
-  margin-top: 5px;
-  color: #64748b;
-  font-size: 11px;
-}
-
-/* =========================================================
-   BUTTONS
-========================================================= */
-
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.saveButton {
-  min-height: 44px;
-  border: 0;
-  border-radius: 9px;
-  background:
-    linear-gradient(
-      135deg,
-      #2563eb,
-      #4f46e5
-    );
-  color: #ffffff;
-  padding: 0 20px;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow:
-    0 8px 20px rgba(37, 99, 235, 0.2);
-  transition:
-    transform 0.2s ease,
-    filter 0.2s ease;
-}
-
-.saveButton:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-}
-
-.saveButton:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.cancelButton {
-  min-height: 44px;
-  border: 1px solid #263247;
-  border-radius: 9px;
-  background: #111827;
-  color: #cbd5e1;
-  padding: 0 18px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.cancelButton:hover {
-  background: #1e293b;
-}
-
-/* =========================================================
-   EMPTY STATE
-========================================================= */
-
-.empty {
-  min-height: 280px;
+.loadingBox,
+.loadingCard {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 30px;
-  text-align: center;
-  color: #64748b;
+  padding: 3rem 1rem;
+  gap: 1rem;
+  color: #9ca3af;
 }
 
-.emptyIcon {
-  width: 60px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-  border-radius: 16px;
-  background: #111827;
-  color: #475569;
-  font-size: 25px;
-}
-
-.emptyTitle {
-  margin: 0;
-  color: #cbd5e1;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.emptyText {
-  max-width: 400px;
-  margin: 7px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-/* =========================================================
-   LOADING
-========================================================= */
-
-.loading {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  font-size: 14px;
+.loadingCard {
+  background: #151a23;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  margin-top: 1.5rem;
 }
 
 .spinner {
-  width: 24px;
-  height: 24px;
-  margin-right: 10px;
-  border: 3px solid #1e293b;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #1f2937;
   border-top-color: #3b82f6;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
 /* =========================================================
-   MESSAGE / ERROR
+   HEADER
 ========================================================= */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
 
-.error {
-  margin: 20px;
-  padding: 14px 16px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.eyebrow {
+  display: block;
+  font-size: 0.75rem;
+  color: #3b82f6;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.title {
+  font-size: 2.2rem;
+  color: white;
+  margin: 0 0 0.3rem;
+}
+
+.subtitle {
+  color: #9ca3af;
+  margin: 0;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.adminBadge {
+  background: #1e293b;
+  border: 1px solid #334155;
   border-radius: 10px;
-  background: rgba(127, 29, 29, 0.18);
-  color: #fca5a5;
-  font-size: 13px;
+  padding: 0.8rem 1.2rem;
+  text-align: right;
 }
 
-.success {
-  margin: 20px;
-  padding: 14px 16px;
-  border: 1px solid rgba(34, 197, 94, 0.25);
+.adminBadge span {
+  display: block;
+  font-size: 0.7rem;
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.adminBadge strong {
+  display: block;
+  font-size: 1rem;
+  color: #e5e7eb;
+  margin-top: 0.2rem;
+}
+
+/* =========================================================
+   SELECTION CARDS
+========================================================= */
+.selectionCard {
+  background: #151a23;
+  border: 1px solid #1f2937;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader {
+  margin-bottom: 1.2rem;
+}
+
+.sectionLabel {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: #3b82f6;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.sectionHeader h2 {
+  color: white;
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+/* =========================================================
+   FIELDS (select, input)
+========================================================= */
+.field {
+  margin-bottom: 1.2rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  color: #e5e7eb;
+  margin-bottom: 0.4rem;
+  font-weight: 500;
+}
+
+.select,
+.input {
+  width: 100%;
+  background: #0f1219;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.select:focus,
+.input:focus {
+  border-color: #3b82f6;
+}
+
+.field small {
+  display: block;
+  margin-top: 0.3rem;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.leagueInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #1f2937;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+}
+
+.leagueInfo span {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.leagueInfo strong {
+  color: #fbbf24;
+  font-size: 1rem;
+}
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #9ca3af;
+  gap: 0.5rem;
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+}
+
+.emptyState h3 {
+  color: #e5e7eb;
+  margin: 0;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.emptyState code {
+  background: #1f2937;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+/* =========================================================
+   CLUB GRID
+========================================================= */
+.clubGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.clubCard {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: #1f2937;
+  border: 2px solid transparent;
   border-radius: 10px;
-  background: rgba(20, 83, 45, 0.18);
-  color: #86efac;
-  font-size: 13px;
+  padding: 0.7rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  text-align: left;
+  color: #e5e7eb;
+}
+
+.clubCard:hover {
+  background: #2d3748;
+}
+
+.clubCardActive {
+  border-color: #3b82f6;
+  background: #263445;
+}
+
+.clubLogo {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.clubLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.clubLogo span {
+  font-size: 1.5rem;
+}
+
+.clubCardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.clubCardContent strong {
+  font-size: 0.9rem;
+  color: white;
+}
+
+.clubCardContent span {
+  font-size: 0.75rem;
+  color: #9ca3af;
 }
 
 /* =========================================================
-   RESPONSIVE TABLET
+   EDITOR CARD
 ========================================================= */
+.editorCard {
+  background: #151a23;
+  border: 1px solid #1f2937;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
 
-@media (max-width: 1050px) {
-  .page {
-    padding: 18px;
-  }
+.editorHeader {
+  margin-bottom: 1.5rem;
+}
 
-  .layout {
-    grid-template-columns: 270px minmax(0, 1fr);
-    gap: 15px;
-  }
+.selectedClub {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
 
-  .clubGrid {
-    grid-template-columns:
-      repeat(
-        auto-fill,
-        minmax(200px, 1fr)
-      );
-    padding: 15px;
-  }
+.selectedLogo {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
 
-  .editPanel {
-    margin: 0 15px 15px;
-  }
+.selectedLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.selectedLogo span {
+  font-size: 1.8rem;
+}
+
+.selectedClub h2 {
+  color: white;
+  font-size: 1.4rem;
+  margin: 0.2rem 0;
+}
+
+.selectedClub p {
+  color: #9ca3af;
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 /* =========================================================
-   RESPONSIVE MOBILE
+   STATS GRID (current values)
 ========================================================= */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
 
-@media (max-width: 760px) {
+.statCard {
+  background: #1f2937;
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.statCard span {
+  display: block;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+}
+
+.statCard strong {
+  font-size: 1.2rem;
+  color: #fbbf24;
+}
+
+/* =========================================================
+   FORM
+========================================================= */
+.form {
+  margin-top: 1rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+}
+
+.resetButton,
+.saveButton {
+  padding: 0.7rem 1.3rem;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.9rem;
+}
+
+.resetButton {
+  background: #374151;
+  color: white;
+}
+
+.resetButton:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.saveButton {
+  background: #3b82f6;
+  color: white;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.resetButton:disabled,
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   INFO GRID (additional club info)
+========================================================= */
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid #1f2937;
+  padding-top: 1.5rem;
+}
+
+.infoGrid div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.infoGrid span {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.infoGrid strong {
+  font-size: 0.95rem;
+  color: #e5e7eb;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 768px) {
   .page {
-    padding: 10px;
+    padding: 1rem;
   }
 
   .header {
     flex-direction: column;
-    align-items: stretch;
-    padding: 17px;
-    border-radius: 14px;
+    gap: 1rem;
   }
 
-  .title {
-    font-size: 22px;
-  }
-
-  .subtitle {
-    font-size: 12px;
-  }
-
-  .backButton {
-    width: 100%;
-  }
-
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
-  .leagueList {
-    max-height: 260px;
-    display: grid;
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-
-  .leagueButton {
-    min-width: 0;
-  }
-
-  .leagueLogo,
-  .leagueLogoPlaceholder {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
-  }
-
-  .leagueCount {
-    display: none;
-  }
-
-  .clubHeader {
-    padding: 16px;
-  }
-
-  .clubTitle {
-    font-size: 18px;
-  }
-
-  .clubGrid {
-    grid-template-columns: 1fr;
-    padding: 12px;
-  }
-
-  .editPanel {
-    margin: 0 12px 12px;
-    padding: 15px;
+  .adminBadge {
+    align-self: flex-start;
   }
 
   .formGrid {
     grid-template-columns: 1fr;
-    gap: 13px;
-  }
-
-  .fieldFull {
-    grid-column: auto;
   }
 
   .actions {
-    flex-direction: column-reverse;
-    align-items: stretch;
+    flex-direction: column;
   }
 
-  .saveButton,
-  .cancelButton {
+  .resetButton,
+  .saveButton {
     width: 100%;
   }
 }
 
-/* =========================================================
-   SMALL PHONES
-========================================================= */
-
-@media (max-width: 420px) {
-  .page {
-    padding: 7px;
-  }
-
-  .header {
-    padding: 14px;
-  }
-
-  .title {
-    font-size: 20px;
-  }
-
-  .panelHeader {
-    padding: 15px;
-  }
-
-  .leagueList {
-    grid-template-columns: 1fr;
-    max-height: 300px;
-  }
-
+@media (max-width: 480px) {
   .clubGrid {
-    padding: 10px;
+    grid-template-columns: 1fr;
   }
 
-  .clubCard {
-    padding: 13px;
-  }
-
-  .clubStats {
+  .statsGrid,
+  .infoGrid {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .editPanel {
-    margin: 0 10px 10px;
-    padding: 13px;
-  }
-
-  .editHeader {
-    align-items: flex-start;
-  }
-
-  .input {
-    height: 42px;
-  }
-}
-
-/* =========================================================
-   REDUCED MOTION
-========================================================= */
-
-@media (prefers-reduced-motion: reduce) {
-  .leagueButton,
-  .clubCard,
-  .saveButton,
-  .backButton {
-    transition: none;
-  }
-
-  .spinner {
-    animation: none;
   }
 }
