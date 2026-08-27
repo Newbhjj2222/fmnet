@@ -2496,4 +2496,694 @@ export default function TrainingPage() {
           >
             <div
               className={
-                styles
+                styles.panelHeading
+              }
+            >
+              <div>
+                <h2>
+                  Training Drills
+                </h2>
+
+                <p>
+                  Select a drill to add
+                  it to the selected day.
+                </p>
+              </div>
+
+              <span
+                className={
+                  styles.countBadge
+                }
+              >
+                {
+                  Object.keys(
+                    TRAINING_DRILLS
+                  ).length
+                }
+              </span>
+            </div>
+
+            <div
+              className={
+                styles.drillFilterTabs
+              }
+            >
+              {drillCategories.map(
+                (category) => (
+                  <button
+                    key={
+                      category.value
+                    }
+                    type="button"
+                    className={
+                      drillFilter ===
+                      category.value
+                        ? styles.activeFilter
+                        : ""
+                    }
+                    onClick={() =>
+                      setDrillFilter(
+                        category.value
+                      )
+                    }
+                  >
+                    <span>
+                      {
+                        category.icon
+                      }
+                    </span>
+
+                    {
+                      category.label
+                    }
+                  </button>
+                )
+              )}
+            </div>
+
+            <div
+              className={
+                styles.drillList
+              }
+            >
+              {filteredDrills.map(
+                (drill) => (
+                  <button
+                    key={
+                      drill.id
+                    }
+                    type="button"
+                    className={
+                      styles.drillCard
+                    }
+                    style={{
+                      borderLeftColor:
+                        drill.color,
+                    }}
+                    onClick={() =>
+                      addDrillToDay(
+                        selectedDay,
+                        drill.id
+                      )
+                    }
+                  >
+                    <div
+                      className={
+                        styles.drillIcon
+                      }
+                      style={{
+                        background:
+                          `${drill.color}18`,
+                      }}
+                    >
+                      {
+                        drill.icon
+                      }
+                    </div>
+
+                    <div
+                      className={
+                        styles.drillInfo
+                      }
+                    >
+                      <strong
+                        style={{
+                          color:
+                            drill.color,
+                        }}
+                      >
+                        {
+                          drill.name
+                        }
+                      </strong>
+
+                      <p>
+                        {
+                          drill.description
+                        }
+                      </p>
+
+                      <small>
+                        ⏱️{" "}
+                        {
+                          drill.duration
+                        }
+                        h • Tap to
+                        add
+                      </small>
+                    </div>
+                  </button>
+                )
+              )}
+            </div>
+          </aside>
+
+          {/* =================================================
+              PLAYERS PANEL
+          ================================================= */}
+
+          <aside
+            className={
+              styles.playersPanel
+            }
+          >
+            <div
+              className={
+                styles.panelHeading
+              }
+            >
+              <div>
+                <h2>
+                  Squad Players
+                </h2>
+
+                <p>
+                  Select a drill first,
+                  then add players.
+                </p>
+              </div>
+
+              <span
+                className={
+                  styles.countBadge
+                }
+              >
+                {players.length}
+              </span>
+            </div>
+
+            <div
+              className={
+                styles.playerDragList
+              }
+            >
+              {players.map(
+                (player) => (
+                  <button
+                    key={
+                      player.id
+                    }
+                    type="button"
+                    className={
+                      styles.dragPlayer
+                    }
+                    onClick={() => {
+                      if (
+                        selectedSlot
+                      ) {
+                        addPlayerToDrill(
+                          selectedDay,
+                          selectedSlot,
+                          player.id
+                        );
+                      } else {
+                        toast.error(
+                          "Select a drill first"
+                        );
+                      }
+                    }}
+                  >
+                    <div
+                      className={
+                        styles.dragPlayerAvatar
+                      }
+                    >
+                      {player.photo ? (
+                        <img
+                          src={
+                            player.photo
+                          }
+                          alt={getPlayerName(
+                            player
+                          )}
+                        />
+                      ) : (
+                        getPlayerName(
+                          player
+                        )
+                          .charAt(0)
+                          .toUpperCase()
+                      )}
+                    </div>
+
+                    <div
+                      className={
+                        styles.playerSummary
+                      }
+                    >
+                      <strong>
+                        {
+                          getPlayerName(
+                            player
+                          )
+                        }
+                      </strong>
+
+                      <small>
+                        {
+                          getPlayerPosition(
+                            player
+                          )
+                        }{" "}
+                        • OVR{" "}
+                        {
+                          getPlayerOverall(
+                            player
+                          )
+                        }
+                      </small>
+                    </div>
+
+                    <span
+                      className={
+                        styles.addIcon
+                      }
+                    >
+                      +
+                    </span>
+                  </button>
+                )
+              )}
+
+              {players.length ===
+                0 && (
+                <div
+                  className={
+                    styles.emptyPlayers
+                  }
+                >
+                  <span>
+                    👥
+                  </span>
+
+                  <strong>
+                    No players found
+                  </strong>
+
+                  <p>
+                    This club currently
+                    has no players.
+                  </p>
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* =================================================
+              SCHEDULE PANEL
+          ================================================= */}
+
+          <section
+            className={
+              styles.schedulePanel
+            }
+          >
+            <div
+              className={
+                styles.panelHeading
+              }
+            >
+              <div>
+                <h2>
+                  Weekly Schedule
+                </h2>
+
+                <p>
+                  Your schedule follows
+                  the game calendar.
+                </p>
+              </div>
+            </div>
+
+            {/* =================================================
+                DAY TABS
+            ================================================= */}
+
+            <div
+              className={
+                styles.dayTabs
+              }
+            >
+              {DAY_NAMES.map(
+                (
+                  day,
+                  index
+                ) => {
+                  const isToday =
+                    index ===
+                    currentGameDayIndex;
+
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      className={
+                        selectedDay ===
+                        index
+                          ? styles.activeDay
+                          : ""
+                      }
+                      onClick={() => {
+                        setSelectedDay(
+                          index
+                        );
+
+                        setSelectedSlot(
+                          null
+                        );
+                      }}
+                    >
+                      <span>
+                        {day.slice(
+                          0,
+                          3
+                        )}
+                      </span>
+
+                      {isToday && (
+                        <small>
+                          TODAY
+                        </small>
+                      )}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+
+            {/* =================================================
+                DAY DROP ZONE
+            ================================================= */}
+
+            <div
+              className={
+                styles.dayDropZone
+              }
+            >
+              <div
+                className={
+                  styles.dayHeader
+                }
+              >
+                <div>
+                  <span
+                    className={
+                      styles.dayEyebrow
+                    }
+                  >
+                    GAME CALENDAR
+                  </span>
+
+                  <h3>
+                    {
+                      DAY_NAMES[
+                        selectedDay
+                      ]
+                    }{" "}
+                    Training
+                  </h3>
+
+                  <small>
+                    {daySlots.length}{" "}
+                    /{" "}
+                    {
+                      MAX_DRILLS_PER_DAY
+                    }{" "}
+                    drills
+                  </small>
+                </div>
+
+                {selectedDay ===
+                  currentGameDayIndex && (
+                  <span
+                    className={
+                      styles.todayBadge
+                    }
+                  >
+                    TODAY
+                  </span>
+                )}
+              </div>
+
+              {/* =================================================
+                  SCHEDULE SLOTS
+              ================================================= */}
+
+              {daySlots.map(
+                (slot) => {
+                  const drill =
+                    TRAINING_DRILLS[
+                      slot.drillId
+                    ];
+
+                  if (!drill) {
+                    return null;
+                  }
+
+                  const isSelected =
+                    selectedSlot ===
+                    slot.id;
+
+                  return (
+                    <div
+                      key={
+                        slot.id
+                      }
+                      className={`${styles.scheduleSlot} ${
+                        isSelected
+                          ? styles.slotSelected
+                          : ""
+                      }`}
+                      style={{
+                        borderColor:
+                          drill.color,
+                      }}
+                      onClick={() =>
+                        setSelectedSlot(
+                          isSelected
+                            ? null
+                            : slot.id
+                        )
+                      }
+                    >
+                      <div
+                        className={
+                          styles.slotHeader
+                        }
+                      >
+                        <div
+                          className={
+                            styles.slotTitle
+                          }
+                        >
+                          <span>
+                            {
+                              drill.icon
+                            }
+                          </span>
+
+                          <strong
+                            style={{
+                              color:
+                                drill.color,
+                            }}
+                          >
+                            {
+                              drill.name
+                            }
+                          </strong>
+                        </div>
+
+                        <button
+                          type="button"
+                          className={
+                            styles.removeButton
+                          }
+                          onClick={(
+                            event
+                          ) => {
+                            event.stopPropagation();
+
+                            removeDrillFromDay(
+                              selectedDay,
+                              slot.id
+                            );
+
+                            if (
+                              selectedSlot ===
+                              slot.id
+                            ) {
+                              setSelectedSlot(
+                                null
+                              );
+                            }
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div
+                        className={
+                          styles.slotPlayers
+                        }
+                      >
+                        {slot.playerIds
+                          ?.length >
+                        0 ? (
+                          slot.playerIds.map(
+                            (
+                              playerId
+                            ) => {
+                              const player =
+                                players.find(
+                                  (
+                                    item
+                                  ) =>
+                                    item.id ===
+                                    playerId
+                                );
+
+                              if (
+                                !player
+                              ) {
+                                return null;
+                              }
+
+                              return (
+                                <span
+                                  key={
+                                    playerId
+                                  }
+                                  className={
+                                    styles.slotPlayer
+                                  }
+                                >
+                                  {
+                                    getPlayerName(
+                                      player
+                                    )
+                                  }
+
+                                  <button
+                                    type="button"
+                                    onClick={(
+                                      event
+                                    ) => {
+                                      event.stopPropagation();
+
+                                      removePlayerFromDrill(
+                                        selectedDay,
+                                        slot.id,
+                                        playerId
+                                      );
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              );
+                            }
+                          )
+                        ) : (
+                          <span
+                            className={
+                              styles.emptySlot
+                            }
+                          >
+                            {isSelected
+                              ? "Tap players to add them here"
+                              : "Select this drill to add players"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        className={
+                          styles.slotFooter
+                        }
+                      >
+                        <span>
+                          👥{" "}
+                          {
+                            slot
+                              .playerIds
+                              ?.length ||
+                            0
+                          }{" "}
+                          /{" "}
+                          {
+                            MAX_PLAYERS_PER_DRILL
+                          }
+                        </span>
+
+                        <span>
+                          ⏱️{" "}
+                          {
+                            drill.duration
+                          }
+                          h
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+              )}
+
+              {daySlots.length ===
+                0 && (
+                <div
+                  className={
+                    styles.noDrills
+                  }
+                >
+                  <div>
+                    📋
+                  </div>
+
+                  <strong>
+                    No training scheduled
+                  </strong>
+
+                  <span>
+                    Select a drill from
+                    the drills panel.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* =================================================
+                TRAINING RULE
+            ================================================= */}
+
+            <div
+              className={
+                styles.trainingNotice
+              }
+            >
+              <span>
+                ℹ️
+              </span>
+
+              <div>
+                <strong>
+                  Game Calendar Training
+                </strong>
+
+                <p>
+                  Training is applied only
+                  to the current game date.
+                  Applying training never
+                  advances the calendar, and
+                  the same date cannot be
+                  trained twice.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </>
+  );
+}
