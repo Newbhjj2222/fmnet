@@ -1770,6 +1770,15 @@ export default function MatchPage() {
           startTimeRef.current =
             Date.now() -
             (loadedMinute / minutesPerSecond) * 1000;
+        } else if (loadedStatus === "half-time") {
+          // Half-time: set to minute 45
+          const minutesPerSecond =
+            90 / MATCH_REAL_DURATION_SECONDS;
+          startTimeRef.current =
+            Date.now() -
+            (45 / minutesPerSecond) * 1000;
+          minuteRef.current = 45;
+          setMatchMinute(45);
         } else {
           startTimeRef.current = Date.now();
         }
@@ -2656,7 +2665,7 @@ export default function MatchPage() {
     ]);
 
   // ==========================================================
-  // SIMULATE ONE PLAY (REALISTIC & HIGH-SCORING)
+  // SIMULATE ONE PLAY (REALISTIC, BALANCED)
   // ==========================================================
 
   const simulatePlay = useCallback(() => {
@@ -2685,7 +2694,7 @@ export default function MatchPage() {
       // POSSESSION (team with ball)
       // ====================================================
       const homePossessionChance = clamp(
-        0.5 + (homePower - awayPower) * 0.02,
+        0.5 + (homePower - awayPower) * 0.015,
         0.30,
         0.70
       );
@@ -2706,9 +2715,9 @@ export default function MatchPage() {
       statsRef.current[team].attacks += 1;
 
       const dangerousChance = clamp(
-        0.30 + (teamPower - opponentPower) * 0.01 + (ownTactics.mentality === "attacking" ? 0.10 : 0),
-        0.15,
-        0.70
+        0.28 + (teamPower - opponentPower) * 0.008 + (ownTactics.mentality === "attacking" ? 0.08 : 0),
+        0.12,
+        0.65
       );
 
       const isDangerousAttack = Math.random() < dangerousChance;
@@ -2720,7 +2729,7 @@ export default function MatchPage() {
       // POSSESSION STATS
       // ====================================================
       const possession = clamp(
-        50 + (homePower - awayPower) * 1.2 + (Math.random() - 0.5) * 10,
+        50 + (homePower - awayPower) * 1.0 + (Math.random() - 0.5) * 8,
         25,
         75
       );
@@ -2759,20 +2768,20 @@ export default function MatchPage() {
       const actionRoll = Math.random() * 100;
       let action;
 
-      if (actionRoll < 55) action = "pass";          // 55% pass
-      else if (actionRoll < 80) action = "dribble";  // 25% dribble
-      else if (actionRoll < 95) action = "shot";     // 15% shot
-      else action = "lose_ball";                     // 5% lose/tackle
+      if (actionRoll < 55) action = "pass";
+      else if (actionRoll < 80) action = "dribble";
+      else if (actionRoll < 95) action = "shot";
+      else action = "lose_ball";
 
       // ====================================================
       // PASS
       // ====================================================
       if (action === "pass") {
         const passChance = clamp(
-          0.72 + (actorOVR - 60) * 0.005 + (teamPower - opponentPower) * 0.003 +
-          (ownTactics.tempo === "slow" ? 0.05 : ownTactics.tempo === "fast" ? -0.03 : 0),
+          0.70 + (actorOVR - 60) * 0.004 + (teamPower - opponentPower) * 0.002 +
+          (ownTactics.tempo === "slow" ? 0.04 : ownTactics.tempo === "fast" ? -0.02 : 0),
           0.50,
-          0.92
+          0.90
         );
 
         if (Math.random() < passChance) {
@@ -2783,9 +2792,9 @@ export default function MatchPage() {
             statsRef.current[team].passes += 1;
 
             const completionChance = clamp(
-              0.70 + (actorOVR - 60) * 0.006 + (teamPower - opponentPower) * 0.005,
+              0.68 + (actorOVR - 60) * 0.005 + (teamPower - opponentPower) * 0.004,
               0.55,
-              0.95
+              0.93
             );
 
             if (Math.random() < completionChance) {
@@ -2832,15 +2841,15 @@ export default function MatchPage() {
       // ====================================================
       if (action === "dribble") {
         const dribbleChance = clamp(
-          0.25 + (actorOVR - 60) * 0.006 + (ownTactics.mentality === "attacking" ? 0.06 : 0),
-          0.15,
-          0.55
+          0.22 + (actorOVR - 60) * 0.005 + (ownTactics.mentality === "attacking" ? 0.05 : 0),
+          0.12,
+          0.50
         );
 
         if (Math.random() < dribbleChance) {
           statsRef.current[team].dribbles += 1;
-          const newX = clamp(actorPosition.x + (team === "home" ? 3 : -3), -13, 13);
-          const newZ = clamp(actorPosition.z + (Math.random() - 0.5) * 4, -8.5, 8.5);
+          const newX = clamp(actorPosition.x + (team === "home" ? 2.5 : -2.5), -13, 13);
+          const newZ = clamp(actorPosition.z + (Math.random() - 0.5) * 3.5, -8.5, 8.5);
           const dribblePosition = { x: newX, z: newZ };
           createBallAction(actorPosition, dribblePosition, "dribble");
           updatePlayerMovement(team, newX, newZ);
@@ -2858,23 +2867,23 @@ export default function MatchPage() {
       // SHOT
       // ====================================================
       if (action === "shot") {
-        let shotChance = 0.15 + (actorOVR - 60) * 0.005 + (teamPower - opponentPower) * 0.004;
-        if (ownTactics.mentality === "attacking") shotChance += 0.06;
-        if (ownTactics.mentality === "defensive") shotChance -= 0.03;
-        if (isDangerousAttack) shotChance *= 1.5;
+        let shotChance = 0.13 + (actorOVR - 60) * 0.004 + (teamPower - opponentPower) * 0.003;
+        if (ownTactics.mentality === "attacking") shotChance += 0.05;
+        if (ownTactics.mentality === "defensive") shotChance -= 0.02;
+        if (isDangerousAttack) shotChance *= 1.3;
 
-        shotChance = clamp(shotChance, 0.08, 0.50);
+        shotChance = clamp(shotChance, 0.06, 0.45);
 
         if (Math.random() < shotChance) {
           statsRef.current[team].shots += 1;
 
           const goalX = team === "home" ? 14.7 : -14.7;
-          const goalPosition = { x: goalX, z: (Math.random() - 0.5) * 5.5 };
+          const goalPosition = { x: goalX, z: (Math.random() - 0.5) * 5.0 };
 
           const onTargetChance = clamp(
-            0.45 + (actorOVR - 60) * 0.008 + (teamPower - opponentPower) * 0.005,
+            0.42 + (actorOVR - 60) * 0.006 + (teamPower - opponentPower) * 0.004,
             0.35,
-            0.90
+            0.85
           );
           const onTarget = Math.random() < onTargetChance;
 
@@ -2882,30 +2891,30 @@ export default function MatchPage() {
           updatePlayerMovement(team, goalPosition.x, goalPosition.z);
 
           if (!onTarget) {
-            if (Math.random() < 0.30) statsRef.current[team].corners += 1;
+            if (Math.random() < 0.28) statsRef.current[team].corners += 1;
             return;
           }
 
           statsRef.current[team].shotsOnTarget += 1;
 
           // ================================================
-          // GOAL PROBABILITY (yongerewe cyane)
+          // GOAL PROBABILITY (yagabanijweho kugira ngo bibe real)
           // ================================================
           const goalkeeper = opponent.find((p) => position(p) === "GK");
           const gkOverall = goalkeeper ? overall(goalkeeper) : 65;
 
-          let goalProbability = 0.22;
-          goalProbability += (teamPower - opponentPower) * 0.015;
-          goalProbability += (actorOVR - 60) * 0.006;
-          goalProbability -= (gkOverall - 60) * 0.003;
+          let goalProbability = 0.15; // yagabanijwe kuva kuri 0.22
+          goalProbability += (teamPower - opponentPower) * 0.01;
+          goalProbability += (actorOVR - 60) * 0.004;
+          goalProbability -= (gkOverall - 60) * 0.002;
 
-          if (ownTactics.mentality === "attacking") goalProbability += 0.05;
-          if (ownTactics.mentality === "defensive") goalProbability -= 0.03;
-          if (opponentTactics.mentality === "defensive") goalProbability -= 0.04;
-          if (opponentTactics.defensiveLine === "high") goalProbability += 0.03;
-          if (opponentTactics.defensiveLine === "deep") goalProbability -= 0.03;
+          if (ownTactics.mentality === "attacking") goalProbability += 0.04;
+          if (ownTactics.mentality === "defensive") goalProbability -= 0.02;
+          if (opponentTactics.mentality === "defensive") goalProbability -= 0.03;
+          if (opponentTactics.defensiveLine === "high") goalProbability += 0.02;
+          if (opponentTactics.defensiveLine === "deep") goalProbability -= 0.02;
 
-          goalProbability = clamp(goalProbability, 0.08, 0.55);
+          goalProbability = clamp(goalProbability, 0.06, 0.45);
 
           if (Math.random() < goalProbability) {
             scoreRef.current[team] += 1;
@@ -2943,7 +2952,7 @@ export default function MatchPage() {
       // ====================================================
       const defendingTeam = team === "home" ? "away" : "home";
       statsRef.current[defendingTeam].tackles += 1;
-      if (Math.random() < 0.10) {
+      if (Math.random() < 0.08) {
         statsRef.current[team].fouls += 1;
         if (Math.random() < 0.03) {
           statsRef.current[team].yellow += 1;
@@ -3079,6 +3088,9 @@ export default function MatchPage() {
 
           setIsPaused(true);
 
+          minuteRef.current = 45;
+          setMatchMinute(45);
+
           saveMatchState(
             "half-time"
           );
@@ -3106,6 +3118,9 @@ export default function MatchPage() {
           );
 
           setIsPaused(true);
+
+          minuteRef.current = MATCH_MINUTE;
+          setMatchMinute(MATCH_MINUTE);
 
           saveMatchState(
             "finished"
@@ -3148,7 +3163,7 @@ export default function MatchPage() {
   ]);
 
   // ==========================================================
-  // START MATCH
+  // START MATCH (FIXED SECOND HALF)
   // ==========================================================
 
   const startMatch =
@@ -3187,8 +3202,23 @@ export default function MatchPage() {
 
         setIsPaused(false);
 
-        // Reset startTimeRef for real-time progression
-        startTimeRef.current = Date.now();
+        const minutesPerSecond =
+          90 / MATCH_REAL_DURATION_SECONDS;
+
+        if (matchStatus === "half-time") {
+          // Second half: start from minute 45
+          startTimeRef.current =
+            Date.now() -
+            (45 / minutesPerSecond) *
+              1000;
+          minuteRef.current = 45;
+          setMatchMinute(45);
+        } else {
+          // Kick-off: start from minute 0
+          startTimeRef.current = Date.now();
+          minuteRef.current = 0;
+          setMatchMinute(0);
+        }
 
         await saveMatchState(
           "live"
