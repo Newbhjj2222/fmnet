@@ -1,0 +1,565 @@
+.page {
+  min-height: 100vh;
+  background: #f5f7fb;
+  color: #111827;
+  padding: 30px 16px 60px;
+}
+
+.container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #2563eb;
+  margin-bottom: 7px;
+}
+
+.title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.subtitle {
+  margin: 9px 0 0;
+  color: #6b7280;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.backButton {
+  border: 1px solid #dbe1ea;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.backButton:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 5px 20px rgba(15, 23, 42, 0.04);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 18px;
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.panelHeader p {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.leagueGrid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(210px, 1fr)
+  );
+  gap: 12px;
+}
+
+.leagueCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.leagueCard:hover {
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.leagueCardActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.leagueLogo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 21px;
+}
+
+.leagueLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.leagueInfo {
+  min-width: 0;
+}
+
+.leagueInfo strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leagueInfo span {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(
+      400px,
+      1.5fr
+    );
+  gap: 20px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+.searchBox {
+  height: 44px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  margin-bottom: 14px;
+  background: #f9fafb;
+}
+
+.searchBox input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111827;
+  font-size: 14px;
+}
+
+.clubCount {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.clubList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.clubItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.clubItem:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.clubItemActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.clubLogo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 19px;
+}
+
+.clubLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.clubDetails {
+  min-width: 0;
+  flex: 1;
+}
+
+.clubDetails strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clubDetails small {
+  display: block;
+  color: #6b7280;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.arrow {
+  color: #9ca3af;
+  font-size: 18px;
+}
+
+.clubHero {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.heroLogo {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  border-radius: 14px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 27px;
+}
+
+.heroLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.heroLabel {
+  display: block;
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.clubHero h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.clubHero p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 800;
+  color: #374151;
+}
+
+.field small {
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.inputWithSuffix {
+  display: flex;
+  align-items: center;
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: 0.2s ease;
+}
+
+.inputWithSuffix:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(
+    37,
+    99,
+    235,
+    0.1
+  );
+}
+
+.inputWithSuffix input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  padding: 0 13px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.inputWithSuffix span {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 13px;
+  border-left: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(
+    2,
+    minmax(0, 1fr)
+  );
+  gap: 9px;
+  padding: 13px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summary span {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.summary strong {
+  font-size: 13px;
+  color: #111827;
+}
+
+.saveButton {
+  width: 100%;
+  height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.saveButton:hover {
+  background: #1d4ed8;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error,
+.success {
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.loading,
+.empty {
+  padding: 25px 15px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.noSelection {
+  min-height: 450px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.noSelection > div {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  margin-bottom: 14px;
+}
+
+.noSelection h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.noSelection p {
+  max-width: 300px;
+  margin: 7px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .clubList {
+    max-height: 450px;
+  }
+}
+
+@media (max-width: 650px) {
+  .page {
+    padding: 18px 10px 40px;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .title {
+    font-size: 25px;
+  }
+
+  .backButton {
+    width: 100%;
+  }
+
+  .panel {
+    padding: 15px;
+    border-radius: 13px;
+  }
+
+  .leagueGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .clubHero {
+    align-items: flex-start;
+  }
+}
