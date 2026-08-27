@@ -1,9 +1,11 @@
 // pages/admin.js
+
 import {
   useEffect,
   useMemo,
   useState,
 } from "react";
+
 import Head from "next/head";
 import { useRouter } from "next/router";
 
@@ -242,18 +244,10 @@ function randomInt(
 }
 
 function randomPlayerRating() {
-  /*
-   * Every player gets an independent
-   * rating between 30 and 85.
-   */
   return randomInt(30, 85);
 }
 
 function generateClubStartingBalance() {
-  /*
-   * Every new club gets its own
-   * random starting balance.
-   */
   return randomInt(
     250000,
     5000000
@@ -1006,11 +1000,6 @@ export default function Admin() {
             ? result.teams
             : [];
 
-        /*
-         * Include currentTeam if it contains
-         * a useful name.
-         */
-
         if (
           result.currentTeam
             ?.name
@@ -1043,12 +1032,6 @@ export default function Admin() {
             "No RPL clubs were found. The RPL team page may be dynamically loaded."
           );
         }
-
-        /*
-         * If the API returned names only,
-         * use the current team's detailed
-         * information when names match.
-         */
 
         const detailedTeam =
           result.currentTeam;
@@ -1172,12 +1155,6 @@ export default function Admin() {
                 );
               }
             );
-
-          /*
-           * IMPORTANT:
-           * Existing balance remains unchanged.
-           * New clubs get their own random balance.
-           */
 
           const balance =
             existing &&
@@ -1334,7 +1311,7 @@ export default function Admin() {
           };
 
           if (existing) {
-            batch.update(
+            await updateDoc(
               doc(
                 db,
                 "clubs",
@@ -1353,7 +1330,7 @@ export default function Admin() {
                 )
               );
 
-            batch.set(
+            await setDoc(
               clubRef,
               {
                 ...payload,
@@ -1376,32 +1353,12 @@ export default function Admin() {
             created++;
           }
 
-          batchWrites++;
-
-          /*
-           * Firestore batch limit is 500.
-           */
-          if (
-            batchWrites >=
-            450
-          ) {
-            await batch.commit();
-
-            batchWrites = 0;
-          }
-
           setRplClubProgress({
             current:
               index + 1,
             total:
               sourceClubs.length,
           });
-        }
-
-        if (
-          batchWrites > 0
-        ) {
-          await batch.commit();
         }
 
         toast.success(
@@ -1653,10 +1610,6 @@ export default function Admin() {
               name
             );
 
-          /*
-           * NEW:
-           * Independent rating for every player.
-           */
           const overall =
             randomPlayerRating();
 
@@ -1705,9 +1658,6 @@ export default function Admin() {
               rplPlayer.nationality ||
               countryName,
 
-            /*
-             * Rating 30-85.
-             */
             overall,
 
             value:
@@ -1794,9 +1744,6 @@ export default function Admin() {
           });
         }
 
-        /*
-         * Firestore batches.
-         */
         let created = 0;
 
         for (
@@ -2403,9 +2350,6 @@ export default function Admin() {
           true
         );
 
-        /*
-         * Keep old balance when editing.
-         */
         const existing =
           editingClub
             ? clubs.find(
