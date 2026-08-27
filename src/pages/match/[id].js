@@ -43,7 +43,7 @@ const ThreePitch = dynamic(
 // CONSTANTS
 // ============================================================
 
-const MATCH_MINUTE_MS = 2667;
+const MATCH_MINUTE_MS = 1000;
 
 const MATCH_MINUTE = 90;
 
@@ -2634,726 +2634,318 @@ export default function MatchPage() {
     ]);
 
   // ==========================================================
-  // SIMULATE ONE PLAY
+  // SIMULATE ONE PLAY (REALISTIC & HIGH-SCORING)
   // ==========================================================
 
-  const simulatePlay =
-    useCallback(() => {
-      if (
-        processingRef.current
-      ) {
-        return;
+  const simulatePlay = useCallback(() => {
+    if (processingRef.current) return;
+    if (
+      homeXIRef.current.length !== PLAYERS_ON_PITCH ||
+      awayXIRef.current.length !== PLAYERS_ON_PITCH
+    ) return;
+
+    processingRef.current = true;
+
+    try {
+      const homePower = calculateTeamPower(
+        homeXIRef.current,
+        tacticsRef.current.home,
+        formationRef.current.home
+      );
+
+      const awayPower = calculateTeamPower(
+        awayXIRef.current,
+        tacticsRef.current.away,
+        formationRef.current.away
+      );
+
+      // ====================================================
+      // POSSESSION (team with ball)
+      // ====================================================
+      const homePossessionChance = clamp(
+        0.5 + (homePower - awayPower) * 0.02, // ingaruka z'imbaraga
+        0.30,
+        0.70
+      );
+
+      const team = Math.random() < homePossessionChance ? "home" : "away";
+      const players = team === "home" ? homeXIRef.current : awayXIRef.current;
+      const opponent = team === "home" ? awayXIRef.current : homeXIRef.current;
+
+      const ownTactics = tacticsRef.current[team];
+      const opponentTactics = tacticsRef.current[team === "home" ? "away" : "home"];
+
+      const teamPower = team === "home" ? homePower : awayPower;
+      const opponentPower = team === "home" ? awayPower : homePower;
+
+      // ====================================================
+      // ATTACK
+      // ====================================================
+      statsRef.current[team].attacks += 1;
+
+      const dangerousChance = clamp(
+        0.30 + (teamPower - opponentPower) * 0.01 + (ownTactics.mentality === "attacking" ? 0.10 : 0),
+        0.15,
+        0.70
+      );
+
+      const isDangerousAttack = Math.random() < dangerousChance;
+      if (isDangerousAttack) {
+        statsRef.current[team].dangerousAttacks += 1;
       }
 
-      if (
-        homeXIRef.current
-          .length !==
-          PLAYERS_ON_PITCH ||
-        awayXIRef.current
-          .length !==
-          PLAYERS_ON_PITCH
-      ) {
-        return;
+      // ====================================================
+      // POSSESSION STATS
+      // ====================================================
+      const possession = clamp(
+        50 + (homePower - awayPower) * 1.2 + (Math.random() - 0.5) * 10,
+        25,
+        75
+      );
+      statsRef.current.home.possession = Number(possession.toFixed(1));
+      statsRef.current.away.possession = Number((100 - possession).toFixed(1));
+
+      // ====================================================
+      // PLAYER SELECTION (rating irakoreshwa cyane)
+      // ====================================================
+      const attackingPlayers = players.filter((p) => {
+        const pos = position(p);
+        return pos === "ATT" || pos === "MID";
+      });
+      const pool = attackingPlayers.length ? attackingPlayers : players;
+
+      // Hitamo umukinnyi ufite rating nini cyane (weighted)
+      const totalWeight = pool.reduce((sum, p) => sum + overall(p), 0);
+      let random = Math.random() * totalWeight;
+      let actor = pool[0];
+      for (const p of pool) {
+        random -= overall(p);
+        if (random <= 0) {
+          actor = p;
+          break;
+        }
       }
 
-      processingRef.current =
-        true;
+      if (!actor) return;
 
-      try {
-        const homePower =
-          calculateTeamPower(
-            homeXIRef.current,
-            tacticsRef.current
-              .home,
-            formationRef.current
-              .home
-          );
+      const actorOVR = overall(actor);
+      const actorPosition = getVisualPosition(team, actor);
 
-        const awayPower =
-          calculateTeamPower(
-            awayXIRef.current,
-            tacticsRef.current
-              .away,
-            formationRef.current
-              .away
-          );
+      // ====================================================
+      // ACTION DECISION (Pass, Dribble, Shot, Lose ball)
+      // ====================================================
+      const actionRoll = Math.random() * 100;
+      let action;
 
-        // ====================================================
-        // POSSESSION
-        // ====================================================
+      if (actionRoll < 55) action = "pass";          // 55% pass
+      else if (actionRoll < 80) action = "dribble";  // 25% dribble
+      else if (actionRoll < 95) action = "shot";     // 15% shot
+      else action = "lose_ball";                     // 5% lose/tackle
 
-        const homePossessionChance =
-          clamp(
-            0.5 +
-              (homePower -
-                awayPower) *
-                0.006,
-            0.30,
-            0.70
-          );
-
-        const team =
-          Math.random() <
-          homePossessionChance
-            ? "home"
-            : "away";
-
-        const players =
-          team === "home"
-            ? homeXIRef.current
-            : awayXIRef.current;
-
-        const opponent =
-          team === "home"
-            ? awayXIRef.current
-            : homeXIRef.current;
-
-        const ownTactics =
-          tacticsRef.current[
-            team
-          ];
-
-        const opponentTactics =
-          tacticsRef.current[
-            team === "home"
-              ? "away"
-              : "home"
-          ];
-
-        const teamPower =
-          team === "home"
-            ? homePower
-            : awayPower;
-
-        const opponentPower =
-          team === "home"
-            ? awayPower
-            : homePower;
-
-        // ====================================================
-        // ATTACK
-        // ====================================================
-
-        statsRef.current[
-          team
-        ].attacks += 1;
-
-        const dangerousChance =
-          clamp(
-            0.30 +
-              (teamPower -
-                opponentPower) *
-                0.004 +
-              (ownTactics
-                .mentality ===
-              "attacking"
-                ? 0.08
-                : 0),
-            0.15,
-            0.65
-          );
-
-        if (
-          Math.random() <
-          dangerousChance
-        ) {
-          statsRef.current[
-            team
-          ].dangerousAttacks += 1;
-        }
-
-        // ====================================================
-        // POSSESSION STATS
-        // ====================================================
-
-        const possession =
-          clamp(
-            50 +
-              (homePower -
-                awayPower) *
-                0.55 +
-              (Math.random() -
-                0.5) *
-                8,
-            25,
-            75
-          );
-
-        statsRef.current.home.possession =
-          Number(
-            possession.toFixed(1)
-          );
-
-        statsRef.current.away.possession =
-          Number(
-            (
-              100 -
-              possession
-            ).toFixed(1)
-          );
-
-        // ====================================================
-        // PLAYER SELECTION
-        // ====================================================
-
-        const attackingPlayers =
-          players.filter(
-            (player) => {
-              const p =
-                position(
-                  player
-                );
-
-              return (
-                p === "ATT" ||
-                p === "MID"
-              );
-            }
-          );
-
-        const pool =
-          attackingPlayers.length
-            ? attackingPlayers
-            : players;
-
-        const actor =
-          pool[
-            Math.floor(
-              Math.random() *
-                pool.length
-            )
-          ];
-
-        if (!actor) {
-          return;
-        }
-
-        const actorOVR =
-          overall(actor);
-
-        const actorPosition =
-          getVisualPosition(
-            team,
-            actor
-          );
-
-        // ====================================================
-        // PASS
-        // ====================================================
-
-        let passChance = 0.68;
-
-        if (
-          ownTactics.tempo ===
-          "fast"
-        ) {
-          passChance -=
-            0.08;
-        }
-
-        if (
-          ownTactics.tempo ===
-          "slow"
-        ) {
-          passChance +=
-            0.08;
-        }
-
-        passChance = clamp(
-          passChance +
-            (actorOVR -
-              60) *
-              0.002,
-          0.45,
-          0.85
+      // ====================================================
+      // PASS
+      // ====================================================
+      if (action === "pass") {
+        const passChance = clamp(
+          0.72 + (actorOVR - 60) * 0.005 + (teamPower - opponentPower) * 0.003 +
+          (ownTactics.tempo === "slow" ? 0.05 : ownTactics.tempo === "fast" ? -0.03 : 0),
+          0.50,
+          0.92
         );
 
-        if (
-          Math.random() <
-          passChance
-        ) {
-          const targets =
-            players.filter(
-              (player) =>
-                playerId(
-                  player
-                ) !==
-                playerId(
-                  actor
-                )
-            );
-
-          const target =
-            targets[
-              Math.floor(
-                Math.random() *
-                  targets.length
-              )
-            ];
+        if (Math.random() < passChance) {
+          const targets = players.filter((p) => playerId(p) !== playerId(actor));
+          const target = targets[Math.floor(Math.random() * targets.length)];
 
           if (target) {
-            statsRef.current[
-              team
-            ].passes += 1;
+            statsRef.current[team].passes += 1;
 
-            const completionChance =
-              clamp(
-                0.65 +
-                  (actorOVR -
-                    60) *
-                    0.008 +
-                  (teamPower -
-                    opponentPower) *
-                    0.002 +
-                  (ownTactics
-                    .tempo ===
-                  "slow"
-                    ? 0.04
-                    : 0),
-                0.45,
-                0.96
-              );
+            const completionChance = clamp(
+              0.70 + (actorOVR - 60) * 0.006 + (teamPower - opponentPower) * 0.005,
+              0.55,
+              0.95
+            );
 
-            const completed =
-              Math.random() <
-              completionChance;
-
-            if (completed) {
-              statsRef.current[
-                team
-              ].passesCompleted +=
-                1;
-
-              const targetPosition =
-                getVisualPosition(
-                  team,
-                  target
-                );
-
-              createBallAction(
-                actorPosition,
-                targetPosition,
-                "pass"
-              );
-
-              updatePlayerMovement(
-                team,
-                targetPosition.x,
-                targetPosition.z
-              );
-
+            if (Math.random() < completionChance) {
+              statsRef.current[team].passesCompleted += 1;
+              const targetPosition = getVisualPosition(team, target);
+              createBallAction(actorPosition, targetPosition, "pass");
+              updatePlayerMovement(team, targetPosition.x, targetPosition.z);
               return;
             }
 
-            statsRef.current[
-              team
-            ].interceptions +=
-              1;
-
-            const interceptionTeam =
-              team === "home"
-                ? "away"
-                : "home";
-
-            const defenders =
-              opponent.filter(
-                (player) => {
-                  const p =
-                    position(
-                      player
-                    );
-
-                  return (
-                    p === "DEF" ||
-                    p === "MID"
-                  );
-                }
-              );
-
-            const interceptor =
-              defenders[
-                Math.floor(
-                  Math.random() *
-                    defenders.length
-                )
-              ];
-
-            if (
-              interceptor
-            ) {
-              const interceptionPosition =
-                getVisualPosition(
-                  interceptionTeam,
-                  interceptor
-                );
-
-              createBallAction(
-                actorPosition,
-                interceptionPosition,
-                "interception"
-              );
-
-              updatePlayerMovement(
-                interceptionTeam,
-                interceptionPosition.x,
-                interceptionPosition.z
-              );
+            // Interception
+            statsRef.current[team].interceptions += 1;
+            const defendingTeam = team === "home" ? "away" : "home";
+            const defenders = opponent.filter((p) => {
+              const pos = position(p);
+              return pos === "DEF" || pos === "MID";
+            });
+            const interceptor = defenders[Math.floor(Math.random() * defenders.length)];
+            if (interceptor) {
+              const interceptionPosition = getVisualPosition(defendingTeam, interceptor);
+              createBallAction(actorPosition, interceptionPosition, "interception");
+              updatePlayerMovement(defendingTeam, interceptionPosition.x, interceptionPosition.z);
             }
-
             return;
           }
+        } else {
+          // Pass failure -> opponent tackle/interception
+          statsRef.current[team].passes += 1;
+          statsRef.current[team].interceptions += 1;
+          const defendingTeam = team === "home" ? "away" : "home";
+          const defenders = opponent.filter((p) => position(p) === "DEF" || position(p) === "MID");
+          const interceptor = defenders.length ? defenders[Math.floor(Math.random() * defenders.length)] : null;
+          if (interceptor) {
+            const interceptionPosition = getVisualPosition(defendingTeam, interceptor);
+            createBallAction(actorPosition, interceptionPosition, "interception");
+            updatePlayerMovement(defendingTeam, interceptionPosition.x, interceptionPosition.z);
+          }
+          return;
         }
+      }
 
-        // ====================================================
-        // DRIBBLE
-        // ====================================================
+      // ====================================================
+      // DRIBBLE
+      // ====================================================
+      if (action === "dribble") {
+        const dribbleChance = clamp(
+          0.25 + (actorOVR - 60) * 0.006 + (ownTactics.mentality === "attacking" ? 0.06 : 0),
+          0.15,
+          0.55
+        );
 
-        let dribbleChance =
-          0.18;
-
-        if (
-          ownTactics.mentality ===
-          "attacking"
-        ) {
-          dribbleChance +=
-            0.05;
-        }
-
-        if (
-          Math.random() <
-          dribbleChance
-        ) {
-          statsRef.current[
-            team
-          ].dribbles += 1;
-
-          const newX =
-            clamp(
-              actorPosition.x +
-                (team ===
-                "home"
-                  ? 2
-                  : -2),
-              -13,
-              13
-            );
-
-          const newZ =
-            clamp(
-              actorPosition.z +
-                (Math.random() -
-                  0.5) *
-                  3,
-              -8.5,
-              8.5
-            );
-
-          const dribblePosition =
-            {
-              x: newX,
-              z: newZ,
-            };
-
-          createBallAction(
-            actorPosition,
-            dribblePosition,
-            "dribble"
-          );
-
-          updatePlayerMovement(
-            team,
-            newX,
-            newZ
-          );
-
+        if (Math.random() < dribbleChance) {
+          statsRef.current[team].dribbles += 1;
+          const newX = clamp(actorPosition.x + (team === "home" ? 3 : -3), -13, 13);
+          const newZ = clamp(actorPosition.z + (Math.random() - 0.5) * 4, -8.5, 8.5);
+          const dribblePosition = { x: newX, z: newZ };
+          createBallAction(actorPosition, dribblePosition, "dribble");
+          updatePlayerMovement(team, newX, newZ);
           return;
         }
 
-        // ====================================================
-        // SHOT
-        // ====================================================
+        // Failed dribble -> tackle
+        const defendingTeam = team === "home" ? "away" : "home";
+        statsRef.current[defendingTeam].tackles += 1;
+        if (Math.random() < 0.08) statsRef.current[team].fouls += 1;
+        return;
+      }
 
-        let shotChance =
-          0.075 +
-          (actorOVR - 60) *
-            0.0025 +
-          (teamPower -
-            opponentPower) *
-            0.002;
+      // ====================================================
+      // SHOT
+      // ====================================================
+      if (action === "shot") {
+        let shotChance = 0.15 + (actorOVR - 60) * 0.005 + (teamPower - opponentPower) * 0.004;
+        if (ownTactics.mentality === "attacking") shotChance += 0.06;
+        if (ownTactics.mentality === "defensive") shotChance -= 0.03;
+        if (isDangerousAttack) shotChance *= 1.5; // Dangerous attacks increase shot chance
 
-        if (
-          ownTactics.mentality ===
-          "attacking"
-        ) {
-          shotChance +=
-            0.035;
-        }
+        shotChance = clamp(shotChance, 0.08, 0.50);
 
-        if (
-          ownTactics.mentality ===
-          "defensive"
-        ) {
-          shotChance -=
-            0.025;
-        }
+        if (Math.random() < shotChance) {
+          statsRef.current[team].shots += 1;
 
-        shotChance = clamp(
-          shotChance,
-          0.035,
-          0.24
-        );
+          const goalX = team === "home" ? 14.7 : -14.7;
+          const goalPosition = { x: goalX, z: (Math.random() - 0.5) * 5.5 };
 
-        if (
-          Math.random() <
-          shotChance
-        ) {
-          statsRef.current[
-            team
-          ].shots += 1;
-
-          const goalX =
-            team === "home"
-              ? 14.7
-              : -14.7;
-
-          const goalPosition =
-            {
-              x: goalX,
-              z:
-                (Math.random() -
-                  0.5) *
-                4.5,
-            };
-
-          const onTargetChance =
-            clamp(
-              0.42 +
-                (actorOVR -
-                  60) *
-                  0.009 +
-                (teamPower -
-                  opponentPower) *
-                  0.001,
-              0.30,
-              0.88
-            );
-
-          const onTarget =
-            Math.random() <
-            onTargetChance;
-
-          createBallAction(
-            actorPosition,
-            goalPosition,
-            onTarget
-              ? "shot"
-              : "miss"
+          const onTargetChance = clamp(
+            0.45 + (actorOVR - 60) * 0.008 + (teamPower - opponentPower) * 0.005,
+            0.35,
+            0.90
           );
+          const onTarget = Math.random() < onTargetChance;
 
-          updatePlayerMovement(
-            team,
-            goalPosition.x,
-            goalPosition.z
-          );
+          createBallAction(actorPosition, goalPosition, onTarget ? "shot" : "miss");
+          updatePlayerMovement(team, goalPosition.x, goalPosition.z);
 
           if (!onTarget) {
-            if (
-              Math.random() <
-              0.28
-            ) {
-              statsRef.current[
-                team
-              ].corners +=
-                1;
-            }
-
+            if (Math.random() < 0.30) statsRef.current[team].corners += 1;
             return;
           }
 
-          statsRef.current[
-            team
-          ].shotsOnTarget +=
-            1;
+          statsRef.current[team].shotsOnTarget += 1;
 
           // ================================================
-          // GOAL PROBABILITY
+          // GOAL PROBABILITY (yongerewe cyane)
           // ================================================
+          const goalkeeper = opponent.find((p) => position(p) === "GK");
+          const gkOverall = goalkeeper ? overall(goalkeeper) : 65;
 
-          let goalProbability =
-            0.095;
+          let goalProbability = 0.22; // base (yari 0.095)
+          goalProbability += (teamPower - opponentPower) * 0.015;
+          goalProbability += (actorOVR - 60) * 0.006; // rating y'uwateye irakoreshwa
+          goalProbability -= (gkOverall - 60) * 0.003; // umunyezamu arakiza
 
-          goalProbability +=
-            (teamPower -
-              opponentPower) *
-            0.003;
+          if (ownTactics.mentality === "attacking") goalProbability += 0.05;
+          if (ownTactics.mentality === "defensive") goalProbability -= 0.03;
+          if (opponentTactics.mentality === "defensive") goalProbability -= 0.04;
+          if (opponentTactics.defensiveLine === "high") goalProbability += 0.03;
+          if (opponentTactics.defensiveLine === "deep") goalProbability -= 0.03;
 
-          goalProbability +=
-            (actorOVR -
-              60) *
-            0.002;
+          goalProbability = clamp(goalProbability, 0.08, 0.55);
 
-          if (
-            ownTactics.mentality ===
-            "attacking"
-          ) {
-            goalProbability +=
-              0.03;
-          }
-
-          if (
-            ownTactics.mentality ===
-            "defensive"
-          ) {
-            goalProbability -=
-              0.02;
-          }
-
-          if (
-            opponentTactics
-              .mentality ===
-            "defensive"
-          ) {
-            goalProbability -=
-              0.025;
-          }
-
-          if (
-            opponentTactics
-              .defensiveLine ===
-            "high"
-          ) {
-            goalProbability +=
-              0.015;
-          }
-
-          if (
-            opponentTactics
-              .defensiveLine ===
-            "deep"
-          ) {
-            goalProbability -=
-              0.02;
-          }
-
-          goalProbability =
-            clamp(
-              goalProbability,
-              0.035,
-              0.34
-            );
-
-          if (
-            Math.random() <
-            goalProbability
-          ) {
-            scoreRef.current[
-              team
-            ] += 1;
+          if (Math.random() < goalProbability) {
+            // GOAL!
+            scoreRef.current[team] += 1;
 
             const event = {
               id: `goal-${Date.now()}-${Math.random()}`,
-
               type: "goal",
-
               team,
-
-              minute:
-                minuteRef.current,
-
-              playerName:
-                playerName(
-                  actor
-                ),
-
-              detail:
-                `${playerName(
-                  actor
-                )} scored!`,
+              minute: minuteRef.current,
+              playerName: playerName(actor),
+              detail: `${playerName(actor)} scored!`,
             };
-
-            eventsRef.current =
-              [
-                event,
-                ...eventsRef.current,
-              ];
-
-            toast.success(
-              `⚽ ${playerName(
-                actor
-              )} SCORED!`
-            );
+            eventsRef.current = [event, ...eventsRef.current];
+            toast.success(`⚽ ${playerName(actor)} SCORED!`);
           } else {
-            const defendingTeam =
-              team === "home"
-                ? "away"
-                : "home";
-
-            statsRef.current[
-              defendingTeam
-            ].saves += 1;
-
-            eventsRef.current =
-              [
-                {
-                  id: `save-${Date.now()}-${Math.random()}`,
-
-                  type: "save",
-
-                  team:
-                    defendingTeam,
-
-                  minute:
-                    minuteRef.current,
-
-                  detail:
-                    "Goalkeeper made an important save.",
-                },
-
-                ...eventsRef.current,
-              ];
+            // SAVE
+            const defendingTeam = team === "home" ? "away" : "home";
+            statsRef.current[defendingTeam].saves += 1;
+            eventsRef.current = [
+              {
+                id: `save-${Date.now()}-${Math.random()}`,
+                type: "save",
+                team: defendingTeam,
+                minute: minuteRef.current,
+                detail: `${goalkeeper ? playerName(goalkeeper) : "Goalkeeper"} made a save.`,
+              },
+              ...eventsRef.current,
+            ];
           }
-
           return;
         }
-
-        // ====================================================
-        // TACKLE / FOUL
-        // ====================================================
-
-        if (
-          Math.random() <
-          0.18
-        ) {
-          const defendingTeam =
-            team === "home"
-              ? "away"
-              : "home";
-
-          statsRef.current[
-            defendingTeam
-          ].tackles += 1;
-
-          if (
-            Math.random() <
-            0.07
-          ) {
-            statsRef.current[
-              team
-            ].fouls += 1;
-          }
-        }
-      } finally {
-        processingRef.current =
-          false;
       }
-    }, [
-      createBallAction,
-      getVisualPosition,
-      updatePlayerMovement,
-    ]);
+
+      // ====================================================
+      // LOSE BALL / TACKLE
+      // ====================================================
+      const defendingTeam = team === "home" ? "away" : "home";
+      statsRef.current[defendingTeam].tackles += 1;
+      if (Math.random() < 0.10) {
+        statsRef.current[team].fouls += 1;
+        if (Math.random() < 0.03) {
+          statsRef.current[team].yellow += 1;
+          eventsRef.current = [
+            {
+              id: `yellow-${Date.now()}-${Math.random()}`,
+              type: "yellow_card",
+              team: team,
+              minute: minuteRef.current,
+              detail: `${playerName(actor)} received a yellow card.`,
+            },
+            ...eventsRef.current,
+          ];
+        }
+      }
+    } finally {
+      processingRef.current = false;
+    }
+  }, [createBallAction, getVisualPosition, updatePlayerMovement]);
 
   // ==========================================================
-  // MATCH TIMER
+  // MATCH TIMER (PLUS ACTIONS)
   // ==========================================================
 
   useEffect(() => {
@@ -3403,27 +2995,25 @@ export default function MatchPage() {
           return;
         }
 
-        const nextMinute =
-          minuteRef.current +
-          1;
+        // Kuri buri munota, kora plays 3 aho kuba 1
+        for (let i = 0; i < 3; i++) {
+          simulatePlay();
+        }
 
-        minuteRef.current =
-          nextMinute;
-
-        simulatePlay();
+        minuteRef.current += 1;
 
         // AI tactical decisions.
         if (
-          nextMinute > 0 &&
-          nextMinute % 10 === 0
+          minuteRef.current > 0 &&
+          minuteRef.current % 10 === 0
         ) {
           runAITactics();
         }
 
         // AI substitutions.
         if (
-          nextMinute >= 55 &&
-          nextMinute % 5 === 0
+          minuteRef.current >= 55 &&
+          minuteRef.current % 5 === 0
         ) {
           if (
             Math.random() <
@@ -3440,7 +3030,7 @@ export default function MatchPage() {
         // ====================================================
 
         if (
-          nextMinute === 45
+          minuteRef.current === 45
         ) {
           statusRef.current =
             "half-time";
@@ -3463,7 +3053,7 @@ export default function MatchPage() {
         // ====================================================
 
         if (
-          nextMinute >=
+          minuteRef.current >=
           MATCH_MINUTE
         ) {
           statusRef.current =
@@ -3488,7 +3078,7 @@ export default function MatchPage() {
 
         // Save every 5 minutes.
         if (
-          nextMinute % 5 ===
+          minuteRef.current % 5 ===
           0
         ) {
           saveMatchState(
@@ -5309,8 +4899,11 @@ export default function MatchPage() {
                             "substitution"
                           ? "🔄"
                           : event.type ===
-                            "shot"
-                          ? "💥"
+                            "yellow_card"
+                          ? "🟨"
+                          : event.type ===
+                            "red_card"
+                          ? "🟥"
                           : "•"}
                       </span>
 
