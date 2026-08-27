@@ -1,30 +1,33 @@
 // pages/transfer.js
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import Head from "next/head";
+import { useRouter } from "next/router";
 
 import {
+  arrayUnion,
   collection,
   doc,
   getDoc,
   getDocs,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  serverTimestamp,
-  writeBatch,
-  query,
-  where,
   onSnapshot,
-} from 'firebase/firestore';
+  serverTimestamp,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
 
-import { db } from '../components/firebase';
-import { useAuth } from '../context/AuthContext';
+import { db } from "../components/firebase";
+import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
-import toast from 'react-hot-toast';
-
-import styles from './transfer.module.css';
+import styles from "./transfer.module.css";
 
 /* =========================================================
    CONSTANTS
@@ -32,7 +35,6 @@ import styles from './transfer.module.css';
 
 const CONTRACT_WAIT_DAYS = 3;
 const JOIN_DELAY_DAYS = 1;
-
 const TRANSFER_RESPONSE_DAYS = 2;
 
 const MAX_SUGGESTIONS = 8;
@@ -41,7 +43,7 @@ const MAX_AI_CONTRACTS_PER_DAY = 10;
 
 const FIRESTORE_BATCH_SIZE = 450;
 
-const YOUTH_COLLECTION = 'youthPlayers';
+const YOUTH_COLLECTION = "youthPlayers";
 
 /* =========================================================
    HELPERS
@@ -53,23 +55,25 @@ function safeNumber(value, fallback = 0) {
 }
 
 function money(value) {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
   }).format(safeNumber(value));
 }
 
 function normalize(value) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || "").trim().toLowerCase();
 }
 
 function playerName(player) {
-  if (!player) return 'Unknown Player';
+  if (!player) return "Unknown Player";
 
   return (
     player.name ||
     player.fullName ||
-    [player.firstName, player.lastName].filter(Boolean).join(' ') ||
-    'Unknown Player'
+    [player.firstName, player.lastName]
+      .filter(Boolean)
+      .join(" ") ||
+    "Unknown Player"
   );
 }
 
@@ -78,7 +82,7 @@ function playerPosition(player) {
     player?.position ||
     player?.primaryPosition ||
     player?.role ||
-    'Unknown'
+    "Unknown"
   );
 }
 
@@ -109,7 +113,7 @@ function askingPrice(player) {
   );
 }
 
-function clubId(player) {
+function getPlayerClubId(player) {
   return (
     player?.clubId ||
     player?.currentClub ||
@@ -118,12 +122,12 @@ function clubId(player) {
   );
 }
 
-function clubName(player) {
+function getPlayerClubName(player) {
   return (
     player?.clubName ||
     player?.currentClubName ||
     player?.teamName ||
-    'Free Agent'
+    "Free Agent"
   );
 }
 
@@ -131,146 +135,145 @@ function dateValue(value) {
   if (!value) return null;
 
   if (
-    typeof value === 'object' &&
-    typeof value.toDate === 'function'
+    typeof value === "object" &&
+    typeof value.toDate === "function"
   ) {
     return value.toDate();
   }
 
   if (
-    typeof value === 'object' &&
-    value.seconds
+    typeof value === "object" &&
+    typeof value.seconds === "number"
   ) {
     return new Date(value.seconds * 1000);
   }
 
   const date = new Date(value);
 
-  return Number.isNaN(date.getTime())
-    ? null
-    : date;
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
 }
 
 function formatDate(value) {
   const date = dateValue(value);
 
-  if (!date) return 'Not set';
+  if (!date) return "Not set";
 
   return date.toLocaleDateString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 
 function formatDateTime(value) {
   const date = dateValue(value);
 
-  if (!date) return 'Not set';
+  if (!date) return "Not set";
 
   return date.toLocaleString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
 /* =========================================================
-   GAME CALENDAR HELPERS
+   GAME CALENDAR
 ========================================================= */
 
-/*
-  IMPORTANT:
-
-  All transfer timing uses the game's currentDate.
-
-  Never use real Date.now() to determine whether a transfer
-  response is due.
-
-  The real Date object is only used to convert the stored
-  game-calendar date into a comparable date object.
-*/
-
-function gameDateValue(value) {
-  return dateValue(value);
+function getCareerGameDate(careerData) {
+  return dateValue(
+    careerData?.currentDate ||
+      careerData?.gameDate ||
+      careerData?.calendarDate
+  );
 }
 
 function addGameDays(date, days) {
-  const base = gameDateValue(date) || new Date();
+  const base = dateValue(date) || new Date();
 
   return new Date(
     base.getTime() +
       safeNumber(days, 0) *
-      24 *
-      60 *
-      60 *
-      1000
+        24 *
+        60 *
+        60 *
+        1000
   ).toISOString();
 }
 
 function gameDaysSince(fromDate, currentGameDate) {
-  const from = gameDateValue(fromDate);
-  const current = gameDateValue(currentGameDate);
+  const from = dateValue(fromDate);
+  const current = dateValue(currentGameDate);
 
   if (!from || !current) return 0;
 
   return Math.floor(
     (current.getTime() - from.getTime()) /
-      (1000 * 60 * 60 * 24)
+      (24 * 60 * 60 * 1000)
   );
 }
 
 function gameDaysRemaining(deadline, currentGameDate) {
-  const end = gameDateValue(deadline);
-  const current = gameDateValue(currentGameDate);
+  const end = dateValue(deadline);
+  const current = dateValue(currentGameDate);
 
   if (!end || !current) return null;
 
   return Math.ceil(
     (end.getTime() - current.getTime()) /
-      (1000 * 60 * 60 * 24)
+      (24 * 60 * 60 * 1000)
   );
 }
 
+/* =========================================================
+   STATUS
+========================================================= */
+
 function offerStatus(offer) {
-  return normalize(
-    offer?.status || 'pending'
-  );
+  return normalize(offer?.status || "pending");
 }
 
 function statusText(status) {
   switch (normalize(status)) {
-    case 'accepted':
-      return 'Accepted';
+    case "accepted":
+      return "Accepted";
 
-    case 'rejected':
-      return 'Rejected';
+    case "rejected":
+      return "Rejected";
 
-    case 'pending':
-      return 'Pending';
+    case "pending":
+      return "Pending";
 
-    case 'negotiation':
-      return 'Negotiation';
+    case "negotiation":
+      return "Negotiation";
 
-    case 'contract-offered':
-      return 'Contract Offered';
+    case "contract-offered":
+      return "Contract Offered";
 
-    case 'contract-accepted':
-      return 'Contract Accepted';
+    case "contract-accepted":
+      return "Contract Accepted";
 
-    case 'joining':
-      return 'Joining Club';
+    case "joining":
+      return "Joining Club";
 
-    case 'completed':
-      return 'Completed';
+    case "contract-pending":
+      return "Contract Pending";
 
-    case 'expired':
-      return 'Expired';
+    case "completed":
+      return "Completed";
+
+    case "expired":
+      return "Expired";
 
     default:
-      return status || 'Pending';
+      return status || "Pending";
   }
 }
 
@@ -278,63 +281,54 @@ function statusClass(status) {
   const value = normalize(status);
 
   if (
-    value === 'accepted' ||
-    value === 'contract-accepted' ||
-    value === 'completed'
+    value === "accepted" ||
+    value === "contract-accepted" ||
+    value === "completed"
   ) {
-    return 'success';
+    return "success";
   }
 
   if (
-    value === 'rejected' ||
-    value === 'expired'
+    value === "rejected" ||
+    value === "expired"
   ) {
-    return 'danger';
+    return "danger";
   }
 
   if (
-    value === 'negotiation' ||
-    value === 'contract-offered' ||
-    value === 'joining'
+    value === "negotiation" ||
+    value === "contract-offered" ||
+    value === "joining" ||
+    value === "contract-pending"
   ) {
-    return 'warning';
+    return "warning";
   }
 
-  return 'pending';
+  return "pending";
 }
 
 /* =========================================================
-   GAME DATE NORMALIZATION
+   POSITION NEED
 ========================================================= */
 
-function getCareerGameDate(careerData) {
-  const value =
-    careerData?.currentDate ||
-    careerData?.gameDate ||
-    careerData?.calendarDate;
-
-  return gameDateValue(value);
-}
-
-/* =========================================================
-   AI PLAYER EVALUATION
-========================================================= */
-
-function getPositionNeed(clubPlayers) {
+function getPositionNeed(players) {
   const positions = {};
 
-  clubPlayers.forEach((player) => {
-    const position = normalize(
-      playerPosition(player)
-    );
+  players.forEach((player) => {
+    const position = normalize(playerPosition(player));
 
     if (!position) return;
 
-    positions[position] = (positions[position] || 0) + 1;
+    positions[position] =
+      (positions[position] || 0) + 1;
   });
 
   return positions;
 }
+
+/* =========================================================
+   AI PLAYER SCORING
+========================================================= */
 
 function calculateAIPlayerScore(
   player,
@@ -345,28 +339,16 @@ function calculateAIPlayerScore(
   const value = playerValue(player);
 
   const budget = safeNumber(
-    aiClub.transferBudget,
+    aiClub?.transferBudget,
     0
   );
 
-  const positions =
-    getPositionNeed(aiPlayers);
-
-  const position = normalize(
-    playerPosition(player)
-  );
+  const positions = getPositionNeed(aiPlayers);
+  const position = normalize(playerPosition(player));
 
   let score = 0;
 
-  /*
-    Overall quality
-  */
-
   score += overall * 2;
-
-  /*
-    Position need
-  */
 
   if (!positions[position]) {
     score += 45;
@@ -376,10 +358,6 @@ function calculateAIPlayerScore(
     score += 10;
   }
 
-  /*
-    Budget
-  */
-
   if (
     budget > 0 &&
     value > 0 &&
@@ -388,14 +366,7 @@ function calculateAIPlayerScore(
     score += 30;
   }
 
-  /*
-    Young players
-  */
-
-  const age = safeNumber(
-    player.age,
-    28
-  );
+  const age = safeNumber(player.age, 28);
 
   if (age <= 21) {
     score += 30;
@@ -405,26 +376,17 @@ function calculateAIPlayerScore(
     score += 10;
   }
 
-  /*
-    Transfer listed
-  */
-
-  const transferStatus =
-    normalize(
-      player.transferStatus
-    );
+  const transferStatus = normalize(
+    player.transferStatus
+  );
 
   if (
-    transferStatus.includes('listed') ||
-    transferStatus.includes('available') ||
-    transferStatus.includes('transfer')
+    transferStatus.includes("listed") ||
+    transferStatus.includes("available") ||
+    transferStatus.includes("transfer")
   ) {
     score += 20;
   }
-
-  /*
-    Potential
-  */
 
   const potential = safeNumber(
     player.potential,
@@ -433,18 +395,11 @@ function calculateAIPlayerScore(
 
   score += Math.min(
     20,
-    Math.max(
-      0,
-      potential - overall
-    )
+    Math.max(0, potential - overall)
   );
 
-  /*
-    Reputation
-  */
-
   const reputation = safeNumber(
-    aiClub.reputation,
+    aiClub?.reputation,
     50
   );
 
@@ -481,13 +436,8 @@ function aiNegotiateBid(
 
   let acceptChance = 0.25;
 
-  /*
-    Offer compared to asking price
-  */
-
   if (asking > 0) {
-    const ratio =
-      amount / asking;
+    const ratio = amount / asking;
 
     if (ratio >= 1.5) {
       acceptChance += 0.45;
@@ -504,11 +454,6 @@ function aiNegotiateBid(
     }
   }
 
-  /*
-    High-quality player
-    = harder to buy cheaply
-  */
-
   if (overall >= 90) {
     acceptChance -= 0.20;
   } else if (overall >= 85) {
@@ -519,88 +464,57 @@ function aiNegotiateBid(
     acceptChance -= 0.05;
   }
 
-  /*
-    Transfer listed
-    = easier to sell
-  */
-
-  const transferStatus =
-    normalize(
-      player.transferStatus
-    );
+  const transferStatus = normalize(
+    player.transferStatus
+  );
 
   if (
-    transferStatus.includes('listed') ||
-    transferStatus.includes('available')
+    transferStatus.includes("listed") ||
+    transferStatus.includes("available")
   ) {
     acceptChance += 0.20;
   }
 
-  /*
-    Seller reputation / pressure
-  */
-
-  const sellerReputation =
-    safeNumber(
-      sellingClub?.reputation,
-      50
-    );
+  const sellerReputation = safeNumber(
+    sellingClub?.reputation,
+    50
+  );
 
   if (sellerReputation < 40) {
     acceptChance += 0.05;
   }
 
-  /*
-    Clamp
-  */
-
   acceptChance = Math.max(
     0.05,
-    Math.min(
-      0.95,
-      acceptChance
-    )
+    Math.min(0.95, acceptChance)
   );
 
-  const roll = Math.random();
-
-  /*
-    ACCEPT
-  */
-
-  if (roll < acceptChance) {
+  if (Math.random() < acceptChance) {
     return {
-      status: 'accepted',
+      status: "accepted",
       acceptedAt: new Date().toISOString(),
       systemResponse: true,
       responseNote:
-        `The selling club accepted the €${money(amount)} offer.`,
+        `The selling club accepted the €${money(
+          amount
+        )} offer.`,
     };
   }
 
-  /*
-    COUNTER OFFER
-  */
-
-  const counterChance = 0.55;
-
   if (
-    Math.random() < counterChance &&
+    Math.random() < 0.55 &&
     asking > amount
   ) {
-    let counterOffer =
-      Math.round(
-        asking * (
-          0.90 +
-          Math.random() * 0.15
-        )
-      );
+    let counterOffer = Math.round(
+      asking *
+        (0.9 + Math.random() * 0.15)
+    );
 
-    /* Never counter above buyer budget if budget is known. */
     const buyerBudget = safeNumber(
       buyerClub?.transferBudget,
       0
     );
+
     if (
       buyerBudget > 0 &&
       counterOffer > buyerBudget
@@ -610,25 +524,23 @@ function aiNegotiateBid(
 
     if (counterOffer > amount) {
       return {
-        status: 'negotiation',
+        status: "negotiation",
         counterOffer,
         systemResponse: true,
         responseNote:
-          `The selling club rejected the offer but wants €${money(counterOffer)}.`,
+          `The selling club rejected the offer but wants €${money(
+            counterOffer
+          )}.`,
       };
     }
   }
 
-  /*
-    REJECT
-  */
-
   return {
-    status: 'rejected',
+    status: "rejected",
     rejectedAt: new Date().toISOString(),
     systemResponse: true,
     responseNote:
-      'The selling club rejected the transfer offer.',
+      "The selling club rejected the transfer offer.",
   };
 }
 
@@ -641,28 +553,23 @@ function aiNegotiateContract(
   player,
   club
 ) {
-  const overall =
-    playerOverall(player);
+  const overall = playerOverall(player);
 
-  const offeredWage =
-    safeNumber(
-      offer.weeklyWage,
-      0
-    );
+  const offeredWage = safeNumber(
+    offer.weeklyWage,
+    0
+  );
 
-  const currentWage =
-    safeNumber(
-      player.wage ||
-      player.salary,
-      0
-    );
+  const currentWage = safeNumber(
+    player.wage || player.salary,
+    500
+  );
 
   let acceptChance = 0.30;
 
   if (currentWage > 0) {
     const ratio =
-      offeredWage /
-      currentWage;
+      offeredWage / currentWage;
 
     if (ratio >= 2) {
       acceptChance += 0.40;
@@ -685,50 +592,49 @@ function aiNegotiateContract(
     acceptChance -= 0.05;
   }
 
-  const reputation =
-    safeNumber(
-      club?.reputation,
-      50
-    );
+  const reputation = safeNumber(
+    club?.reputation,
+    50
+  );
 
   if (reputation >= 80) {
     acceptChance += 0.10;
+  } else if (reputation >= 65) {
+    acceptChance += 0.05;
   }
 
   acceptChance = Math.max(
     0.05,
-    Math.min(
-      0.90,
-      acceptChance
-    )
+    Math.min(0.90, acceptChance)
   );
 
   if (
-    Math.random() <
-    acceptChance
+    Math.random() < acceptChance
   ) {
     return {
-      status: 'contract-accepted',
-      acceptedAt:
-        new Date().toISOString(),
+      status: "contract-accepted",
+      acceptedAt: new Date().toISOString(),
       systemResponse: true,
       responseNote:
-        `${playerName(player)} accepted the contract.`,
+        `${playerName(
+          player
+        )} accepted the contract.`,
     };
   }
 
   return {
-    status: 'rejected',
-    rejectedAt:
-      new Date().toISOString(),
+    status: "rejected",
+    rejectedAt: new Date().toISOString(),
     systemResponse: true,
     responseNote:
-      `${playerName(player)} rejected the contract.`,
+      `${playerName(
+        player
+      )} rejected the contract.`,
   };
 }
 
 /* =========================================================
-   AI OFFER CREATION
+   AI BID CREATION
 ========================================================= */
 
 function createAIBid({
@@ -736,11 +642,8 @@ function createAIBid({
   player,
   gameDate,
 }) {
-  const value =
-    playerValue(player);
-
-  const asking =
-    askingPrice(player);
+  const value = playerValue(player);
+  const asking = askingPrice(player);
 
   const baseValue =
     asking > 0
@@ -749,35 +652,43 @@ function createAIBid({
       ? value
       : 100000;
 
-  const offerAmount =
-    Math.max(
-      1,
-      Math.round(
-        baseValue *
-        (
-          0.78 +
-          Math.random() * 0.27
-        )
-      )
-    );
+  const offerAmount = Math.max(
+    1,
+    Math.round(
+      baseValue *
+        (0.78 + Math.random() * 0.27)
+    )
+  );
 
   return {
     id:
-      `ai-${aiClub.id}-${player.id}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      `ai-${aiClub.id}-${player.id}-${Date.now()}-${Math.floor(
+        Math.random() * 10000
+      )}`,
 
     buyerClubId: aiClub.id,
+
     buyerClubName:
       aiClub.name ||
       aiClub.clubName ||
-      'AI Club',
+      "AI Club",
+
     playerId: player.id,
+
     playerName: playerName(player),
+
     offerAmount,
+
     askingPrice: asking,
-    type: 'transfer',
-    status: 'pending',
-    createdBy: 'system-ai',
+
+    type: "transfer",
+
+    status: "pending",
+
+    createdBy: "system-ai",
+
     createdAt: gameDate.toISOString(),
+
     responseDeadline: addGameDays(
       gameDate,
       TRANSFER_RESPONSE_DAYS
@@ -796,40 +707,45 @@ export async function getServerSideProps() {
       clubsSnapshot,
     ] = await Promise.all([
       getDocs(
-        collection(db, 'players')
+        collection(db, "players")
       ),
       getDocs(
-        collection(db, 'clubs')
+        collection(db, "clubs")
       ),
     ]);
 
-    const players = playersSnapshot.docs.map(
-      (item) => ({
-        id: item.id,
-        ...item.data(),
-      })
-    );
+    const players =
+      playersSnapshot.docs.map(
+        (item) => ({
+          id: item.id,
+          ...item.data(),
+        })
+      );
 
-    const clubs = clubsSnapshot.docs.map(
-      (item) => ({
-        id: item.id,
-        ...item.data(),
-      })
-    );
+    const clubs =
+      clubsSnapshot.docs.map(
+        (item) => ({
+          id: item.id,
+          ...item.data(),
+        })
+      );
 
     return {
       props: {
-        initialPlayers: JSON.parse(
-          JSON.stringify(players)
-        ),
-        initialClubs: JSON.parse(
-          JSON.stringify(clubs)
-        ),
+        initialPlayers:
+          JSON.parse(
+            JSON.stringify(players)
+          ),
+
+        initialClubs:
+          JSON.parse(
+            JSON.stringify(clubs)
+          ),
       },
     };
   } catch (error) {
     console.error(
-      'Transfer SSR error:',
+      "Transfer SSR error:",
       error
     );
 
@@ -850,8 +766,7 @@ export default function TransferPage({
   initialPlayers = [],
   initialClubs = [],
 }) {
-  const router =
-    useRouter();
+  const router = useRouter();
 
   const {
     user,
@@ -861,16 +776,12 @@ export default function TransferPage({
   const [
     players,
     setPlayers,
-  ] = useState(
-    initialPlayers
-  );
+  ] = useState(initialPlayers);
 
   const [
     clubs,
     setClubs,
-  ] = useState(
-    initialClubs
-  );
+  ] = useState(initialClubs);
 
   const [
     youthPlayers,
@@ -900,17 +811,17 @@ export default function TransferPage({
   const [
     activeTab,
     setActiveTab,
-  ] = useState('incoming');
+  ] = useState("incoming");
 
   const [
     search,
     setSearch,
-  ] = useState('');
+  ] = useState("");
 
   const [
     statusFilter,
     setStatusFilter,
-  ] = useState('all');
+  ] = useState("all");
 
   const [
     selectedBid,
@@ -935,17 +846,17 @@ export default function TransferPage({
   const [
     contractWage,
     setContractWage,
-  ] = useState('');
+  ] = useState("");
 
   const [
     contractBonus,
     setContractBonus,
-  ] = useState('');
+  ] = useState("");
 
   const [
     contractYears,
     setContractYears,
-  ] = useState('3');
+  ] = useState("3");
 
   const [
     contractLoading,
@@ -957,25 +868,20 @@ export default function TransferPage({
     setIsProcessingSystem,
   ] = useState(false);
 
-  /*
-    Prevent processing the same game date repeatedly.
-  */
-
   const processedCalendarRef =
     useRef(new Set());
 
   /* =======================================================
-     CURRENT GAME DATE
+     GAME DATE
   ======================================================= */
 
-  const currentGameDate =
-    useMemo(
-      () =>
-        getCareerGameDate(
-          careerData
-        ),
-      [careerData]
-    );
+  const currentGameDate = useMemo(
+    () =>
+      getCareerGameDate(
+        careerData
+      ),
+    [careerData]
+  );
 
   const currentGameDateKey =
     currentGameDate
@@ -989,17 +895,14 @@ export default function TransferPage({
   ======================================================= */
 
   useEffect(() => {
-    if (
-      !loading &&
-      !user
-    ) {
-      router.push('/login');
+    if (loading) return;
+
+    if (!user) {
+      router.push("/login");
       return;
     }
 
-    if (user) {
-      loadCareer();
-    }
+    loadCareer();
   }, [
     user,
     loading,
@@ -1011,38 +914,42 @@ export default function TransferPage({
   ======================================================= */
 
   async function loadCareer() {
+    if (!user?.uid) return;
+
     try {
       setIsLoading(true);
 
       const userRef = doc(
         db,
-        'users',
+        "users",
         user.uid
       );
 
-      const snapshot = await getDoc(
-        userRef
-      );
+      const snapshot =
+        await getDoc(userRef);
 
       if (!snapshot.exists()) {
         setCareerData({});
         return;
       }
 
-      const data = snapshot.data();
-      const career = data.careerData || {};
+      const data =
+        snapshot.data();
+
+      const career =
+        data.careerData || {};
+
       setCareerData(career);
 
       if (career.currentClub) {
         const clubRef = doc(
           db,
-          'clubs',
+          "clubs",
           career.currentClub
         );
 
-        const clubSnapshot = await getDoc(
-          clubRef
-        );
+        const clubSnapshot =
+          await getDoc(clubRef);
 
         if (
           clubSnapshot.exists()
@@ -1051,12 +958,17 @@ export default function TransferPage({
             id: clubSnapshot.id,
             ...clubSnapshot.data(),
           });
+        } else {
+          setCurrentClub(null);
         }
+      } else {
+        setCurrentClub(null);
       }
     } catch (error) {
       console.error(error);
+
       toast.error(
-        'Could not load transfer centre'
+        "Could not load transfer centre"
       );
     } finally {
       setIsLoading(false);
@@ -1070,28 +982,26 @@ export default function TransferPage({
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribe = onSnapshot(
-      collection(
-        db,
-        'players'
-      ),
-      (snapshot) => {
-        const playerList = snapshot.docs.map(
-          (docItem) => ({
-            id: docItem.id,
-            ...docItem.data(),
-          })
-        );
-
-        setPlayers(playerList);
-      },
-      (error) => {
-        console.error(
-          'Players realtime error:',
-          error
-        );
-      }
-    );
+    const unsubscribe =
+      onSnapshot(
+        collection(db, "players"),
+        (snapshot) => {
+          setPlayers(
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...item.data(),
+              })
+            )
+          );
+        },
+        (error) => {
+          console.error(
+            "Players realtime error:",
+            error
+          );
+        }
+      );
 
     return () => unsubscribe();
   }, [user]);
@@ -1103,102 +1013,92 @@ export default function TransferPage({
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribe = onSnapshot(
-      collection(
-        db,
-        'clubs'
-      ),
-      (snapshot) => {
-        const clubList = snapshot.docs.map(
-          (docItem) => ({
-            id: docItem.id,
-            ...docItem.data(),
-          })
-        );
-
-        setClubs(clubList);
-      },
-      (error) => {
-        console.error(
-          'Clubs realtime error:',
-          error
-        );
-      }
-    );
+    const unsubscribe =
+      onSnapshot(
+        collection(db, "clubs"),
+        (snapshot) => {
+          setClubs(
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...item.data(),
+              })
+            )
+          );
+        },
+        (error) => {
+          console.error(
+            "Clubs realtime error:",
+            error
+          );
+        }
+      );
 
     return () => unsubscribe();
   }, [user]);
 
   /* =======================================================
-     REALTIME YOUTH PLAYERS
+     REALTIME YOUTH
   ======================================================= */
 
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribe = onSnapshot(
-      collection(
-        db,
-        YOUTH_COLLECTION
-      ),
-      (snapshot) => {
-        const list = snapshot.docs.map(
-          (docItem) => ({
-            id: docItem.id,
-            ...docItem.data(),
-          })
-        );
-
-        setYouthPlayers(list);
-      },
-      (error) => {
-        /*
-          Youth collection may not exist in some installations.
-          Do not crash the transfer centre.
-        */
-        console.warn(
-          'Youth players realtime error:',
-          error
-        );
-      }
-    );
+    const unsubscribe =
+      onSnapshot(
+        collection(
+          db,
+          YOUTH_COLLECTION
+        ),
+        (snapshot) => {
+          setYouthPlayers(
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...item.data(),
+              })
+            )
+          );
+        },
+        (error) => {
+          console.warn(
+            "Youth players realtime error:",
+            error
+          );
+        }
+      );
 
     return () => unsubscribe();
   }, [user]);
 
   /* =======================================================
-     CLUB MAP
+     MAPS
   ======================================================= */
 
-  const clubMap =
-    useMemo(() => {
-      return clubs.reduce(
+  const clubMap = useMemo(
+    () =>
+      clubs.reduce(
         (map, club) => {
-          map[club.id] =
-            club;
-
+          map[club.id] = club;
           return map;
         },
         {}
-      );
-    }, [clubs]);
+      ),
+    [clubs]
+  );
 
-  /* =======================================================
-     PLAYER MAP
-  ======================================================= */
-
-  const playerMap =
-    useMemo(() => {
-      return players.reduce(
+  const playerMap = useMemo(
+    () =>
+      players.reduce(
         (map, player) => {
           map[player.id] =
             player;
-
           return map;
         },
         {}
-      );
-    }, [players]);
+      ),
+    [players]
+  );
 
   /* =======================================================
      CURRENT CLUB
@@ -1216,7 +1116,7 @@ export default function TransferPage({
 
       return players.filter(
         (player) =>
-          clubId(player) ===
+          getPlayerClubId(player) ===
           currentClubId
       );
     }, [
@@ -1236,7 +1136,7 @@ export default function TransferPage({
       await updateDoc(
         doc(
           db,
-          'players',
+          "players",
           playerId
         ),
         {
@@ -1262,16 +1162,434 @@ export default function TransferPage({
       return true;
     } catch (error) {
       console.error(error);
+
       toast.error(
-        'Could not update player'
+        "Could not update player"
       );
+
       return false;
     }
   }
 
   /* =======================================================
-     SYSTEM BID RESPONSES
-     GAME CALENDAR ONLY
+     COMPLETE DUE TRANSFERS
+
+     IMPORTANT:
+     Transfer is NOT completed here.
+
+     The player:
+       seller
+        ↓
+       joining
+        ↓
+       buyer club
+        ↓
+       contract-offered
+        ↓
+       contract-accepted
+        ↓
+       completed
+
+  ======================================================= */
+
+  const completeDueTransfers =
+    useCallback(
+      async (gameDate) => {
+        if (!gameDate) return;
+
+        const dueTransfers = [];
+
+        players.forEach(
+          (player) => {
+            const pending =
+              player.pendingTransfer;
+
+            if (!pending) return;
+
+            if (
+              normalize(
+                pending.status
+              ) !== "joining"
+            ) {
+              return;
+            }
+
+            const joiningDate =
+              dateValue(
+                pending.joiningDate
+              );
+
+            if (!joiningDate) {
+              return;
+            }
+
+            if (
+              joiningDate.getTime() >
+              gameDate.getTime()
+            ) {
+              return;
+            }
+
+            if (
+              !pending.toClubId
+            ) {
+              return;
+            }
+
+            dueTransfers.push({
+              player,
+              pending,
+            });
+          }
+        );
+
+        if (
+          dueTransfers.length === 0
+        ) {
+          return;
+        }
+
+        let batch =
+          writeBatch(db);
+
+        let operationCount = 0;
+        let completedCount = 0;
+
+        const commitBatch =
+          async () => {
+            if (
+              operationCount > 0
+            ) {
+              await batch.commit();
+            }
+
+            batch =
+              writeBatch(db);
+
+            operationCount = 0;
+          };
+
+        for (
+          const item of dueTransfers
+        ) {
+          if (
+            operationCount >=
+            FIRESTORE_BATCH_SIZE - 3
+          ) {
+            await commitBatch();
+          }
+
+          const {
+            player,
+            pending,
+          } = item;
+
+          const fromClubId =
+            pending.fromClubId ||
+            getPlayerClubId(
+              player
+            );
+
+          const toClubId =
+            pending.toClubId;
+
+          const buyerClub =
+            clubMap[toClubId];
+
+          const sellerClub =
+            clubMap[fromClubId];
+
+          if (!buyerClub) {
+            continue;
+          }
+
+          const transferFee =
+            safeNumber(
+              pending.offerAmount,
+              0
+            );
+
+          const buyerName =
+            buyerClub.name ||
+            buyerClub.clubName ||
+            "";
+
+          /*
+            Keep the actual transfer offer
+            as accepted/joining.
+          */
+
+          const existingOffers =
+            Array.isArray(
+              player.transferOffers
+            )
+              ? player.transferOffers
+              : [];
+
+          const transferOffers =
+            existingOffers.map(
+              (offer) => {
+                if (
+                  offer.id ===
+                  pending.id
+                ) {
+                  return {
+                    ...offer,
+                    status: "joining",
+                    joiningDate:
+                      pending.joiningDate,
+                  };
+                }
+
+                return offer;
+              }
+            );
+
+          /*
+            If no matching offer was found,
+            keep existing offers.
+          */
+
+          /*
+            Contract is created NOW,
+            after the player actually
+            reaches the new club.
+          */
+
+          const currentWage =
+            safeNumber(
+              player.wage ||
+                player.salary,
+              500
+            );
+
+          const weeklyWage =
+            Math.round(
+              currentWage * 1.2
+            );
+
+          const contractId =
+            `transfer-contract-${toClubId}-${player.id}-${gameDate.getTime()}`;
+
+          const contract = {
+            id: contractId,
+
+            clubId: toClubId,
+
+            clubName: buyerName,
+
+            playerId: player.id,
+
+            playerName:
+              playerName(player),
+
+            weeklyWage,
+
+            signingBonus: 0,
+
+            years: 3,
+
+            status:
+              "contract-offered",
+
+            negotiationRound: 1,
+
+            secondChanceUsed: false,
+
+            createdAt:
+              gameDate.toISOString(),
+
+            responseDeadline:
+              addGameDays(
+                gameDate,
+                CONTRACT_WAIT_DAYS
+              ),
+
+            createdBy:
+              "system-ai",
+
+            transferId:
+              pending.id || null,
+
+            transferFee,
+          };
+
+          const existingContracts =
+            Array.isArray(
+              player.contractOffers
+            )
+              ? player.contractOffers
+              : [];
+
+          /*
+            Prevent duplicate contract
+            creation.
+          */
+
+          const alreadyHasContract =
+            existingContracts.some(
+              (offer) =>
+                offer.transferId ===
+                  pending.id &&
+                (
+                  offer.status ===
+                    "contract-offered" ||
+                  offer.status ===
+                    "contract-accepted"
+                )
+            );
+
+          const newContractOffers =
+            alreadyHasContract
+              ? existingContracts
+              : [
+                  ...existingContracts,
+                  contract,
+                ];
+
+          const newTransferStatus =
+            "contract-pending";
+
+          const playerUpdate = {
+            clubId: toClubId,
+
+            currentClub: toClubId,
+
+            teamId: toClubId,
+
+            clubName: buyerName,
+
+            currentClubName: buyerName,
+
+            /*
+              IMPORTANT:
+              Not "completed" yet.
+            */
+
+            transferStatus:
+              newTransferStatus,
+
+            pendingTransfer: null,
+
+            transferOffers,
+
+            latestOffer:
+              pending,
+
+            contractOffers:
+              newContractOffers,
+
+            latestContractOffer:
+              alreadyHasContract
+                ? player.latestContractOffer ||
+                  null
+                : contract,
+
+            lastTransferFee:
+              transferFee,
+
+            lastTransferDate:
+              gameDate.toISOString(),
+
+            updatedAt:
+              serverTimestamp(),
+          };
+
+          batch.update(
+            doc(
+              db,
+              "players",
+              player.id
+            ),
+            playerUpdate
+          );
+
+          operationCount++;
+          completedCount++;
+
+          /*
+            Transfer money is paid only once,
+            when the player actually moves.
+          */
+
+          if (transferFee > 0) {
+            const buyerBudget =
+              safeNumber(
+                buyerClub.transferBudget,
+                0
+              );
+
+            batch.update(
+              doc(
+                db,
+                "clubs",
+                toClubId
+              ),
+              {
+                transferBudget:
+                  Math.max(
+                    0,
+                    buyerBudget -
+                      transferFee
+                  ),
+
+                updatedAt:
+                  serverTimestamp(),
+              }
+            );
+
+            operationCount++;
+
+            if (sellerClub) {
+              const sellerBudget =
+                safeNumber(
+                  sellerClub.transferBudget,
+                  0
+                );
+
+              batch.update(
+                doc(
+                  db,
+                  "clubs",
+                  fromClubId
+                ),
+                {
+                  transferBudget:
+                    sellerBudget +
+                    transferFee,
+
+                  updatedAt:
+                    serverTimestamp(),
+                }
+              );
+
+              operationCount++;
+            }
+          }
+        }
+
+        await commitBatch();
+
+        if (
+          completedCount > 0
+        ) {
+          toast.success(
+            `${completedCount} player${
+              completedCount > 1
+                ? "s"
+                : ""
+            } reached the new club and received a contract offer.`
+          );
+        }
+      },
+      [
+        players,
+        clubMap,
+      ]
+    );
+
+  /* =======================================================
+     SYSTEM TRANSFER RESPONSES
   ======================================================= */
 
   const processSystemResponses =
@@ -1289,23 +1607,26 @@ export default function TransferPage({
         try {
           setIsProcessingSystem(true);
 
-          const gameDate = currentGameDate;
+          const gameDate =
+            currentGameDate;
 
-          const updates = [];
+          const playerUpdates =
+            new Map();
 
-          /*
-            AI/system seller clubs only.
-          */
-
-          for (const player of players) {
-            const sellerClubId = clubId(player);
+          for (
+            const player of players
+          ) {
+            const sellerClubId =
+              getPlayerClubId(
+                player
+              );
 
             if (!sellerClubId) {
               continue;
             }
 
             /*
-              Current user's club is handled manually.
+              User's own club handles offers manually.
             */
 
             if (
@@ -1319,54 +1640,82 @@ export default function TransferPage({
               clubMap[sellerClubId];
 
             /*
-              If the club has a managerId,
-              it is controlled by a user.
+              User-managed clubs don't get
+              AI responses.
             */
 
-            if (sellerClub?.managerId) {
+            if (
+              sellerClub?.managerId
+            ) {
               continue;
             }
 
-            const offers = Array.isArray(
-              player.transferOffers
-            )
-              ? player.transferOffers
-              : [];
+            const offers =
+              Array.isArray(
+                player.transferOffers
+              )
+                ? player.transferOffers
+                : [];
 
-            if (offers.length === 0) {
+            if (
+              offers.length === 0
+            ) {
               continue;
             }
+
+            const updatedOffers =
+              [...offers];
 
             let changed = false;
 
-            const updatedOffers = [...offers];
-
             for (
               let index = 0;
-              index < updatedOffers.length;
+              index <
+              updatedOffers.length;
               index++
             ) {
-              const offer = updatedOffers[index];
+              const offer =
+                updatedOffers[index];
 
               if (
-                offerStatus(offer) !==
-                'pending'
+                offerStatus(
+                  offer
+                ) !== "pending"
               ) {
                 continue;
               }
 
-              const offerDate = dateValue(
-                offer.createdAt
-              );
+              /*
+                Only AI buyer offers
+                need system response
+                from the seller.
+
+                If buyer is current user,
+                seller is AI and this page
+                may be showing outgoing bids.
+              */
+
+              if (
+                offer.buyerClubId ===
+                currentClub.id
+              ) {
+                continue;
+              }
+
+              const offerDate =
+                dateValue(
+                  offer.createdAt
+                );
 
               if (!offerDate) {
                 continue;
               }
 
-              const daysSince = gameDaysSince(
-                offerDate,
-                gameDate
-              );
+              const daysSince =
+                gameDaysSince(
+                  offerDate,
+                  gameDate
+                );
 
               if (
                 daysSince <
@@ -1376,165 +1725,201 @@ export default function TransferPage({
               }
 
               const buyerClub =
-                clubMap[offer.buyerClubId];
-
-              /*
-                If buyer no longer exists,
-                reject safely.
-              */
+                clubMap[
+                  offer.buyerClubId
+                ];
 
               if (!buyerClub) {
                 updatedOffers[index] = {
                   ...offer,
-                  status: 'rejected',
-                  rejectedAt: gameDate.toISOString(),
+
+                  status:
+                    "rejected",
+
+                  rejectedAt:
+                    gameDate.toISOString(),
+
                   systemResponse: true,
+
                   responseNote:
-                    'Transfer rejected because the buying club no longer exists.',
+                    "Transfer rejected because the buying club no longer exists.",
                 };
+
                 changed = true;
+
                 continue;
               }
 
-              const response = aiNegotiateBid(
-                offer,
-                player,
-                sellerClub,
-                buyerClub
-              );
-
-              updatedOffers[index] = {
-                ...offer,
-                ...response,
-              };
-
-              changed = true;
-
-              /*
-                ACCEPTED TRANSFER
-              */
+              const response =
+                aiNegotiateBid(
+                  offer,
+                  player,
+                  sellerClub,
+                  buyerClub
+                );
 
               if (
                 response.status ===
-                'accepted'
+                "accepted"
               ) {
-                updatedOffers[index] = {
-                  ...updatedOffers[index],
-                  acceptedAt: gameDate.toISOString(),
-                  joiningDate: addGameDays(
+                const joiningDate =
+                  addGameDays(
                     gameDate,
                     JOIN_DELAY_DAYS
-                  ),
-                  status: 'joining',
+                  );
+
+                const acceptedOffer = {
+                  ...offer,
+
+                  ...response,
+
+                  status:
+                    "accepted",
+
+                  acceptedAt:
+                    gameDate.toISOString(),
+
+                  joiningDate,
+
+                  /*
+                    This marks the transfer
+                    as accepted, but not
+                    completed.
+                  */
                 };
 
-                updates.push({
-                  player,
-                  updatedOffers,
-                  pendingTransfer: {
-                    ...updatedOffers[index],
-                    fromClubId: sellerClubId,
-                    fromClubName:
-                      sellerClub?.name ||
-                      clubName(player),
-                    toClubId:
-                      offer.buyerClubId,
-                    toClubName:
-                      buyerClub?.name ||
-                      offer.buyerClubName,
-                    joiningDate: addGameDays(
-                      gameDate,
-                      JOIN_DELAY_DAYS
-                    ),
-                    status: 'joining',
-                  },
-                });
+                updatedOffers[index] =
+                  acceptedOffer;
+
+                playerUpdates.set(
+                  player.id,
+                  {
+                    player,
+                    updatedOffers,
+                    pendingTransfer: {
+                      ...acceptedOffer,
+
+                      fromClubId:
+                        sellerClubId,
+
+                      fromClubName:
+                        sellerClub?.name ||
+                        getPlayerClubName(
+                          player
+                        ),
+
+                      toClubId:
+                        offer.buyerClubId,
+
+                      toClubName:
+                        buyerClub.name ||
+                        buyerClub.clubName ||
+                        offer.buyerClubName,
+
+                      status:
+                        "joining",
+
+                      joiningDate,
+                    },
+
+                    transferStatus:
+                      "accepted",
+                  }
+                );
+              } else {
+                updatedOffers[index] = {
+                  ...offer,
+                  ...response,
+                };
+
+                playerUpdates.set(
+                  player.id,
+                  {
+                    player,
+                    updatedOffers,
+                    pendingTransfer:
+                      player.pendingTransfer ||
+                      null,
+
+                    transferStatus:
+                      response.status,
+                  }
+                );
               }
+
+              changed = true;
             }
 
-            if (!changed) {
+            if (
+              !changed
+            ) {
               continue;
             }
-
-            updates.push({
-              player,
-              updatedOffers,
-              pendingTransfer: null,
-            });
           }
 
-          /*
-            Commit all player changes.
-          */
+          if (
+            playerUpdates.size === 0
+          ) {
+            return;
+          }
 
-          if (updates.length > 0) {
-            const batch = writeBatch(db);
-            let count = 0;
+          let batch =
+            writeBatch(db);
 
-            for (const item of updates) {
-              if (
-                count >=
-                FIRESTORE_BATCH_SIZE
-              ) {
-                break;
-              }
+          let count = 0;
 
-              const {
-                player,
-                updatedOffers,
-                pendingTransfer,
-              } = item;
+          for (
+            const item of
+              playerUpdates.values()
+          ) {
+            if (
+              count >=
+              FIRESTORE_BATCH_SIZE
+            ) {
+              await batch.commit();
 
-              const latest =
-                updatedOffers[
-                  updatedOffers.length - 1
-                ];
+              batch =
+                writeBatch(db);
 
-              const updateData = {
-                transferOffers: updatedOffers,
-                latestOffer: latest,
-                transferStatus:
-                  latest?.status ||
-                  player.transferStatus ||
-                  'available',
-                updatedAt:
-                  serverTimestamp(),
-              };
-
-              if (pendingTransfer) {
-                updateData.pendingTransfer =
-                  pendingTransfer;
-              } else {
-                updateData.pendingTransfer =
-                  null;
-              }
-
-              batch.update(
-                doc(
-                  db,
-                  'players',
-                  player.id
-                ),
-                updateData
-              );
-
-              count++;
+              count = 0;
             }
 
-            await batch.commit();
+            batch.update(
+              doc(
+                db,
+                "players",
+                item.player.id
+              ),
+              {
+                transferOffers:
+                  item.updatedOffers,
 
-            /*
-              Complete accepted transfers separately
-              using the game date.
-            */
+                latestOffer:
+                  item.updatedOffers[
+                    item.updatedOffers.length -
+                      1
+                  ] || null,
 
-            await completeDueTransfers(
-              gameDate
+                transferStatus:
+                  item.transferStatus,
+
+                pendingTransfer:
+                  item.pendingTransfer,
+
+                updatedAt:
+                  serverTimestamp(),
+              }
             );
+
+            count++;
+          }
+
+          if (count > 0) {
+            await batch.commit();
           }
         } catch (error) {
           console.error(
-            'System processing error:',
+            "System transfer response error:",
             error
           );
         } finally {
@@ -1552,244 +1937,10 @@ export default function TransferPage({
     );
 
   /* =======================================================
-     COMPLETE ACCEPTED TRANSFERS
-  ======================================================= */
-
-  async function completeDueTransfers(
-    gameDate
-  ) {
-    if (!gameDate) return;
-
-    const dueTransfers = [];
-
-    players.forEach((player) => {
-      const pending =
-        player.pendingTransfer;
-
-      if (
-        !pending ||
-        normalize(pending.status) !==
-          'joining'
-      ) {
-        return;
-      }
-
-      const joiningDate = dateValue(
-        pending.joiningDate
-      );
-
-      if (!joiningDate) {
-        return;
-      }
-
-      if (
-        joiningDate.getTime() >
-        gameDate.getTime()
-      ) {
-        return;
-      }
-
-      dueTransfers.push({
-        player,
-        pending,
-      });
-    });
-
-    if (dueTransfers.length === 0) {
-      return;
-    }
-
-    const batch = writeBatch(db);
-    let count = 0;
-
-    for (const item of dueTransfers) {
-      if (
-        count >=
-        FIRESTORE_BATCH_SIZE
-      ) {
-        break;
-      }
-
-      const {
-        player,
-        pending,
-      } = item;
-
-      const fromClubId =
-        pending.fromClubId ||
-        clubId(player);
-
-      const toClubId =
-        pending.toClubId;
-
-      if (!toClubId) {
-        continue;
-      }
-
-      const transferFee = safeNumber(
-        pending.offerAmount,
-        0
-      );
-
-      const sellerClub =
-        clubMap[fromClubId];
-
-      const buyerClub =
-        clubMap[toClubId];
-
-      if (!buyerClub) {
-        continue;
-      }
-
-      /*
-        Remove player from seller
-        and put him at buyer.
-      */
-
-      const playerRef = doc(
-        db,
-        'players',
-        player.id
-      );
-
-      const newClubName =
-        buyerClub.name ||
-        buyerClub.clubName ||
-        '';
-
-      const updateData = {
-        clubId: toClubId,
-        currentClub: toClubId,
-        teamId: toClubId,
-        clubName: newClubName,
-        currentClubName: newClubName,
-        transferStatus: 'completed',
-        pendingTransfer: null,
-        lastTransferFee: transferFee,
-        lastTransferDate:
-          gameDate.toISOString(),
-        updatedAt:
-          serverTimestamp(),
-      };
-
-      /*
-        Auto contract offer for joining player.
-      */
-
-      const weeklyWage = Math.round(
-        (
-          player.wage ||
-          player.salary ||
-          1000
-        ) * 1.2
-      );
-
-      const autoContract = {
-        id: `auto-contract-${toClubId}-${player.id}-${Date.now()}`,
-        clubId: toClubId,
-        clubName: newClubName,
-        playerId: player.id,
-        playerName: playerName(player),
-        weeklyWage,
-        signingBonus: 0,
-        years: 3,
-        status: 'contract-offered',
-        negotiationRound: 1,
-        secondChanceUsed: false,
-        createdAt: gameDate.toISOString(),
-        responseDeadline: addGameDays(
-          gameDate,
-          CONTRACT_WAIT_DAYS
-        ),
-        createdBy: 'system-ai',
-      };
-
-      const existingContracts = Array.isArray(
-        player.contractOffers
-      )
-        ? player.contractOffers
-        : [];
-
-      updateData.contractOffers = [
-        ...existingContracts,
-        autoContract,
-      ];
-
-      updateData.latestContractOffer =
-        autoContract;
-
-      batch.update(
-        playerRef,
-        updateData
-      );
-
-      /*
-        Buyer budget.
-      */
-
-      if (transferFee > 0) {
-        const buyerBudget = safeNumber(
-          buyerClub.transferBudget,
-          0
-        );
-
-        batch.update(
-          doc(
-            db,
-            'clubs',
-            toClubId
-          ),
-          {
-            transferBudget: Math.max(
-              0,
-              buyerBudget - transferFee
-            ),
-            updatedAt:
-              serverTimestamp(),
-          }
-        );
-
-        /*
-          Seller receives money.
-        */
-
-        if (sellerClub) {
-          const sellerBudget = safeNumber(
-            sellerClub.transferBudget,
-            0
-          );
-
-          batch.update(
-            doc(
-              db,
-              'clubs',
-              fromClubId
-            ),
-            {
-              transferBudget:
-                sellerBudget + transferFee,
-              updatedAt:
-                serverTimestamp(),
-            }
-          );
-        }
-      }
-
-      count++;
-    }
-
-    if (count > 0) {
-      await batch.commit();
-
-      toast.success(
-        `${count} transfer${count > 1 ? 's' : ''} completed`
-      );
-    }
-  }
-
-  /* =======================================================
      SYSTEM CONTRACT RESPONSES
-     GAME CALENDAR ONLY
+
+     This is where contract acceptance
+     finally completes the transfer.
   ======================================================= */
 
   const processSystemContractResponses =
@@ -1797,7 +1948,6 @@ export default function TransferPage({
       async () => {
         if (
           !user ||
-          !currentClub ||
           !currentGameDate ||
           isProcessingSystem
         ) {
@@ -1807,79 +1957,150 @@ export default function TransferPage({
         try {
           setIsProcessingSystem(true);
 
-          const gameDate = currentGameDate;
+          const gameDate =
+            currentGameDate;
 
-          const batch = writeBatch(db);
-          let updateCount = 0;
+          const updates =
+            [];
 
-          players.forEach((player) => {
+          for (
+            const player of players
+          ) {
+            const offers =
+              Array.isArray(
+                player.contractOffers
+              )
+                ? player.contractOffers
+                : [];
+
             if (
-              updateCount >=
-              FIRESTORE_BATCH_SIZE
+              offers.length === 0
             ) {
-              return;
+              continue;
             }
 
-            const offers = Array.isArray(
-              player.contractOffers
-            )
-              ? player.contractOffers
-              : [];
+            const updatedOffers =
+              [...offers];
 
-            if (offers.length === 0) {
-              return;
-            }
-
-            const updatedOffers = [...offers];
             let changed = false;
 
-            offers.forEach(
-              (offer, index) => {
-                if (
-                  offerStatus(offer) !==
-                  'contract-offered'
-                ) {
-                  return;
-                }
+            for (
+              let index = 0;
+              index <
+              updatedOffers.length;
+              index++
+            ) {
+              const offer =
+                updatedOffers[index];
 
-                const offerDate = dateValue(
+              if (
+                offerStatus(
+                  offer
+                ) !==
+                "contract-offered"
+              ) {
+                continue;
+              }
+
+              const offerDate =
+                dateValue(
                   offer.createdAt
                 );
 
-                if (!offerDate) {
-                  return;
-                }
+              if (!offerDate) {
+                continue;
+              }
 
-                const daysSince = gameDaysSince(
+              const daysSince =
+                gameDaysSince(
                   offerDate,
                   gameDate
                 );
 
-                if (
-                  daysSince <
-                  TRANSFER_RESPONSE_DAYS
-                ) {
-                  return;
-                }
+              if (
+                daysSince <
+                CONTRACT_WAIT_DAYS
+              ) {
+                continue;
+              }
 
-                const response =
-                  aiNegotiateContract(
-                    offer,
-                    player,
-                    currentClub
-                  );
+              /*
+                IMPORTANT FIX:
+                Use the club stored inside
+                the contract.
 
+                Never use currentClub here.
+              */
+
+              const contractClub =
+                clubMap[
+                  offer.clubId
+                ];
+
+              if (
+                !contractClub
+              ) {
                 updatedOffers[index] = {
                   ...offer,
-                  ...response,
+
+                  status:
+                    "rejected",
+
+                  rejectedAt:
+                    gameDate.toISOString(),
+
+                  systemResponse:
+                    true,
+
+                  responseNote:
+                    "Contract rejected because the club no longer exists.",
                 };
 
                 changed = true;
+
+                continue;
               }
-            );
+
+              const response =
+                aiNegotiateContract(
+                  offer,
+                  player,
+                  contractClub
+                );
+
+              updatedOffers[index] = {
+                ...offer,
+                ...response,
+              };
+
+              changed = true;
+
+              /*
+                CONTRACT ACCEPTED
+                =================
+
+                Only here can transfer
+                become COMPLETED.
+              */
+
+              if (
+                response.status ===
+                "contract-accepted"
+              ) {
+                updatedOffers[index] = {
+                  ...updatedOffers[index],
+
+                  status:
+                    "contract-accepted",
+
+                  acceptedAt:
+                    gameDate.toISOString(),
+                };
+              }
+            }
 
             if (!changed) {
-              return;
+              continue;
             }
 
             const latest =
@@ -1887,33 +2108,160 @@ export default function TransferPage({
                 updatedOffers.length - 1
               ];
 
+            /*
+              Find the most recent
+              accepted contract.
+            */
+
+            const acceptedContract =
+              [...updatedOffers]
+                .reverse()
+                .find(
+                  (offer) =>
+                    offerStatus(
+                      offer
+                    ) ===
+                    "contract-accepted"
+                );
+
+            updates.push({
+              player,
+              updatedOffers,
+              latest,
+              acceptedContract:
+                acceptedContract ||
+                null,
+            });
+          }
+
+          if (
+            updates.length === 0
+          ) {
+            return;
+          }
+
+          let batch =
+            writeBatch(db);
+
+          let count = 0;
+
+          for (
+            const item of updates
+          ) {
+            if (
+              count >=
+              FIRESTORE_BATCH_SIZE
+            ) {
+              await batch.commit();
+
+              batch =
+                writeBatch(db);
+
+              count = 0;
+            }
+
+            const data = {
+              contractOffers:
+                item.updatedOffers,
+
+              latestContractOffer:
+                item.latest,
+
+              updatedAt:
+                serverTimestamp(),
+            };
+
+            /*
+              CONTRACT ACCEPTED
+              = TRANSFER COMPLETED
+            */
+
+            if (
+              item.acceptedContract
+            ) {
+              data.transferStatus =
+                "completed";
+
+              data.activeContract =
+                item.acceptedContract;
+
+              data.contractStatus =
+                "active";
+
+              data.contractClubId =
+                item.acceptedContract.clubId;
+
+              data.contractWeeklyWage =
+                safeNumber(
+                  item.acceptedContract
+                    .weeklyWage,
+                  0
+                );
+
+              data.contractSigningBonus =
+                safeNumber(
+                  item.acceptedContract
+                    .signingBonus,
+                  0
+                );
+
+              data.contractYears =
+                safeNumber(
+                  item.acceptedContract
+                    .years,
+                  3
+                );
+
+              data.contractStartDate =
+                gameDate.toISOString();
+
+              /*
+                Once the contract is accepted,
+                no joining transfer remains.
+              */
+
+              data.pendingTransfer =
+                null;
+            }
+
             batch.update(
               doc(
                 db,
-                'players',
-                player.id
+                "players",
+                item.player.id
               ),
-              {
-                contractOffers: updatedOffers,
-                latestContractOffer: latest,
-                updatedAt:
-                  serverTimestamp(),
-              }
+              data
             );
 
-            updateCount++;
-          });
+            count++;
+          }
 
-          if (updateCount > 0) {
+          if (count > 0) {
             await batch.commit();
 
-            toast.success(
-              `System processed ${updateCount} contract offers`
-            );
+            const acceptedCount =
+              updates.filter(
+                (item) =>
+                  Boolean(
+                    item.acceptedContract
+                  )
+              ).length;
+
+            if (
+              acceptedCount > 0
+            ) {
+              toast.success(
+                `${acceptedCount} player contract${
+                  acceptedCount > 1
+                    ? "s"
+                    : ""
+                } accepted. Transfer completed.`
+              );
+            }
           }
         } catch (error) {
           console.error(
-            'System contract processing error:',
+            "System contract response error:",
             error
           );
         } finally {
@@ -1922,9 +2270,9 @@ export default function TransferPage({
       },
       [
         user,
-        currentClub,
         currentGameDate,
         players,
+        clubMap,
         isProcessingSystem,
       ]
     );
@@ -1945,35 +2293,42 @@ export default function TransferPage({
           return;
         }
 
-        const gameDate = currentGameDate;
+        const gameDate =
+          currentGameDate;
 
-        /*
-          One processing cycle per game day.
-        */
+        const dateKey =
+          gameDate
+            .toISOString()
+            .slice(0, 10);
 
-        const dateKey = gameDate
-          .toISOString()
-          .slice(0, 10);
+        const processKey =
+          `ai-${dateKey}`;
 
         if (
           processedCalendarRef.current.has(
-            `ai-${dateKey}`
+            processKey
           )
         ) {
           return;
         }
 
         try {
-          setIsProcessingSystem(true);
+          setIsProcessingSystem(
+            true
+          );
 
           /*
-            Transfer window follows GAME CALENDAR,
-            not real-world date.
+            June, July, August
+            + January.
           */
 
-          const month = gameDate.getUTCMonth();
+          const month =
+            gameDate.getUTCMonth();
+
           const isSummerWindow =
-            month >= 5 && month <= 7;
+            month >= 5 &&
+            month <= 7;
+
           const isWinterWindow =
             month === 0;
 
@@ -1982,36 +2337,38 @@ export default function TransferPage({
             !isWinterWindow
           ) {
             processedCalendarRef.current.add(
-              `ai-${dateKey}`
+              processKey
             );
+
             return;
           }
 
-          /*
-            AI clubs have no managerId.
-          */
+          const aiClubs =
+            clubs.filter(
+              (club) =>
+                !club.managerId &&
+                club.id !==
+                  currentClub.id
+            );
 
-          const aiClubs = clubs.filter(
-            (club) =>
-              !club.managerId &&
-              club.id !== currentClub.id
-          );
-
-          if (aiClubs.length === 0) {
+          if (
+            aiClubs.length === 0
+          ) {
             processedCalendarRef.current.add(
-              `ai-${dateKey}`
+              processKey
             );
+
             return;
           }
 
-          /*
-            We collect updates first.
-          */
+          const operations =
+            [];
 
-          const operations = [];
           let transferCount = 0;
 
-          for (const aiClub of aiClubs) {
+          for (
+            const aiClub of aiClubs
+          ) {
             if (
               transferCount >=
               MAX_AI_TRANSFERS_PER_DAY
@@ -2019,153 +2376,161 @@ export default function TransferPage({
               break;
             }
 
-            const budget = safeNumber(
-              aiClub.transferBudget,
-              0
-            );
+            const budget =
+              safeNumber(
+                aiClub.transferBudget,
+                0
+              );
 
             if (budget <= 0) {
               continue;
             }
 
-            const aiSquad = players.filter(
-              (player) =>
-                clubId(player) === aiClub.id
-            );
+            const aiSquad =
+              players.filter(
+                (player) =>
+                  getPlayerClubId(
+                    player
+                  ) === aiClub.id
+              );
 
-            /*
-              Candidates from senior players.
-            */
+            const seniorCandidates =
+              players.filter(
+                (player) => {
+                  const pClub =
+                    getPlayerClubId(
+                      player
+                    );
 
-            const seniorCandidates = players.filter(
-              (player) => {
-                const pClub = clubId(player);
+                  if (
+                    !pClub ||
+                    pClub ===
+                      aiClub.id
+                  ) {
+                    return false;
+                  }
 
-                if (
-                  !pClub ||
-                  pClub === aiClub.id
-                ) {
-                  return false;
+                  if (
+                    player.pendingTransfer
+                  ) {
+                    return false;
+                  }
+
+                  if (
+                    normalize(
+                      player.transferStatus
+                    ) ===
+                    "completed"
+                  ) {
+                    return false;
+                  }
+
+                  const status =
+                    normalize(
+                      player.transferStatus
+                    );
+
+                  return (
+                    status.includes(
+                      "listed"
+                    ) ||
+                    status.includes(
+                      "available"
+                    ) ||
+                    status.includes(
+                      "transfer"
+                    ) ||
+                    Math.random() <
+                      0.20
+                  );
                 }
+              );
 
-                /*
-                  Don't target players already
-                  involved in a completed transfer.
-                */
+            const youthCandidates =
+              youthPlayers.filter(
+                (player) => {
+                  const pClub =
+                    getPlayerClubId(
+                      player
+                    );
 
-                if (
-                  normalize(
-                    player.transferStatus
-                  ) === 'completed'
-                ) {
-                  return false;
+                  if (
+                    pClub ===
+                    aiClub.id
+                  ) {
+                    return false;
+                  }
+
+                  if (
+                    player.pendingTransfer
+                  ) {
+                    return false;
+                  }
+
+                  return true;
                 }
-
-                /*
-                  Don't target players with
-                  a pending transfer.
-                */
-
-                if (player.pendingTransfer) {
-                  return false;
-                }
-
-                const status = normalize(
-                  player.transferStatus
-                );
-
-                /*
-                  AI can scout normal players
-                  and transfer-listed players.
-                */
-
-                return (
-                  status.includes('listed') ||
-                  status.includes('available') ||
-                  status.includes('transfer') ||
-                  Math.random() < 0.20
-                );
-              }
-            );
-
-            /*
-              Youth candidates.
-            */
-
-            const youthCandidates = youthPlayers.filter(
-              (player) => {
-                const pClub = clubId(player);
-
-                if (pClub === aiClub.id) {
-                  return false;
-                }
-
-                if (player.pendingTransfer) {
-                  return false;
-                }
-
-                return true;
-              }
-            );
-
-            /*
-              Combine both markets.
-            */
+              );
 
             const candidates = [
               ...seniorCandidates.map(
                 (player) => ({
                   player,
-                  source: 'players',
+                  source: "players",
                 })
               ),
+
               ...youthCandidates.map(
                 (player) => ({
                   player,
-                  source: 'youthPlayers',
+                  source:
+                    "youthPlayers",
                 })
               ),
             ];
 
-            if (candidates.length === 0) {
+            if (
+              candidates.length ===
+              0
+            ) {
               continue;
             }
 
-            /*
-              Score candidates.
-            */
-
-            const scored = candidates
-              .map(
-                ({ player, source }) => ({
-                  player,
-                  source,
-                  score: calculateAIPlayerScore(
+            const scored =
+              candidates
+                .map(
+                  ({
                     player,
-                    aiClub,
-                    aiSquad
-                  ),
-                })
-              )
-              .sort(
-                (a, b) =>
-                  b.score - a.score
+                    source,
+                  }) => ({
+                    player,
+                    source,
+                    score:
+                      calculateAIPlayerScore(
+                        player,
+                        aiClub,
+                        aiSquad
+                      ),
+                  })
+                )
+                .sort(
+                  (a, b) =>
+                    b.score -
+                    a.score
+                );
+
+            const topCandidates =
+              scored.slice(
+                0,
+                Math.min(
+                  5,
+                  scored.length
+                )
               );
 
-            /*
-              AI does not always buy the #1 player.
-              It chooses from the best candidates.
-            */
-
-            const topCandidates = scored.slice(
-              0,
-              Math.min(
-                5,
-                scored.length
-              )
-            );
-
-            if (topCandidates.length === 0) {
+            if (
+              topCandidates.length ===
+              0
+            ) {
               continue;
             }
 
@@ -2180,13 +2545,15 @@ export default function TransferPage({
             const targetPlayer =
               selected.player;
 
-            const value = playerValue(
-              targetPlayer
-            );
+            const value =
+              playerValue(
+                targetPlayer
+              );
 
-            const asking = askingPrice(
-              targetPlayer
-            );
+            const asking =
+              askingPrice(
+                targetPlayer
+              );
 
             const estimatedCost =
               asking > 0
@@ -2200,94 +2567,104 @@ export default function TransferPage({
               continue;
             }
 
-            /*
-              Prevent duplicate AI bids.
-            */
+            const existingOffers =
+              Array.isArray(
+                targetPlayer.transferOffers
+              )
+                ? targetPlayer.transferOffers
+                : [];
 
-            const existingOffers = Array.isArray(
-              targetPlayer.transferOffers
-            )
-              ? targetPlayer.transferOffers
-              : [];
-
-            const duplicate = existingOffers.some(
-              (offer) =>
-                offer.buyerClubId ===
-                  aiClub.id &&
-                (
-                  offerStatus(offer) ===
-                    'pending' ||
-                  offerStatus(offer) ===
-                    'negotiation'
-                )
-            );
+            const duplicate =
+              existingOffers.some(
+                (offer) =>
+                  offer.buyerClubId ===
+                    aiClub.id &&
+                  (
+                    offerStatus(
+                      offer
+                    ) === "pending" ||
+                    offerStatus(
+                      offer
+                    ) ===
+                      "negotiation"
+                  )
+              );
 
             if (duplicate) {
               continue;
             }
 
-            const bid = createAIBid({
-              aiClub,
-              player: targetPlayer,
-              gameDate,
-            });
-
-            /*
-              If the AI is buying a youth player,
-              the player must eventually become
-              a normal player.
-            */
+            const bid =
+              createAIBid({
+                aiClub,
+                player:
+                  targetPlayer,
+                gameDate,
+              });
 
             operations.push({
               aiClub,
-              player: targetPlayer,
-              source: selected.source,
+              player:
+                targetPlayer,
+              source:
+                selected.source,
               bid,
             });
 
             transferCount++;
           }
 
-          /*
-            WRITE AI BIDS
-          */
+          if (
+            operations.length > 0
+          ) {
+            let batch =
+              writeBatch(db);
 
-          if (operations.length > 0) {
-            const batch = writeBatch(db);
             let count = 0;
 
-            for (const operation of operations) {
+            for (
+              const operation of
+                operations
+            ) {
               if (
                 count >=
                 FIRESTORE_BATCH_SIZE
               ) {
-                break;
+                await batch.commit();
+
+                batch =
+                  writeBatch(db);
+
+                count = 0;
               }
 
-              const {
-                player,
-                bid,
-              } = operation;
-
-              const existing = Array.isArray(
-                player.transferOffers
-              )
-                ? player.transferOffers
-                : [];
+              const existing =
+                Array.isArray(
+                  operation.player
+                    .transferOffers
+                )
+                  ? operation.player
+                      .transferOffers
+                  : [];
 
               batch.update(
                 doc(
                   db,
-                  'players',
-                  player.id
+                  "players",
+                  operation.player.id
                 ),
                 {
                   transferOffers: [
                     ...existing,
-                    bid,
+                    operation.bid,
                   ],
-                  latestOffer: bid,
-                  transferStatus: 'available',
+
+                  latestOffer:
+                    operation.bid,
+
+                  transferStatus:
+                    "available",
+
                   updatedAt:
                     serverTimestamp(),
                 }
@@ -2296,23 +2673,31 @@ export default function TransferPage({
               count++;
             }
 
-            await batch.commit();
+            if (count > 0) {
+              await batch.commit();
+            }
 
             toast.success(
-              `AI clubs submitted ${count} transfer bids`
+              `AI clubs submitted ${operations.length} transfer bid${
+                operations.length > 1
+                  ? "s"
+                  : ""
+              }.`
             );
           }
 
           processedCalendarRef.current.add(
-            `ai-${dateKey}`
+            processKey
           );
         } catch (error) {
           console.error(
-            'AI transfer market error:',
+            "AI transfer market error:",
             error
           );
         } finally {
-          setIsProcessingSystem(false);
+          setIsProcessingSystem(
+            false
+          );
         }
       },
       [
@@ -2327,7 +2712,11 @@ export default function TransferPage({
     );
 
   /* =======================================================
-     AI CONTRACT SIGNING
+     AI CONTRACT SIGNINGS
+
+     AI clubs can offer contracts to
+     players who don't have an active
+     contract.
   ======================================================= */
 
   const processAIContractSignings =
@@ -2341,11 +2730,13 @@ export default function TransferPage({
           return;
         }
 
-        const gameDate = currentGameDate;
+        const gameDate =
+          currentGameDate;
 
-        const dateKey = gameDate
-          .toISOString()
-          .slice(0, 10);
+        const dateKey =
+          gameDate
+            .toISOString()
+            .slice(0, 10);
 
         const processKey =
           `contracts-${dateKey}`;
@@ -2359,28 +2750,35 @@ export default function TransferPage({
         }
 
         try {
-          setIsProcessingSystem(true);
-
-          /*
-            AI clubs look at players
-            who have recently joined them.
-          */
-
-          const aiClubs = clubs.filter(
-            (club) => !club.managerId
+          setIsProcessingSystem(
+            true
           );
 
-          if (aiClubs.length === 0) {
+          const aiClubs =
+            clubs.filter(
+              (club) =>
+                !club.managerId
+            );
+
+          if (
+            aiClubs.length ===
+            0
+          ) {
             processedCalendarRef.current.add(
               processKey
             );
+
             return;
           }
 
-          const batch = writeBatch(db);
+          const operations =
+            [];
+
           let count = 0;
 
-          for (const aiClub of aiClubs) {
+          for (
+            const aiClub of aiClubs
+          ) {
             if (
               count >=
               MAX_AI_CONTRACTS_PER_DAY
@@ -2388,43 +2786,68 @@ export default function TransferPage({
               break;
             }
 
-            const squad = players.filter(
-              (player) =>
-                clubId(player) === aiClub.id
-            );
+            const squad =
+              players.filter(
+                (player) =>
+                  getPlayerClubId(
+                    player
+                  ) === aiClub.id
+              );
 
-            /*
-              Players without contract
-              or with expiring contract.
-            */
+            const candidates =
+              squad.filter(
+                (player) => {
+                  const offers =
+                    Array.isArray(
+                      player.contractOffers
+                    )
+                      ? player.contractOffers
+                      : [];
 
-            const candidates = squad.filter(
-              (player) => {
-                if (
-                  player.contractOffers &&
-                  Array.isArray(
-                    player.contractOffers
-                  )
-                ) {
-                  const active =
-                    player.contractOffers.some(
+                  const hasActive =
+                    offers.some(
                       (offer) =>
-                        offerStatus(offer) ===
-                          'contract-offered' ||
-                        offerStatus(offer) ===
-                          'contract-accepted'
+                        offer.clubId ===
+                          aiClub.id &&
+                        (
+                          offerStatus(
+                            offer
+                          ) ===
+                            "contract-offered" ||
+                          offerStatus(
+                            offer
+                          ) ===
+                            "contract-accepted"
+                        )
                     );
 
-                  if (active) {
+                  if (hasActive) {
                     return false;
                   }
+
+                  /*
+                    Don't create a new
+                    contract for a player
+                    whose transfer is not
+                    yet completed.
+                  */
+
+                  if (
+                    normalize(
+                      player.transferStatus
+                    ) ===
+                      "contract-pending"
+                  ) {
+                    return false;
+                  }
+
+                  return true;
                 }
+              );
 
-                return true;
-              }
-            );
-
-            for (const player of candidates) {
+            for (
+              const player of candidates
+            ) {
               if (
                 count >=
                 MAX_AI_CONTRACTS_PER_DAY
@@ -2432,20 +2855,17 @@ export default function TransferPage({
                 break;
               }
 
-              const overall = playerOverall(
-                player
-              );
+              const overall =
+                playerOverall(
+                  player
+                );
 
-              /*
-                Stronger players receive
-                stronger contracts.
-              */
-
-              const currentWage = safeNumber(
-                player.wage ||
-                player.salary,
-                500
-              );
+              const currentWage =
+                safeNumber(
+                  player.wage ||
+                    player.salary,
+                  500
+                );
 
               const wageMultiplier =
                 overall >= 85
@@ -2454,69 +2874,143 @@ export default function TransferPage({
                   ? 1.30
                   : 1.15;
 
-              const weeklyWage = Math.round(
-                currentWage * wageMultiplier
-              );
+              const weeklyWage =
+                Math.round(
+                  currentWage *
+                    wageMultiplier
+                );
 
               const contract = {
-                id: `ai-contract-${aiClub.id}-${player.id}-${Date.now()}`,
-                clubId: aiClub.id,
+                id:
+                  `ai-contract-${aiClub.id}-${player.id}-${gameDate.getTime()}-${Math.floor(
+                    Math.random() *
+                      10000
+                  )}`,
+
+                clubId:
+                  aiClub.id,
+
                 clubName:
                   aiClub.name ||
                   aiClub.clubName ||
-                  '',
-                playerId: player.id,
-                playerName: playerName(
-                  player
-                ),
+                  "",
+
+                playerId:
+                  player.id,
+
+                playerName:
+                  playerName(player),
+
                 weeklyWage,
-                signingBonus: Math.round(
-                  weeklyWage * 4
-                ),
-                years: overall >= 80 ? 4 : 3,
-                status: 'contract-offered',
+
+                signingBonus:
+                  Math.round(
+                    weeklyWage * 4
+                  ),
+
+                years:
+                  overall >= 80
+                    ? 4
+                    : 3,
+
+                status:
+                  "contract-offered",
+
                 negotiationRound: 1,
-                secondChanceUsed: false,
-                createdAt: gameDate.toISOString(),
-                responseDeadline: addGameDays(
-                  gameDate,
-                  TRANSFER_RESPONSE_DAYS
-                ),
-                createdBy: 'system-ai',
+
+                secondChanceUsed:
+                  false,
+
+                createdAt:
+                  gameDate.toISOString(),
+
+                responseDeadline:
+                  addGameDays(
+                    gameDate,
+                    CONTRACT_WAIT_DAYS
+                  ),
+
+                createdBy:
+                  "system-ai",
               };
 
-              const existing = Array.isArray(
-                player.contractOffers
-              )
-                ? player.contractOffers
-                : [];
-
-              batch.update(
-                doc(
-                  db,
-                  'players',
-                  player.id
-                ),
-                {
-                  contractOffers: [
-                    ...existing,
-                    contract,
-                  ],
-                  latestContractOffer: contract,
-                  updatedAt:
-                    serverTimestamp(),
-                }
-              );
+              operations.push({
+                player,
+                contract,
+              });
 
               count++;
             }
           }
 
-          if (count > 0) {
-            await batch.commit();
+          if (
+            operations.length > 0
+          ) {
+            let batch =
+              writeBatch(db);
+
+            let batchCount = 0;
+
+            for (
+              const operation of
+                operations
+            ) {
+              if (
+                batchCount >=
+                FIRESTORE_BATCH_SIZE
+              ) {
+                await batch.commit();
+
+                batch =
+                  writeBatch(db);
+
+                batchCount = 0;
+              }
+
+              const existing =
+                Array.isArray(
+                  operation.player
+                    .contractOffers
+                )
+                  ? operation.player
+                      .contractOffers
+                  : [];
+
+              batch.update(
+                doc(
+                  db,
+                  "players",
+                  operation.player.id
+                ),
+                {
+                  contractOffers: [
+                    ...existing,
+                    operation.contract,
+                  ],
+
+                  latestContractOffer:
+                    operation.contract,
+
+                  updatedAt:
+                    serverTimestamp(),
+                }
+              );
+
+              batchCount++;
+            }
+
+            if (
+              batchCount > 0
+            ) {
+              await batch.commit();
+            }
 
             toast.success(
-              `AI clubs sent ${count} contract offers`
+              `AI clubs sent ${operations.length} contract offer${
+                operations.length > 1
+                  ? "s"
+                  : ""
+              }.`
             );
           }
 
@@ -2525,11 +3019,13 @@ export default function TransferPage({
           );
         } catch (error) {
           console.error(
-            'AI contract signing error:',
+            "AI contract signing error:",
             error
           );
         } finally {
-          setIsProcessingSystem(false);
+          setIsProcessingSystem(
+            false
+          );
         }
       },
       [
@@ -2542,7 +3038,14 @@ export default function TransferPage({
     );
 
   /* =======================================================
-     RUN GAME-CALENDAR PROCESSING
+     RUN GAME CALENDAR
+
+     ORDER MATTERS:
+
+     1. Due players move.
+     2. Existing contracts get responses.
+     3. AI creates transfer bids.
+     4. AI creates normal contracts.
   ======================================================= */
 
   useEffect(() => {
@@ -2554,41 +3057,69 @@ export default function TransferPage({
       return;
     }
 
-    /*
-      IMPORTANT:
+    let cancelled = false;
 
-      This effect is triggered by the game's currentDate.
-      It does NOT use real-world time.
-
-      When the player advances from:
-        2026-08-20
-      to:
-        2026-08-21
-
-      the transfer system processes that game day.
-    */
-
-    const run = async () => {
-      await processSystemResponses();
-      await processSystemContractResponses();
-      await processSystemAITransfers();
-      await processAIContractSignings();
+    async function run() {
+      if (cancelled) return;
 
       /*
-        Complete accepted transfers
-        according to GAME DATE.
+        Step 1:
+        Players whose joining date has arrived
+        move to their new club and receive
+        contract offers.
       */
 
       await completeDueTransfers(
         currentGameDate
       );
-    };
+
+      if (cancelled) return;
+
+      /*
+        Step 2:
+        AI responds to transfer bids.
+      */
+
+      await processSystemResponses();
+
+      if (cancelled) return;
+
+      /*
+        Step 3:
+        AI responds to contracts.
+      */
+
+      await processSystemContractResponses();
+
+      if (cancelled) return;
+
+      /*
+        Step 4:
+        AI starts new transfers.
+      */
+
+      await processSystemAITransfers();
+
+      if (cancelled) return;
+
+      /*
+        Step 5:
+        AI sends normal contracts.
+      */
+
+      await processAIContractSignings();
+    }
 
     run();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     user,
     currentClub,
     currentGameDateKey,
+    completeDueTransfers,
     processSystemResponses,
     processSystemContractResponses,
     processSystemAITransfers,
@@ -2605,17 +3136,22 @@ export default function TransferPage({
 
       currentClubPlayers.forEach(
         (player) => {
-          const offers = Array.isArray(
-            player.transferOffers
-          )
-            ? player.transferOffers
-            : [];
+          const offers =
+            Array.isArray(
+              player.transferOffers
+            )
+              ? player.transferOffers
+              : [];
 
           offers.forEach(
             (offer, index) => {
+              if (!offer) {
+                return;
+              }
+
               if (
-                !offer ||
-                offer.type === 'loan'
+                offer.type ===
+                "loan"
               ) {
                 return;
               }
@@ -2634,17 +3170,27 @@ export default function TransferPage({
 
               result.push({
                 ...offer,
+
                 player,
-                playerId: player.id,
-                offerIndex: index,
+
+                playerId:
+                  player.id,
+
+                offerIndex:
+                  index,
+
                 id:
                   offer.id ||
                   `${player.id}-${index}`,
+
+                buyerClubId,
+
                 buyerClubName:
                   offer.buyerClubName ||
-                  clubMap[buyerClubId]?.name ||
-                  'Unknown Club',
-                buyerClubId,
+                  clubMap[
+                    buyerClubId
+                  ]?.name ||
+                  "Unknown Club",
               });
             }
           );
@@ -2654,14 +3200,18 @@ export default function TransferPage({
       return result.sort(
         (a, b) => {
           const aDate =
-            dateValue(a.createdAt)?.getTime() ||
-            0;
+            dateValue(
+              a.createdAt
+            )?.getTime() || 0;
 
           const bDate =
-            dateValue(b.createdAt)?.getTime() ||
-            0;
+            dateValue(
+              b.createdAt
+            )?.getTime() || 0;
 
-          return bDate - aDate;
+          return (
+            bDate - aDate
+          );
         }
       );
     }, [
@@ -2678,56 +3228,76 @@ export default function TransferPage({
     useMemo(() => {
       const result = [];
 
-      players.forEach((player) => {
-        const offers = Array.isArray(
-          player.transferOffers
-        )
-          ? player.transferOffers
-          : [];
+      players.forEach(
+        (player) => {
+          const offers =
+            Array.isArray(
+              player.transferOffers
+            )
+              ? player.transferOffers
+              : [];
 
-        offers.forEach(
-          (offer, index) => {
-            if (
-              !offer ||
-              offer.type === 'loan'
-            ) {
-              return;
+          offers.forEach(
+            (offer, index) => {
+              if (!offer) {
+                return;
+              }
+
+              if (
+                offer.type ===
+                "loan"
+              ) {
+                return;
+              }
+
+              if (
+                offer.buyerClubId !==
+                currentClubId
+              ) {
+                return;
+              }
+
+              result.push({
+                ...offer,
+
+                player,
+
+                playerId:
+                  player.id,
+
+                offerIndex:
+                  index,
+
+                id:
+                  offer.id ||
+                  `${player.id}-${index}`,
+              });
             }
-
-            if (
-              offer.buyerClubId !==
-              currentClubId
-            ) {
-              return;
-            }
-
-            result.push({
-              ...offer,
-              player,
-              playerId: player.id,
-              offerIndex: index,
-              id:
-                offer.id ||
-                `${player.id}-${index}`,
-            });
-          }
-        );
-      });
+          );
+        }
+      );
 
       return result.sort(
         (a, b) => {
           const aDate =
-            dateValue(a.createdAt)?.getTime() ||
-            0;
+            dateValue(
+              a.createdAt
+            )?.getTime() || 0;
 
           const bDate =
-            dateValue(b.createdAt)?.getTime() ||
-            0;
+            dateValue(
+              b.createdAt
+            )?.getTime() || 0;
 
-          return bDate - aDate;
+          return (
+            bDate - aDate
+          );
         }
       );
-    }, [players, currentClubId]);
+    }, [
+      players,
+      currentClubId,
+    ]);
 
   /* =======================================================
      JOINING PLAYERS
@@ -2735,17 +3305,24 @@ export default function TransferPage({
 
   const joiningPlayers =
     useMemo(() => {
-      if (!currentClubId) return [];
+      if (!currentClubId) {
+        return [];
+      }
 
       return players.filter(
         (player) =>
           player.pendingTransfer &&
-          player.pendingTransfer.toClubId ===
+          player.pendingTransfer
+            .toClubId ===
             currentClubId &&
-          offerStatus(player.pendingTransfer) ===
-            'joining'
+          offerStatus(
+            player.pendingTransfer
+          ) === "joining"
       );
-    }, [players, currentClubId]);
+    }, [
+      players,
+      currentClubId,
+    ]);
 
   /* =======================================================
      CONTRACT OFFERS
@@ -2755,69 +3332,130 @@ export default function TransferPage({
     useMemo(() => {
       const result = [];
 
-      players.forEach((player) => {
-        const offers = Array.isArray(
-          player.contractOffers
-        )
-          ? player.contractOffers
-          : [];
+      players.forEach(
+        (player) => {
+          const offers =
+            Array.isArray(
+              player.contractOffers
+            )
+              ? player.contractOffers
+              : [];
 
-        offers.forEach(
-          (offer, index) => {
-            if (
-              offer.clubId !==
-              currentClubId
-            ) {
-              return;
+          offers.forEach(
+            (offer, index) => {
+              if (
+                offer.clubId !==
+                currentClubId
+              ) {
+                return;
+              }
+
+              /*
+                Show relevant contract
+                statuses only.
+              */
+
+              const status =
+                offerStatus(
+                  offer
+                );
+
+              if (
+                ![
+                  "contract-offered",
+                  "contract-accepted",
+                  "rejected",
+                ].includes(status)
+              ) {
+                return;
+              }
+
+              result.push({
+                ...offer,
+
+                player,
+
+                playerId:
+                  player.id,
+
+                offerIndex:
+                  index,
+
+                id:
+                  offer.id ||
+                  `${player.id}-contract-${index}`,
+              });
             }
+          );
+        }
+      );
 
-            result.push({
-              ...offer,
-              player,
-              playerId: player.id,
-              offerIndex: index,
-              id:
-                offer.id ||
-                `${player.id}-contract-${index}`,
-            });
-          }
-        );
-      });
+      return result.sort(
+        (a, b) => {
+          const aDate =
+            dateValue(
+              a.createdAt
+            )?.getTime() || 0;
 
-      return result;
-    }, [players, currentClubId]);
+          const bDate =
+            dateValue(
+              b.createdAt
+            )?.getTime() || 0;
+
+          return (
+            bDate - aDate
+          );
+        }
+      );
+    }, [
+      players,
+      currentClubId,
+    ]);
 
   /* =======================================================
-     FILTERED BIDS
+     FILTER
   ======================================================= */
 
   const visibleBids =
     useMemo(() => {
       let source =
-        activeTab === 'incoming'
+        activeTab ===
+        "incoming"
           ? incomingBids
           : outgoingBids;
 
-      const term = normalize(search);
+      const term =
+        normalize(search);
 
       if (term) {
-        source = source.filter(
-          (bid) =>
-            normalize(
-              playerName(bid.player)
-            ).includes(term) ||
-            normalize(
-              bid.buyerClubName
-            ).includes(term)
-        );
+        source =
+          source.filter(
+            (bid) =>
+              normalize(
+                playerName(
+                  bid.player
+                )
+              ).includes(term) ||
+              normalize(
+                bid.buyerClubName
+              ).includes(term)
+          );
       }
 
-      if (statusFilter !== 'all') {
-        source = source.filter(
-          (bid) =>
-            normalize(bid.status) ===
-            normalize(statusFilter)
-        );
+      if (
+        statusFilter !==
+        "all"
+      ) {
+        source =
+          source.filter(
+            (bid) =>
+              normalize(
+                bid.status
+              ) ===
+              normalize(
+                statusFilter
+              )
+          );
       }
 
       return source;
@@ -2836,33 +3474,47 @@ export default function TransferPage({
   const pendingIncoming =
     incomingBids.filter(
       (bid) =>
-        offerStatus(bid) === 'pending'
+        offerStatus(
+          bid
+        ) === "pending"
     ).length;
 
   const pendingOutgoing =
     outgoingBids.filter(
       (bid) =>
-        offerStatus(bid) === 'pending' ||
-        offerStatus(bid) === 'negotiation'
+        offerStatus(
+          bid
+        ) === "pending" ||
+        offerStatus(
+          bid
+        ) === "negotiation"
     ).length;
 
-  const acceptedDeals =
-    [
-      ...incomingBids,
-      ...outgoingBids,
-    ].filter(
-      (bid) =>
-        offerStatus(bid) === 'accepted' ||
-        offerStatus(bid) === 'completed'
-    ).length;
+  const acceptedDeals = [
+    ...incomingBids,
+    ...outgoingBids,
+  ].filter(
+    (bid) =>
+      [
+        "accepted",
+        "completed",
+        "joining",
+      ].includes(
+        offerStatus(bid)
+      )
+  ).length;
 
   const contractWaiting =
     contractOffers.filter(
       (offer) =>
-        offerStatus(offer) ===
-          'contract-offered' ||
-        offerStatus(offer) ===
-          'contract-accepted'
+        offerStatus(
+          offer
+        ) ===
+          "contract-offered" ||
+        offerStatus(
+          offer
+        ) ===
+          "contract-accepted"
     ).length;
 
   const joiningCount =
@@ -2877,65 +3529,84 @@ export default function TransferPage({
       const budget =
         safeNumber(
           careerData?.transferBudget,
-          currentClub?.transferBudget || 0
+          currentClub?.transferBudget ||
+            0
         );
 
-      const squad = currentClubPlayers;
-
-      const positions = getPositionNeed(
-        squad
-      );
+      const positions =
+        getPositionNeed(
+          currentClubPlayers
+        );
 
       return players
         .filter(
           (player) =>
-            clubId(player) !== currentClubId
+            getPlayerClubId(
+              player
+            ) !== currentClubId &&
+            !player.pendingTransfer
         )
         .map((player) => {
-          const position = normalize(
-            playerPosition(player)
-          );
+          const position =
+            normalize(
+              playerPosition(
+                player
+              )
+            );
 
-          const overall = playerOverall(
-            player
-          );
+          const overall =
+            playerOverall(
+              player
+            );
 
-          const value = playerValue(
-            player
-          );
+          const value =
+            playerValue(
+              player
+            );
 
-          let score = overall * 2;
+          let score =
+            overall * 2;
 
-          const reasons = [];
+          const reasons =
+            [];
 
           if (
             budget > 0 &&
             value <= budget
           ) {
             score += 30;
+
             reasons.push(
-              'Fits transfer budget'
+              "Fits transfer budget"
             );
           }
 
-          if (!positions[position]) {
+          if (
+            !positions[position]
+          ) {
             score += 30;
+
             reasons.push(
-              'Squad needs this position'
+              "Squad needs this position"
             );
           } else if (
-            positions[position] < 2
+            positions[position] <
+            2
           ) {
             score += 20;
+
             reasons.push(
-              'Squad depth is low'
+              "Squad depth is low"
             );
           }
 
-          if (overall >= 75) {
+          if (
+            overall >= 75
+          ) {
             score += 15;
+
             reasons.push(
-              'Strong overall rating'
+              "Strong overall rating"
             );
           }
 
@@ -2946,35 +3617,56 @@ export default function TransferPage({
             ) <= 23
           ) {
             score += 12;
+
             reasons.push(
-              'High development potential'
+              "High development potential"
             );
           }
 
-          const status = normalize(
-            player.transferStatus
-          );
+          const status =
+            normalize(
+              player.transferStatus
+            );
 
           if (
-            status.includes('listed') ||
-            status.includes('available')
+            status.includes(
+              "listed"
+            ) ||
+            status.includes(
+              "available"
+            )
           ) {
             score += 10;
+
             reasons.push(
-              'Available on the market'
+              "Available on the market"
             );
           }
 
           return {
             player,
-            score: Math.round(score),
-            reasons: reasons.slice(0, 3),
+
+            score:
+              Math.round(
+                score
+              ),
+
+            reasons:
+              reasons.slice(
+                0,
+                3
+              ),
           };
         })
         .sort(
-          (a, b) => b.score - a.score
+          (a, b) =>
+            b.score -
+            a.score
         )
-        .slice(0, MAX_SUGGESTIONS);
+        .slice(
+          0,
+          MAX_SUGGESTIONS
+        );
     }, [
       players,
       currentClubPlayers,
@@ -2984,10 +3676,12 @@ export default function TransferPage({
     ]);
 
   /* =======================================================
-     ACCEPT BID
+     ACCEPT INCOMING BID
   ======================================================= */
 
-  async function acceptBid(bid) {
+  async function acceptBid(
+    bid
+  ) {
     if (
       !bid?.playerId ||
       !currentClubId
@@ -2995,18 +3689,27 @@ export default function TransferPage({
       return;
     }
 
-    const player = playerMap[bid.playerId];
+    const player =
+      playerMap[
+        bid.playerId
+      ];
 
     if (!player) {
       toast.error(
-        'Player no longer exists'
+        "Player no longer exists"
       );
+
       return;
     }
 
-    const confirmed = window.confirm(
-      `Accept €${money(bid.offerAmount)} offer for ${playerName(player)}?`
-    );
+    const confirmed =
+      window.confirm(
+        `Accept €${money(
+          bid.offerAmount
+        )} offer for ${playerName(
+          player
+        )}?`
+      );
 
     if (!confirmed) {
       return;
@@ -3016,60 +3719,99 @@ export default function TransferPage({
       setSaving(true);
 
       const gameDate =
-        currentGameDate || new Date();
+        currentGameDate ||
+        new Date();
 
-      const acceptedOffer = {
-        ...bid,
-        status: 'accepted',
-        acceptedAt: gameDate.toISOString(),
-        joiningDate: addGameDays(
+      const joiningDate =
+        addGameDays(
           gameDate,
           JOIN_DELAY_DAYS
-        ),
-      };
+        );
 
-      const existingOffers = Array.isArray(
-        player.transferOffers
-      )
-        ? player.transferOffers
-        : [];
+      const offers =
+        Array.isArray(
+          player.transferOffers
+        )
+          ? player.transferOffers
+          : [];
 
-      const updatedOffers = existingOffers.map(
-        (offer, index) =>
-          index === bid.offerIndex
-            ? acceptedOffer
-            : offer
-      );
+      const acceptedOffer =
+        {
+          ...offers[
+            bid.offerIndex
+          ],
 
-      await updatePlayer(player.id, {
-        transferOffers: updatedOffers,
-        latestOffer: acceptedOffer,
-        transferStatus: 'accepted',
-        pendingTransfer: {
-          ...acceptedOffer,
-          fromClubId: currentClubId,
-          fromClubName:
-            currentClub?.name || '',
-          toClubId: bid.buyerClubId,
-          toClubName: bid.buyerClubName,
-          acceptedAt: gameDate.toISOString(),
-          joiningDate: addGameDays(
-            gameDate,
-            JOIN_DELAY_DAYS
-          ),
-          status: 'joining',
-        },
-      });
+          status:
+            "accepted",
+
+          acceptedAt:
+            gameDate.toISOString(),
+
+          joiningDate,
+
+          manualResponse:
+            true,
+        };
+
+      const updatedOffers =
+        offers.map(
+          (offer, index) =>
+            index ===
+            bid.offerIndex
+              ? acceptedOffer
+              : offer
+        );
+
+      const success =
+        await updatePlayer(
+          player.id,
+          {
+            transferOffers:
+              updatedOffers,
+
+            latestOffer:
+              acceptedOffer,
+
+            transferStatus:
+              "accepted",
+
+            pendingTransfer: {
+              ...acceptedOffer,
+
+              id:
+                acceptedOffer.id,
+
+              fromClubId:
+                currentClubId,
+
+              fromClubName:
+                currentClub?.name ||
+                currentClub?.clubName ||
+                "",
+
+              toClubId:
+                bid.buyerClubId,
+
+              toClubName:
+                bid.buyerClubName,
+
+              status:
+                "joining",
+
+              joiningDate,
+            },
+          }
+        );
+
+      if (!success) {
+        return;
+      }
 
       setSelectedBid(null);
       setShowBidModal(false);
+
       toast.success(
-        'Transfer accepted. Player will join the new club according to the game calendar.'
-      );
-    } catch (error) {
-      console.error(error);
-      toast.error(
-        'Could not accept transfer'
+        "Transfer accepted. The player will join according to the game calendar."
       );
     } finally {
       setSaving(false);
@@ -3080,20 +3822,28 @@ export default function TransferPage({
      REJECT BID
   ======================================================= */
 
-  async function rejectBid(bid) {
+  async function rejectBid(
+    bid
+  ) {
     if (!bid?.playerId) {
       return;
     }
 
-    const player = playerMap[bid.playerId];
+    const player =
+      playerMap[
+        bid.playerId
+      ];
 
     if (!player) {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Reject the offer for ${playerName(player)}?`
-    );
+    const confirmed =
+      window.confirm(
+        `Reject the offer for ${playerName(
+          player
+        )}?`
+      );
 
     if (!confirmed) {
       return;
@@ -3103,43 +3853,65 @@ export default function TransferPage({
       setSaving(true);
 
       const gameDate =
-        currentGameDate || new Date();
+        currentGameDate ||
+        new Date();
 
-      const offers = Array.isArray(
-        player.transferOffers
-      )
-        ? player.transferOffers
-        : [];
+      const offers =
+        Array.isArray(
+          player.transferOffers
+        )
+          ? player.transferOffers
+          : [];
 
-      const updatedOffers = offers.map(
-        (offer, index) =>
-          index === bid.offerIndex
-            ? {
-                ...offer,
-                status: 'rejected',
-                rejectedAt:
-                  gameDate.toISOString(),
-              }
-            : offer
+      const updatedOffers =
+        offers.map(
+          (offer, index) =>
+            index ===
+            bid.offerIndex
+              ? {
+                  ...offer,
+
+                  status:
+                    "rejected",
+
+                  rejectedAt:
+                    gameDate.toISOString(),
+                }
+              : offer
+        );
+
+      await updatePlayer(
+        player.id,
+        {
+          transferOffers:
+            updatedOffers,
+
+          latestOffer: {
+            ...bid,
+
+            status:
+              "rejected",
+
+            rejectedAt:
+              gameDate.toISOString(),
+          },
+
+          transferStatus:
+            "available",
+        }
       );
-
-      await updatePlayer(player.id, {
-        transferOffers: updatedOffers,
-        latestOffer: {
-          ...bid,
-          status: 'rejected',
-          rejectedAt: gameDate.toISOString(),
-        },
-        transferStatus: 'available',
-      });
 
       setSelectedBid(null);
       setShowBidModal(false);
-      toast.success('Offer rejected');
+
+      toast.success(
+        "Offer rejected"
+      );
     } catch (error) {
       console.error(error);
+
       toast.error(
-        'Could not reject offer'
+        "Could not reject offer"
       );
     } finally {
       setSaving(false);
@@ -3150,38 +3922,51 @@ export default function TransferPage({
      ACCEPT COUNTER OFFER
   ======================================================= */
 
-  async function acceptCounterOffer(bid) {
+  async function acceptCounterOffer(
+    bid
+  ) {
     if (
       !bid?.playerId ||
-      !bid.counterOffer ||
+      !bid?.counterOffer ||
       !currentClubId
     ) {
       return;
     }
 
-    const player = playerMap[bid.playerId];
+    const player =
+      playerMap[
+        bid.playerId
+      ];
 
     if (!player) {
       toast.error(
-        'Player no longer exists'
+        "Player no longer exists"
       );
+
       return;
     }
 
-    const counterAmount = safeNumber(
-      bid.counterOffer,
-      0
-    );
-
-    const budget = safeNumber(
-      careerData?.transferBudget,
-      currentClub?.transferBudget || 0
-    );
-
-    if (counterAmount > budget) {
-      toast.error(
-        'You cannot afford this counter offer.'
+    const counterAmount =
+      safeNumber(
+        bid.counterOffer,
+        0
       );
+
+    const budget =
+      safeNumber(
+        careerData?.transferBudget,
+        currentClub?.transferBudget ||
+          0
+      );
+
+    if (
+      counterAmount >
+      budget
+    ) {
+      toast.error(
+        "You cannot afford this counter offer."
+      );
+
       return;
     }
 
@@ -3189,63 +3974,98 @@ export default function TransferPage({
       setSaving(true);
 
       const gameDate =
-        currentGameDate || new Date();
+        currentGameDate ||
+        new Date();
 
-      const existingOffers = Array.isArray(
-        player.transferOffers
-      )
-        ? player.transferOffers
-        : [];
+      const joiningDate =
+        addGameDays(
+          gameDate,
+          JOIN_DELAY_DAYS
+        );
 
-      const updatedOffers = existingOffers.map(
-        (offer, index) =>
-          index === bid.offerIndex
-            ? {
-                ...offer,
-                offerAmount: counterAmount,
-                status: 'accepted',
-                acceptedAt:
-                  gameDate.toISOString(),
-                joiningDate: addGameDays(
-                  gameDate,
-                  JOIN_DELAY_DAYS
-                ),
-              }
-            : offer
-      );
+      const offers =
+        Array.isArray(
+          player.transferOffers
+        )
+          ? player.transferOffers
+          : [];
 
       const acceptedOffer =
-        updatedOffers[bid.offerIndex];
+        {
+          ...offers[
+            bid.offerIndex
+          ],
 
-      await updatePlayer(player.id, {
-        transferOffers: updatedOffers,
-        latestOffer: acceptedOffer,
-        transferStatus: 'accepted',
-        pendingTransfer: {
-          ...acceptedOffer,
-          fromClubId: currentClubId,
-          fromClubName:
-            currentClub?.name || '',
-          toClubId: bid.buyerClubId,
-          toClubName: bid.buyerClubName,
-          acceptedAt: gameDate.toISOString(),
-          joiningDate: addGameDays(
-            gameDate,
-            JOIN_DELAY_DAYS
-          ),
-          status: 'joining',
-        },
-      });
+          offerAmount:
+            counterAmount,
+
+          status:
+            "accepted",
+
+          acceptedAt:
+            gameDate.toISOString(),
+
+          joiningDate,
+        };
+
+      const updatedOffers =
+        offers.map(
+          (offer, index) =>
+            index ===
+            bid.offerIndex
+              ? acceptedOffer
+              : offer
+        );
+
+      await updatePlayer(
+        player.id,
+        {
+          transferOffers:
+            updatedOffers,
+
+          latestOffer:
+            acceptedOffer,
+
+          transferStatus:
+            "accepted",
+
+          pendingTransfer: {
+            ...acceptedOffer,
+
+            fromClubId:
+              currentClubId,
+
+            fromClubName:
+              currentClub?.name ||
+              "",
+
+            toClubId:
+              bid.buyerClubId,
+
+            toClubName:
+              bid.buyerClubName,
+
+            status:
+              "joining",
+
+            joiningDate,
+          },
+        }
+      );
 
       setSelectedBid(null);
       setShowBidModal(false);
+
       toast.success(
-        `Counter offer accepted: €${money(counterAmount)}`
+        `Counter offer accepted: €${money(
+          counterAmount
+        )}`
       );
     } catch (error) {
       console.error(error);
+
       toast.error(
-        'Could not accept counter offer'
+        "Could not accept counter offer"
       );
     } finally {
       setSaving(false);
@@ -3256,8 +4076,12 @@ export default function TransferPage({
      OPEN CONTRACT
   ======================================================= */
 
-  function openContract(player) {
-    setContractPlayer(player);
+  function openContract(
+    player
+  ) {
+    setContractPlayer(
+      player
+    );
 
     setContractWage(
       String(
@@ -3269,9 +4093,12 @@ export default function TransferPage({
       )
     );
 
-    setContractBonus('');
-    setContractYears('3');
-    setShowContractModal(true);
+    setContractBonus("");
+    setContractYears("3");
+
+    setShowContractModal(
+      true
+    );
   }
 
   /* =======================================================
@@ -3286,87 +4113,148 @@ export default function TransferPage({
       return;
     }
 
-    const wage = safeNumber(
-      contractWage,
-      0
-    );
+    const wage =
+      safeNumber(
+        contractWage,
+        0
+      );
 
-    const bonus = safeNumber(
-      contractBonus,
-      0
-    );
+    const bonus =
+      safeNumber(
+        contractBonus,
+        0
+      );
 
-    const years = safeNumber(
-      contractYears,
-      3
-    );
+    const years =
+      safeNumber(
+        contractYears,
+        3
+      );
 
     if (wage <= 0) {
       toast.error(
-        'Enter a valid weekly wage'
+        "Enter a valid weekly wage"
       );
+
       return;
     }
 
     if (years <= 0) {
       toast.error(
-        'Contract duration is invalid'
+        "Contract duration is invalid"
       );
+
       return;
     }
 
     try {
-      setContractLoading(true);
+      setContractLoading(
+        true
+      );
 
       const gameDate =
-        currentGameDate || new Date();
+        currentGameDate ||
+        new Date();
 
       const contract = {
-        id: `${currentClubId}-${contractPlayer.id}-${Date.now()}`,
-        clubId: currentClubId,
-        clubName: currentClub?.name || '',
-        playerId: contractPlayer.id,
-        playerName: playerName(
-          contractPlayer
-        ),
-        weeklyWage: wage,
-        signingBonus: bonus,
+        id:
+          `${currentClubId}-${contractPlayer.id}-${gameDate.getTime()}`,
+
+        clubId:
+          currentClubId,
+
+        clubName:
+          currentClub?.name ||
+          currentClub?.clubName ||
+          "",
+
+        playerId:
+          contractPlayer.id,
+
+        playerName:
+          playerName(
+            contractPlayer
+          ),
+
+        weeklyWage:
+          wage,
+
+        signingBonus:
+          bonus,
+
         years,
-        status: 'contract-offered',
+
+        status:
+          "contract-offered",
+
         negotiationRound: 1,
-        secondChanceUsed: false,
-        createdAt: gameDate.toISOString(),
-        responseDeadline: addGameDays(
-          gameDate,
-          CONTRACT_WAIT_DAYS
-        ),
-        createdBy: user?.uid || 'user',
+
+        secondChanceUsed:
+          false,
+
+        createdAt:
+          gameDate.toISOString(),
+
+        responseDeadline:
+          addGameDays(
+            gameDate,
+            CONTRACT_WAIT_DAYS
+          ),
+
+        createdBy:
+          user?.uid ||
+          "user",
+
+        transferId:
+          contractPlayer
+            ?.latestOffer?.id ||
+          null,
       };
 
       await updatePlayer(
         contractPlayer.id,
         {
-          contractOffers: arrayUnion(
-            contract
-          ),
-          latestContractOffer: contract,
+          contractOffers:
+            arrayUnion(
+              contract
+            ),
+
+          latestContractOffer:
+            contract,
+
+          /*
+            If the player is already
+            in this club but contract
+            was missing, keep it
+            contract-pending.
+          */
+
           transferStatus:
-            'contract-offered',
+            "contract-pending",
         }
       );
 
-      setShowContractModal(false);
-      setContractPlayer(null);
+      setShowContractModal(
+        false
+      );
+
+      setContractPlayer(
+        null
+      );
+
       toast.success(
-        'Contract offer sent.'
+        "Contract offer sent. The player will respond using the game calendar."
       );
     } catch (error) {
       console.error(error);
+
       toast.error(
-        'Could not send contract offer'
+        "Could not send contract offer"
       );
     } finally {
-      setContractLoading(false);
+      setContractLoading(
+        false
+      );
     }
   }
 
@@ -3385,82 +4273,115 @@ export default function TransferPage({
       return;
     }
 
-    const player = playerMap[
-      contract.playerId
-    ];
+    const player =
+      playerMap[
+        contract.playerId
+      ];
 
     if (!player) {
       toast.error(
-        'Player no longer exists'
+        "Player no longer exists"
       );
+
       return;
     }
 
     try {
       setSaving(true);
 
-      const currentWage = safeNumber(
-        contract.weeklyWage,
-        0
-      );
+      const currentWage =
+        safeNumber(
+          contract.weeklyWage,
+          0
+        );
 
-      const improvedWage = Math.round(
-        currentWage * 1.15
-      );
+      const improvedWage =
+        Math.round(
+          currentWage * 1.15
+        );
 
       const gameDate =
-        currentGameDate || new Date();
+        currentGameDate ||
+        new Date();
 
-      const offers = Array.isArray(
-        player.contractOffers
-      )
-        ? player.contractOffers
-        : [];
+      const offers =
+        Array.isArray(
+          player.contractOffers
+        )
+          ? player.contractOffers
+          : [];
 
-      const updatedOffers = offers.map(
-        (offer) => {
-          if (offer.id !== contract.id) {
-            return offer;
+      const updatedOffers =
+        offers.map(
+          (offer) => {
+            if (
+              offer.id !==
+              contract.id
+            ) {
+              return offer;
+            }
+
+            return {
+              ...offer,
+
+              weeklyWage:
+                improvedWage,
+
+              negotiationRound:
+                safeNumber(
+                  offer.negotiationRound,
+                  1
+                ) + 1,
+
+              secondChanceUsed:
+                true,
+
+              status:
+                "contract-offered",
+
+              createdAt:
+                gameDate.toISOString(),
+
+              responseDeadline:
+                addGameDays(
+                  gameDate,
+                  CONTRACT_WAIT_DAYS
+                ),
+            };
           }
+        );
 
-          return {
-            ...offer,
-            weeklyWage: improvedWage,
-            negotiationRound:
-              safeNumber(
-                offer.negotiationRound,
-                1
-              ) + 1,
-            secondChanceUsed: true,
-            status: 'contract-offered',
-            createdAt: gameDate.toISOString(),
-            responseDeadline: addGameDays(
-              gameDate,
-              CONTRACT_WAIT_DAYS
-            ),
-          };
+      const latest =
+        updatedOffers.find(
+          (offer) =>
+            offer.id ===
+            contract.id
+        );
+
+      await updatePlayer(
+        player.id,
+        {
+          contractOffers:
+            updatedOffers,
+
+          latestContractOffer:
+            latest,
+
+          transferStatus:
+            "contract-pending",
         }
       );
 
-      const latest = updatedOffers.find(
-        (offer) =>
-          offer.id === contract.id
-      );
-
-      await updatePlayer(player.id, {
-        contractOffers: updatedOffers,
-        latestContractOffer: latest,
-        transferStatus:
-          'contract-offered',
-      });
-
       toast.success(
-        `Second negotiation sent with €${money(improvedWage)} weekly wage.`
+        `Second negotiation sent with €${money(
+          improvedWage
+        )} weekly wage.`
       );
     } catch (error) {
       console.error(error);
+
       toast.error(
-        'Could not start second negotiation'
+        "Could not start second negotiation"
       );
     } finally {
       setSaving(false);
@@ -3476,13 +4397,29 @@ export default function TransferPage({
     isLoading
   ) {
     return (
-      <div className={styles.loading}>
-        <div className={styles.spinner} />
+      <main
+        className={
+          styles.loadingPage
+        }
+      >
+        <div
+          className={
+            styles.loadingCard
+          }
+        >
+          <span>⚽</span>
 
-        <p>
-          Loading transfer centre...
-        </p>
-      </div>
+          <h1>
+            Loading transfer centre...
+          </h1>
+
+          <p>
+            Loading clubs,
+            players and transfer
+            negotiations.
+          </p>
+        </div>
+      </main>
     );
   }
 
@@ -3498,25 +4435,45 @@ export default function TransferPage({
     return (
       <>
         <Head>
-          <title>Transfer Centre</title>
+          <title>
+            Transfer Centre
+          </title>
+
+          <meta
+            name="description"
+            content="Football transfer centre"
+          />
         </Head>
 
-        <main className={styles.emptyPage}>
-          <div className={styles.emptyIcon}>
+        <main
+          className={
+            styles.emptyPage
+          }
+        >
+          <div
+            className={
+              styles.emptyIcon
+            }
+          >
             🔄
           </div>
 
-          <h1>No Club Assigned</h1>
+          <h1>
+            No Club Assigned
+          </h1>
 
           <p>
-            You need to manage a club before
+            You need to manage
+            a club before
             negotiating transfers.
           </p>
 
           <button
             type="button"
             onClick={() =>
-              router.push('/club')
+              router.push(
+                "/club"
+              )
             }
           >
             Choose Club
@@ -3533,13 +4490,15 @@ export default function TransferPage({
   const transferBudget =
     safeNumber(
       careerData?.transferBudget,
-      currentClub?.transferBudget || 0
+      currentClub?.transferBudget ||
+        0
     );
 
   const wageBudget =
     safeNumber(
       careerData?.wageBudget,
-      currentClub?.wageBudget || 0
+      currentClub?.wageBudget ||
+        0
     );
 
   /* =======================================================
@@ -3550,43 +4509,65 @@ export default function TransferPage({
     <>
       <Head>
         <title>
-          Transfer Centre |{' '}
+          Transfer Centre |{" "}
           {currentClub?.name ||
-            'Club'}
+            "Club"}
         </title>
 
         <meta
           name="description"
-          content="Manage transfer bids, AI negotiations, contracts, incoming offers and General Manager recommendations."
+          content="Manage football transfers, AI negotiations, contracts, incoming offers and General Manager recommendations."
         />
       </Head>
 
-      <main className={styles.page}>
+      <main
+        className={
+          styles.page
+        }
+      >
         {/* =================================================
             HEADER
         ================================================= */}
 
-        <header className={styles.header}>
-          <div className={styles.headerLeft}>
-            <div className={styles.clubLogo}>
+        <header
+          className={
+            styles.header
+          }
+        >
+          <div
+            className={
+              styles.headerLeft
+            }
+          >
+            <div
+              className={
+                styles.clubLogo
+              }
+            >
               {currentClub?.logo ? (
                 <img
-                  src={currentClub.logo}
+                  src={
+                    currentClub.logo
+                  }
                   alt=""
                 />
               ) : (
-                '⚽'
+                "⚽"
               )}
             </div>
 
             <div>
               <span
-                className={styles.eyebrow}
+                className={
+                  styles.eyebrow
+                }
               >
                 FOOTBALL OPERATIONS
               </span>
 
-              <h1>Transfer Centre</h1>
+              <h1>
+                Transfer Centre
+              </h1>
 
               <p>
                 {currentClub?.name}
@@ -3594,7 +4575,7 @@ export default function TransferPage({
 
               {currentGameDate && (
                 <small>
-                  Game date:{' '}
+                  Game date:{" "}
                   {formatDate(
                     currentGameDate
                   )}
@@ -3603,14 +4584,21 @@ export default function TransferPage({
             </div>
           </div>
 
-          <div className={styles.budgetPanel}>
+          <div
+            className={
+              styles.budgetPanel
+            }
+          >
             <div>
               <span>
                 TRANSFER BUDGET
               </span>
 
               <strong>
-                €{money(transferBudget)}
+                €
+                {money(
+                  transferBudget
+                )}
               </strong>
             </div>
 
@@ -3620,7 +4608,10 @@ export default function TransferPage({
               </span>
 
               <strong>
-                €{money(wageBudget)}
+                €
+                {money(
+                  wageBudget
+                )}
               </strong>
             </div>
           </div>
@@ -3630,32 +4621,45 @@ export default function TransferPage({
             SUMMARY
         ================================================= */}
 
-        <section className={styles.summaryGrid}>
+        <section
+          className={
+            styles.summaryGrid
+          }
+        >
           <article
-            className={styles.summaryCard}
+            className={
+              styles.summaryCard
+            }
           >
             <span>📥</span>
 
             <div>
-              <small>INCOMING</small>
+              <small>
+                INCOMING
+              </small>
 
               <strong>
                 {pendingIncoming}
               </strong>
 
               <p>
-                Offers awaiting decision
+                Offers awaiting
+                decision
               </p>
             </div>
           </article>
 
           <article
-            className={styles.summaryCard}
+            className={
+              styles.summaryCard
+            }
           >
             <span>📤</span>
 
             <div>
-              <small>OUTGOING</small>
+              <small>
+                OUTGOING
+              </small>
 
               <strong>
                 {pendingOutgoing}
@@ -3668,30 +4672,39 @@ export default function TransferPage({
           </article>
 
           <article
-            className={styles.summaryCard}
+            className={
+              styles.summaryCard
+            }
           >
             <span>✍️</span>
 
             <div>
-              <small>CONTRACTS</small>
+              <small>
+                CONTRACTS
+              </small>
 
               <strong>
                 {contractWaiting}
               </strong>
 
               <p>
-                Players considering offers
+                Players considering
+                offers
               </p>
             </div>
           </article>
 
           <article
-            className={styles.summaryCard}
+            className={
+              styles.summaryCard
+            }
           >
             <span>✅</span>
 
             <div>
-              <small>DEALS</small>
+              <small>
+                DEALS
+              </small>
 
               <strong>
                 {acceptedDeals}
@@ -3704,31 +4717,45 @@ export default function TransferPage({
           </article>
 
           <article
-            className={styles.summaryCard}
+            className={
+              styles.summaryCard
+            }
           >
             <span>⏳</span>
 
             <div>
-              <small>JOINING</small>
+              <small>
+                JOINING
+              </small>
 
               <strong>
                 {joiningCount}
               </strong>
 
               <p>
-                Players arriving soon
+                Players arriving
+                soon
               </p>
             </div>
           </article>
         </section>
 
         {/* =================================================
-            GM ALERT
+            GM
         ================================================= */}
 
-        {suggestions.length > 0 && (
-          <section className={styles.gmBanner}>
-            <div className={styles.gmAvatar}>
+        {suggestions.length >
+          0 && (
+          <section
+            className={
+              styles.gmBanner
+            }
+          >
+            <div
+              className={
+                styles.gmAvatar
+              }
+            >
               GM
             </div>
 
@@ -3738,14 +4765,15 @@ export default function TransferPage({
               </span>
 
               <strong>
-                I have identified potential
-                recruitment targets.
+                I have identified
+                potential recruitment
+                targets.
               </strong>
 
               <p>
-                Based on squad needs, budget,
-                rating, age and market
-                availability.
+                Based on squad needs,
+                budget, rating, age
+                and market availability.
               </p>
             </div>
 
@@ -3753,7 +4781,7 @@ export default function TransferPage({
               type="button"
               onClick={() =>
                 setActiveTab(
-                  'suggestions'
+                  "suggestions"
                 )
               }
             >
@@ -3763,37 +4791,49 @@ export default function TransferPage({
         )}
 
         {/* =================================================
-            NAV
+            NAVIGATION
         ================================================= */}
 
-        <nav className={styles.tabs}>
+        <nav
+          className={
+            styles.tabs
+          }
+        >
           <button
+            type="button"
             className={
-              activeTab === 'incoming'
+              activeTab ===
+              "incoming"
                 ? styles.activeTab
-                : ''
+                : ""
             }
             onClick={() =>
               setActiveTab(
-                'incoming'
+                "incoming"
               )
             }
           >
             📥 Incoming Bids
-            {pendingIncoming > 0 && (
-              <b>{pendingIncoming}</b>
+
+            {pendingIncoming >
+              0 && (
+              <b>
+                {pendingIncoming}
+              </b>
             )}
           </button>
 
           <button
+            type="button"
             className={
-              activeTab === 'outgoing'
+              activeTab ===
+              "outgoing"
                 ? styles.activeTab
-                : ''
+                : ""
             }
             onClick={() =>
               setActiveTab(
-                'outgoing'
+                "outgoing"
               )
             }
           >
@@ -3801,30 +4841,40 @@ export default function TransferPage({
           </button>
 
           <button
+            type="button"
             className={
-              activeTab === 'joining'
+              activeTab ===
+              "joining"
                 ? styles.activeTab
-                : ''
+                : ""
             }
             onClick={() =>
-              setActiveTab('joining')
+              setActiveTab(
+                "joining"
+              )
             }
           >
             ⏳ Joining Club
-            {joiningCount > 0 && (
-              <b>{joiningCount}</b>
+
+            {joiningCount >
+              0 && (
+              <b>
+                {joiningCount}
+              </b>
             )}
           </button>
 
           <button
+            type="button"
             className={
-              activeTab === 'contracts'
+              activeTab ===
+              "contracts"
                 ? styles.activeTab
-                : ''
+                : ""
             }
             onClick={() =>
               setActiveTab(
-                'contracts'
+                "contracts"
               )
             }
           >
@@ -3832,14 +4882,16 @@ export default function TransferPage({
           </button>
 
           <button
+            type="button"
             className={
-              activeTab === 'suggestions'
+              activeTab ===
+              "suggestions"
                 ? styles.activeTab
-                : ''
+                : ""
             }
             onClick={() =>
               setActiveTab(
-                'suggestions'
+                "suggestions"
               )
             }
           >
@@ -3848,16 +4900,24 @@ export default function TransferPage({
         </nav>
 
         {/* =================================================
-            BID LIST
+            BIDS
         ================================================= */}
 
-        {(activeTab === 'incoming' ||
-          activeTab === 'outgoing') && (
+        {(
+          activeTab ===
+            "incoming" ||
+          activeTab ===
+            "outgoing"
+        ) && (
           <section
-            className={styles.contentCard}
+            className={
+              styles.contentCard
+            }
           >
             <div
-              className={styles.contentHeader}
+              className={
+                styles.contentHeader
+              }
             >
               <div>
                 <span>
@@ -3866,24 +4926,34 @@ export default function TransferPage({
 
                 <h2>
                   {activeTab ===
-                  'incoming'
-                    ? 'Offers for Your Players'
-                    : 'Your Transfer Bids'}
+                  "incoming"
+                    ? "Offers for Your Players"
+                    : "Your Transfer Bids"}
                 </h2>
               </div>
 
               <div
-                className={styles.headerTools}
+                className={
+                  styles.headerTools
+                }
               >
                 <div
-                  className={styles.search}
+                  className={
+                    styles.search
+                  }
                 >
                   🔎
+
                   <input
-                    value={search}
-                    onChange={(event) =>
+                    value={
+                      search
+                    }
+                    onChange={(
+                      event
+                    ) =>
                       setSearch(
-                        event.target
+                        event
+                          .target
                           .value
                       )
                     }
@@ -3892,10 +4962,15 @@ export default function TransferPage({
                 </div>
 
                 <select
-                  value={statusFilter}
-                  onChange={(event) =>
+                  value={
+                    statusFilter
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setStatusFilter(
-                      event.target
+                      event
+                        .target
                         .value
                     )
                   }
@@ -3919,12 +4994,18 @@ export default function TransferPage({
                   <option value="negotiation">
                     Negotiation
                   </option>
+
+                  <option value="joining">
+                    Joining
+                  </option>
                 </select>
               </div>
             </div>
 
             <div
-              className={styles.tableWrapper}
+              className={
+                styles.tableWrapper
+              }
             >
               <table
                 className={
@@ -3933,18 +5014,39 @@ export default function TransferPage({
               >
                 <thead>
                   <tr>
-                    <th>Player</th>
-                    <th>Club</th>
-                    <th>Offer</th>
-                    <th>Asking</th>
-                    <th>Status</th>
-                    <th>Submitted</th>
-                    <th>Action</th>
+                    <th>
+                      Player
+                    </th>
+
+                    <th>
+                      Club
+                    </th>
+
+                    <th>
+                      Offer
+                    </th>
+
+                    <th>
+                      Asking
+                    </th>
+
+                    <th>
+                      Status
+                    </th>
+
+                    <th>
+                      Submitted
+                    </th>
+
+                    <th>
+                      Action
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {visibleBids.length > 0 ? (
+                  {visibleBids
+                    .length > 0 ? (
                     visibleBids.map(
                       (bid) => {
                         const player =
@@ -4012,8 +5114,8 @@ export default function TransferPage({
                                   <small>
                                     {playerPosition(
                                       player
-                                    )}{' '}
-                                    • OVR{' '}
+                                    )}{" "}
+                                    • OVR{" "}
                                     {playerOverall(
                                       player
                                     )}
@@ -4023,11 +5125,8 @@ export default function TransferPage({
                             </td>
 
                             <td>
-                              <span>
-                                {
-                                  bid.buyerClubName
-                                }
-                              </span>
+                              {bid.buyerClubName ||
+                                "Unknown Club"}
                             </td>
 
                             <td>
@@ -4055,7 +5154,9 @@ export default function TransferPage({
 
                             <td>
                               <span
-                                className={`${styles.status} ${styles[statusClass(status)]}`}
+                                className={`${styles.status} ${styles[statusClass(
+                                  status
+                                )]}`}
                               >
                                 {statusText(
                                   status
@@ -4076,12 +5177,12 @@ export default function TransferPage({
                                 {remaining !==
                                   null && (
                                   <>
-                                    {' '}
-                                    •{' '}
+                                    {" "}
+                                    •{" "}
                                     {remaining >
                                     0
                                       ? `${remaining} game days`
-                                      : 'Due'}
+                                      : "Due"}
                                   </>
                                 )}
                               </small>
@@ -4109,9 +5210,9 @@ export default function TransferPage({
                                 </button>
 
                                 {activeTab ===
-                                  'incoming' &&
+                                  "incoming" &&
                                   status ===
-                                    'pending' && (
+                                    "pending" && (
                                     <>
                                       <button
                                         type="button"
@@ -4172,8 +5273,9 @@ export default function TransferPage({
                           </strong>
 
                           <p>
-                            There are no offers
-                            matching your filters.
+                            There are no
+                            offers matching
+                            your filters.
                           </p>
                         </div>
                       </td>
@@ -4186,15 +5288,20 @@ export default function TransferPage({
         )}
 
         {/* =================================================
-            JOINING PLAYERS
+            JOINING
         ================================================= */}
 
-        {activeTab === 'joining' && (
+        {activeTab ===
+          "joining" && (
           <section
-            className={styles.contentCard}
+            className={
+              styles.contentCard
+            }
           >
             <div
-              className={styles.contentHeader}
+              className={
+                styles.contentHeader
+              }
             >
               <div>
                 <span>
@@ -4207,14 +5314,15 @@ export default function TransferPage({
 
                 <p>
                   These players have
-                  accepted transfers and will
-                  join your club according to
-                  the game calendar.
+                  accepted transfers
+                  and are waiting for
+                  their joining date.
                 </p>
               </div>
             </div>
 
-            {joiningPlayers.length > 0 ? (
+            {joiningPlayers.length >
+            0 ? (
               <div
                 className={
                   styles.joiningList
@@ -4233,7 +5341,9 @@ export default function TransferPage({
 
                     return (
                       <article
-                        key={player.id}
+                        key={
+                          player.id
+                        }
                         className={
                           styles.joiningCard
                         }
@@ -4279,9 +5389,9 @@ export default function TransferPage({
                           </h3>
 
                           <p>
-                            From:{' '}
+                            From:{" "}
                             {pending.fromClubName ||
-                              'Unknown'}
+                              "Unknown"}
                           </p>
 
                           <p>
@@ -4307,11 +5417,13 @@ export default function TransferPage({
                             )}
                           </strong>
 
-                          {remaining !== null && (
+                          {remaining !==
+                            null && (
                             <small>
-                              {remaining > 0
+                              {remaining >
+                              0
                                 ? `${remaining} game days remaining`
-                                : 'Joining today or soon'}
+                                : "Joining today"}
                             </small>
                           )}
 
@@ -4336,19 +5448,23 @@ export default function TransferPage({
               </div>
             ) : (
               <div
-                className={styles.emptyState}
+                className={
+                  styles.emptyState
+                }
               >
-                <span>⏳</span>
+                <span>
+                  ⏳
+                </span>
 
                 <h3>
                   No players joining
                 </h3>
 
                 <p>
-                  When a transfer is accepted,
-                  the player will appear here
-                  while waiting to join your
-                  club.
+                  Accepted transfers
+                  waiting for their
+                  joining date will
+                  appear here.
                 </p>
               </div>
             )}
@@ -4359,26 +5475,43 @@ export default function TransferPage({
             CONTRACTS
         ================================================= */}
 
-        {activeTab === 'contracts' && (
+        {activeTab ===
+          "contracts" && (
           <section
-            className={styles.contentCard}
+            className={
+              styles.contentCard
+            }
           >
             <div
-              className={styles.contentHeader}
+              className={
+                styles.contentHeader
+              }
             >
               <div>
                 <span>
                   PLAYER NEGOTIATIONS
                 </span>
 
-                <h2>Contract Offers</h2>
+                <h2>
+                  Contract Offers
+                </h2>
+
+                <p>
+                  A transfer becomes
+                  fully completed only
+                  after the player accepts
+                  the contract.
+                </p>
               </div>
             </div>
 
             <div
-              className={styles.contractGrid}
+              className={
+                styles.contractGrid
+              }
             >
-              {contractOffers.length > 0 ? (
+              {contractOffers.length >
+              0 ? (
                 contractOffers.map(
                   (contract) => {
                     const remaining =
@@ -4446,7 +5579,7 @@ export default function TransferPage({
                             </h3>
 
                             <p>
-                              {clubName(
+                              {getPlayerClubName(
                                 player
                               )}
                             </p>
@@ -4491,7 +5624,7 @@ export default function TransferPage({
 
                             <strong>
                               {contract.years ||
-                                0}{' '}
+                                0}{" "}
                               yrs
                             </strong>
                           </div>
@@ -4503,20 +5636,26 @@ export default function TransferPage({
                           }
                         >
                           <span
-                            className={`${styles.status} ${styles[statusClass(status)]}`}
+                            className={`${styles.status} ${styles[statusClass(
+                              status
+                            )]}`}
                           >
                             {statusText(
                               status
                             )}
                           </span>
 
-                          {remaining !== null && (
-                            <span>
-                              {remaining > 0
-                                ? `${remaining} game days remaining`
-                                : 'Response deadline reached'}
-                            </span>
-                          )}
+                          {remaining !==
+                            null &&
+                            status ===
+                              "contract-offered" && (
+                              <span>
+                                {remaining >
+                                0
+                                  ? `${remaining} game days remaining`
+                                  : "Response deadline reached"}
+                              </span>
+                            )}
                         </div>
 
                         <div
@@ -4525,7 +5664,7 @@ export default function TransferPage({
                           }
                         >
                           {status ===
-                            'contract-offered' && (
+                            "contract-offered" && (
                             <button
                               type="button"
                               onClick={() =>
@@ -4539,8 +5678,8 @@ export default function TransferPage({
                               }
                             >
                               {contract.secondChanceUsed
-                                ? 'Second Chance Used'
-                                : 'Second Negotiation'}
+                                ? "Second Chance Used"
+                                : "Second Negotiation"}
                             </button>
                           )}
 
@@ -4568,15 +5707,17 @@ export default function TransferPage({
                     styles.emptyState
                   }
                 >
-                  <span>✍️</span>
+                  <span>
+                    ✍️
+                  </span>
 
                   <h3>
                     No active contracts
                   </h3>
 
                   <p>
-                    Contract negotiations will
-                    appear here.
+                    Contract negotiations
+                    will appear here.
                   </p>
                 </div>
               )}
@@ -4585,15 +5726,20 @@ export default function TransferPage({
         )}
 
         {/* =================================================
-            SUGGESTIONS
+            GM SUGGESTIONS
         ================================================= */}
 
-        {activeTab === 'suggestions' && (
+        {activeTab ===
+          "suggestions" && (
           <section
-            className={styles.contentCard}
+            className={
+              styles.contentCard
+            }
           >
             <div
-              className={styles.contentHeader}
+              className={
+                styles.contentHeader
+              }
             >
               <div>
                 <span>
@@ -4606,13 +5752,17 @@ export default function TransferPage({
                 </h2>
 
                 <p>
-                  Recruitment targets based on
-                  squad and budget.
+                  Recruitment targets
+                  based on squad needs,
+                  budget, rating and
+                  availability.
                 </p>
               </div>
 
               <div
-                className={styles.gmBadge}
+                className={
+                  styles.gmBadge
+                }
               >
                 🧠 GM
               </div>
@@ -4630,7 +5780,9 @@ export default function TransferPage({
                   reasons,
                 }) => (
                   <article
-                    key={player.id}
+                    key={
+                      player.id
+                    }
                     className={
                       styles.suggestionCard
                     }
@@ -4683,8 +5835,8 @@ export default function TransferPage({
                     <p>
                       {playerPosition(
                         player
-                      )}{' '}
-                      • OVR{' '}
+                      )}{" "}
+                      • OVR{" "}
                       {playerOverall(
                         player
                       )}
@@ -4741,7 +5893,8 @@ export default function TransferPage({
                               index
                             }
                           >
-                            ✓ {reason}
+                            ✓{" "}
+                            {reason}
                           </span>
                         )
                       )}
@@ -4795,27 +5948,37 @@ export default function TransferPage({
                 styles.modalOverlay
               }
               onClick={() =>
-                setShowBidModal(false)
+                setShowBidModal(
+                  false
+                )
               }
             >
               <div
-                className={styles.modal}
+                className={
+                  styles.modal
+                }
                 onClick={(event) =>
                   event.stopPropagation()
                 }
               >
                 <button
                   type="button"
-                  className={styles.close}
+                  className={
+                    styles.close
+                  }
                   onClick={() =>
-                    setShowBidModal(false)
+                    setShowBidModal(
+                      false
+                    )
                   }
                 >
                   ×
                 </button>
 
                 <span
-                  className={styles.eyebrow}
+                  className={
+                    styles.eyebrow
+                  }
                 >
                   TRANSFER BID
                 </span>
@@ -4831,9 +5994,11 @@ export default function TransferPage({
                     styles.modalSubtitle
                   }
                 >
-                  {selectedBid.buyerClubName}{' '}
-                  has submitted a transfer
-                  offer.
+                  {
+                    selectedBid.buyerClubName
+                  }{" "}
+                  has submitted a
+                  transfer offer.
                 </p>
 
                 <div
@@ -4842,7 +6007,9 @@ export default function TransferPage({
                   }
                 >
                   <div>
-                    <span>OFFER</span>
+                    <span>
+                      OFFER
+                    </span>
 
                     <strong>
                       €
@@ -4885,16 +6052,20 @@ export default function TransferPage({
                 </div>
 
                 <div
-                  className={styles.bidMeta}
+                  className={
+                    styles.bidMeta
+                  }
                 >
                   <div>
-                    <span>PLAYER</span>
+                    <span>
+                      PLAYER
+                    </span>
 
                     <strong>
                       {playerPosition(
                         selectedBid.player
-                      )}{' '}
-                      • OVR{' '}
+                      )}{" "}
+                      • OVR{" "}
                       {playerOverall(
                         selectedBid.player
                       )}
@@ -4914,7 +6085,9 @@ export default function TransferPage({
                   </div>
 
                   <div>
-                    <span>STATUS</span>
+                    <span>
+                      STATUS
+                    </span>
 
                     <strong>
                       {statusText(
@@ -4946,7 +6119,7 @@ export default function TransferPage({
                         styles.systemResponse
                       }
                     >
-                      💬{' '}
+                      💬{" "}
                       {
                         selectedBid.responseNote
                       }
@@ -4959,7 +6132,8 @@ export default function TransferPage({
                       styles.systemResponse
                     }
                   >
-                    💰 AI counter offer:{' '}
+                    💰 AI counter
+                    offer:{" "}
                     <strong>
                       €
                       {money(
@@ -4989,17 +6163,20 @@ export default function TransferPage({
                   </button>
 
                   {activeTab ===
-                    'incoming' &&
+                    "incoming" &&
                     offerStatus(
                       selectedBid
-                    ) === 'pending' && (
+                    ) ===
+                      "pending" && (
                       <>
                         <button
                           type="button"
                           className={
                             styles.rejectButton
                           }
-                          disabled={saving}
+                          disabled={
+                            saving
+                          }
                           onClick={() =>
                             rejectBid(
                               selectedBid
@@ -5014,7 +6191,9 @@ export default function TransferPage({
                           className={
                             styles.acceptButton
                           }
-                          disabled={saving}
+                          disabled={
+                            saving
+                          }
                           onClick={() =>
                             acceptBid(
                               selectedBid
@@ -5022,23 +6201,25 @@ export default function TransferPage({
                           }
                         >
                           {saving
-                            ? 'Processing...'
-                            : 'Accept Bid'}
+                            ? "Processing..."
+                            : "Accept Bid"}
                         </button>
                       </>
                     )}
 
                   {activeTab ===
-                    'outgoing' &&
+                    "outgoing" &&
                     selectedBid.counterOffer &&
                     selectedBid.status ===
-                      'negotiation' && (
+                      "negotiation" && (
                       <button
                         type="button"
                         className={
                           styles.acceptButton
                         }
-                        disabled={saving}
+                        disabled={
+                          saving
+                        }
                         onClick={() =>
                           acceptCounterOffer(
                             selectedBid
@@ -5073,14 +6254,18 @@ export default function TransferPage({
               }
             >
               <div
-                className={styles.modal}
+                className={
+                  styles.modal
+                }
                 onClick={(event) =>
                   event.stopPropagation()
                 }
               >
                 <button
                   type="button"
-                  className={styles.close}
+                  className={
+                    styles.close
+                  }
                   onClick={() =>
                     setShowContractModal(
                       false
@@ -5091,7 +6276,9 @@ export default function TransferPage({
                 </button>
 
                 <span
-                  className={styles.eyebrow}
+                  className={
+                    styles.eyebrow
+                  }
                 >
                   CONTRACT NEGOTIATION
                 </span>
@@ -5107,8 +6294,8 @@ export default function TransferPage({
                     styles.modalSubtitle
                   }
                 >
-                  Offer the player a new
-                  contract.
+                  Offer the player a
+                  new contract.
                 </p>
 
                 <div
@@ -5124,7 +6311,9 @@ export default function TransferPage({
                         styles.moneyInput
                       }
                     >
-                      <span>€</span>
+                      <span>
+                        €
+                      </span>
 
                       <input
                         type="number"
@@ -5154,7 +6343,9 @@ export default function TransferPage({
                         styles.moneyInput
                       }
                     >
-                      <span>€</span>
+                      <span>
+                        €
+                      </span>
 
                       <input
                         type="number"
@@ -5221,12 +6412,14 @@ export default function TransferPage({
                     styles.contractNotice
                   }
                 >
-                  ⏱️ The player will have
-                  approximately{' '}
+                  ⏱️ The player will
+                  have approximately{" "}
                   <strong>
-                    {CONTRACT_WAIT_DAYS}{' '}
+                    {
+                      CONTRACT_WAIT_DAYS
+                    }{" "}
                     game days
-                  </strong>{' '}
+                  </strong>{" "}
                   to respond.
                 </div>
 
@@ -5243,8 +6436,8 @@ export default function TransferPage({
                   }
                 >
                   {contractLoading
-                    ? 'Sending...'
-                    : 'Send Contract Offer'}
+                    ? "Sending..."
+                    : "Send Contract Offer"}
                 </button>
               </div>
             </div>
