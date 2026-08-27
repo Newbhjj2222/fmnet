@@ -1,0 +1,748 @@
+.page {
+  min-height: 100vh;
+  padding: 24px;
+  background: #f5f7fb;
+  color: #111827;
+}
+
+.header {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.backButton {
+  border: 0;
+  background: #fff;
+  color: #111827;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.gameDate {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b7280;
+  letter-spacing: .08em;
+}
+
+.hero {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  padding: 28px;
+  border-radius: 20px;
+  background: #111827;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.playerPhoto {
+  width: 130px;
+  height: 130px;
+  flex: 0 0 130px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #374151;
+  font-size: 48px;
+  font-weight: 900;
+}
+
+.playerPhoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.playerIdentity {
+  flex: 1;
+}
+
+.position {
+  font-size: 12px;
+  font-weight: 800;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+.playerIdentity h1 {
+  margin: 5px 0;
+  font-size: 34px;
+}
+
+.playerIdentity p {
+  margin: 0;
+  color: #d1d5db;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.badges span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #374151;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.transferBadge {
+  background: #92400e !important;
+  color: #fff;
+}
+
+.aiBadge {
+  background: #312e81 !important;
+  color: #fff;
+}
+
+.heroOverall {
+  width: 110px;
+  text-align: center;
+}
+
+.heroOverall span {
+  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 800;
+}
+
+.heroOverall strong {
+  display: block;
+  font-size: 52px;
+  line-height: 1;
+}
+
+.financeGrid {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.infoCard {
+  padding: 20px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.infoCard span {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.infoCard strong {
+  font-size: 21px;
+}
+
+.negotiationCard {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  padding: 24px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.sectionEyebrow {
+  display: block;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.negotiationCard h2 {
+  margin: 6px 0;
+  font-size: 24px;
+}
+
+.negotiationCard p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.negotiationNumbers {
+  display: flex;
+  gap: 30px;
+  margin: 20px 0;
+}
+
+.negotiationNumbers div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.negotiationNumbers span {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 800;
+}
+
+.negotiateButton {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: #111827;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.negotiateButton:hover {
+  opacity: .9;
+}
+
+.counterBox {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #f3f4f6;
+}
+
+.counterBox span {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  color: #6b7280;
+}
+
+.counterBox strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 28px;
+}
+
+.counterBox p {
+  margin-top: 5px;
+}
+
+.counterActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.acceptCounter,
+.negotiateAgain {
+  border: 0;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.acceptCounter {
+  background: #166534;
+  color: #fff;
+}
+
+.negotiateAgain {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.currentOffer {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  padding: 18px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.currentOffer div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.currentOffer span {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 800;
+}
+
+.currentOffer strong {
+  font-size: 14px;
+}
+
+.success {
+  color: #15803d !important;
+}
+
+.warning {
+  color: #b45309 !important;
+}
+
+.danger {
+  color: #b91c1c !important;
+}
+
+.pending {
+  color: #6b7280 !important;
+}
+
+.contentGrid {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.contentCard,
+.historyCard {
+  padding: 24px;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+}
+
+.sectionHeader {
+  margin-bottom: 20px;
+}
+
+.sectionHeader span {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.sectionHeader h2 {
+  margin: 5px 0 0;
+  font-size: 22px;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.detailsGrid div {
+  padding: 13px;
+  background: #f9fafb;
+  border-radius: 10px;
+}
+
+.detailsGrid span {
+  display: block;
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.detailsGrid strong {
+  font-size: 14px;
+}
+
+.statsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.statRow > span {
+  font-size: 12px;
+  color: #4b5563;
+  font-weight: 700;
+}
+
+.statValue {
+  display: grid;
+  grid-template-columns: 1fr 35px;
+  align-items: center;
+  gap: 10px;
+}
+
+.statBar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.statFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #111827;
+}
+
+.statValue strong {
+  font-size: 12px;
+  text-align: right;
+}
+
+.historyCard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.emptyHistory {
+  padding: 30px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.emptyHistory span {
+  display: block;
+  font-size: 30px;
+  margin-bottom: 10px;
+}
+
+.emptyHistory p {
+  margin: 0;
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.historyItem {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap: 15px;
+  align-items: center;
+  padding: 15px;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.historyItem div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.historyItem strong {
+  font-size: 14px;
+}
+
+.historyItem span,
+.historyItem small {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.historyStatus {
+  font-weight: 900 !important;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .65);
+}
+
+.modal {
+  width: min(520px, 100%);
+  position: relative;
+  padding: 28px;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.closeButton {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 35px;
+  height: 35px;
+  border: 0;
+  border-radius: 50%;
+  background: #f3f4f6;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.modal h2 {
+  margin: 8px 0;
+  font-size: 26px;
+}
+
+.modal > p {
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.modalCounter {
+  margin: 20px 0;
+  padding: 15px;
+  border-radius: 12px;
+  background: #f3f4f6;
+}
+
+.modalCounter span {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  color: #6b7280;
+}
+
+.modalCounter strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 24px;
+}
+
+.moneyField {
+  margin-top: 20px;
+}
+
+.moneyField label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.moneyField > div {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.moneyField span {
+  padding: 0 14px;
+  font-weight: 900;
+  color: #6b7280;
+}
+
+.moneyField input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 14px 10px;
+  font-size: 18px;
+}
+
+.offerInfo {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.offerInfo div {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.offerInfo span {
+  display: block;
+  font-size: 9px;
+  color: #6b7280;
+  font-weight: 800;
+}
+
+.offerInfo strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.gameDateNotice {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+}
+
+.gameDateNotice strong {
+  margin-left: 5px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.cancelButton,
+.submitButton {
+  flex: 1;
+  padding: 13px;
+  border: 0;
+  border-radius: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cancelButton {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.submitButton {
+  background: #111827;
+  color: #fff;
+}
+
+.loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.spinner {
+  width: 35px;
+  height: 35px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #111827;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+.emptyPage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.emptyPage button {
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #111827;
+  color: #fff;
+  font-weight: 800;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .financeGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .currentOffer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hero {
+    flex-wrap: wrap;
+  }
+
+  .heroOverall {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 12px;
+  }
+
+  .hero {
+    padding: 20px;
+  }
+
+  .playerPhoto {
+    width: 90px;
+    height: 90px;
+    flex-basis: 90px;
+    font-size: 32px;
+  }
+
+  .playerIdentity h1 {
+    font-size: 25px;
+  }
+
+  .heroOverall strong {
+    font-size: 40px;
+  }
+
+  .financeGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .negotiationNumbers {
+    gap: 18px;
+  }
+
+  .currentOffer {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .historyItem {
+    grid-template-columns: 1fr;
+  }
+
+  .offerInfo {
+    grid-template-columns: 1fr;
+  }
+
+  .counterActions,
+  .modalActions {
+    flex-direction: column;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
