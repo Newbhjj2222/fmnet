@@ -43,7 +43,7 @@ const ThreePitch = dynamic(
 // CONSTANTS
 // ============================================================
 
-const MATCH_MINUTE_MS = 1000;
+const MATCH_MINUTE_MS = 3000;
 
 const MATCH_MINUTE = 90;
 
