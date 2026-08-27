@@ -43,7 +43,10 @@ const ThreePitch = dynamic(
 // CONSTANTS
 // ============================================================
 
-const MATCH_MINUTE_MS = 3000;
+// Real match duration in seconds (4 minutes)
+const MATCH_REAL_DURATION_SECONDS = 240;
+// Timer tick in milliseconds (500ms = 2 plays per second)
+const MATCH_TICK_MS = 500;
 
 const MATCH_MINUTE = 90;
 
@@ -1198,6 +1201,10 @@ export default function MatchPage() {
   const ballActionIdRef =
     useRef(0);
 
+  // Real time match start timestamp
+  const startTimeRef =
+    useRef(null);
+
   // ==========================================================
   // LOAD USER PROFILE
   // ==========================================================
@@ -1751,6 +1758,21 @@ export default function MatchPage() {
         setSubsUsed(
           loadedSubs
         );
+
+        // ====================================================
+        // START TIME REF (for real time progression)
+        // ====================================================
+
+        if (loadedStatus === "live") {
+          // Estimate startTime so that current minute matches real elapsed
+          const minutesPerSecond =
+            90 / MATCH_REAL_DURATION_SECONDS; // 0.375
+          startTimeRef.current =
+            Date.now() -
+            (loadedMinute / minutesPerSecond) * 1000;
+        } else {
+          startTimeRef.current = Date.now();
+        }
 
         // ====================================================
         // PAUSE STATE
@@ -2663,7 +2685,7 @@ export default function MatchPage() {
       // POSSESSION (team with ball)
       // ====================================================
       const homePossessionChance = clamp(
-        0.5 + (homePower - awayPower) * 0.02, // ingaruka z'imbaraga
+        0.5 + (homePower - awayPower) * 0.02,
         0.30,
         0.70
       );
@@ -2839,7 +2861,7 @@ export default function MatchPage() {
         let shotChance = 0.15 + (actorOVR - 60) * 0.005 + (teamPower - opponentPower) * 0.004;
         if (ownTactics.mentality === "attacking") shotChance += 0.06;
         if (ownTactics.mentality === "defensive") shotChance -= 0.03;
-        if (isDangerousAttack) shotChance *= 1.5; // Dangerous attacks increase shot chance
+        if (isDangerousAttack) shotChance *= 1.5;
 
         shotChance = clamp(shotChance, 0.08, 0.50);
 
@@ -2872,10 +2894,10 @@ export default function MatchPage() {
           const goalkeeper = opponent.find((p) => position(p) === "GK");
           const gkOverall = goalkeeper ? overall(goalkeeper) : 65;
 
-          let goalProbability = 0.22; // base (yari 0.095)
+          let goalProbability = 0.22;
           goalProbability += (teamPower - opponentPower) * 0.015;
-          goalProbability += (actorOVR - 60) * 0.006; // rating y'uwateye irakoreshwa
-          goalProbability -= (gkOverall - 60) * 0.003; // umunyezamu arakiza
+          goalProbability += (actorOVR - 60) * 0.006;
+          goalProbability -= (gkOverall - 60) * 0.003;
 
           if (ownTactics.mentality === "attacking") goalProbability += 0.05;
           if (ownTactics.mentality === "defensive") goalProbability -= 0.03;
@@ -2886,7 +2908,6 @@ export default function MatchPage() {
           goalProbability = clamp(goalProbability, 0.08, 0.55);
 
           if (Math.random() < goalProbability) {
-            // GOAL!
             scoreRef.current[team] += 1;
 
             const event = {
@@ -2900,7 +2921,6 @@ export default function MatchPage() {
             eventsRef.current = [event, ...eventsRef.current];
             toast.success(`⚽ ${playerName(actor)} SCORED!`);
           } else {
-            // SAVE
             const defendingTeam = team === "home" ? "away" : "home";
             statsRef.current[defendingTeam].saves += 1;
             eventsRef.current = [
@@ -2945,7 +2965,7 @@ export default function MatchPage() {
   }, [createBallAction, getVisualPosition, updatePlayerMovement]);
 
   // ==========================================================
-  // MATCH TIMER (PLUS ACTIONS)
+  // MATCH TIMER (REAL TIME, CONTINUOUS PLAY)
   // ==========================================================
 
   useEffect(() => {
@@ -2995,31 +3015,48 @@ export default function MatchPage() {
           return;
         }
 
-        // Kuri buri munota, kora plays 3 aho kuba 1
-        for (let i = 0; i < 3; i++) {
-          simulatePlay();
-        }
+        // Calculate current minute based on real elapsed time
+        const elapsedSeconds =
+          (Date.now() - startTimeRef.current) / 1000;
+        const minutesPerSecond =
+          90 / MATCH_REAL_DURATION_SECONDS; // 0.375
 
-        minuteRef.current += 1;
+        const newMinute = Math.min(
+          MATCH_MINUTE,
+          Math.floor(elapsedSeconds * minutesPerSecond)
+        );
 
-        // AI tactical decisions.
-        if (
-          minuteRef.current > 0 &&
-          minuteRef.current % 10 === 0
-        ) {
-          runAITactics();
-        }
+        const previousMinute = minuteRef.current;
+        minuteRef.current = newMinute;
+        setMatchMinute(newMinute);
 
-        // AI substitutions.
-        if (
-          minuteRef.current >= 55 &&
-          minuteRef.current % 5 === 0
-        ) {
+        // Continuous play: simulate every tick regardless of minute change
+        simulatePlay();
+
+        // AI updates only when minute changes
+        if (newMinute !== previousMinute) {
           if (
-            Math.random() <
-            0.22
+            newMinute > 0 &&
+            newMinute % 10 === 0
           ) {
-            runAISubstitution();
+            runAITactics();
+          }
+
+          if (
+            newMinute >= 55 &&
+            newMinute % 5 === 0
+          ) {
+            if (
+              Math.random() <
+              0.22
+            ) {
+              runAISubstitution();
+            }
+          }
+
+          // Save every 5 minutes
+          if (newMinute % 5 === 0) {
+            saveMatchState("live");
           }
         }
 
@@ -3030,7 +3067,8 @@ export default function MatchPage() {
         // ====================================================
 
         if (
-          minuteRef.current === 45
+          newMinute >= 45 &&
+          statusRef.current !== "half-time"
         ) {
           statusRef.current =
             "half-time";
@@ -3045,6 +3083,11 @@ export default function MatchPage() {
             "half-time"
           );
 
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+
           return;
         }
 
@@ -3053,8 +3096,7 @@ export default function MatchPage() {
         // ====================================================
 
         if (
-          minuteRef.current >=
-          MATCH_MINUTE
+          newMinute >= MATCH_MINUTE
         ) {
           statusRef.current =
             "finished";
@@ -3073,19 +3115,14 @@ export default function MatchPage() {
             `FULL TIME ${scoreRef.current.home} - ${scoreRef.current.away}`
           );
 
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+
           return;
         }
-
-        // Save every 5 minutes.
-        if (
-          minuteRef.current % 5 ===
-          0
-        ) {
-          saveMatchState(
-            "live"
-          );
-        }
-      }, MATCH_MINUTE_MS);
+      }, MATCH_TICK_MS);
 
     return () => {
       if (
@@ -3149,6 +3186,9 @@ export default function MatchPage() {
         );
 
         setIsPaused(false);
+
+        // Reset startTimeRef for real-time progression
+        startTimeRef.current = Date.now();
 
         await saveMatchState(
           "live"
