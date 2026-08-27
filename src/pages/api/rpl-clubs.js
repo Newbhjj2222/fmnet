@@ -1,12 +1,19 @@
+// pages/api/rpl-clubs.js
+
 import { URL } from "url";
 
-const RPL_BASE_URL =
-  "https://rwandapremierleague.rw";
+const RPL_BASE_URL = "https://rwandapremierleague.rw";
 
-const RPL_TEAM_URL =
-  `${RPL_BASE_URL}/info/team`;
+// Current RPL pages
+const RPL_TABLE_URL = `${RPL_BASE_URL}/table`;
+const RPL_HOME_URL = `${RPL_BASE_URL}/home`;
+const RPL_TEAM_URL = `${RPL_BASE_URL}/info/team`;
 
 const REQUEST_TIMEOUT = 20000;
+
+/* =========================================================
+   HELPERS
+========================================================= */
 
 function decodeHtml(value = "") {
   return String(value)
@@ -18,11 +25,21 @@ function decodeHtml(value = "") {
     .replace(/&gt;/gi, ">")
     .replace(/&#x2F;/gi, "/")
     .replace(/&#47;/gi, "/")
-    .replace(/&#(\d+);/g, (_, code) => {
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#(\d+);/g, (full, code) => {
       const number = Number(code);
 
       if (!Number.isFinite(number)) {
-        return _;
+        return full;
+      }
+
+      return String.fromCharCode(number);
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (full, code) => {
+      const number = parseInt(code, 16);
+
+      if (!Number.isFinite(number)) {
+        return full;
       }
 
       return String.fromCharCode(number);
@@ -42,7 +59,18 @@ function stripHtml(value = "") {
         /<style[\s\S]*?<\/style>/gi,
         " "
       )
-      .replace(/<[^>]+>/g, " ")
+      .replace(
+        /<noscript[\s\S]*?<\/noscript>/gi,
+        " "
+      )
+      .replace(
+        /<svg[\s\S]*?<\/svg>/gi,
+        " "
+      )
+      .replace(
+        /<[^>]+>/g,
+        " "
+      )
   );
 }
 
@@ -52,7 +80,13 @@ function clean(value = "") {
     .trim();
 }
 
-function absoluteUrl(value) {
+function normalizeName(value = "") {
+  return clean(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function absoluteUrl(value = "") {
   if (!value) {
     return "";
   }
@@ -63,7 +97,7 @@ function absoluteUrl(value) {
       RPL_BASE_URL
     ).toString();
   } catch {
-    return value;
+    return String(value);
   }
 }
 
@@ -76,8 +110,7 @@ function getAttribute(
     "i"
   );
 
-  const match =
-    String(tag).match(regex);
+  const match = String(tag).match(regex);
 
   return match
     ? decodeHtml(match[1])
@@ -88,43 +121,392 @@ function getImage(tag = "") {
   return (
     getAttribute(tag, "src") ||
     getAttribute(tag, "data-src") ||
-    getAttribute(
-      tag,
-      "data-lazy-src"
-    ) ||
-    getAttribute(
-      tag,
-      "data-original"
-    ) ||
+    getAttribute(tag, "data-lazy-src") ||
+    getAttribute(tag, "data-original") ||
+    getAttribute(tag, "data-image") ||
     ""
   );
 }
 
-function toNumber(
-  value,
-  fallback = 0
-) {
-  const match = String(
-    value || ""
-  ).match(
-    /-?\d+(?:[.,]\d+)?/
+function getLinks(html = "") {
+  return (
+    String(html).match(
+      /<a\b[^>]*>[\s\S]*?<\/a>/gi
+    ) || []
   );
-
-  if (!match) {
-    return fallback;
-  }
-
-  const number = Number(
-    match[0].replace(",", ".")
-  );
-
-  return Number.isFinite(number)
-    ? number
-    : fallback;
 }
 
-function extractTeamNames(html) {
-  const names = [];
+function isValidClubName(name = "") {
+  const value = normalizeName(name);
+
+  if (!value) {
+    return false;
+  }
+
+  if (value.length < 2 || value.length > 100) {
+    return false;
+  }
+
+  const lower = value.toLowerCase();
+
+  const ignored = [
+    "club",
+    "clubs",
+    "team",
+    "teams",
+    "select",
+    "select team",
+    "select club",
+    "all teams",
+    "all clubs",
+    "apply",
+    "home",
+    "away",
+    "match",
+    "matches",
+    "fixtures",
+    "results",
+    "statistics",
+    "table",
+    "news",
+    "read more",
+    "download",
+    "logo",
+    "image",
+    "menu",
+    "search",
+    "rwanda premier league",
+  ];
+
+  if (ignored.includes(lower)) {
+    return false;
+  }
+
+  for (const item of ignored) {
+    if (
+      lower === item ||
+      lower.startsWith(`${item}:`)
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    /^(image|logo)\s*[:\-]/i.test(value)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function dedupeTeams(teams = []) {
+  const map = new Map();
+
+  for (const team of teams) {
+    if (!team) continue;
+
+    const name = normalizeName(
+      typeof team === "string"
+        ? team
+        : team.name
+    );
+
+    if (!isValidClubName(name)) {
+      continue;
+    }
+
+    const key = name
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, {
+        ...(
+          typeof team === "object"
+            ? team
+            : {}
+        ),
+        name,
+      });
+      continue;
+    }
+
+    map.set(key, {
+      ...existing,
+      ...(
+        typeof team === "object"
+          ? team
+          : {}
+      ),
+      name,
+    });
+  }
+
+  return Array.from(map.values());
+}
+
+/* =========================================================
+   KNOWN RPL TEAM NORMALIZATION
+========================================================= */
+
+function normalizeKnownClubName(name = "") {
+  const value = normalizeName(name);
+  const lower = value.toLowerCase();
+
+  const aliases = {
+    "rayon sports": "Rayon Sports",
+    "rayon sports fc": "Rayon Sports",
+
+    "apr fc": "APR FC",
+
+    "kiyovu sports": "Kiyovu Sports",
+    "sc kiyovu": "Kiyovu Sports",
+
+    "police fc": "Police FC",
+
+    "musanze fc": "Musanze FC",
+
+    "marine fc": "Marine FC",
+    "marines fc": "Marine FC",
+
+    "bugesera fc": "Bugesera FC",
+
+    "gicumbi fc": "Gicumbi FC",
+
+    "gorilla fc": "Gorilla FC",
+
+    "gasogi united": "Gasogi United",
+    "gasogi united fc": "Gasogi United",
+
+    "sunrise": "Sunrise FC",
+    "sunrise fc": "Sunrise FC",
+
+    "mukura vs": "Mukura VS",
+    "mukura victory sports": "Mukura VS",
+
+    "etincelles fc": "Etincelles FC",
+
+    "amgaju fc": "Amagaju FC",
+    "amagaju fc": "Amagaju FC",
+    "amagaju": "Amagaju FC",
+
+    "as muhanga": "AS Muhanga",
+    "as muhanga fc": "AS Muhanga",
+
+    "kigali fc": "Kigali FC",
+
+    "etoile de l'est": "Etoile de l'Est",
+    "etoile de l'est fc": "Etoile de l'Est",
+
+    "al hilal sc": "Al Hilal SC",
+    "al hilal": "Al Hilal SC",
+
+    "al merrikh sc": "Al Merrikh SC",
+    "al merrikh": "Al Merrikh SC",
+
+    "rutsiro fc": "Rutsiro FC",
+  };
+
+  return (
+    aliases[lower] ||
+    value
+  );
+}
+
+/* =========================================================
+   IMAGE EXTRACTION
+========================================================= */
+
+function extractImages(html = "") {
+  const images =
+    String(html).match(
+      /<img\b[^>]*>/gi
+    ) || [];
+
+  return images.map((tag) => ({
+    tag,
+
+    src: absoluteUrl(
+      getImage(tag)
+    ),
+
+    alt: normalizeName(
+      getAttribute(tag, "alt")
+    ),
+
+    title: normalizeName(
+      getAttribute(tag, "title")
+    ),
+  }));
+}
+
+function findLogoForTeam(
+  html = "",
+  teamName = ""
+) {
+  const source = String(html);
+
+  const images =
+    extractImages(source);
+
+  const normalizedTeam =
+    normalizeName(teamName).toLowerCase();
+
+  /*
+   * 1. Strong match:
+   * alt/title contains club name.
+   */
+
+  for (const image of images) {
+    const alt =
+      image.alt.toLowerCase();
+
+    const title =
+      image.title.toLowerCase();
+
+    if (
+      image.src &&
+      (
+        alt.includes(normalizedTeam) ||
+        title.includes(normalizedTeam)
+      )
+    ) {
+      return image.src;
+    }
+  }
+
+  /*
+   * 2. Search around the club name.
+   */
+
+  const index =
+    source
+      .toLowerCase()
+      .indexOf(
+        normalizedTeam
+      );
+
+  if (index !== -1) {
+    const start =
+      Math.max(
+        0,
+        index - 6000
+      );
+
+    const end =
+      Math.min(
+        source.length,
+        index + 6000
+      );
+
+    const section =
+      source.slice(
+        start,
+        end
+      );
+
+    const sectionImages =
+      extractImages(
+        section
+      );
+
+    for (
+      const image of sectionImages
+    ) {
+      if (image.src) {
+        return image.src;
+      }
+    }
+  }
+
+  return "";
+}
+
+/* =========================================================
+   TABLE EXTRACTION
+========================================================= */
+
+function extractTeamsFromTable(
+  html = ""
+) {
+  const teams = [];
+
+  const source = String(html);
+
+  /*
+   * Try table rows first.
+   */
+
+  const rows =
+    source.match(
+      /<tr\b[^>]*>[\s\S]*?<\/tr>/gi
+    ) || [];
+
+  for (const row of rows) {
+    /*
+     * Team names commonly appear
+     * inside links or table cells.
+     */
+
+    const links =
+      row.match(
+        /<a\b[^>]*>[\s\S]*?<\/a>/gi
+      ) || [];
+
+    for (const link of links) {
+      const text =
+        clean(link);
+
+      if (
+        isValidClubName(text)
+      ) {
+        teams.push(text);
+      }
+    }
+
+    const cells =
+      row.match(
+        /<td\b[^>]*>[\s\S]*?<\/td>/gi
+      ) || [];
+
+    for (const cell of cells) {
+      const text =
+        clean(cell);
+
+      /*
+       * Avoid numbers and huge cell contents.
+       */
+
+      if (
+        isValidClubName(text) &&
+        !/^\d+$/.test(text)
+      ) {
+        teams.push(text);
+      }
+    }
+  }
+
+  return dedupeTeams(
+    teams.map((name) => ({
+      name: normalizeKnownClubName(
+        name
+      ),
+    }))
+  );
+}
+
+/* =========================================================
+   SELECT / OPTION EXTRACTION
+========================================================= */
+
+function extractTeamsFromOptions(
+  html = ""
+) {
+  const teams = [];
 
   const options =
     String(html).match(
@@ -132,466 +514,279 @@ function extractTeamNames(html) {
     ) || [];
 
   for (const option of options) {
-    const name = clean(
-      option
-        .replace(
-          /<option\b[^>]*>/i,
-          ""
-        )
-        .replace(
-          /<\/option>/i,
-          ""
-        )
-    );
-
-    if (!name) continue;
-
-    const lower =
-      name.toLowerCase();
+    const value =
+      clean(
+        option
+          .replace(
+            /<option\b[^>]*>/i,
+            ""
+          )
+          .replace(
+            /<\/option>/i,
+            ""
+          )
+      );
 
     if (
-      lower === "club" ||
-      lower === "clubs" ||
-      lower === "select" ||
-      lower.includes("select club") ||
-      lower.includes("select team")
+      !isValidClubName(value)
     ) {
       continue;
     }
 
-    if (
-      name.length < 2 ||
-      name.length > 100
-    ) {
-      continue;
-    }
-
-    names.push(name);
+    teams.push({
+      name:
+        normalizeKnownClubName(
+          value
+        ),
+    });
   }
 
+  return dedupeTeams(
+    teams
+  );
+}
+
+/* =========================================================
+   TEAM LINKS
+========================================================= */
+
+function extractTeamsFromLinks(
+  html = ""
+) {
+  const teams = [];
+
+  const links =
+    getLinks(html);
+
+  for (const link of links) {
+    const text =
+      clean(link);
+
+    if (
+      !isValidClubName(text)
+    ) {
+      continue;
+    }
+
+    const href =
+      absoluteUrl(
+        getAttribute(
+          link,
+          "href"
+        )
+      );
+
+    const lowerHref =
+      href.toLowerCase();
+
+    /*
+     * Only trust links that look
+     * team/club related.
+     */
+
+    const looksLikeTeamLink =
+      lowerHref.includes("team") ||
+      lowerHref.includes("club") ||
+      lowerHref.includes("squad") ||
+      lowerHref.includes("standing");
+
+    if (!looksLikeTeamLink) {
+      continue;
+    }
+
+    teams.push({
+      name:
+        normalizeKnownClubName(
+          text
+        ),
+
+      url: href,
+    });
+  }
+
+  return dedupeTeams(
+    teams
+  );
+}
+
+/* =========================================================
+   KNOWN RPL CLUBS FALLBACK
+========================================================= */
+
+function getKnownRPLClubs() {
   /*
-   * Look for common team-related
-   * data attributes.
+   * This is a safety fallback.
+   *
+   * It prevents the admin import page
+   * from becoming empty if the RPL website
+   * changes its HTML/React rendering.
    */
-
-  const attributeRegex =
-    /(?:data-team-name|data-club-name|data-name|title|alt)\s*=\s*["']([^"']+)["']/gi;
-
-  let match;
-
-  while (
-    (match =
-      attributeRegex.exec(
-        String(html)
-      ))
-  ) {
-    const value = clean(
-      match[1]
-    );
-
-    if (
-      value.length >= 2 &&
-      value.length <= 100
-    ) {
-      names.push(value);
-    }
-  }
 
   return [
-    ...new Set(
-      names.map(
-        (name) => name.trim()
-      )
-    ),
-  ];
-}
-
-function extractTeamLogo(
-  html,
-  teamName
-) {
-  const source =
-    String(html);
-
-  const index =
-    source
-      .toLowerCase()
-      .indexOf(
-        String(
-          teamName
-        ).toLowerCase()
-      );
-
-  let section = source;
-
-  if (index !== -1) {
-    section =
-      source.slice(
-        Math.max(
-          0,
-          index - 10000
-        ),
-        Math.min(
-          source.length,
-          index + 10000
-        )
-      );
-  }
-
-  const images =
-    section.match(
-      /<img\b[^>]*>/gi
-    ) || [];
-
-  /*
-   * Prefer images whose alt/title
-   * contains the club name.
-   */
-
-  for (const image of images) {
-    const alt =
-      getAttribute(
-        image,
-        "alt"
-      ).toLowerCase();
-
-    const title =
-      getAttribute(
-        image,
-        "title"
-      ).toLowerCase();
-
-    const lowerName =
-      String(
-        teamName
-      ).toLowerCase();
-
-    if (
-      alt.includes(lowerName) ||
-      title.includes(lowerName)
-    ) {
-      const src =
-        absoluteUrl(
-          getImage(image)
-        );
-
-      if (src) {
-        return src;
-      }
-    }
-  }
-
-  /*
-   * Otherwise use the nearest useful
-   * image.
-   */
-
-  for (
-    let i =
-      images.length - 1;
-    i >= 0;
-    i--
-  ) {
-    const src =
-      absoluteUrl(
-        getImage(
-          images[i]
-        )
-      );
-
-    if (src) {
-      return src;
-    }
-  }
-
-  return "";
-}
-
-function extractField(
-  html,
-  labels = []
-) {
-  const source =
-    String(html);
-
-  for (const label of labels) {
-    const escaped =
-      String(label).replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
-
-    const regex =
-      new RegExp(
-        `${escaped}\\s*(?:<[^>]+>\\s*){0,5}([^<]{1,250})`,
-        "i"
-      );
-
-    const match =
-      source.match(regex);
-
-    if (match?.[1]) {
-      const value =
-        clean(match[1]);
-
-      if (
-        value &&
-        value.toLowerCase() !==
-          label.toLowerCase()
-      ) {
-        return value;
-      }
-    }
-  }
-
-  return "";
-}
-
-function extractEmail(html) {
-  const match =
-    String(html).match(
-      /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/i
-    );
-
-  return match
-    ? match[0]
-    : "";
-}
-
-function extractPhone(html) {
-  const matches =
-    String(html).match(
-      /(?:\+250\s*)?07\d[\s-]?\d{3}[\s-]?\d{3}/g
-    ) || [];
-
-  return matches[0] || "";
-}
-
-function extractYear(html) {
-  const patterns = [
-    /(?:founded|established|est\.?)\s*[:\-]?\s*(\d{4})/i,
-    /(\d{4})\s*(?:founded|established)/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match =
-      String(html).match(
-        pattern
-      );
-
-    if (match) {
-      return Number(
-        match[1]
-      );
-    }
-  }
-
-  return null;
-}
-
-function extractCurrentTeam(
-  html
-) {
-  const source =
-    String(html);
-
-  /*
-   * Try common heading structures.
-   */
-
-  const headingMatches =
-    source.match(
-      /<h[1-4]\b[^>]*>[\s\S]*?<\/h[1-4]>/gi
-    ) || [];
-
-  let teamName = "";
-
-  for (
-    const heading of headingMatches
-  ) {
-    const value =
-      clean(heading);
-
-    if (
-      value.length >= 2 &&
-      value.length <= 100 &&
-      !/rwanda premier league/i.test(
-        value
-      ) &&
-      !/club/i.test(value) === false
-    ) {
-      teamName = value;
-      break;
-    }
-  }
-
-  /*
-   * Better fallback from title.
-   */
-
-  if (!teamName) {
-    const titleMatch =
-      source.match(
-        /<title\b[^>]*>([\s\S]*?)<\/title>/i
-      );
-
-    if (titleMatch) {
-      teamName =
-        clean(
-          titleMatch[1]
-            .replace(
-              /\|.*$/,
-              ""
-            )
-        );
-    }
-  }
-
-  if (!teamName) {
-    return null;
-  }
-
-  const logo =
-    extractTeamLogo(
-      source,
-      teamName
-    );
-
-  const founded =
-    extractYear(source);
-
-  const email =
-    extractEmail(source);
-
-  const phone =
-    extractPhone(source);
-
-  const stadium =
-    extractField(
-      source,
-      [
-        "Stadium",
-        "Home Stadium",
-      ]
-    );
-
-  const location =
-    extractField(
-      source,
-      [
-        "Location",
-        "City",
-      ]
-    );
-
-  const coach =
-    extractField(
-      source,
-      [
-        "Head Coach",
-        "Coach",
-        "Manager",
-      ]
-    );
-
-  const president =
-    extractField(
-      source,
-      [
-        "President",
-        "Chairman",
-      ]
-    );
-
-  const captain =
-    extractField(
-      source,
-      [
-        "Captain",
-      ]
-    );
-
-  const squadSize =
-    toNumber(
-      extractField(
-        source,
-        [
-          "Squad",
-          "Squad Size",
-          "Players",
-        ]
-      ),
-      0
-    );
-
-  return {
-    name: teamName,
-
-    shortName:
-      teamName
-        .replace(
-          /\bFOOTBALL CLUB\b/gi,
-          ""
-        )
-        .replace(
-          /\bFC\b/gi,
-          ""
-        )
-        .trim()
-        .slice(0, 12),
-
-    logo,
-
-    stadium,
-    location,
-    founded,
-
-    email,
-    phone,
-
-    coach,
-    president,
-    captain,
-
-    squadSize,
-
+    "Al Hilal SC",
+    "Al Merrikh SC",
+    "Amagaju FC",
+    "APR FC",
+    "Bugesera FC",
+    "Etincelles FC",
+    "Etoile de l'Est",
+    "Gasogi United",
+    "Gicumbi FC",
+    "Gorilla FC",
+    "Kigali FC",
+    "Kiyovu Sports",
+    "Marine FC",
+    "Mukura VS",
+    "Musanze FC",
+    "Police FC",
+    "Rayon Sports",
+    "Sunrise FC",
+  ].map((name) => ({
+    name,
     source:
       "rwanda-premier-league",
-
     sourceUrl:
-      RPL_TEAM_URL,
-
-    sourceClubName:
-      teamName,
-  };
+      RPL_TABLE_URL,
+  }));
 }
 
-async function fetchHtml() {
+/* =========================================================
+   LOGO MAP
+========================================================= */
+
+function enrichTeams(
+  teams,
+  html
+) {
+  return dedupeTeams(
+    teams.map((team) => {
+      const name =
+        normalizeKnownClubName(
+          team.name
+        );
+
+      const logo =
+        team.logo ||
+        findLogoForTeam(
+          html,
+          name
+        );
+
+      const shortName =
+        createShortName(
+          name
+        );
+
+      return {
+        ...team,
+
+        name,
+
+        shortName,
+
+        logo,
+
+        source:
+          "rwanda-premier-league",
+
+        sourceUrl:
+          team.url ||
+          RPL_TABLE_URL,
+      };
+    })
+  );
+}
+
+/* =========================================================
+   SHORT NAME
+========================================================= */
+
+function createShortName(
+  name = ""
+) {
+  const cleaned =
+    normalizeName(name)
+      .replace(
+        /\bFOOTBALL CLUB\b/gi,
+        ""
+      )
+      .replace(
+        /\bFOOTBALL\b/gi,
+        ""
+      )
+      .replace(
+        /\bFC\b/gi,
+        ""
+      )
+      .replace(
+        /\bSC\b/gi,
+        ""
+      )
+      .trim();
+
+  if (!cleaned) {
+    return name
+      .slice(0, 12)
+      .toUpperCase();
+  }
+
+  const words =
+    cleaned.split(/\s+/);
+
+  if (words.length === 1) {
+    return words[0]
+      .slice(0, 12)
+      .toUpperCase();
+  }
+
+  return words
+    .map(
+      (word) =>
+        word[0]
+          ? word[0].toUpperCase()
+          : ""
+    )
+    .join("")
+    .slice(0, 8);
+}
+
+/* =========================================================
+   HTTP FETCH
+========================================================= */
+
+async function fetchHtml(
+  url
+) {
   const controller =
     new AbortController();
 
   const timeout =
-    setTimeout(
-      () => {
-        controller.abort();
-      },
-      REQUEST_TIMEOUT
-    );
+    setTimeout(() => {
+      controller.abort();
+    }, REQUEST_TIMEOUT);
 
   try {
     const response =
       await fetch(
-        RPL_TEAM_URL,
+        url,
         {
           method: "GET",
 
           headers: {
             Accept:
-              "text/html,application/xhtml+xml",
+              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 
             "User-Agent":
-              "Mozilla/5.0 (compatible; VirtualFootballManager/1.0)",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
+
+            "Accept-Language":
+              "en-US,en;q=0.9",
+
+            Referer:
+              RPL_BASE_URL,
           },
+
+          redirect: "follow",
 
           signal:
             controller.signal,
@@ -600,21 +795,79 @@ async function fetchHtml() {
 
     if (!response.ok) {
       throw new Error(
-        `RPL returned HTTP ${response.status}`
+        `RPL returned HTTP ${response.status} for ${url}`
       );
     }
 
-    return await response.text();
+    const html =
+      await response.text();
+
+    if (
+      !html ||
+      html.trim().length < 100
+    ) {
+      throw new Error(
+        `RPL returned an empty HTML response from ${url}`
+      );
+    }
+
+    return html;
   } finally {
     clearTimeout(timeout);
   }
 }
 
+/* =========================================================
+   FETCH MULTIPLE SOURCES
+========================================================= */
+
+async function fetchRPLSources() {
+  const results = [];
+
+  const urls = [
+    RPL_TABLE_URL,
+    RPL_HOME_URL,
+    RPL_TEAM_URL,
+  ];
+
+  for (const url of urls) {
+    try {
+      const html =
+        await fetchHtml(url);
+
+      results.push({
+        url,
+        html,
+      });
+    } catch (error) {
+      console.error(
+        `Failed to fetch ${url}:`,
+        error?.message
+      );
+    }
+  }
+
+  return results;
+}
+
+/* =========================================================
+   API HANDLER
+========================================================= */
+
 export default async function handler(
   req,
   res
 ) {
+  /*
+   * Only GET.
+   */
+
   if (req.method !== "GET") {
+    res.setHeader(
+      "Allow",
+      "GET"
+    );
+
     return res.status(405).json({
       success: false,
       message:
@@ -623,98 +876,262 @@ export default async function handler(
   }
 
   try {
-    const html =
-      await fetchHtml();
-
-    const teamNames =
-      extractTeamNames(
-        html
-      );
-
-    const currentTeam =
-      extractCurrentTeam(
-        html
-      );
+    const sources =
+      await fetchRPLSources();
 
     /*
-     * Do not pretend that names extracted
-     * from generic alt/title attributes
-     * are definitely clubs.
+     * We don't immediately fail if
+     * one RPL page is unavailable.
      */
 
-    const filteredNames =
-      teamNames.filter(
-        (name) => {
-          const lower =
-            name.toLowerCase();
+    let extractedTeams = [];
 
-          return (
-            !lower.includes(
-              "rwanda premier league"
-            ) &&
-            !lower.includes(
-              "read more"
-            ) &&
-            !lower.includes(
-              "home"
-            ) &&
-            !lower.includes(
-              "menu"
-            ) &&
-            !lower.includes(
-              "logo"
-            )
-          );
-        }
-      );
-
-    const uniqueNames = [
-      ...new Set(
-        filteredNames
-      ),
-    ];
+    let primaryHtml = "";
 
     /*
-     * If the page exposes only one team,
-     * currentTeam is still returned.
+     * =====================================================
+     * 1. TABLE PAGE
+     * =====================================================
+     */
+
+    const tableSource =
+      sources.find(
+        (item) =>
+          item.url ===
+          RPL_TABLE_URL
+      );
+
+    if (tableSource) {
+      primaryHtml =
+        tableSource.html;
+
+      const tableTeams =
+        extractTeamsFromTable(
+          tableSource.html
+        );
+
+      extractedTeams.push(
+        ...tableTeams
+      );
+
+      const optionTeams =
+        extractTeamsFromOptions(
+          tableSource.html
+        );
+
+      extractedTeams.push(
+        ...optionTeams
+      );
+
+      const linkTeams =
+        extractTeamsFromLinks(
+          tableSource.html
+        );
+
+      extractedTeams.push(
+        ...linkTeams
+      );
+    }
+
+    /*
+     * =====================================================
+     * 2. HOME PAGE
+     * =====================================================
+     */
+
+    const homeSource =
+      sources.find(
+        (item) =>
+          item.url ===
+          RPL_HOME_URL
+      );
+
+    if (homeSource) {
+      if (!primaryHtml) {
+        primaryHtml =
+          homeSource.html;
+      }
+
+      extractedTeams.push(
+        ...extractTeamsFromTable(
+          homeSource.html
+        )
+      );
+
+      extractedTeams.push(
+        ...extractTeamsFromOptions(
+          homeSource.html
+        )
+      );
+
+      extractedTeams.push(
+        ...extractTeamsFromLinks(
+          homeSource.html
+        )
+      );
+    }
+
+    /*
+     * =====================================================
+     * 3. TEAM PAGE
+     * =====================================================
+     */
+
+    const teamSource =
+      sources.find(
+        (item) =>
+          item.url ===
+          RPL_TEAM_URL
+      );
+
+    if (teamSource) {
+      if (!primaryHtml) {
+        primaryHtml =
+          teamSource.html;
+      }
+
+      extractedTeams.push(
+        ...extractTeamsFromOptions(
+          teamSource.html
+        )
+      );
+
+      extractedTeams.push(
+        ...extractTeamsFromLinks(
+          teamSource.html
+        )
+      );
+    }
+
+    /*
+     * =====================================================
+     * CLEAN + ENRICH
+     * =====================================================
+     */
+
+    let teams =
+      enrichTeams(
+        extractedTeams,
+        primaryHtml
+      );
+
+    /*
+     * =====================================================
+     * FALLBACK
+     * =====================================================
+     *
+     * If RPL changes its HTML and our
+     * parser finds nothing, use the
+     * current known RPL membership.
+     *
+     * This is much better than returning
+     * "No clubs returned" while the website
+     * visibly contains the clubs.
+     */
+
+    let usedFallback = false;
+
+    if (teams.length === 0) {
+      teams =
+        getKnownRPLClubs();
+
+      usedFallback = true;
+    }
+
+    /*
+     * =====================================================
+     * SORT
+     * =====================================================
+     */
+
+    teams.sort(
+      (a, b) =>
+        a.name.localeCompare(
+          b.name,
+          "en",
+          {
+            sensitivity:
+              "base",
+          }
+        )
+    );
+
+    /*
+     * =====================================================
+     * RESPONSE
+     * =====================================================
      */
 
     return res.status(200).json({
       success: true,
 
       source:
-        RPL_TEAM_URL,
+        RPL_BASE_URL,
 
-      teams:
-        uniqueNames.map(
-          (name) => ({
-            name,
-            source:
-              "rwanda-premier-league",
-            sourceUrl:
-              RPL_TEAM_URL,
-          })
-        ),
+      sourceUrl:
+        RPL_TABLE_URL,
 
-      currentTeam,
+      season:
+        "2026-2027",
+
+      teams,
 
       count:
-        uniqueNames.length,
+        teams.length,
+
+      usedFallback,
+
+      fetchedSources:
+        sources.map(
+          (item) =>
+            item.url
+        ),
 
       fetchedAt:
         new Date().toISOString(),
     });
   } catch (error) {
     console.error(
-      "RPL clubs fetch error:",
+      "RPL clubs API error:",
       error
     );
 
-    return res.status(500).json({
-      success: false,
-      message:
+    /*
+     * Even if the external website
+     * temporarily fails, return known
+     * current clubs instead of making
+     * the admin page unusable.
+     */
+
+    const fallback =
+      getKnownRPLClubs();
+
+    return res.status(200).json({
+      success: true,
+
+      source:
+        RPL_BASE_URL,
+
+      sourceUrl:
+        RPL_TABLE_URL,
+
+      season:
+        "2026-2027",
+
+      teams:
+        fallback,
+
+      count:
+        fallback.length,
+
+      usedFallback: true,
+
+      warning:
         error?.message ||
-        "Unable to fetch RPL clubs.",
+        "RPL website could not be fetched. Showing known current clubs.",
+
+      fetchedAt:
+        new Date().toISOString(),
     });
   }
 }
