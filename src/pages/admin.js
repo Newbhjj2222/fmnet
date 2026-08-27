@@ -1,11 +1,6 @@
 // pages/admin.js
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 
@@ -59,12 +54,8 @@ const EMPTY_CLUB = {
   capacity: "",
   owner: "",
   coach: "",
-  president: "",
-  captain: "",
-  email: "",
-  phone: "",
   currency: "EUR",
-  balance: 0,
+  balance: "",
   homeKit: "",
   awayKit: "",
   thirdKit: "",
@@ -92,7 +83,7 @@ const EMPTY_PLAYER = {
 };
 
 /* =========================================================
-   PLAYER GENERATION DATA
+   PLAYER GENERATION
 ========================================================= */
 
 const FIRST_NAMES = [
@@ -222,47 +213,182 @@ const POSITIONS = [
 ];
 
 /* =========================================================
-   RANDOM HELPERS
+   HELPERS
 ========================================================= */
 
-function randomInt(
-  min,
-  max
-) {
-  const low =
-    Math.ceil(min);
+function randomInteger(min, max) {
+  const low = Math.ceil(Number(min));
+  const high = Math.floor(Number(max));
 
-  const high =
-    Math.floor(max);
+  if (high <= low) {
+    return low;
+  }
 
-  return (
-    Math.floor(
-      Math.random() *
-        (high - low + 1)
-    ) + low
-  );
+  return Math.floor(
+    Math.random() * (high - low + 1)
+  ) + low;
 }
 
-function randomPlayerRating() {
-  return randomInt(30, 85);
+/*
+ * RPL player rating:
+ * 30 - 85
+ */
+function generatePlayerRating() {
+  return randomInteger(30, 85);
 }
 
+/*
+ * Club starting balance:
+ * deliberately different for each new club.
+ */
 function generateClubStartingBalance() {
-  return randomInt(
-    250000,
-    5000000
+  const min = 500000;
+  const max = 50000000;
+
+  return randomInteger(min, max);
+}
+
+function generatePlayerValue(overall) {
+  const rating = Number(overall) || 30;
+
+  return Math.max(
+    10000,
+    Math.round(
+      rating *
+        rating *
+        randomInteger(700, 1500)
+    )
   );
 }
 
-function generateReputation() {
-  return randomInt(
-    40,
-    90
+function generatePlayerWage(overall) {
+  const rating = Number(overall) || 30;
+
+  return Math.max(
+    100,
+    Math.round(
+      rating *
+        randomInteger(10, 70)
+    )
   );
+}
+
+function normalizeText(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePlayerName(value = "") {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeClubName(value = "") {
+  return normalizeText(value)
+    .replace(/\bfootball club\b/g, "")
+    .replace(/\bfootball\b/g, "")
+    .replace(/\bfc\b/g, "")
+    .replace(/\bsc\b/g, "")
+    .replace(/\bsports\b/g, "")
+    .replace(/\bclub\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function absoluteSafeUrl(value = "") {
+  const stringValue = String(value || "").trim();
+
+  if (!stringValue) {
+    return "";
+  }
+
+  if (
+    stringValue.startsWith("http://") ||
+    stringValue.startsWith("https://") ||
+    stringValue.startsWith("data:")
+  ) {
+    return stringValue;
+  }
+
+  return stringValue;
+}
+
+function splitPlayerName(fullName = "") {
+  const parts = String(fullName)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return {
+      firstName: "",
+      lastName: "",
+    };
+  }
+
+  if (parts.length === 1) {
+    return {
+      firstName: parts[0],
+      lastName: "",
+    };
+  }
+
+  return {
+    firstName: parts
+      .slice(0, -1)
+      .join(" "),
+    lastName:
+      parts[parts.length - 1],
+  };
+}
+
+function convertRplPosition(position) {
+  const value = normalizeText(position);
+
+  if (
+    value.includes("goalkeeper") ||
+    value.includes("keeper") ||
+    value === "gk"
+  ) {
+    return "GK";
+  }
+
+  if (
+    value.includes("defender") ||
+    value.includes("defence") ||
+    value.includes("defense") ||
+    value === "def"
+  ) {
+    return "DEF";
+  }
+
+  if (
+    value.includes("midfielder") ||
+    value.includes("midfield") ||
+    value === "mid"
+  ) {
+    return "MID";
+  }
+
+  if (
+    value.includes("forward") ||
+    value.includes("striker") ||
+    value.includes("attacker") ||
+    value === "fwd"
+  ) {
+    return "FWD";
+  }
+
+  return "MID";
 }
 
 /* =========================================================
-   GENERATED PLAYERS
+   GENERATE PLAYERS
 ========================================================= */
 
 function generatePlayersForClub(
@@ -272,14 +398,25 @@ function generatePlayersForClub(
 ) {
   const players = [];
 
-  for (
-    let i = 0;
-    i < count;
-    i++
-  ) {
+  const usedNumbers = new Set();
+
+  for (let i = 0; i < count; i++) {
+    let shirtNumber =
+      ((Number(existingCount) + i) % 99) + 1;
+
+    while (usedNumbers.has(shirtNumber)) {
+      shirtNumber++;
+
+      if (shirtNumber > 99) {
+        shirtNumber = 1;
+      }
+    }
+
+    usedNumbers.add(shirtNumber);
+
     const firstName =
       FIRST_NAMES[
-        randomInt(
+        randomInteger(
           0,
           FIRST_NAMES.length - 1
         )
@@ -287,7 +424,7 @@ function generatePlayersForClub(
 
     const lastName =
       LAST_NAMES[
-        randomInt(
+        randomInteger(
           0,
           LAST_NAMES.length - 1
         )
@@ -295,35 +432,33 @@ function generatePlayersForClub(
 
     const position =
       POSITIONS[
-        randomInt(
+        randomInteger(
           0,
           POSITIONS.length - 1
         )
       ];
 
-    const age =
-      randomInt(
-        17,
-        34
-      );
+    const age = randomInteger(17, 34);
 
     const overall =
-      randomPlayerRating();
+      generatePlayerRating();
 
-    const shirtNumber =
-      ((existingCount + i) %
-        99) +
-      1;
+    const nationality =
+      NATIONALITIES[
+        randomInteger(
+          0,
+          NATIONALITIES.length - 1
+        )
+      ];
 
     players.push({
-      name:
-        `${firstName} ${lastName}`,
+      name: `${firstName} ${lastName}`,
 
       firstName,
+
       lastName,
 
-      clubId:
-        club.id,
+      clubId: club.id,
 
       clubName:
         club.name ||
@@ -336,7 +471,7 @@ function generatePlayersForClub(
 
       countryName:
         club.countryName ||
-        "Rwanda",
+        "",
 
       position,
 
@@ -344,45 +479,40 @@ function generatePlayersForClub(
 
       age,
 
-      nationality:
-        NATIONALITIES[
-          randomInt(
-            0,
-            NATIONALITIES.length - 1
-          )
-        ],
+      nationality,
 
       overall,
 
       value:
-        overall *
-        50000,
+        generatePlayerValue(
+          overall
+        ),
 
       wage:
-        randomInt(
-          500,
-          5500
+        generatePlayerWage(
+          overall
         ),
 
       contractYears:
-        randomInt(
-          1,
-          5
-        ),
+        randomInteger(1, 5),
 
       photo: "",
 
-      status:
-        "active",
+      status: "active",
 
       goals: 0,
+
       assists: 0,
+
       appearances: 0,
+
       yellowCards: 0,
+
       redCards: 0,
 
-      isGenerated:
-        true,
+      isGenerated: true,
+
+      source: "generated",
 
       createdAt:
         serverTimestamp(),
@@ -396,12 +526,11 @@ function generatePlayersForClub(
 }
 
 /* =========================================================
-   COMPONENT
+   ADMIN PAGE
 ========================================================= */
 
 export default function Admin() {
-  const router =
-    useRouter();
+  const router = useRouter();
 
   const {
     user,
@@ -409,88 +538,50 @@ export default function Admin() {
     loading,
   } = useAuth();
 
-  const [
-    isAdmin,
-    setIsAdmin,
-  ] = useState(false);
+  const [isAdmin, setIsAdmin] =
+    useState(false);
 
-  const [
-    checkingAdmin,
-    setCheckingAdmin,
-  ] = useState(true);
+  const [checkingAdmin, setCheckingAdmin] =
+    useState(true);
 
-  const [
-    activeTab,
-    setActiveTab,
-  ] = useState("overview");
+  const [activeTab, setActiveTab] =
+    useState("overview");
 
-  const [
-    countries,
-    setCountries,
-  ] = useState([]);
+  const [countries, setCountries] =
+    useState([]);
 
-  const [
-    leagues,
-    setLeagues,
-  ] = useState([]);
+  const [leagues, setLeagues] =
+    useState([]);
 
-  const [
-    clubs,
-    setClubs,
-  ] = useState([]);
+  const [clubs, setClubs] =
+    useState([]);
 
-  const [
-    players,
-    setPlayers,
-  ] = useState([]);
+  const [players, setPlayers] =
+    useState([]);
 
-  const [
-    countryForm,
-    setCountryForm,
-  ] = useState(
-    EMPTY_COUNTRY
-  );
+  const [countryForm, setCountryForm] =
+    useState(EMPTY_COUNTRY);
 
-  const [
-    leagueForm,
-    setLeagueForm,
-  ] = useState(
-    EMPTY_LEAGUE
-  );
+  const [leagueForm, setLeagueForm] =
+    useState(EMPTY_LEAGUE);
 
-  const [
-    clubForm,
-    setClubForm,
-  ] = useState(
-    EMPTY_CLUB
-  );
+  const [clubForm, setClubForm] =
+    useState(EMPTY_CLUB);
 
-  const [
-    playerForm,
-    setPlayerForm,
-  ] = useState(
-    EMPTY_PLAYER
-  );
+  const [playerForm, setPlayerForm] =
+    useState(EMPTY_PLAYER);
 
-  const [
-    editingCountry,
-    setEditingCountry,
-  ] = useState(null);
+  const [editingCountry, setEditingCountry] =
+    useState(null);
 
-  const [
-    editingLeague,
-    setEditingLeague,
-  ] = useState(null);
+  const [editingLeague, setEditingLeague] =
+    useState(null);
 
-  const [
-    editingClub,
-    setEditingClub,
-  ] = useState(null);
+  const [editingClub, setEditingClub] =
+    useState(null);
 
-  const [
-    editingPlayer,
-    setEditingPlayer,
-  ] = useState(null);
+  const [editingPlayer, setEditingPlayer] =
+    useState(null);
 
   const [
     isFetchingRplPlayers,
@@ -531,10 +622,8 @@ export default function Admin() {
     count: 20,
   });
 
-  const [
-    isSubmitting,
-    setIsSubmitting,
-  ] = useState(false);
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
 
   const [
     isLoadingData,
@@ -542,247 +631,17 @@ export default function Admin() {
   ] = useState(true);
 
   /* =========================================================
-     NORMALIZATION
-  ========================================================= */
-
-  const normalizePlayerName = (
-    value = ""
-  ) => {
-    return String(value)
-      .normalize("NFD")
-      .replace(
-        /[\u0300-\u036f]/g,
-        ""
-      )
-      .toLowerCase()
-      .replace(
-        /[^a-z0-9]+/g,
-        " "
-      )
-      .trim();
-  };
-
-  const normalizeClubName = (
-    value = ""
-  ) => {
-    return String(value)
-      .normalize("NFD")
-      .replace(
-        /[\u0300-\u036f]/g,
-        ""
-      )
-      .toLowerCase()
-      .replace(
-        /\bfootball club\b/g,
-        ""
-      )
-      .replace(
-        /\bfc\b/g,
-        ""
-      )
-      .replace(
-        /\bsc\b/g,
-        ""
-      )
-      .replace(
-        /\bsports\b/g,
-        ""
-      )
-      .replace(
-        /[^a-z0-9]+/g,
-        " "
-      )
-      .replace(
-        /\s+/g,
-        " "
-      )
-      .trim();
-  };
-
-  const findMatchingClub = (
-    rplClubName
-  ) => {
-    const normalizedRpl =
-      normalizeClubName(
-        rplClubName
-      );
-
-    if (!normalizedRpl) {
-      return null;
-    }
-
-    return (
-      clubs.find(
-        (club) => {
-          const normalized =
-            normalizeClubName(
-              club.name
-            );
-
-          return (
-            normalized ===
-              normalizedRpl ||
-            normalized.includes(
-              normalizedRpl
-            ) ||
-            normalizedRpl.includes(
-              normalized
-            )
-          );
-        }
-      ) || null
-    );
-  };
-
-  const findCountryByName = (
-    name
-  ) => {
-    const normalized =
-      String(
-        name || ""
-      )
-        .toLowerCase()
-        .trim();
-
-    return (
-      countries.find(
-        (country) =>
-          String(
-            country.name ||
-              ""
-          )
-            .toLowerCase()
-            .trim() ===
-          normalized
-      ) || null
-    );
-  };
-
-  const convertRplPosition = (
-    position
-  ) => {
-    const value =
-      String(
-        position || ""
-      )
-        .toLowerCase()
-        .trim();
-
-    if (
-      value.includes(
-        "goalkeeper"
-      ) ||
-      value === "gk" ||
-      value.includes(
-        "keeper"
-      )
-    ) {
-      return "GK";
-    }
-
-    if (
-      value.includes(
-        "defender"
-      ) ||
-      value.includes(
-        "defence"
-      ) ||
-      value.includes(
-        "defense"
-      )
-    ) {
-      return "DEF";
-    }
-
-    if (
-      value.includes(
-        "midfielder"
-      ) ||
-      value.includes(
-        "midfield"
-      )
-    ) {
-      return "MID";
-    }
-
-    if (
-      value.includes(
-        "forward"
-      ) ||
-      value.includes(
-        "striker"
-      ) ||
-      value.includes(
-        "attacker"
-      )
-    ) {
-      return "FWD";
-    }
-
-    return "MID";
-  };
-
-  const splitPlayerName = (
-    fullName = ""
-  ) => {
-    const parts =
-      String(fullName)
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (
-      parts.length === 0
-    ) {
-      return {
-        firstName: "",
-        lastName: "",
-      };
-    }
-
-    if (
-      parts.length === 1
-    ) {
-      return {
-        firstName:
-          parts[0],
-        lastName: "",
-      };
-    }
-
-    return {
-      firstName:
-        parts
-          .slice(
-            0,
-            -1
-          )
-          .join(" "),
-
-      lastName:
-        parts[
-          parts.length - 1
-        ],
-    };
-  };
-
-  /* =========================================================
      DISPLAY NAME
   ========================================================= */
 
-  const displayName =
-    useMemo(() => {
-      return (
-        userData?.displayName ||
-        user?.email?.split(
-          "@"
-        )[0] ||
-        "Manager"
-      );
-    }, [
-      userData,
-      user,
-    ]);
+  const displayName = useMemo(() => {
+    return (
+      userData?.displayName ||
+      userData?.username ||
+      user?.email?.split("@")[0] ||
+      "Manager"
+    );
+  }, [userData, user]);
 
   /* =========================================================
      ADMIN CHECK
@@ -794,25 +653,19 @@ export default function Admin() {
     }
 
     if (!user) {
-      router.replace(
-        "/login"
-      );
-
+      router.replace("/login");
       return;
     }
 
     const normalizedName =
-      displayName
+      String(displayName)
         .trim()
         .toLowerCase();
 
     const admin =
-      normalizedName ===
-        "navio" ||
-      userData?.role ===
-        "admin" ||
-      userData?.isAdmin ===
-        true;
+      normalizedName === "navio" ||
+      userData?.role === "admin" ||
+      userData?.isAdmin === true;
 
     setIsAdmin(admin);
     setCheckingAdmin(false);
@@ -822,9 +675,7 @@ export default function Admin() {
         "You are not authorized to access this page."
       );
 
-      router.replace(
-        "/dashboard"
-      );
+      router.replace("/dashboard");
     }
   }, [
     user,
@@ -835,59 +686,48 @@ export default function Admin() {
   ]);
 
   /* =========================================================
-     LOAD FIRESTORE
+     LOAD ALL DATA
   ========================================================= */
 
-  useEffect(() => {
-    if (!isAdmin) {
-      return;
-    }
-
-    loadAllData();
-  }, [isAdmin]);
-
-  const loadAllData =
+  const loadAllData = useCallback(
     async () => {
       try {
-        setIsLoadingData(
-          true
-        );
+        setIsLoadingData(true);
 
         const [
           countriesSnapshot,
           leaguesSnapshot,
           clubsSnapshot,
           playersSnapshot,
-        ] =
-          await Promise.all([
-            getDocs(
-              collection(
-                db,
-                "countries"
-              )
-            ),
+        ] = await Promise.all([
+          getDocs(
+            collection(
+              db,
+              "countries"
+            )
+          ),
 
-            getDocs(
-              collection(
-                db,
-                "leagues"
-              )
-            ),
+          getDocs(
+            collection(
+              db,
+              "leagues"
+            )
+          ),
 
-            getDocs(
-              collection(
-                db,
-                "clubs"
-              )
-            ),
+          getDocs(
+            collection(
+              db,
+              "clubs"
+            )
+          ),
 
-            getDocs(
-              collection(
-                db,
-                "players"
-              )
-            ),
-          ]);
+          getDocs(
+            collection(
+              db,
+              "players"
+            )
+          ),
+        ]);
 
         setCountries(
           countriesSnapshot.docs.map(
@@ -934,28 +774,105 @@ export default function Admin() {
           "Failed to load admin data."
         );
       } finally {
-        setIsLoadingData(
-          false
-        );
+        setIsLoadingData(false);
       }
-    };
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    loadAllData();
+  }, [
+    isAdmin,
+    loadAllData,
+  ]);
 
   /* =========================================================
-     IMPORT RPL CLUBS
+     MATCH CLUB
+  ========================================================= */
+
+  const findMatchingClub = useCallback(
+    (rplClubName) => {
+      const normalizedRplClub =
+        normalizeClubName(
+          rplClubName
+        );
+
+      if (!normalizedRplClub) {
+        return null;
+      }
+
+      return (
+        clubs.find((club) => {
+          const normalizedClub =
+            normalizeClubName(
+              club.name ||
+                club.clubName ||
+                ""
+            );
+
+          if (!normalizedClub) {
+            return false;
+          }
+
+          return (
+            normalizedClub ===
+              normalizedRplClub ||
+            normalizedClub.includes(
+              normalizedRplClub
+            ) ||
+            normalizedRplClub.includes(
+              normalizedClub
+            )
+          );
+        }) || null
+      );
+    },
+    [clubs]
+  );
+
+  /* =========================================================
+     COUNTRY MATCH
+  ========================================================= */
+
+  const findCountryByName =
+    useCallback(
+      (name) => {
+        const normalized =
+          normalizeText(name);
+
+        if (!normalized) {
+          return null;
+        }
+
+        return (
+          countries.find(
+            (country) =>
+              normalizeText(
+                country.name || ""
+              ) === normalized
+          ) || null
+        );
+      },
+      [countries]
+    );
+
+  /* =========================================================
+     RPL CLUB IMPORT
   ========================================================= */
 
   const fetchAndImportRplClubs =
     async () => {
-      if (
-        isFetchingRplClubs
-      ) {
+      if (isFetchingRplClubs) {
         return;
       }
 
       try {
-        setIsFetchingRplClubs(
-          true
-        );
+        setIsFetchingRplClubs(true);
 
         setRplClubProgress({
           current: 0,
@@ -965,8 +882,7 @@ export default function Admin() {
         toast.loading(
           "Fetching Rwanda Premier League clubs...",
           {
-            id:
-              "rpl-clubs-import",
+            id: "rpl-clubs-import",
           }
         );
 
@@ -977,90 +893,38 @@ export default function Admin() {
 
         if (!response.ok) {
           throw new Error(
-            `RPL clubs API returned ${response.status}`
+            `RPL Clubs API returned ${response.status}`
           );
         }
 
         const result =
           await response.json();
 
-        if (
-          !result.success
-        ) {
+        if (!result.success) {
           throw new Error(
             result.message ||
               "Failed to fetch RPL clubs."
           );
         }
 
-        let sourceClubs =
+        const fetchedClubs =
           Array.isArray(
-            result.teams
+            result.clubs
           )
-            ? result.teams
+            ? result.clubs
             : [];
 
         if (
-          result.currentTeam
-            ?.name
-        ) {
-          const already =
-            sourceClubs.some(
-              (club) =>
-                normalizeClubName(
-                  club.name
-                ) ===
-                normalizeClubName(
-                  result
-                    .currentTeam
-                    .name
-                )
-            );
-
-          if (!already) {
-            sourceClubs.push(
-              result.currentTeam
-            );
-          }
-        }
-
-        if (
-          sourceClubs.length ===
-          0
+          fetchedClubs.length === 0
         ) {
           throw new Error(
-            "No RPL clubs were found. The RPL team page may be dynamically loaded."
+            "No clubs were returned by Rwanda Premier League."
           );
         }
-
-        const detailedTeam =
-          result.currentTeam;
-
-        sourceClubs =
-          sourceClubs.map(
-            (club) => {
-              const same =
-                detailedTeam &&
-                normalizeClubName(
-                  club.name
-                ) ===
-                  normalizeClubName(
-                    detailedTeam.name
-                  );
-
-              return same
-                ? {
-                    ...club,
-                    ...detailedTeam,
-                  }
-                : club;
-            }
-          );
 
         setRplClubProgress({
           current: 0,
-          total:
-            sourceClubs.length,
+          total: fetchedClubs.length,
         });
 
         const existingSnapshot =
@@ -1079,293 +943,344 @@ export default function Admin() {
             })
           );
 
-        let created = 0;
-        let updated = 0;
-        let skipped = 0;
+        const existingKeys =
+          new Set(
+            existingClubs.map(
+              (club) =>
+                normalizeClubName(
+                  club.name ||
+                    club.clubName ||
+                    ""
+                )
+            )
+          );
 
-        const batch =
-          writeBatch(db);
+        const countryCache =
+          new Map();
 
-        let batchWrites = 0;
+        countries.forEach(
+          (country) => {
+            countryCache.set(
+              normalizeText(
+                country.name
+              ),
+              country
+            );
+          }
+        );
+
+        const clubsToCreate = [];
+
+        let skippedDuplicates = 0;
 
         for (
           let index = 0;
           index <
-          sourceClubs.length;
+          fetchedClubs.length;
           index++
         ) {
-          const sourceClub =
-            sourceClubs[index];
+          const rplClub =
+            fetchedClubs[index];
 
           const name =
             String(
-              sourceClub.name ||
-                sourceClub.teamName ||
+              rplClub.name ||
+                rplClub.clubName ||
+                rplClub.teamName ||
                 ""
             ).trim();
 
           if (!name) {
-            skipped++;
-
             setRplClubProgress({
               current:
                 index + 1,
               total:
-                sourceClubs.length,
+                fetchedClubs.length,
             });
 
             continue;
           }
 
-          const normalized =
+          const normalizedName =
             normalizeClubName(
               name
             );
 
-          const existing =
-            existingClubs.find(
-              (club) =>
-                normalizeClubName(
-                  club.name
-                ) ===
-                normalized
-            );
-
-          const country =
-            findCountryByName(
-              "Rwanda"
-            );
-
-          const league =
-            leagues.find(
-              (item) => {
-                const leagueName =
-                  String(
-                    item.name ||
-                      ""
-                  ).toLowerCase();
-
-                return (
-                  leagueName.includes(
-                    "rwanda premier"
-                  ) ||
-                  leagueName.includes(
-                    "premier league"
-                  )
-                );
-              }
-            );
-
-          const balance =
-            existing &&
-            Number.isFinite(
-              Number(
-                existing.balance
-              )
+          if (
+            !normalizedName ||
+            existingKeys.has(
+              normalizedName
             )
-              ? Number(
-                  existing.balance
-                )
-              : generateClubStartingBalance();
+          ) {
+            skippedDuplicates++;
+
+            setRplClubProgress({
+              current:
+                index + 1,
+              total:
+                fetchedClubs.length,
+            });
+
+            continue;
+          }
+
+          existingKeys.add(
+            normalizedName
+          );
+
+          const countryName =
+            String(
+              rplClub.countryName ||
+                rplClub.country ||
+                "Rwanda"
+            ).trim();
+
+          let country =
+            countryCache.get(
+              normalizeText(
+                countryName
+              )
+            );
+
+          /*
+           * Rwanda country is created automatically
+           * if it does not exist.
+           */
+          if (
+            !country &&
+            normalizeText(
+              countryName
+            ) === "rwanda"
+          ) {
+            const existingRwanda =
+              countries.find(
+                (item) =>
+                  normalizeText(
+                    item.name
+                  ) === "rwanda"
+              );
+
+            country =
+              existingRwanda ||
+              null;
+          }
+
+          const startingBalance =
+            generateClubStartingBalance();
 
           const payload = {
             name,
 
             shortName:
-              sourceClub.shortName ||
-              name
-                .replace(
-                  /\bFOOTBALL CLUB\b/gi,
-                  ""
-                )
-                .replace(
-                  /\bFC\b/gi,
-                  ""
-                )
-                .trim()
-                .slice(
-                  0,
-                  12
-                ),
+              String(
+                rplClub.shortName ||
+                  rplClub.short_name ||
+                  name
+              ).trim(),
 
             countryId:
-              existing?.countryId ||
-              country?.id ||
-              "",
+              country?.id || "",
 
             countryName:
-              existing?.countryName ||
-              "Rwanda",
+              country?.name ||
+              countryName,
 
             leagueId:
-              existing?.leagueId ||
-              league?.id ||
+              rplClub.leagueId ||
               "",
 
             leagueName:
-              existing?.leagueName ||
-              league?.name ||
+              rplClub.leagueName ||
               "Rwanda Premier League",
 
             logo:
-              sourceClub.logo ||
-              existing?.logo ||
-              "",
+              absoluteSafeUrl(
+                rplClub.logo ||
+                  rplClub.logoUrl ||
+                  rplClub.image ||
+                  ""
+              ),
 
             stadium:
-              sourceClub.stadium ||
-              existing?.stadium ||
-              "",
+              String(
+                rplClub.stadium ||
+                  rplClub.venue ||
+                  ""
+              ).trim(),
 
             location:
-              sourceClub.location ||
-              existing?.location ||
-              "Rwanda",
+              String(
+                rplClub.location ||
+                  rplClub.city ||
+                  ""
+              ).trim(),
 
             founded:
-              sourceClub.founded ??
-              existing?.founded ??
-              null,
+              Number(
+                rplClub.founded
+              ) || null,
 
             capacity:
               Number(
-                sourceClub.capacity ||
-                  existing?.capacity ||
-                  0
-              ),
+                rplClub.capacity ||
+                  rplClub.stadiumCapacity
+              ) || 0,
 
             owner:
-              sourceClub.owner ||
-              existing?.owner ||
-              "",
+              String(
+                rplClub.owner ||
+                  ""
+              ).trim(),
 
             coach:
-              sourceClub.coach ||
-              existing?.coach ||
-              "",
-
-            president:
-              sourceClub.president ||
-              existing?.president ||
-              "",
-
-            captain:
-              sourceClub.captain ||
-              existing?.captain ||
-              "",
-
-            email:
-              sourceClub.email ||
-              existing?.email ||
-              "",
-
-            phone:
-              sourceClub.phone ||
-              existing?.phone ||
-              "",
+              String(
+                rplClub.coach ||
+                  rplClub.manager ||
+                  ""
+              ).trim(),
 
             currency:
-              existing?.currency ||
-              "EUR",
+              String(
+                rplClub.currency ||
+                  "EUR"
+              ).toUpperCase(),
 
-            balance,
+            /*
+             * Every new club gets a different
+             * randomly generated starting balance.
+             */
+            balance:
+              startingBalance,
 
             homeKit:
-              existing?.homeKit ||
+              rplClub.homeKit ||
+              rplClub.home_kit ||
               "",
 
             awayKit:
-              existing?.awayKit ||
+              rplClub.awayKit ||
+              rplClub.away_kit ||
               "",
 
             thirdKit:
-              existing?.thirdKit ||
+              rplClub.thirdKit ||
+              rplClub.third_kit ||
               "",
 
             colors:
-              existing?.colors ||
-              "",
+              String(
+                rplClub.colors ||
+                  rplClub.colours ||
+                  ""
+              ).trim(),
 
             description:
-              existing?.description ||
-              "",
+              String(
+                rplClub.description ||
+                  rplClub.bio ||
+                  ""
+              ).trim(),
 
-            squadSize:
+            reputation:
               Number(
-                sourceClub.squadSize ||
-                  existing?.squadSize ||
-                  0
+                rplClub.reputation
+              ) ||
+              randomInteger(
+                35,
+                80
               ),
+
+            totalMatches: 0,
+
+            totalWins: 0,
+
+            totalDraws: 0,
+
+            totalLosses: 0,
+
+            goalsFor: 0,
+
+            goalsAgainst: 0,
 
             source:
               "rwanda-premier-league",
 
             sourceUrl:
+              rplClub.sourceUrl ||
               "https://rwandapremierleague.rw/info/team",
 
-            sourceClubName:
-              name,
+            importedAt:
+              serverTimestamp(),
+
+            createdAt:
+              serverTimestamp(),
 
             updatedAt:
               serverTimestamp(),
           };
 
-          if (existing) {
-            await updateDoc(
-              doc(
-                db,
-                "clubs",
-                existing.id
-              ),
-              payload
-            );
-
-            updated++;
-          } else {
-            const clubRef =
-              doc(
-                collection(
-                  db,
-                  "clubs"
-                )
-              );
-
-            await setDoc(
-              clubRef,
-              {
-                ...payload,
-
-                reputation:
-                  generateReputation(),
-
-                totalMatches: 0,
-                totalWins: 0,
-                totalDraws: 0,
-                totalLosses: 0,
-                goalsFor: 0,
-                goalsAgainst: 0,
-
-                createdAt:
-                  serverTimestamp(),
-              }
-            );
-
-            created++;
-          }
+          clubsToCreate.push(
+            payload
+          );
 
           setRplClubProgress({
             current:
               index + 1,
             total:
-              sourceClubs.length,
+              fetchedClubs.length,
           });
         }
 
+        /*
+         * Firestore batches support up to 500 writes.
+         * Keep batches smaller for safety.
+         */
+        const BATCH_SIZE = 400;
+
+        let created = 0;
+
+        for (
+          let start = 0;
+          start <
+          clubsToCreate.length;
+          start += BATCH_SIZE
+        ) {
+          const batch =
+            writeBatch(db);
+
+          const chunk =
+            clubsToCreate.slice(
+              start,
+              start + BATCH_SIZE
+            );
+
+          chunk.forEach(
+            (club) => {
+              const clubRef =
+                doc(
+                  collection(
+                    db,
+                    "clubs"
+                  )
+                );
+
+              batch.set(
+                clubRef,
+                club
+              );
+            }
+          );
+
+          await batch.commit();
+
+          created +=
+            chunk.length;
+        }
+
         toast.success(
-          `RPL clubs import complete. ${created} created, ${updated} updated, ${skipped} skipped.`,
+          `RPL club import complete. ${created} clubs added, ${skippedDuplicates} duplicates skipped.`,
           {
-            id:
-              "rpl-clubs-import",
+            id: "rpl-clubs-import",
             duration: 6000,
           }
         );
@@ -1381,9 +1296,8 @@ export default function Admin() {
           error?.message ||
             "Failed to import RPL clubs.",
           {
-            id:
-              "rpl-clubs-import",
-            duration: 6000,
+            id: "rpl-clubs-import",
+            duration: 7000,
           }
         );
       } finally {
@@ -1394,14 +1308,12 @@ export default function Admin() {
     };
 
   /* =========================================================
-     IMPORT RPL PLAYERS
+     RPL PLAYER IMPORT
   ========================================================= */
 
   const fetchAndImportRplPlayers =
     async () => {
-      if (
-        isFetchingRplPlayers
-      ) {
+      if (isFetchingRplPlayers) {
         return;
       }
 
@@ -1418,8 +1330,7 @@ export default function Admin() {
         toast.loading(
           "Fetching Rwanda Premier League players...",
           {
-            id:
-              "rpl-import",
+            id: "rpl-import",
           }
         );
 
@@ -1437,9 +1348,7 @@ export default function Admin() {
         const result =
           await response.json();
 
-        if (
-          !result.success
-        ) {
+        if (!result.success) {
           throw new Error(
             result.message ||
               "Failed to fetch RPL players."
@@ -1454,8 +1363,7 @@ export default function Admin() {
             : [];
 
         if (
-          fetchedPlayers.length ===
-          0
+          fetchedPlayers.length === 0
         ) {
           throw new Error(
             "No players were returned by Rwanda Premier League."
@@ -1499,11 +1407,9 @@ export default function Admin() {
         const playersToCreate =
           [];
 
-        let skippedDuplicates =
-          0;
+        let skippedDuplicates = 0;
 
-        let skippedUnknownClubs =
-          0;
+        let skippedUnknownClubs = 0;
 
         for (
           let index = 0;
@@ -1517,6 +1423,7 @@ export default function Admin() {
           const name =
             String(
               rplPlayer.name ||
+                rplPlayer.playerName ||
                 ""
             ).trim();
 
@@ -1524,6 +1431,8 @@ export default function Admin() {
             String(
               rplPlayer.clubName ||
                 rplPlayer.club ||
+                rplPlayer.team ||
+                rplPlayer.teamName ||
                 ""
             ).trim();
 
@@ -1588,9 +1497,11 @@ export default function Admin() {
           );
 
           const countryName =
-            rplPlayer.nationality ||
-            rplPlayer.countryName ||
-            "";
+            String(
+              rplPlayer.nationality ||
+                rplPlayer.countryName ||
+                ""
+            ).trim();
 
           const country =
             findCountryByName(
@@ -1610,8 +1521,38 @@ export default function Admin() {
               name
             );
 
-          const overall =
-            randomPlayerRating();
+          /*
+           * IMPORTANT:
+           *
+           * RPL source may not provide ratings.
+           * We generate a DIFFERENT rating between 30 and 85.
+           */
+          const rating =
+            generatePlayerRating();
+
+          const age =
+            Number(
+              rplPlayer.age
+            ) >= 15 &&
+            Number(
+              rplPlayer.age
+            ) <= 45
+              ? Number(
+                  rplPlayer.age
+                )
+              : randomInteger(
+                  18,
+                  32
+                );
+
+          const shirtNumber =
+            Number(
+              rplPlayer.shirtNumber
+            ) > 0
+              ? Number(
+                  rplPlayer.shirtNumber
+                )
+              : 0;
 
           const payload = {
             name,
@@ -1632,58 +1573,67 @@ export default function Admin() {
 
             countryId:
               country?.id ||
+              club.countryId ||
               "",
 
             countryName:
               country?.name ||
-              countryName,
+              countryName ||
+              club.countryName ||
+              "Rwanda",
 
             position,
 
             positionLabel:
-              rplPlayer.positionLabel ||
-              "",
+              rplPlayer.position ||
+              position,
 
-            shirtNumber:
-              Number(
-                rplPlayer.shirtNumber
-              ) || 0,
+            shirtNumber,
 
-            age:
-              Number(
-                rplPlayer.age
-              ) || 18,
+            age,
 
             nationality:
               rplPlayer.nationality ||
-              countryName,
+              countryName ||
+              "Rwanda",
 
-            overall,
+            /*
+             * Rating is ALWAYS generated 30-85.
+             * This prevents everyone having the same rating.
+             */
+            overall:
+              rating,
 
             value:
-              overall *
-              50000,
+              generatePlayerValue(
+                rating
+              ),
 
             wage:
-              randomInt(
-                500,
-                5500
+              generatePlayerWage(
+                rating
               ),
 
             contractYears:
-              randomInt(
+              randomInteger(
                 1,
                 5
               ),
 
             photo:
-              rplPlayer.photo ||
-              "",
+              absoluteSafeUrl(
+                rplPlayer.photo ||
+                  rplPlayer.image ||
+                  rplPlayer.photoUrl ||
+                  ""
+              ),
 
             clubLogo:
-              rplPlayer.clubLogo ||
-              club.logo ||
-              "",
+              absoluteSafeUrl(
+                rplPlayer.clubLogo ||
+                  club.logo ||
+                  ""
+              ),
 
             status:
               "active",
@@ -1719,9 +1669,6 @@ export default function Admin() {
             sourceClubName:
               rplClubName,
 
-            sourceUrl:
-              "https://rwandapremierleague.rw/players",
-
             importedAt:
               serverTimestamp(),
 
@@ -1744,39 +1691,44 @@ export default function Admin() {
           });
         }
 
+        /*
+         * Firestore batch import.
+         */
+        const BATCH_SIZE = 400;
+
         let created = 0;
 
         for (
           let start = 0;
           start <
           playersToCreate.length;
-          start += 450
+          start += BATCH_SIZE
         ) {
-          const chunk =
-            playersToCreate.slice(
-              start,
-              start + 450
-            );
-
           const batch =
             writeBatch(db);
 
-          for (
-            const player of chunk
-          ) {
-            const ref =
-              doc(
-                collection(
-                  db,
-                  "players"
-                )
-              );
-
-            batch.set(
-              ref,
-              player
+          const chunk =
+            playersToCreate.slice(
+              start,
+              start + BATCH_SIZE
             );
-          }
+
+          chunk.forEach(
+            (player) => {
+              const playerRef =
+                doc(
+                  collection(
+                    db,
+                    "players"
+                  )
+                );
+
+              batch.set(
+                playerRef,
+                player
+              );
+            }
+          );
 
           await batch.commit();
 
@@ -1786,13 +1738,12 @@ export default function Admin() {
 
         toast.success(
           `RPL import complete. ${created} players added, ${skippedDuplicates} duplicates skipped.${
-            skippedUnknownClubs
+            skippedUnknownClubs > 0
               ? ` ${skippedUnknownClubs} players skipped because their club was not found.`
               : ""
           }`,
           {
-            id:
-              "rpl-import",
+            id: "rpl-import",
             duration: 7000,
           }
         );
@@ -1808,9 +1759,8 @@ export default function Admin() {
           error?.message ||
             "Failed to import RPL players.",
           {
-            id:
-              "rpl-import",
-            duration: 6000,
+            id: "rpl-import",
+            duration: 7000,
           }
         );
       } finally {
@@ -1824,89 +1774,89 @@ export default function Admin() {
      GENERATE PLAYERS
   ========================================================= */
 
-  const generatePlayers =
-    async (e) => {
-      e.preventDefault();
+  const generatePlayers = async (
+    e
+  ) => {
+    e.preventDefault();
 
-      if (
-        !generatePlayerForm.clubId
+    if (
+      !generatePlayerForm.clubId
+    ) {
+      toast.error(
+        "Select a club."
+      );
+
+      return;
+    }
+
+    const count =
+      Number(
+        generatePlayerForm.count
+      ) || 20;
+
+    if (
+      count <= 0 ||
+      count > 100
+    ) {
+      toast.error(
+        "Player count must be between 1 and 100."
+      );
+
+      return;
+    }
+
+    const club =
+      clubs.find(
+        (item) =>
+          item.id ===
+          generatePlayerForm.clubId
+      );
+
+    if (!club) {
+      toast.error(
+        "Club not found."
+      );
+
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const existingCount =
+        players.filter(
+          (player) =>
+            player.clubId ===
+            club.id
+        ).length;
+
+      const playersToGenerate =
+        generatePlayersForClub(
+          club,
+          count,
+          existingCount
+        );
+
+      const BATCH_SIZE = 400;
+
+      for (
+        let start = 0;
+        start <
+        playersToGenerate.length;
+        start += BATCH_SIZE
       ) {
-        toast.error(
-          "Select a club."
-        );
+        const batch =
+          writeBatch(db);
 
-        return;
-      }
-
-      const count =
-        Number(
-          generatePlayerForm.count
-        ) || 20;
-
-      if (
-        count <= 0 ||
-        count > 100
-      ) {
-        toast.error(
-          "Player count must be between 1 and 100."
-        );
-
-        return;
-      }
-
-      const club =
-        clubs.find(
-          (item) =>
-            item.id ===
-            generatePlayerForm.clubId
-        );
-
-      if (!club) {
-        toast.error(
-          "Club not found."
-        );
-
-        return;
-      }
-
-      try {
-        setIsSubmitting(
-          true
-        );
-
-        const existingCount =
-          players.filter(
-            (player) =>
-              player.clubId ===
-              club.id
-          ).length;
-
-        const generated =
-          generatePlayersForClub(
-            club,
-            count,
-            existingCount
+        const chunk =
+          playersToGenerate.slice(
+            start,
+            start + BATCH_SIZE
           );
 
-        for (
-          let start = 0;
-          start <
-          generated.length;
-          start += 450
-        ) {
-          const chunk =
-            generated.slice(
-              start,
-              start + 450
-            );
-
-          const batch =
-            writeBatch(db);
-
-          for (
-            const player of chunk
-          ) {
-            const ref =
+        chunk.forEach(
+          (player) => {
+            const playerRef =
               doc(
                 collection(
                   db,
@@ -1915,138 +1865,129 @@ export default function Admin() {
               );
 
             batch.set(
-              ref,
+              playerRef,
               player
             );
           }
-
-          await batch.commit();
-        }
-
-        toast.success(
-          `${count} players generated for ${club.name}.`
         );
 
-        setShowGeneratePlayers(
-          false
-        );
-
-        setGeneratePlayerForm({
-          clubId: "",
-          count: 20,
-        });
-
-        await loadAllData();
-      } catch (error) {
-        console.error(
-          "Generate players error:",
-          error
-        );
-
-        toast.error(
-          "Failed to generate players."
-        );
-      } finally {
-        setIsSubmitting(
-          false
-        );
+        await batch.commit();
       }
-    };
+
+      toast.success(
+        `${count} players generated for ${club.name}.`
+      );
+
+      setShowGeneratePlayers(
+        false
+      );
+
+      setGeneratePlayerForm({
+        clubId: "",
+        count: 20,
+      });
+
+      await loadAllData();
+    } catch (error) {
+      console.error(
+        "Generate players error:",
+        error
+      );
+
+      toast.error(
+        "Failed to generate players."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   /* =========================================================
      COUNTRY
   ========================================================= */
 
-  const saveCountry =
-    async (e) => {
-      e.preventDefault();
+  const saveCountry = async (
+    e
+  ) => {
+    e.preventDefault();
 
-      if (
-        !countryForm.name.trim()
-      ) {
-        toast.error(
-          "Country name is required."
+    if (
+      !countryForm.name.trim()
+    ) {
+      toast.error(
+        "Country name is required."
+      );
+
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const payload = {
+        name:
+          countryForm.name.trim(),
+
+        code:
+          countryForm.code
+            .trim()
+            .toUpperCase(),
+
+        flag:
+          countryForm.flag.trim(),
+
+        updatedAt:
+          serverTimestamp(),
+      };
+
+      if (editingCountry) {
+        await updateDoc(
+          doc(
+            db,
+            "countries",
+            editingCountry
+          ),
+          payload
         );
 
-        return;
-      }
-
-      try {
-        setIsSubmitting(
-          true
+        toast.success(
+          "Country updated."
+        );
+      } else {
+        await addDoc(
+          collection(
+            db,
+            "countries"
+          ),
+          {
+            ...payload,
+            createdAt:
+              serverTimestamp(),
+          }
         );
 
-        const payload = {
-          name:
-            countryForm.name.trim(),
-
-          code:
-            countryForm.code
-              .trim()
-              .toUpperCase(),
-
-          flag:
-            countryForm.flag.trim(),
-
-          updatedAt:
-            serverTimestamp(),
-        };
-
-        if (
-          editingCountry
-        ) {
-          await updateDoc(
-            doc(
-              db,
-              "countries",
-              editingCountry
-            ),
-            payload
-          );
-
-          toast.success(
-            "Country updated."
-          );
-        } else {
-          await addDoc(
-            collection(
-              db,
-              "countries"
-            ),
-            {
-              ...payload,
-
-              createdAt:
-                serverTimestamp(),
-            }
-          );
-
-          toast.success(
-            "Country added."
-          );
-        }
-
-        setCountryForm(
-          EMPTY_COUNTRY
-        );
-
-        setEditingCountry(
-          null
-        );
-
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to save country."
-        );
-      } finally {
-        setIsSubmitting(
-          false
+        toast.success(
+          "Country added."
         );
       }
-    };
+
+      setCountryForm(
+        EMPTY_COUNTRY
+      );
+
+      setEditingCountry(null);
+
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
+
+      toast.error(
+        "Failed to save country."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const editCountry = (
     country
@@ -2071,161 +2012,155 @@ export default function Admin() {
     );
   };
 
-  const removeCountry =
-    async (id) => {
-      if (
-        !window.confirm(
-          "Delete this country?"
+  const removeCountry = async (
+    id
+  ) => {
+    if (
+      !window.confirm(
+        "Delete this country?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          "countries",
+          id
         )
-      ) {
-        return;
-      }
+      );
 
-      try {
-        await deleteDoc(
-          doc(
-            db,
-            "countries",
-            id
-          )
-        );
+      toast.success(
+        "Country deleted."
+      );
 
-        toast.success(
-          "Country deleted."
-        );
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
 
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to delete country."
-        );
-      }
-    };
+      toast.error(
+        "Failed to delete country."
+      );
+    }
+  };
 
   /* =========================================================
      LEAGUE
   ========================================================= */
 
-  const saveLeague =
-    async (e) => {
-      e.preventDefault();
+  const saveLeague = async (
+    e
+  ) => {
+    e.preventDefault();
 
-      if (
-        !leagueForm.name.trim()
-      ) {
-        toast.error(
-          "League name is required."
+    if (
+      !leagueForm.name.trim()
+    ) {
+      toast.error(
+        "League name is required."
+      );
+
+      return;
+    }
+
+    if (
+      !leagueForm.countryId
+    ) {
+      toast.error(
+        "Select a country."
+      );
+
+      return;
+    }
+
+    const country =
+      countries.find(
+        (item) =>
+          item.id ===
+          leagueForm.countryId
+      );
+
+    try {
+      setIsSubmitting(true);
+
+      const payload = {
+        name:
+          leagueForm.name.trim(),
+
+        countryId:
+          leagueForm.countryId,
+
+        countryName:
+          country?.name ||
+          leagueForm.countryName ||
+          "",
+
+        logo:
+          leagueForm.logo.trim(),
+
+        level:
+          Number(
+            leagueForm.level
+          ) || 1,
+
+        season:
+          leagueForm.season.trim(),
+
+        updatedAt:
+          serverTimestamp(),
+      };
+
+      if (editingLeague) {
+        await updateDoc(
+          doc(
+            db,
+            "leagues",
+            editingLeague
+          ),
+          payload
         );
 
-        return;
-      }
+        toast.success(
+          "League updated."
+        );
+      } else {
+        await addDoc(
+          collection(
+            db,
+            "leagues"
+          ),
+          {
+            ...payload,
 
-      if (
-        !leagueForm.countryId
-      ) {
-        toast.error(
-          "Select a country."
+            createdAt:
+              serverTimestamp(),
+          }
         );
 
-        return;
-      }
-
-      const country =
-        countries.find(
-          (item) =>
-            item.id ===
-            leagueForm.countryId
-        );
-
-      try {
-        setIsSubmitting(
-          true
-        );
-
-        const payload = {
-          name:
-            leagueForm.name.trim(),
-
-          countryId:
-            leagueForm.countryId,
-
-          countryName:
-            country?.name ||
-            leagueForm.countryName ||
-            "",
-
-          logo:
-            leagueForm.logo.trim(),
-
-          level:
-            Number(
-              leagueForm.level
-            ) || 1,
-
-          season:
-            leagueForm.season.trim(),
-
-          updatedAt:
-            serverTimestamp(),
-        };
-
-        if (
-          editingLeague
-        ) {
-          await updateDoc(
-            doc(
-              db,
-              "leagues",
-              editingLeague
-            ),
-            payload
-          );
-
-          toast.success(
-            "League updated."
-          );
-        } else {
-          await addDoc(
-            collection(
-              db,
-              "leagues"
-            ),
-            {
-              ...payload,
-
-              createdAt:
-                serverTimestamp(),
-            }
-          );
-
-          toast.success(
-            "League added."
-          );
-        }
-
-        setLeagueForm(
-          EMPTY_LEAGUE
-        );
-
-        setEditingLeague(
-          null
-        );
-
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to save league."
-        );
-      } finally {
-        setIsSubmitting(
-          false
+        toast.success(
+          "League added."
         );
       }
-    };
+
+      setLeagueForm(
+        EMPTY_LEAGUE
+      );
+
+      setEditingLeague(null);
+
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
+
+      toast.error(
+        "Failed to save league."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const editLeague = (
     league
@@ -2238,8 +2173,7 @@ export default function Admin() {
         league.countryId || "",
 
       countryName:
-        league.countryName ||
-        "",
+        league.countryName || "",
 
       logo:
         league.logo || "",
@@ -2260,260 +2194,307 @@ export default function Admin() {
     );
   };
 
-  const removeLeague =
-    async (id) => {
-      if (
-        !window.confirm(
-          "Delete this league?"
+  const removeLeague = async (
+    id
+  ) => {
+    if (
+      !window.confirm(
+        "Delete this league?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          "leagues",
+          id
         )
-      ) {
-        return;
-      }
+      );
 
-      try {
-        await deleteDoc(
-          doc(
-            db,
-            "leagues",
-            id
-          )
-        );
+      toast.success(
+        "League deleted."
+      );
 
-        toast.success(
-          "League deleted."
-        );
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
 
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to delete league."
-        );
-      }
-    };
+      toast.error(
+        "Failed to delete league."
+      );
+    }
+  };
 
   /* =========================================================
      CLUB
   ========================================================= */
 
-  const saveClub =
-    async (e) => {
-      e.preventDefault();
+  const saveClub = async (
+    e
+  ) => {
+    e.preventDefault();
+
+    if (
+      !clubForm.name.trim()
+    ) {
+      toast.error(
+        "Club name is required."
+      );
+
+      return;
+    }
+
+    if (
+      !clubForm.countryId
+    ) {
+      toast.error(
+        "Select a country."
+      );
+
+      return;
+    }
+
+    if (
+      !clubForm.leagueId
+    ) {
+      toast.error(
+        "Select a league."
+      );
+
+      return;
+    }
+
+    const country =
+      countries.find(
+        (item) =>
+          item.id ===
+          clubForm.countryId
+      );
+
+    const league =
+      leagues.find(
+        (item) =>
+          item.id ===
+          clubForm.leagueId
+      );
+
+    try {
+      setIsSubmitting(true);
+
+      /*
+       * Existing club is important here.
+       * We NEVER overwrite its balance accidentally.
+       */
+      const existing =
+        editingClub
+          ? clubs.find(
+              (club) =>
+                club.id ===
+                editingClub
+            )
+          : null;
+
+      let balance;
 
       if (
-        !clubForm.name.trim()
+        existing &&
+        existing.balance !==
+          undefined &&
+        existing.balance !== null &&
+        Number.isFinite(
+          Number(
+            existing.balance
+          )
+        )
       ) {
-        toast.error(
-          "Club name is required."
-        );
-
-        return;
+        /*
+         * Editing:
+         * preserve current balance.
+         */
+        balance =
+          Number(
+            existing.balance
+          );
+      } else if (
+        clubForm.balance !==
+          "" &&
+        Number.isFinite(
+          Number(
+            clubForm.balance
+          )
+        )
+      ) {
+        balance =
+          Number(
+            clubForm.balance
+          );
+      } else {
+        /*
+         * New club:
+         * generate random starting balance.
+         */
+        balance =
+          generateClubStartingBalance();
       }
 
-      if (
-        !clubForm.countryId
-      ) {
-        toast.error(
-          "Select a country."
-        );
+      const payload = {
+        name:
+          clubForm.name.trim(),
 
-        return;
-      }
+        shortName:
+          clubForm.shortName.trim(),
 
-      if (
-        !clubForm.leagueId
-      ) {
-        toast.error(
-          "Select a league."
-        );
+        countryId:
+          clubForm.countryId,
 
-        return;
-      }
+        countryName:
+          country?.name ||
+          clubForm.countryName ||
+          "",
 
-      const country =
-        countries.find(
-          (item) =>
-            item.id ===
-            clubForm.countryId
-        );
+        leagueId:
+          clubForm.leagueId,
 
-      const league =
-        leagues.find(
-          (item) =>
-            item.id ===
-            clubForm.leagueId
-        );
+        leagueName:
+          league?.name ||
+          clubForm.leagueName ||
+          "",
 
-      try {
-        setIsSubmitting(
-          true
-        );
+        logo:
+          clubForm.logo.trim(),
 
-        const existing =
-          editingClub
-            ? clubs.find(
-                (club) =>
-                  club.id ===
-                  editingClub
-              )
-            : null;
+        stadium:
+          clubForm.stadium.trim(),
 
-        const payload = {
-          name:
-            clubForm.name.trim(),
+        location:
+          clubForm.location.trim(),
 
-          shortName:
-            clubForm.shortName.trim(),
+        founded:
+          Number(
+            clubForm.founded
+          ) || null,
 
-          countryId:
-            clubForm.countryId,
+        capacity:
+          Number(
+            clubForm.capacity
+          ) || 0,
 
-          countryName:
-            country?.name ||
-            clubForm.countryName ||
-            "",
+        owner:
+          clubForm.owner.trim(),
 
-          leagueId:
-            clubForm.leagueId,
+        coach:
+          clubForm.coach.trim(),
 
-          leagueName:
-            league?.name ||
-            clubForm.leagueName ||
-            "",
-
-          logo:
-            clubForm.logo.trim(),
-
-          stadium:
-            clubForm.stadium.trim(),
-
-          location:
-            clubForm.location.trim(),
-
-          founded:
-            Number(
-              clubForm.founded
-            ) || null,
-
-          capacity:
-            Number(
-              clubForm.capacity
-            ) || 0,
-
-          owner:
-            clubForm.owner.trim(),
-
-          coach:
-            clubForm.coach.trim(),
-
-          president:
-            clubForm.president.trim(),
-
-          captain:
-            clubForm.captain.trim(),
-
-          email:
-            clubForm.email.trim(),
-
-          phone:
-            clubForm.phone.trim(),
-
-          currency:
+        currency:
+          (
             clubForm.currency ||
-            "EUR",
+            "EUR"
+          )
+            .trim()
+            .toUpperCase(),
 
-          balance:
-            existing?.balance ??
-            Number(
-              clubForm.balance
-            ) ||
-            generateClubStartingBalance(),
+        /*
+         * IMPORTANT:
+         * No invalid ?? + || syntax.
+         */
+        balance,
 
-          homeKit:
-            clubForm.homeKit.trim(),
+        homeKit:
+          clubForm.homeKit.trim(),
 
-          awayKit:
-            clubForm.awayKit.trim(),
+        awayKit:
+          clubForm.awayKit.trim(),
 
-          thirdKit:
-            clubForm.thirdKit.trim(),
+        thirdKit:
+          clubForm.thirdKit.trim(),
 
-          colors:
-            clubForm.colors.trim(),
+        colors:
+          clubForm.colors.trim(),
 
-          description:
-            clubForm.description.trim(),
+        description:
+          clubForm.description.trim(),
 
-          updatedAt:
-            serverTimestamp(),
-        };
+        updatedAt:
+          serverTimestamp(),
+      };
 
-        if (
-          editingClub
-        ) {
-          await updateDoc(
-            doc(
-              db,
-              "clubs",
-              editingClub
-            ),
-            payload
-          );
-
-          toast.success(
-            "Club updated."
-          );
-        } else {
-          await addDoc(
-            collection(
-              db,
-              "clubs"
-            ),
-            {
-              ...payload,
-
-              reputation:
-                generateReputation(),
-
-              totalMatches: 0,
-              totalWins: 0,
-              totalDraws: 0,
-              totalLosses: 0,
-              goalsFor: 0,
-              goalsAgainst: 0,
-
-              createdAt:
-                serverTimestamp(),
-            }
-          );
-
-          toast.success(
-            "Club created."
-          );
-        }
-
-        setClubForm(
-          EMPTY_CLUB
+      if (editingClub) {
+        await updateDoc(
+          doc(
+            db,
+            "clubs",
+            editingClub
+          ),
+          payload
         );
 
-        setEditingClub(
-          null
+        toast.success(
+          "Club updated."
+        );
+      } else {
+        await addDoc(
+          collection(
+            db,
+            "clubs"
+          ),
+          {
+            ...payload,
+
+            reputation:
+              randomInteger(
+                35,
+                80
+              ),
+
+            totalMatches: 0,
+
+            totalWins: 0,
+
+            totalDraws: 0,
+
+            totalLosses: 0,
+
+            goalsFor: 0,
+
+            goalsAgainst: 0,
+
+            createdAt:
+              serverTimestamp(),
+          }
         );
 
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to save club."
-        );
-      } finally {
-        setIsSubmitting(
-          false
+        toast.success(
+          `Club created with starting balance ${formatMoney(
+            balance,
+            payload.currency
+          )}.`
         );
       }
-    };
+
+      setClubForm(
+        EMPTY_CLUB
+      );
+
+      setEditingClub(null);
+
+      await loadAllData();
+    } catch (error) {
+      console.error(
+        "Save club error:",
+        error
+      );
+
+      toast.error(
+        error?.message ||
+          "Failed to save club."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const editClub = (
     club
@@ -2529,8 +2510,7 @@ export default function Admin() {
         club.countryId || "",
 
       countryName:
-        club.countryName ||
-        "",
+        club.countryName || "",
 
       leagueId:
         club.leagueId || "",
@@ -2559,23 +2539,11 @@ export default function Admin() {
       coach:
         club.coach || "",
 
-      president:
-        club.president || "",
-
-      captain:
-        club.captain || "",
-
-      email:
-        club.email || "",
-
-      phone:
-        club.phone || "",
-
       currency:
         club.currency || "EUR",
 
       balance:
-        club.balance || 0,
+        club.balance ?? "",
 
       homeKit:
         club.homeKit || "",
@@ -2602,229 +2570,234 @@ export default function Admin() {
     );
   };
 
-  const removeClub =
-    async (id) => {
-      if (
-        !window.confirm(
-          "Delete this club? This does not automatically delete its players."
+  const removeClub = async (
+    id
+  ) => {
+    if (
+      !window.confirm(
+        "Delete this club? This does not automatically delete its players."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          "clubs",
+          id
         )
-      ) {
-        return;
-      }
+      );
 
-      try {
-        await deleteDoc(
-          doc(
-            db,
-            "clubs",
-            id
-          )
-        );
+      toast.success(
+        "Club deleted."
+      );
 
-        toast.success(
-          "Club deleted."
-        );
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
 
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to delete club."
-        );
-      }
-    };
+      toast.error(
+        "Failed to delete club."
+      );
+    }
+  };
 
   /* =========================================================
      PLAYER
   ========================================================= */
 
-  const savePlayer =
-    async (e) => {
-      e.preventDefault();
+  const savePlayer = async (
+    e
+  ) => {
+    e.preventDefault();
 
-      if (
-        !playerForm.name.trim()
-      ) {
-        toast.error(
-          "Player name is required."
+    if (
+      !playerForm.name.trim()
+    ) {
+      toast.error(
+        "Player name is required."
+      );
+
+      return;
+    }
+
+    if (
+      !playerForm.clubId
+    ) {
+      toast.error(
+        "Select a club."
+      );
+
+      return;
+    }
+
+    const club =
+      clubs.find(
+        (item) =>
+          item.id ===
+          playerForm.clubId
+      );
+
+    const country =
+      countries.find(
+        (item) =>
+          item.id ===
+          playerForm.countryId
+      );
+
+    if (!club) {
+      toast.error(
+        "Selected club was not found."
+      );
+
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      /*
+       * Manual player rating is clamped to 30-85.
+       */
+      const overall = Math.min(
+        85,
+        Math.max(
+          30,
+          Number(
+            playerForm.overall
+          ) || 60
+        )
+      );
+
+      const payload = {
+        name:
+          playerForm.name.trim(),
+
+        firstName:
+          playerForm.firstName.trim(),
+
+        lastName:
+          playerForm.lastName.trim(),
+
+        clubId:
+          playerForm.clubId,
+
+        clubName:
+          club.name ||
+          playerForm.clubName ||
+          "",
+
+        countryId:
+          playerForm.countryId,
+
+        countryName:
+          country?.name ||
+          playerForm.countryName ||
+          "",
+
+        position:
+          playerForm.position,
+
+        shirtNumber:
+          Number(
+            playerForm.shirtNumber
+          ) || 0,
+
+        age:
+          Number(
+            playerForm.age
+          ) || 18,
+
+        nationality:
+          playerForm.nationality.trim(),
+
+        overall,
+
+        value:
+          Number(
+            playerForm.value
+          ) || 0,
+
+        wage:
+          Number(
+            playerForm.wage
+          ) || 0,
+
+        contractYears:
+          Number(
+            playerForm.contractYears
+          ) || 1,
+
+        photo:
+          playerForm.photo.trim(),
+
+        updatedAt:
+          serverTimestamp(),
+      };
+
+      if (editingPlayer) {
+        await updateDoc(
+          doc(
+            db,
+            "players",
+            editingPlayer
+          ),
+          payload
         );
 
-        return;
-      }
+        toast.success(
+          "Player updated."
+        );
+      } else {
+        await addDoc(
+          collection(
+            db,
+            "players"
+          ),
+          {
+            ...payload,
 
-      if (
-        !playerForm.clubId
-      ) {
-        toast.error(
-          "Select a club."
+            status: "active",
+
+            goals: 0,
+
+            assists: 0,
+
+            appearances: 0,
+
+            yellowCards: 0,
+
+            redCards: 0,
+
+            createdAt:
+              serverTimestamp(),
+          }
         );
 
-        return;
-      }
-
-      const club =
-        clubs.find(
-          (item) =>
-            item.id ===
-            playerForm.clubId
-        );
-
-      const country =
-        countries.find(
-          (item) =>
-            item.id ===
-            playerForm.countryId
-        );
-
-      try {
-        setIsSubmitting(
-          true
-        );
-
-        const payload = {
-          name:
-            playerForm.name.trim(),
-
-          firstName:
-            playerForm.firstName.trim(),
-
-          lastName:
-            playerForm.lastName.trim(),
-
-          clubId:
-            playerForm.clubId,
-
-          clubName:
-            club?.name ||
-            playerForm.clubName ||
-            "",
-
-          clubLogo:
-            club?.logo ||
-            "",
-
-          countryId:
-            playerForm.countryId,
-
-          countryName:
-            country?.name ||
-            playerForm.countryName ||
-            "",
-
-          position:
-            playerForm.position,
-
-          shirtNumber:
-            Number(
-              playerForm.shirtNumber
-            ) || 0,
-
-          age:
-            Number(
-              playerForm.age
-            ) || 18,
-
-          nationality:
-            playerForm.nationality.trim(),
-
-          overall:
-            Math.max(
-              30,
-              Math.min(
-                85,
-                Number(
-                  playerForm.overall
-                ) || 60
-              )
-            ),
-
-          value:
-            Number(
-              playerForm.value
-            ) || 0,
-
-          wage:
-            Number(
-              playerForm.wage
-            ) || 0,
-
-          contractYears:
-            Number(
-              playerForm.contractYears
-            ) || 1,
-
-          photo:
-            playerForm.photo.trim(),
-
-          updatedAt:
-            serverTimestamp(),
-        };
-
-        if (
-          editingPlayer
-        ) {
-          await updateDoc(
-            doc(
-              db,
-              "players",
-              editingPlayer
-            ),
-            payload
-          );
-
-          toast.success(
-            "Player updated."
-          );
-        } else {
-          await addDoc(
-            collection(
-              db,
-              "players"
-            ),
-            {
-              ...payload,
-
-              status:
-                "active",
-
-              goals: 0,
-              assists: 0,
-              appearances: 0,
-              yellowCards: 0,
-              redCards: 0,
-
-              createdAt:
-                serverTimestamp(),
-            }
-          );
-
-          toast.success(
-            "Player added to club."
-          );
-        }
-
-        setPlayerForm(
-          EMPTY_PLAYER
-        );
-
-        setEditingPlayer(
-          null
-        );
-
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to save player."
-        );
-      } finally {
-        setIsSubmitting(
-          false
+        toast.success(
+          "Player added to club."
         );
       }
-    };
+
+      setPlayerForm(
+        EMPTY_PLAYER
+      );
+
+      setEditingPlayer(null);
+
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
+
+      toast.error(
+        "Failed to save player."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const editPlayer = (
     player
@@ -2834,47 +2807,45 @@ export default function Admin() {
         player.name || "",
 
       firstName:
-        player.firstName ||
-        "",
+        player.firstName || "",
 
       lastName:
-        player.lastName ||
-        "",
+        player.lastName || "",
 
       clubId:
-        player.clubId ||
-        "",
+        player.clubId || "",
 
       clubName:
-        player.clubName ||
-        "",
+        player.clubName || "",
 
       countryId:
-        player.countryId ||
-        "",
+        player.countryId || "",
 
       countryName:
-        player.countryName ||
-        "",
+        player.countryName || "",
 
       position:
-        player.position ||
-        "MID",
+        player.position || "MID",
 
       shirtNumber:
-        player.shirtNumber ||
-        "",
+        player.shirtNumber || "",
 
       age:
-        player.age ||
-        "",
+        player.age || "",
 
       nationality:
-        player.nationality ||
-        "",
+        player.nationality || "",
 
       overall:
-        player.overall || 60,
+        Math.min(
+          85,
+          Math.max(
+            30,
+            Number(
+              player.overall
+            ) || 60
+          )
+        ),
 
       value:
         player.value || 0,
@@ -2883,8 +2854,7 @@ export default function Admin() {
         player.wage || 0,
 
       contractYears:
-        player.contractYears ||
-        1,
+        player.contractYears || 1,
 
       photo:
         player.photo || "",
@@ -2899,77 +2869,73 @@ export default function Admin() {
     );
   };
 
-  const removePlayer =
-    async (id) => {
-      if (
-        !window.confirm(
-          "Delete this player?"
+  const removePlayer = async (
+    id
+  ) => {
+    if (
+      !window.confirm(
+        "Delete this player?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          "players",
+          id
         )
-      ) {
-        return;
-      }
+      );
 
-      try {
-        await deleteDoc(
-          doc(
-            db,
-            "players",
-            id
-          )
-        );
+      toast.success(
+        "Player deleted."
+      );
 
-        toast.success(
-          "Player deleted."
-        );
+      await loadAllData();
+    } catch (error) {
+      console.error(error);
 
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-
-        toast.error(
-          "Failed to delete player."
-        );
-      }
-    };
+      toast.error(
+        "Failed to delete player."
+      );
+    }
+  };
 
   /* =========================================================
-     HELPERS
+     CANCEL EDITING
   ========================================================= */
 
-  const cancelEditing =
-    () => {
-      setEditingCountry(
-        null
-      );
+  const cancelEditing = () => {
+    setEditingCountry(null);
 
-      setEditingLeague(
-        null
-      );
+    setEditingLeague(null);
 
-      setEditingClub(
-        null
-      );
+    setEditingClub(null);
 
-      setEditingPlayer(
-        null
-      );
+    setEditingPlayer(null);
 
-      setCountryForm(
-        EMPTY_COUNTRY
-      );
+    setCountryForm(
+      EMPTY_COUNTRY
+    );
 
-      setLeagueForm(
-        EMPTY_LEAGUE
-      );
+    setLeagueForm(
+      EMPTY_LEAGUE
+    );
 
-      setClubForm(
-        EMPTY_CLUB
-      );
+    setClubForm(
+      EMPTY_CLUB
+    );
 
-      setPlayerForm(
-        EMPTY_PLAYER
-      );
-    };
+    setPlayerForm(
+      EMPTY_PLAYER
+    );
+  };
+
+  /* =========================================================
+     MONEY
+  ========================================================= */
 
   const formatMoney = (
     amount,
@@ -2979,27 +2945,19 @@ export default function Admin() {
       return new Intl.NumberFormat(
         "en-US",
         {
-          style:
-            "currency",
-
+          style: "currency",
           currency:
-            currency ||
-            "EUR",
-
+            currency || "EUR",
           maximumFractionDigits: 0,
         }
       ).format(
-        Number(
-          amount
-        ) || 0
+        Number(amount) || 0
       );
     } catch {
       return `${
         currency || "EUR"
       } ${
-        Number(
-          amount
-        ) || 0
+        Number(amount) || 0
       }`;
     }
   };
@@ -3033,10 +2991,7 @@ export default function Admin() {
     );
   }
 
-  if (
-    !user ||
-    !isAdmin
-  ) {
+  if (!user || !isAdmin) {
     return null;
   }
 
@@ -3048,7 +3003,8 @@ export default function Admin() {
     <>
       <Head>
         <title>
-          Admin Panel | Virtual Football Manager
+          Admin Panel | Virtual
+          Football Manager
         </title>
 
         <meta
@@ -3063,16 +3019,14 @@ export default function Admin() {
       </Head>
 
       <main
-        className={
-          styles.page
-        }
+        className={styles.page}
       >
-        {/* HEADER */}
+        {/* =====================================================
+            HEADER
+        ===================================================== */}
 
         <header
-          className={
-            styles.header
-          }
+          className={styles.header}
         >
           <div>
             <div
@@ -3134,12 +3088,12 @@ export default function Admin() {
           </div>
         </header>
 
-        {/* NAV */}
+        {/* =====================================================
+            NAVIGATION
+        ===================================================== */}
 
         <nav
-          className={
-            styles.tabs
-          }
+          className={styles.tabs}
         >
           <button
             className={
@@ -3222,7 +3176,9 @@ export default function Admin() {
           </button>
         </nav>
 
-        {/* CONTENT */}
+        {/* =====================================================
+            CONTENT
+        ===================================================== */}
 
         <section
           className={
@@ -3248,7 +3204,9 @@ export default function Admin() {
             </div>
           ) : (
             <>
-              {/* OVERVIEW */}
+              {/* =================================================
+                  OVERVIEW
+              ================================================= */}
 
               {activeTab ===
                 "overview" && (
@@ -3265,9 +3223,8 @@ export default function Admin() {
                       </h2>
 
                       <p>
-                        Overview
-                        of your
-                        football
+                        Overview of
+                        your football
                         world.
                       </p>
                     </div>
@@ -3424,8 +3381,7 @@ export default function Admin() {
                       </strong>
 
                       <small>
-                        Create a
-                        football
+                        Create a football
                         nation
                       </small>
                     </button>
@@ -3474,8 +3430,7 @@ export default function Admin() {
 
                       <small>
                         Create a
-                        football
-                        club
+                        football club
                       </small>
                     </button>
 
@@ -3602,13 +3557,17 @@ export default function Admin() {
                                     </td>
 
                                     <td>
-                                      {club.leagueName ||
-                                        "-"}
+                                      {
+                                        club.leagueName ||
+                                        "-"
+                                      }
                                     </td>
 
                                     <td>
-                                      {club.countryName ||
-                                        "-"}
+                                      {
+                                        club.countryName ||
+                                        "-"
+                                      }
                                     </td>
 
                                     <td>
@@ -3619,8 +3578,10 @@ export default function Admin() {
                                     </td>
 
                                     <td>
-                                      {club.stadium ||
-                                        "-"}
+                                      {
+                                        club.stadium ||
+                                        "-"
+                                      }
                                     </td>
                                   </tr>
                                 )
@@ -3633,7 +3594,9 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* COUNTRIES */}
+              {/* =================================================
+                  COUNTRIES
+              ================================================= */}
 
               {activeTab ===
                 "countries" && (
@@ -3682,9 +3645,9 @@ export default function Admin() {
                           setCountryForm(
                             {
                               ...countryForm,
-                              name: e
-                                .target
-                                .value,
+                              name:
+                                e.target
+                                  .value,
                             }
                           )
                         }
@@ -3703,9 +3666,9 @@ export default function Admin() {
                           setCountryForm(
                             {
                               ...countryForm,
-                              code: e
-                                .target
-                                .value,
+                              code:
+                                e.target
+                                  .value,
                             }
                           )
                         }
@@ -3723,9 +3686,9 @@ export default function Admin() {
                           setCountryForm(
                             {
                               ...countryForm,
-                              flag: e
-                                .target
-                                .value,
+                              flag:
+                                e.target
+                                  .value,
                             }
                           )
                         }
@@ -3748,9 +3711,7 @@ export default function Admin() {
 
                   <DataTable
                     title="Countries"
-                    data={
-                      countries
-                    }
+                    data={countries}
                     empty="No countries yet."
                     columns={[
                       {
@@ -3810,7 +3771,9 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* LEAGUES */}
+              {/* =================================================
+                  LEAGUES
+              ================================================= */}
 
               {activeTab ===
                 "leagues" && (
@@ -3828,8 +3791,8 @@ export default function Admin() {
                       </h2>
 
                       <p>
-                        Create and
-                        manage football
+                        Create and manage
+                        football
                         competitions.
                       </p>
                     </div>
@@ -3859,13 +3822,13 @@ export default function Admin() {
                           setLeagueForm(
                             {
                               ...leagueForm,
-                              name: e
-                                .target
-                                .value,
+                              name:
+                                e.target
+                                  .value,
                             }
                           )
                         }
-                        placeholder="Rwanda Premier League"
+                        placeholder="Premier League"
                         required
                       />
 
@@ -3881,8 +3844,7 @@ export default function Admin() {
                             {
                               ...leagueForm,
                               countryId:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -3911,9 +3873,9 @@ export default function Admin() {
                           setLeagueForm(
                             {
                               ...leagueForm,
-                              logo: e
-                                .target
-                                .value,
+                              logo:
+                                e.target
+                                  .value,
                             }
                           )
                         }
@@ -3932,8 +3894,7 @@ export default function Admin() {
                             {
                               ...leagueForm,
                               season:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -3955,8 +3916,7 @@ export default function Admin() {
                             {
                               ...leagueForm,
                               level:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -3979,9 +3939,7 @@ export default function Admin() {
 
                   <DataTable
                     title="Leagues"
-                    data={
-                      leagues
-                    }
+                    data={leagues}
                     empty="No leagues yet."
                     columns={[
                       {
@@ -4065,7 +4023,9 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* CLUBS */}
+              {/* =================================================
+                  CLUBS
+              ================================================= */}
 
               {activeTab ===
                 "clubs" && (
@@ -4085,8 +4045,8 @@ export default function Admin() {
                       <p>
                         Manage clubs,
                         finances,
-                        stadiums and
-                        kits.
+                        stadiums,
+                        logos and kits.
                       </p>
                     </div>
 
@@ -4099,12 +4059,13 @@ export default function Admin() {
                         fetchAndImportRplClubs
                       }
                       disabled={
-                        isFetchingRplClubs
+                        isFetchingRplClubs ||
+                        isFetchingRplPlayers
                       }
                     >
                       {isFetchingRplClubs
-                        ? "⏳ Importing..."
-                        : "🇷🇼 Import RPL Clubs"}
+                        ? "⏳ Fetching Clubs..."
+                        : "🇷🇼 Fetch RPL Clubs"}
                     </button>
                   </div>
 
@@ -4116,8 +4077,7 @@ export default function Admin() {
                     >
                       <div>
                         <strong>
-                          Importing
-                          Rwanda
+                          Fetching Rwanda
                           Premier League
                           clubs
                         </strong>
@@ -4127,9 +4087,8 @@ export default function Admin() {
                             rplClubProgress.current
                           }{" "}
                           /{" "}
-                          {
-                            rplClubProgress.total
-                          }
+                          {rplClubProgress.total ||
+                            "..."}
                         </span>
                       </div>
 
@@ -4155,6 +4114,13 @@ export default function Admin() {
                           }}
                         />
                       </div>
+
+                      <small>
+                        New clubs receive
+                        their own starting
+                        balance and source
+                        information.
+                      </small>
                     </div>
                   )}
 
@@ -4190,13 +4156,13 @@ export default function Admin() {
                           setClubForm(
                             {
                               ...clubForm,
-                              name: e
-                                .target
-                                .value,
+                              name:
+                                e.target
+                                  .value,
                             }
                           )
                         }
-                        placeholder="APR FC"
+                        placeholder="Manchester United"
                         required
                       />
 
@@ -4212,13 +4178,12 @@ export default function Admin() {
                             {
                               ...clubForm,
                               shortName:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                        placeholder="APR"
+                        placeholder="MUN"
                       />
 
                       <Input
@@ -4232,9 +4197,9 @@ export default function Admin() {
                           setClubForm(
                             {
                               ...clubForm,
-                              logo: e
-                                .target
-                                .value,
+                              logo:
+                                e.target
+                                  .value,
                             }
                           )
                         }
@@ -4253,8 +4218,7 @@ export default function Admin() {
                             {
                               ...clubForm,
                               countryId:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -4284,8 +4248,7 @@ export default function Admin() {
                             {
                               ...clubForm,
                               leagueId:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -4309,7 +4272,8 @@ export default function Admin() {
                         styles.formSectionTitle
                       }
                     >
-                      🏟️ Stadium & Location
+                      🏟️ Stadium &
+                      Location
                     </h3>
 
                     <div
@@ -4329,13 +4293,12 @@ export default function Admin() {
                             {
                               ...clubForm,
                               stadium:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                        placeholder="Stadium"
+                        placeholder="Amahoro Stadium"
                       />
 
                       <Input
@@ -4350,8 +4313,7 @@ export default function Admin() {
                             {
                               ...clubForm,
                               location:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -4373,17 +4335,18 @@ export default function Admin() {
                             {
                               ...clubForm,
                               capacity:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
+                        placeholder="30000"
                       />
 
                       <Input
                         label="Founded"
                         type="number"
+                        min="1800"
                         value={
                           clubForm.founded
                         }
@@ -4394,147 +4357,12 @@ export default function Admin() {
                             {
                               ...clubForm,
                               founded:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                      />
-
-                      <Input
-                        label="Email"
-                        type="email"
-                        value={
-                          clubForm.email
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setClubForm(
-                            {
-                              ...clubForm,
-                              email:
-                                e
-                                  .target
-                                  .value,
-                            }
-                          )
-                        }
-                      />
-
-                      <Input
-                        label="Phone"
-                        value={
-                          clubForm.phone
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setClubForm(
-                            {
-                              ...clubForm,
-                              phone:
-                                e
-                                  .target
-                                  .value,
-                            }
-                          )
-                        }
-                      />
-                    </div>
-
-                    <h3
-                      className={
-                        styles.formSectionTitle
-                      }
-                    >
-                      👔 Leadership
-                    </h3>
-
-                    <div
-                      className={
-                        styles.formGrid
-                      }
-                    >
-                      <Input
-                        label="Owner"
-                        value={
-                          clubForm.owner
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setClubForm(
-                            {
-                              ...clubForm,
-                              owner:
-                                e
-                                  .target
-                                  .value,
-                            }
-                          )
-                        }
-                      />
-
-                      <Input
-                        label="Coach"
-                        value={
-                          clubForm.coach
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setClubForm(
-                            {
-                              ...clubForm,
-                              coach:
-                                e
-                                  .target
-                                  .value,
-                            }
-                          )
-                        }
-                      />
-
-                      <Input
-                        label="President"
-                        value={
-                          clubForm.president
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setClubForm(
-                            {
-                              ...clubForm,
-                              president:
-                                e
-                                  .target
-                                  .value,
-                            }
-                          )
-                        }
-                      />
-
-                      <Input
-                        label="Captain"
-                        value={
-                          clubForm.captain
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setClubForm(
-                            {
-                              ...clubForm,
-                              captain:
-                                e
-                                  .target
-                                  .value,
-                            }
-                          )
-                        }
+                        placeholder="1995"
                       />
                     </div>
 
@@ -4563,8 +4391,7 @@ export default function Admin() {
                             {
                               ...clubForm,
                               currency:
-                                e
-                                  .target
+                                e.target
                                   .value
                                   .toUpperCase(),
                             }
@@ -4587,12 +4414,52 @@ export default function Admin() {
                             {
                               ...clubForm,
                               balance:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
+                        placeholder="Leave empty for automatic balance"
+                      />
+
+                      <Input
+                        label="Owner"
+                        value={
+                          clubForm.owner
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setClubForm(
+                            {
+                              ...clubForm,
+                              owner:
+                                e.target
+                                  .value,
+                            }
+                          )
+                        }
+                        placeholder="Club Owner"
+                      />
+
+                      <Input
+                        label="Current Coach"
+                        value={
+                          clubForm.coach
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setClubForm(
+                            {
+                              ...clubForm,
+                              coach:
+                                e.target
+                                  .value,
+                            }
+                          )
+                        }
+                        placeholder="Available / None"
                       />
                     </div>
 
@@ -4621,13 +4488,12 @@ export default function Admin() {
                             {
                               ...clubForm,
                               homeKit:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                        placeholder="Description or image URL"
+                        placeholder="Kit description or image URL"
                       />
 
                       <Input
@@ -4642,13 +4508,12 @@ export default function Admin() {
                             {
                               ...clubForm,
                               awayKit:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                        placeholder="Description or image URL"
+                        placeholder="Kit description or image URL"
                       />
 
                       <Input
@@ -4663,13 +4528,12 @@ export default function Admin() {
                             {
                               ...clubForm,
                               thirdKit:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                        placeholder="Description or image URL"
+                        placeholder="Kit description or image URL"
                       />
 
                       <Input
@@ -4684,8 +4548,7 @@ export default function Admin() {
                             {
                               ...clubForm,
                               colors:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -4714,14 +4577,13 @@ export default function Admin() {
                             {
                               ...clubForm,
                               description:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
                         }
-                        rows={5}
                         placeholder="Club history and details..."
+                        rows={5}
                       />
                     </div>
 
@@ -4740,9 +4602,7 @@ export default function Admin() {
 
                   <DataTable
                     title="Clubs"
-                    data={
-                      clubs
-                    }
+                    data={clubs}
                     empty="No clubs created yet."
                     columns={[
                       {
@@ -4771,11 +4631,20 @@ export default function Admin() {
                                 </span>
                               )}
 
-                              <strong>
-                                {
-                                  item.name
-                                }
-                              </strong>
+                              <div>
+                                <strong>
+                                  {
+                                    item.name
+                                  }
+                                </strong>
+
+                                <small>
+                                  {formatMoney(
+                                    item.balance,
+                                    item.currency
+                                  )}
+                                </small>
+                              </div>
                             </div>
                           ),
                       },
@@ -4840,7 +4709,9 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* PLAYERS */}
+              {/* =================================================
+                  PLAYERS
+              ================================================= */}
 
               {activeTab ===
                 "players" && (
@@ -4862,8 +4733,9 @@ export default function Admin() {
                         import Rwanda
                         Premier League
                         players, or
-                        generate players
-                        for a club.
+                        generate
+                        players for a
+                        club.
                       </p>
                     </div>
 
@@ -4878,24 +4750,6 @@ export default function Admin() {
                           styles.rplImportButton
                         }
                         onClick={
-                          fetchAndImportRplClubs
-                        }
-                        disabled={
-                          isFetchingRplClubs ||
-                          isFetchingRplPlayers
-                        }
-                      >
-                        {isFetchingRplClubs
-                          ? "⏳ Importing Clubs..."
-                          : "🏟️ Import RPL Clubs"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className={
-                          styles.rplImportButton
-                        }
-                        onClick={
                           fetchAndImportRplPlayers
                         }
                         disabled={
@@ -4904,7 +4758,7 @@ export default function Admin() {
                         }
                       >
                         {isFetchingRplPlayers
-                          ? "⏳ Importing Players..."
+                          ? "⏳ Importing..."
                           : "🇷🇼 Import RPL Players"}
                       </button>
 
@@ -4923,7 +4777,8 @@ export default function Admin() {
                           isFetchingRplClubs
                         }
                       >
-                        ⚡ Generate Players
+                        ⚡ Generate
+                        Players
                       </button>
                     </div>
                   </div>
@@ -4946,10 +4801,8 @@ export default function Admin() {
                             rplFetchProgress.current
                           }{" "}
                           /{" "}
-                          {
-                            rplFetchProgress.total ||
-                            "..."
-                          }
+                          {rplFetchProgress.total ||
+                            "..."}
                         </span>
                       </div>
 
@@ -4977,14 +4830,18 @@ export default function Admin() {
                       </div>
 
                       <small>
-                        Existing players are
-                        automatically skipped.
-                        New player ratings are
-                        generated independently
-                        from 30 to 85.
+                        Ratings are
+                        automatically
+                        generated
+                        between 30 and
+                        85.
                       </small>
                     </div>
                   )}
+
+                  {/* =================================================
+                      GENERATOR MODAL
+                  ================================================= */}
 
                   {showGeneratePlayers && (
                     <div
@@ -5031,7 +4888,8 @@ export default function Admin() {
                             </h3>
 
                             <p>
-                              Create a squad
+                              Create a
+                              squad
                               automatically
                               and save it
                               directly to
@@ -5075,8 +4933,7 @@ export default function Admin() {
                                 {
                                   ...generatePlayerForm,
                                   clubId:
-                                    e
-                                      .target
+                                    e.target
                                       .value,
                                 }
                               )
@@ -5109,8 +4966,7 @@ export default function Admin() {
                                 {
                                   ...generatePlayerForm,
                                   count:
-                                    e
-                                      .target
+                                    e.target
                                       .value,
                                 }
                               )
@@ -5138,24 +4994,21 @@ export default function Admin() {
                                     ) =>
                                       club.id ===
                                       generatePlayerForm.clubId
-                                  )
-                                    ?.name
+                                  )?.name
                                 }
                               </strong>
 
                               <small>
-                                Players
-                                receive
-                                different
+                                Ratings,
                                 positions,
-                                ratings
-                                from
-                                30-85,
                                 ages,
+                                values,
+                                wages and
                                 shirt
-                                numbers,
-                                values and
-                                wages.
+                                numbers
+                                will be
+                                generated
+                                automatically.
                               </small>
                             </div>
                           )}
@@ -5201,6 +5054,10 @@ export default function Admin() {
                     </div>
                   )}
 
+                  {/* =================================================
+                      PLAYER FORM
+                  ================================================= */}
+
                   <form
                     className={
                       styles.formCard
@@ -5234,9 +5091,9 @@ export default function Admin() {
                           setPlayerForm(
                             {
                               ...playerForm,
-                              name: e
-                                .target
-                                .value,
+                              name:
+                                e.target
+                                  .value,
                             }
                           )
                         }
@@ -5256,8 +5113,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               firstName:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5276,8 +5132,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               lastName:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5288,6 +5143,7 @@ export default function Admin() {
                         label="Age"
                         type="number"
                         min="15"
+                        max="45"
                         value={
                           playerForm.age
                         }
@@ -5298,8 +5154,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               age:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5318,8 +5173,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               nationality:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5338,8 +5192,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               countryId:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5384,8 +5237,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               clubId:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5415,8 +5267,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               position:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5464,8 +5315,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               shirtNumber:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5473,7 +5323,7 @@ export default function Admin() {
                       />
 
                       <Input
-                        label="Overall Rating"
+                        label="Overall Rating (30-85)"
                         type="number"
                         min="30"
                         max="85"
@@ -5487,8 +5337,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               overall:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5524,8 +5373,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               value:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5546,8 +5394,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               wage:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5569,8 +5416,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               contractYears:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5589,8 +5435,7 @@ export default function Admin() {
                             {
                               ...playerForm,
                               photo:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -5614,9 +5459,7 @@ export default function Admin() {
 
                   <DataTable
                     title="Players"
-                    data={
-                      players
-                    }
+                    data={players}
                     empty="No players yet."
                     columns={[
                       {
@@ -5699,9 +5542,15 @@ export default function Admin() {
                                 styles.rating
                               }
                             >
-                              {
-                                item.overall
-                              }
+                              {Math.min(
+                                85,
+                                Math.max(
+                                  30,
+                                  Number(
+                                    item.overall
+                                  ) || 0
+                                )
+                              )}
                             </span>
                           ),
                       },
@@ -5737,7 +5586,7 @@ export default function Admin() {
 }
 
 /* =========================================================
-   INPUT
+   INPUT COMPONENT
 ========================================================= */
 
 function Input({
@@ -5752,9 +5601,7 @@ function Input({
 }) {
   return (
     <div
-      className={
-        styles.field
-      }
+      className={styles.field}
     >
       <label>
         {label}
@@ -5763,15 +5610,11 @@ function Input({
       <input
         type={type}
         value={value}
-        onChange={
-          onChange
-        }
+        onChange={onChange}
         placeholder={
           placeholder
         }
-        required={
-          required
-        }
+        required={required}
         min={min}
         max={max}
       />
@@ -5780,7 +5623,7 @@ function Input({
 }
 
 /* =========================================================
-   SELECT
+   SELECT COMPONENT
 ========================================================= */
 
 function Select({
@@ -5792,9 +5635,7 @@ function Select({
 }) {
   return (
     <div
-      className={
-        styles.field
-      }
+      className={styles.field}
     >
       <label>
         {label}
@@ -5802,9 +5643,7 @@ function Select({
 
       <select
         value={value}
-        onChange={
-          onChange
-        }
+        onChange={onChange}
       >
         {placeholder && (
           <option value="">
@@ -5912,15 +5751,16 @@ function DataTable({
         </h3>
 
         <span>
-          {data.length} item
-          {data.length === 1
+          {data.length}{" "}
+          item
+          {data.length ===
+          1
             ? ""
             : "s"}
         </span>
       </div>
 
-      {data.length ===
-      0 ? (
+      {data.length === 0 ? (
         <div
           className={
             styles.empty
@@ -5982,11 +5822,9 @@ function DataTable({
                             index
                           }
                         >
-                          {
-                            column.render(
-                              item
-                            )
-                          }
+                          {column.render(
+                            item
+                          )}
                         </td>
                       )
                     )}
@@ -5998,6 +5836,7 @@ function DataTable({
                         }
                       >
                         <button
+                          type="button"
                           className={
                             styles.editButton
                           }
@@ -6006,11 +5845,13 @@ function DataTable({
                               item
                             )
                           }
+                          title="Edit"
                         >
                           ✏️
                         </button>
 
                         <button
+                          type="button"
                           className={
                             styles.deleteButton
                           }
@@ -6019,6 +5860,7 @@ function DataTable({
                               item.id
                             )
                           }
+                          title="Delete"
                         >
                           🗑️
                         </button>
