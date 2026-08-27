@@ -3085,9 +3085,10 @@ export default function MatchPage() {
         // ====================================================
 
         if (
-          newMinute >= 45 &&
-          statusRef.current !== "half-time"
-        ) {
+  previousMinute < 45 &&
+  newMinute >= 45 &&
+  statusRef.current === "live"
+) {
           statusRef.current =
             "half-time";
 
