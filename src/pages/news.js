@@ -1824,4 +1824,1722 @@ export default function NewsPage() {
       newsItems.push(
         ...generateMediaReports({
           clubInfo,
-         
+          careerData,
+          players,
+          matches,
+        })
+      );
+
+      if (
+        careerData?.boardConfidence !==
+        undefined
+      ) {
+        const confidence =
+          safeNumber(
+            careerData.boardConfidence,
+            70
+          );
+
+        newsItems.push({
+          id:
+            `news-board-${confidence}`,
+          type: 'board',
+          icon:
+            NEWS_TEMPLATES.board.icon,
+          title:
+            NEWS_TEMPLATES.board.title,
+          color:
+            NEWS_TEMPLATES.board.color,
+          headline:
+            `Board confidence is ${confidence}%`,
+          body:
+            confidence >= 75
+              ? 'The board is pleased with the direction of the club.'
+              : confidence >= 50
+                ? 'The board remains patient but expects improved results.'
+                : 'The board is becoming increasingly concerned about the club.',
+          date:
+            careerData.boardConfidenceUpdatedAt ||
+            new Date().toISOString(),
+        });
+      }
+
+      newsItems.sort(
+        (a, b) =>
+          getTimestampValue(
+            b.date
+          ) -
+          getTimestampValue(
+            a.date
+          )
+      );
+
+      return newsItems.slice(
+        0,
+        MAX_NEWS
+      );
+    }, [
+      clubInfo,
+      matches,
+      players,
+      careerData,
+    ]);
+
+  /* =======================================================
+     COMMUNITY POSTS AS NEWS
+  ======================================================= */
+
+  const communityNews =
+    useMemo(() => {
+      return posts.map(
+        (post) => ({
+          ...post,
+          isCommunityPost:
+            true,
+          type:
+            'community',
+          icon: '👥',
+          title:
+            post.isAI
+              ? 'AI Football Community'
+              : 'Manager Community',
+          color:
+            '#06b6d4',
+          headline:
+            post.title ||
+            `${post.username || 'Manager'} posted an update`,
+          body:
+            post.content || '',
+          date:
+            post.createdAt ||
+            new Date().toISOString(),
+        })
+      );
+    }, [posts]);
+
+  /* =======================================================
+     ALL FEED
+  ======================================================= */
+
+  const allFeed =
+    useMemo(() => {
+      return [
+        ...generatedNews,
+        ...communityNews,
+      ].sort(
+        (a, b) =>
+          getTimestampValue(
+            b.date
+          ) -
+          getTimestampValue(
+            a.date
+          )
+      );
+    }, [
+      generatedNews,
+      communityNews,
+    ]);
+
+  /* =======================================================
+     FILTERS
+  ======================================================= */
+
+  const filterTypes =
+    useMemo(() => {
+      const available =
+        new Set(
+          allFeed.map(
+            (item) =>
+              item.type
+          )
+        );
+
+      const filters = [
+        {
+          value: 'all',
+          label: 'All',
+          icon: '📰',
+        },
+        {
+          value: 'match_result',
+          label: 'Matches',
+          icon: '⚽',
+        },
+        {
+          value: 'transfer',
+          label: 'Transfers',
+          icon: '🔄',
+        },
+        {
+          value: 'injury',
+          label: 'Injuries',
+          icon: '🩹',
+        },
+        {
+          value: 'media',
+          label: 'Media',
+          icon: '📺',
+        },
+        {
+          value: 'interview',
+          label: 'Interviews',
+          icon: '🎤',
+        },
+        {
+          value: 'community',
+          label: 'Community',
+          icon: '👥',
+        },
+        {
+          value: 'finance',
+          label: 'Finance',
+          icon: '💰',
+        },
+        {
+          value: 'league',
+          label: 'League',
+          icon: '📊',
+        },
+      ];
+
+      return filters.filter(
+        (filter) =>
+          filter.value ===
+            'all' ||
+          available.has(
+            filter.value
+          )
+      );
+    }, [allFeed]);
+
+  const filteredFeed =
+    useMemo(() => {
+      let result =
+        allFeed;
+
+      if (
+        activeFilter !==
+        'all'
+      ) {
+        result =
+          result.filter(
+            (item) =>
+              item.type ===
+              activeFilter
+          );
+      }
+
+      if (
+        searchTerm.trim()
+      ) {
+        const search =
+          searchTerm
+            .trim()
+            .toLowerCase();
+
+        result =
+          result.filter(
+            (item) =>
+              safeString(
+                item.headline
+              )
+                .toLowerCase()
+                .includes(search) ||
+              safeString(
+                item.body
+              )
+                .toLowerCase()
+                .includes(search) ||
+              safeString(
+                item.username
+              )
+                .toLowerCase()
+                .includes(search)
+          );
+      }
+
+      return result;
+    }, [
+      allFeed,
+      activeFilter,
+      searchTerm,
+    ]);
+
+  /* =======================================================
+     CREATE USER POST
+  ======================================================= */
+
+  const createPost =
+    async () => {
+      if (!user) {
+        toast.error(
+          'You must be logged in'
+        );
+        return;
+      }
+
+      const content =
+        postText.trim();
+
+      if (!content) {
+        toast.error(
+          'Write something first'
+        );
+        return;
+      }
+
+      if (
+        content.length > 1000
+      ) {
+        toast.error(
+          'Post is too long. Maximum 1000 characters.'
+        );
+        return;
+      }
+
+      const now =
+        Date.now();
+
+      if (
+        now -
+          lastPostTime.current <
+        POST_COOLDOWN
+      ) {
+        toast.error(
+          'Please wait a few seconds before posting again'
+        );
+        return;
+      }
+
+      try {
+        setPosting(true);
+
+        const username =
+          userData?.username ||
+          userData?.displayName ||
+          user.displayName ||
+          user.email?.split(
+            '@'
+          )[0] ||
+          'Manager';
+
+        await addDoc(
+          collection(
+            db,
+            'posts'
+          ),
+          {
+            userId:
+              user.uid,
+
+            username,
+
+            avatar:
+              userData?.photoURL ||
+              user.photoURL ||
+              '',
+
+            title:
+              `${clubInfo?.name || 'Club'} Update`,
+
+            content,
+
+            type:
+              'manager_post',
+
+            likeCount:
+              0,
+
+            commentCount:
+              0,
+
+            likes: [],
+
+            aiLikes: [],
+
+            isAI:
+              false,
+
+            isAIOnly:
+              false,
+
+            createdAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp(),
+
+            aiEngagedAt:
+              null,
+          }
+        );
+
+        setPostText('');
+
+        lastPostTime.current =
+          Date.now();
+
+        toast.success(
+          'Post published'
+        );
+      } catch (error) {
+        console.error(
+          'Create post error:',
+          error
+        );
+
+        toast.error(
+          'Could not publish post'
+        );
+      } finally {
+        setPosting(false);
+      }
+    };
+
+  /* =======================================================
+     LIKE / UNLIKE
+  ======================================================= */
+
+  const toggleLike =
+    async (post) => {
+      if (!user) {
+        return;
+      }
+
+      const postRef =
+        doc(
+          db,
+          'posts',
+          post.id
+        );
+
+      try {
+        await runTransaction(
+          db,
+          async (
+            transaction
+          ) => {
+            const snapshot =
+              await transaction.get(
+                postRef
+              );
+
+            if (
+              !snapshot.exists()
+            ) {
+              return;
+            }
+
+            const data =
+              snapshot.data();
+
+            const likes =
+              Array.isArray(
+                data.likes
+              )
+                ? data.likes
+                : [];
+
+            const alreadyLiked =
+              likes.includes(
+                user.uid
+              );
+
+            transaction.update(
+              postRef,
+              {
+                likes:
+                  alreadyLiked
+                    ? arrayRemove(
+                        user.uid
+                      )
+                    : arrayUnion(
+                        user.uid
+                      ),
+
+                likeCount:
+                  increment(
+                    alreadyLiked
+                      ? -1
+                      : 1
+                  ),
+
+                updatedAt:
+                  serverTimestamp(),
+              }
+            );
+          }
+        );
+      } catch (error) {
+        console.error(
+          'Like error:',
+          error
+        );
+
+        toast.error(
+          'Could not update like'
+        );
+      }
+    };
+
+  /* =======================================================
+     ADD COMMENT
+  ======================================================= */
+
+  const addComment =
+    async (post) => {
+      if (!user) {
+        return;
+      }
+
+      const text =
+        safeString(
+          commentText[post.id],
+          ''
+        ).trim();
+
+      if (!text) {
+        return;
+      }
+
+      if (
+        text.length > 500
+      ) {
+        toast.error(
+          'Comment is too long'
+        );
+        return;
+      }
+
+      try {
+        const username =
+          userData?.username ||
+          userData?.displayName ||
+          user.displayName ||
+          user.email?.split(
+            '@'
+          )[0] ||
+          'Manager';
+
+        await addDoc(
+          collection(
+            db,
+            'posts',
+            post.id,
+            'comments'
+          ),
+          {
+            userId:
+              user.uid,
+
+            username,
+
+            avatar:
+              userData?.photoURL ||
+              user.photoURL ||
+              '',
+
+            content:
+              text,
+
+            isAI:
+              false,
+
+            createdAt:
+              serverTimestamp(),
+          }
+        );
+
+        await updateDoc(
+          doc(
+            db,
+            'posts',
+            post.id
+          ),
+          {
+            commentCount:
+              increment(1),
+
+            updatedAt:
+              serverTimestamp(),
+          }
+        );
+
+        setCommentText(
+          (previous) => ({
+            ...previous,
+            [post.id]:
+              '',
+          })
+        );
+      } catch (error) {
+        console.error(
+          'Comment error:',
+          error
+        );
+
+        toast.error(
+          'Could not add comment'
+        );
+      }
+    };
+
+  /* =======================================================
+     MEDIA INTERVIEW
+  ======================================================= */
+
+  const openInterview =
+    () => {
+      const interview =
+        generateInterview({
+          clubInfo,
+          careerData,
+          players,
+        });
+
+      setMediaInterview(
+        interview
+      );
+    };
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (
+    loading ||
+    isLoading
+  ) {
+    return (
+      <div
+        className={
+          styles.loadingContainer
+        }
+      >
+        <div
+          className={
+            styles.spinner
+          }
+        />
+
+        <p>
+          Loading football world...
+        </p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
+  return (
+    <>
+      <Head>
+        <title>
+          Football News - Virtual Football Manager
+        </title>
+
+        <meta
+          name="description"
+          content="Live football news, transfers, injuries, media reports and manager community."
+        />
+      </Head>
+
+      <main
+        className={
+          styles.page
+        }
+      >
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
+        <header
+          className={
+            styles.header
+          }
+        >
+          <div>
+            <span
+              className={
+                styles.eyebrow
+              }
+            >
+              GLOBAL FOOTBALL NETWORK
+            </span>
+
+            <h1>
+              Football News
+            </h1>
+
+            <p>
+              Transfers, injuries,
+              results, interviews,
+              media reports and
+              manager discussions.
+            </p>
+          </div>
+
+          <div
+            className={
+              styles.headerStats
+            }
+          >
+            <div
+              className={
+                styles.statBox
+              }
+            >
+              <strong>
+                {allFeed.length}
+              </strong>
+
+              <span>
+                Stories
+              </span>
+            </div>
+
+            <div
+              className={
+                styles.statBox
+              }
+            >
+              <strong>
+                {posts.length}
+              </strong>
+
+              <span>
+                Community Posts
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* =================================================
+            MEDIA BAR
+        ================================================= */}
+
+        <section
+          className={
+            styles.mediaBar
+          }
+        >
+          <div
+            className={
+              styles.mediaBarTitle
+            }
+          >
+            <span>
+              📺
+            </span>
+
+            <div>
+              <strong>
+                Football Media
+              </strong>
+
+              <small>
+                Latest reports from
+                around the football
+                world
+              </small>
+            </div>
+          </div>
+
+          <div
+            className={
+              styles.mediaOutlets
+            }
+          >
+            {MEDIA_OUTLETS
+              .slice(0, 4)
+              .map(
+                (outlet) => (
+                  <button
+                    key={
+                      outlet.id
+                    }
+                    type="button"
+                    className={
+                      styles.mediaOutlet
+                    }
+                    style={{
+                      '--media-color':
+                        outlet.color,
+                    }}
+                    onClick={() =>
+                      setSelectedMedia(
+                        outlet
+                      )
+                    }
+                  >
+                    <span>
+                      {
+                        outlet.icon
+                      }
+                    </span>
+
+                    <div>
+                      <strong>
+                        {
+                          outlet.name
+                        }
+                      </strong>
+
+                      <small>
+                        {
+                          outlet.type
+                        }
+                      </small>
+                    </div>
+                  </button>
+                )
+              )}
+          </div>
+
+          <button
+            type="button"
+            className={
+              styles.interviewButton
+            }
+            onClick={
+              openInterview
+            }
+          >
+            🎤
+            <span>
+              Media Interview
+            </span>
+          </button>
+        </section>
+
+        {/* =================================================
+            CREATE POST
+        ================================================= */}
+
+        <section
+          className={
+            styles.createPost
+          }
+        >
+          <div
+            className={
+              styles.createPostHeader
+            }
+          >
+            <div
+              className={
+                styles.userAvatar
+              }
+            >
+              {(
+                userData?.username ||
+                user.displayName ||
+                'M'
+              )
+                .charAt(0)
+                .toUpperCase()}
+            </div>
+
+            <div>
+              <strong>
+                Share with football world
+              </strong>
+
+              <small>
+                Post an update,
+                opinion or club news.
+              </small>
+            </div>
+          </div>
+
+          <textarea
+            className={
+              styles.postTextarea
+            }
+            value={
+              postText
+            }
+            maxLength={1000}
+            onChange={(event) =>
+              setPostText(
+                event.target.value
+              )
+            }
+            placeholder="What's happening at your club?"
+          />
+
+          <div
+            className={
+              styles.createPostFooter
+            }
+          >
+            <span>
+              {postText.length}
+              /1000
+            </span>
+
+            <button
+              type="button"
+              className={
+                styles.publishButton
+              }
+              disabled={
+                posting ||
+                !postText.trim()
+              }
+              onClick={
+                createPost
+              }
+            >
+              {posting
+                ? 'Publishing...'
+                : '🚀 Publish Post'}
+            </button>
+          </div>
+        </section>
+
+        {/* =================================================
+            SEARCH
+        ================================================= */}
+
+        <section
+          className={
+            styles.searchSection
+          }
+        >
+          <div
+            className={
+              styles.searchBox
+            }
+          >
+            <span>
+              🔎
+            </span>
+
+            <input
+              type="text"
+              value={
+                searchTerm
+              }
+              onChange={(
+                event
+              ) =>
+                setSearchTerm(
+                  event.target.value
+                )
+              }
+              placeholder="Search football news..."
+            />
+          </div>
+        </section>
+
+        {/* =================================================
+            FILTERS
+        ================================================= */}
+
+        <nav
+          className={
+            styles.filters
+          }
+        >
+          {filterTypes.map(
+            (filter) => (
+              <button
+                key={
+                  filter.value
+                }
+                type="button"
+                className={
+                  activeFilter ===
+                  filter.value
+                    ? styles.activeFilter
+                    : ''
+                }
+                onClick={() =>
+                  setActiveFilter(
+                    filter.value
+                  )
+                }
+              >
+                <span>
+                  {
+                    filter.icon
+                  }
+                </span>
+
+                {
+                  filter.label
+                }
+              </button>
+            )
+          )}
+        </nav>
+
+        {/* =================================================
+            FEED
+        ================================================= */}
+
+        <section
+          className={
+            styles.newsList
+          }
+        >
+          {filteredFeed.length >
+          0 ? (
+            filteredFeed.map(
+              (item) => {
+                /* =========================================
+                   COMMUNITY POST
+                ========================================= */
+
+                if (
+                  item.isCommunityPost
+                ) {
+                  const post =
+                    posts.find(
+                      (p) =>
+                        p.id ===
+                        item.id
+                    ) ||
+                    item;
+
+                  const likes =
+                    Array.isArray(
+                      post.likes
+                    )
+                      ? post.likes
+                      : [];
+
+                  const aiLikes =
+                    Array.isArray(
+                      post.aiLikes
+                    )
+                      ? post.aiLikes
+                      : [];
+
+                  const liked =
+                    user &&
+                    likes.includes(
+                      user.uid
+                    );
+
+                  const postComments =
+                    comments[
+                      post.id
+                    ] || [];
+
+                  return (
+                    <article
+                      key={
+                        item.id
+                      }
+                      className={
+                        styles.communityPost
+                      }
+                    >
+                      <div
+                        className={
+                          styles.postHeader
+                        }
+                      >
+                        <div
+                          className={
+                            styles.postAvatar
+                          }
+                        >
+                          {post.avatar ? (
+                            <img
+                              src={
+                                post.avatar
+                              }
+                              alt={
+                                post.username ||
+                                'Manager'
+                              }
+                            />
+                          ) : (
+                            safeString(
+                              post.username,
+                              'M'
+                            )
+                              .charAt(
+                                0
+                              )
+                              .toUpperCase()
+                          )}
+                        </div>
+
+                        <div
+                          className={
+                            styles.postAuthor
+                          }
+                        >
+                          <strong>
+                            {
+                              post.username ||
+                              'Manager'
+                            }
+                          </strong>
+
+                          <small>
+                            Manager
+                            Community
+                            •{' '}
+                            {timeAgo(
+                              post.createdAt
+                            )}
+                          </small>
+                        </div>
+
+                        {post.isAI && (
+                          <span
+                            className={
+                              styles.aiBadge
+                            }
+                          >
+                            🤖 AI
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        className={
+                          styles.postBody
+                        }
+                      >
+                        {post.title && (
+                          <h2>
+                            {
+                              post.title
+                            }
+                          </h2>
+                        )}
+
+                        <p>
+                          {
+                            post.content
+                          }
+                        </p>
+                      </div>
+
+                      <div
+                        className={
+                          styles.postStats
+                        }
+                      >
+                        <span>
+                          ❤️{' '}
+                          {
+                            safeNumber(
+                              post.likeCount
+                            )
+                          }
+                        </span>
+
+                        <span>
+                          🤖{' '}
+                          {
+                            aiLikes.length
+                          } AI
+                        </span>
+
+                        <span>
+                          💬{' '}
+                          {
+                            safeNumber(
+                              post.commentCount
+                            )
+                          }
+                        </span>
+                      </div>
+
+                      <div
+                        className={
+                          styles.postActions
+                        }
+                      >
+                        <button
+                          type="button"
+                          className={
+                            liked
+                              ? styles.likedButton
+                              : ''
+                          }
+                          onClick={() =>
+                            toggleLike(
+                              post
+                            )
+                          }
+                        >
+                          {liked
+                            ? '❤️ Liked'
+                            : '🤍 Like'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleComments(
+                              post.id
+                            )
+                          }
+                        >
+                          💬 Comments
+                        </button>
+                      </div>
+
+                      {openComments[
+                        post.id
+                      ] && (
+                        <div
+                          className={
+                            styles.commentsArea
+                          }
+                        >
+                          <div
+                            className={
+                              styles.commentInput
+                            }
+                          >
+                            <input
+                              type="text"
+                              value={
+                                commentText[
+                                  post.id
+                                ] || ''
+                              }
+                              onChange={(
+                                event
+                              ) =>
+                                setCommentText(
+                                  (
+                                    previous
+                                  ) => ({
+                                    ...previous,
+                                    [post.id]:
+                                      event
+                                        .target
+                                        .value,
+                                  })
+                                )
+                              }
+                              onKeyDown={(
+                                event
+                              ) => {
+                                if (
+                                  event.key ===
+                                  'Enter'
+                                ) {
+                                  addComment(
+                                    post
+                                  );
+                                }
+                              }}
+                              placeholder="Write a comment..."
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                addComment(
+                                  post
+                                )
+                              }
+                            >
+                              Send
+                            </button>
+                          </div>
+
+                          {loadingComments[
+                            post.id
+                          ] ? (
+                            <div
+                              className={
+                                styles.commentLoading
+                              }
+                            >
+                              Loading
+                              comments...
+                            </div>
+                          ) : postComments.length >
+                            0 ? (
+                            <div
+                              className={
+                                styles.commentsList
+                              }
+                            >
+                              {postComments.map(
+                                (
+                                  comment
+                                ) => (
+                                  <div
+                                    key={
+                                      comment.id
+                                    }
+                                    className={
+                                      styles.comment
+                                    }
+                                  >
+                                    <div
+                                      className={
+                                        styles.commentAvatar
+                                      }
+                                    >
+                                      {
+                                        comment.avatar ||
+                                        safeString(
+                                          comment.username,
+                                          'U'
+                                        )
+                                          .charAt(
+                                            0
+                                          )
+                                          .toUpperCase()
+                                      }
+                                    </div>
+
+                                    <div
+                                      className={
+                                        styles.commentContent
+                                      }
+                                    >
+                                      <div
+                                        className={
+                                          styles.commentTop
+                                        }
+                                      >
+                                        <strong>
+                                          {
+                                            comment.username
+                                          }
+                                        </strong>
+
+                                        {comment.isAI && (
+                                          <span
+                                            className={
+                                              styles.aiCommentBadge
+                                            }
+                                          >
+                                            🤖 AI
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <p>
+                                        {
+                                          comment.content
+                                        }
+                                      </p>
+
+                                      <small>
+                                        {
+                                          timeAgo(
+                                            comment.createdAt
+                                          )
+                                        }
+                                      </small>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          ) : (
+                            <div
+                              className={
+                                styles.emptyComments
+                              }
+                            >
+                              No comments
+                              yet.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                }
+
+                /* =========================================
+                   NORMAL NEWS CARD
+                ========================================= */
+
+                return (
+                  <article
+                    key={
+                      item.id
+                    }
+                    className={
+                      styles.newsCard
+                    }
+                    style={{
+                      borderLeftColor:
+                        item.color,
+                    }}
+                  >
+                    <div
+                      className={
+                        styles.newsIcon
+                      }
+                      style={{
+                        background:
+                          `${item.color}18`,
+                      }}
+                    >
+                      <span>
+                        {
+                          item.icon
+                        }
+                      </span>
+                    </div>
+
+                    <div
+                      className={
+                        styles.newsContent
+                      }
+                    >
+                      <div
+                        className={
+                          styles.newsHeader
+                        }
+                      >
+                        <span
+                          className={
+                            styles.newsType
+                          }
+                          style={{
+                            color:
+                              item.color,
+                          }}
+                        >
+                          {
+                            item.title
+                          }
+                        </span>
+
+                        <span
+                          className={
+                            styles.newsTime
+                          }
+                        >
+                          {timeAgo(
+                            item.date
+                          )}
+                        </span>
+                      </div>
+
+                      <h2
+                        className={
+                          styles.newsHeadline
+                        }
+                      >
+                        {
+                          item.headline
+                        }
+                      </h2>
+
+                      <p
+                        className={
+                          styles.newsBody
+                        }
+                      >
+                        {
+                          item.body
+                        }
+                      </p>
+
+                      {item.type ===
+                        'media' && (
+                        <button
+                          type="button"
+                          className={
+                            styles.readReportButton
+                          }
+                          onClick={() =>
+                            setSelectedMedia(
+                              MEDIA_OUTLETS.find(
+                                (
+                                  outlet
+                                ) =>
+                                  outlet.id ===
+                                  item.mediaOutletId
+                              ) ||
+                                MEDIA_OUTLETS[0]
+                            )
+                          }
+                        >
+                          📺 Read
+                          full media
+                          report
+                        </button>
+                      )}
+
+                      <div
+                        className={
+                          styles.newsFooter
+                        }
+                      >
+                        <span>
+                          {
+                            formatDate(
+                              item.date
+                            )
+                          }
+                        </span>
+
+                        <span>
+                          {
+                            formatTime(
+                              item.date
+                            )
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                );
+              }
+            )
+          ) : (
+            <div
+              className={
+                styles.emptyState
+              }
+            >
+              <span>
+                📰
+              </span>
+
+              <h3>
+                No news found
+              </h3>
+
+              <p>
+                There are no stories
+                matching your current
+                filters.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* =================================================
+            MEDIA MODAL
+        ================================================= */}
+
+        {selectedMedia && (
+          <div
+            className={
+              styles.modalOverlay
+            }
+            onClick={() =>
+              setSelectedMedia(
+                null
+              )
+            }
+          >
+            <div
+              className={
+                styles.modal
+              }
+              onClick={(event) =>
+                event.stopPropagation()
+              }
+            >
+              <div
+                className={
+                  styles.modalHeader
+                }
+              >
+                <div>
+                  <span
+                    className={
+                      styles.modalIcon
+                    }
+                  >
+                    {
+                      selectedMedia.icon
+                    }
+                  </span>
+
+                  <div>
+                    <strong>
+                      {
+                        selectedMedia.name
+                      }
+                    </strong>
+
+                    <small>
+                      {
+                        selectedMedia.type
+                      }
+                    </small>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedMedia(
+                      null
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                className={
+                  styles.modalBody
+                }
+              >
+                <span
+                  className={
+                    styles.liveLabel
+                  }
+                >
+                  ● LIVE MEDIA
+                </span>
+
+                <h2>
+                  {
+                    selectedMedia.name
+                  } is following
+                  the story
+                </h2>
+
+                <p>
+                  Our journalists are
+                  monitoring developments
+                  around{' '}
+                  <strong>
+                    {
+                      clubInfo?.name ||
+                      'your club'
+                    }
+                  </strong>
+                  .
+                </p>
+
+                <p>
+                  Transfer activity,
+                  tactical decisions,
+                  player performances
+                  and manager decisions
+                  will continue to be
+                  analysed throughout
+                  the season.
+                </p>
+
+                <div
+                  className={
+                    styles.mediaQuote
+                  }
+                >
+                  “The story is still
+                  developing. Our
+                  reporters will continue
+                  following every major
+                  development.”
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================
+            INTERVIEW MODAL
+        ================================================= */}
+
+        {mediaInterview && (
+          <div
+            className={
+              styles.modalOverlay
+            }
+            onClick={() =>
+              setMediaInterview(
+                null
+              )
+            }
+          >
+            <div
+              className={
+                styles.interviewModal
+              }
+              onClick={(event) =>
+                event.stopPropagation()
+              }
+            >
+              <div
+                className={
+                  styles.interviewHero
+                }
+              >
+                <span>
+                  🎤
+                </span>
+
+                <div>
+                  <small>
+                    EXCLUSIVE
+                  </small>
+
+                  <h2>
+                    {
+                      mediaInterview.title
+                    }
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMediaInterview(
+                      null
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                className={
+                  styles.interviewBody
+                }
+              >
+                <h3>
+                  {
+                    mediaInterview.headline
+                  }
+                </h3>
+
+                <p>
+                  {
+                    mediaInterview.body
+                  }
+                </p>
+
+                <span
+                  className={
+                    styles.interviewDisclaimer
+                  }
+                >
+                  🎙️ Simulated media
+                  interview from the
+                  football world.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </>
+  );
+}
