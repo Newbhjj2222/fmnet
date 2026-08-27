@@ -1,680 +1,514 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+// pages/club-manager.js
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import Cookies from "js-cookie";
 
 import {
   collection,
-  doc,
   getDocs,
-  onSnapshot,
-  query,
+  doc,
   updateDoc,
-  where,
+  serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "../components/firebase";
+import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 import styles from "./admin-leagues.module.css";
 
+/* =========================================================
+   HELPERS
+========================================================= */
 
-// ============================================================
-// DEFAULTS
-// ============================================================
-
-const DEFAULT_CURRENCY = "EUR";
-
-const DEFAULT_REPUTATION = 50;
-
-const DEFAULT_BALANCE = 1000000;
-
-const DEFAULT_TRANSFER_BUDGET = 500000;
-
-const DEFAULT_WAGE_BUDGET = 100000;
-
-
-// ============================================================
-// NUMBER HELPERS
-// ============================================================
-
-function numberValue(value, fallback = 0) {
+function toNumber(value, fallback = 0) {
   const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return fallback;
+  return Number.isFinite(number)
+    ? number
+    : fallback;
+}
+
+function formatMoney(value, currency = "EUR") {
+  const amount = toNumber(value, 0);
+
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "EUR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${amount.toLocaleString()} ${currency || "EUR"}`;
   }
-
-  return number;
 }
 
-
-function formatMoney(value) {
-  const number = numberValue(value, 0);
-
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(number);
+function formatNumber(value) {
+  return toNumber(value, 0).toLocaleString();
 }
 
+/* =========================================================
+   EMPTY FORM
+========================================================= */
 
-// ============================================================
-// NORMALIZE LEAGUE
-// ============================================================
+const EMPTY_FORM = {
+  reputation: 50,
+  balance: 0,
+  transferBudget: 0,
+  wageBudget: 0,
+};
 
-function normalizeLeague(id, data = {}) {
-  return {
-    id,
+/* =========================================================
+   PAGE
+========================================================= */
 
-    name:
-      data.name ||
-      data.leagueName ||
-      data.title ||
-      "Unnamed League",
-
-    country:
-      data.country ||
-      data.countryName ||
-      "",
-
-    logo:
-      data.logo ||
-      data.logoUrl ||
-      "",
-
-    reputation:
-      numberValue(
-        data.reputation,
-        DEFAULT_REPUTATION
-      ),
-
-    ...data,
-  };
-}
-
-
-// ============================================================
-// NORMALIZE CLUB
-// ============================================================
-
-function normalizeClub(id, data = {}) {
-  return {
-    id,
-
-    name:
-      data.name ||
-      data.clubName ||
-      data.teamName ||
-      "Unnamed Club",
-
-    shortName:
-      data.shortName ||
-      data.short ||
-      "",
-
-    logo:
-      data.logo ||
-      data.logoUrl ||
-      "",
-
-    leagueId:
-      data.leagueId ||
-      data.leagueID ||
-      data.league ||
-      data.competitionId ||
-      "",
-
-    country:
-      data.country ||
-      data.countryName ||
-      "",
-
-    currency:
-      data.currency ||
-      DEFAULT_CURRENCY,
-
-    reputation:
-      numberValue(
-        data.reputation,
-        DEFAULT_REPUTATION
-      ),
-
-    balance:
-      numberValue(
-        data.balance,
-        DEFAULT_BALANCE
-      ),
-
-    transferBudget:
-      numberValue(
-        data.transferBudget,
-        DEFAULT_TRANSFER_BUDGET
-      ),
-
-    wageBudget:
-      numberValue(
-        data.wageBudget,
-        DEFAULT_WAGE_BUDGET
-      ),
-
-    ...data,
-  };
-}
-
-
-// ============================================================
-// PAGE
-// ============================================================
-
-export default function AdminLeaguesPage() {
+export default function ClubManager() {
   const router = useRouter();
 
-  const [loading, setLoading] =
-    useState(true);
+  const {
+    user,
+    userData,
+    loading,
+  } = useAuth();
 
-  const [saving, setSaving] =
-    useState(false);
+  /* =======================================================
+     AUTH
+  ======================================================= */
 
-  const [leagues, setLeagues] =
-    useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
 
-  const [clubs, setClubs] =
-    useState([]);
+  /* =======================================================
+     DATA
+  ======================================================= */
 
-  const [selectedLeagueId, setSelectedLeagueId] =
-    useState("");
+  const [leagues, setLeagues] = useState([]);
+  const [clubs, setClubs] = useState([]);
 
-  const [selectedClubId, setSelectedClubId] =
-    useState("");
+  const [selectedLeagueId, setSelectedLeagueId] = useState("");
+  const [selectedClubId, setSelectedClubId] = useState("");
 
-  const [search, setSearch] =
-    useState("");
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  const [error, setError] =
-    useState("");
+  /* =======================================================
+     UI
+  ======================================================= */
 
-  const [success, setSuccess] =
-    useState("");
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [form, setForm] = useState({
-    reputation: DEFAULT_REPUTATION,
-    balance: DEFAULT_BALANCE,
-    transferBudget: DEFAULT_TRANSFER_BUDGET,
-    wageBudget: DEFAULT_WAGE_BUDGET,
-  });
+  /* =======================================================
+     DISPLAY NAME
+  ======================================================= */
 
-
-  // ==========================================================
-  // ADMIN CHECK
-  // ==========================================================
-
-  useEffect(() => {
-    const username =
-      Cookies.get("user");
-
-    if (!username) {
-      router.replace("/login");
-
-      return;
-    }
-
-    /*
-     * If your project already has a stronger
-     * admin authentication system, keep that
-     * system here.
-     */
-  }, [router]);
-
-
-  // ==========================================================
-  // LOAD LEAGUES
-  // ==========================================================
-
-  useEffect(() => {
-    let unsubscribe;
-
-    async function loadLeagues() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const snapshot =
-          await getDocs(
-            collection(
-              db,
-              "leagues"
-            )
-          );
-
-        const list =
-          snapshot.docs
-            .map((item) =>
-              normalizeLeague(
-                item.id,
-                item.data()
-              )
-            )
-            .sort((a, b) =>
-              a.name.localeCompare(
-                b.name
-              )
-            );
-
-        setLeagues(list);
-
-        if (
-          list.length > 0 &&
-          !selectedLeagueId
-        ) {
-          setSelectedLeagueId(
-            list[0].id
-          );
-        }
-      } catch (err) {
-        console.error(
-          "Load leagues error:",
-          err
-        );
-
-        setError(
-          err?.message ||
-          "Failed to load leagues."
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadLeagues();
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [selectedLeagueId]);
-
-
-  // ==========================================================
-  // LOAD CLUBS
-  // ==========================================================
-
-  useEffect(() => {
-    if (!selectedLeagueId) {
-      setClubs([]);
-      setSelectedClubId("");
-
-      return;
-    }
-
-    let unsubscribe =
-      null;
-
-    async function loadClubs() {
-      try {
-        setLoading(true);
-        setError("");
-
-        /*
-         * First try:
-         * clubs where leagueId == selectedLeagueId
-         */
-
-        const clubsQuery =
-          query(
-            collection(
-              db,
-              "clubs"
-            ),
-            where(
-              "leagueId",
-              "==",
-              selectedLeagueId
-            )
-          );
-
-        const snapshot =
-          await getDocs(
-            clubsQuery
-          );
-
-        const list =
-          snapshot.docs
-            .map((item) =>
-              normalizeClub(
-                item.id,
-                item.data()
-              )
-            )
-            .sort((a, b) =>
-              a.name.localeCompare(
-                b.name
-              )
-            );
-
-        setClubs(list);
-
-        if (list.length > 0) {
-          setSelectedClubId(
-            list[0].id
-          );
-        } else {
-          setSelectedClubId("");
-        }
-      } catch (err) {
-        console.error(
-          "Load clubs error:",
-          err
-        );
-
-        /*
-         * Firestore index/query problems
-         * should not destroy the page.
-         *
-         * Fallback: load all clubs and
-         * filter locally.
-         */
-
-        try {
-          const snapshot =
-            await getDocs(
-              collection(
-                db,
-                "clubs"
-              )
-            );
-
-          const all =
-            snapshot.docs.map(
-              (item) =>
-                normalizeClub(
-                  item.id,
-                  item.data()
-                )
-            );
-
-          const filtered =
-            all
-              .filter(
-                (club) =>
-                  String(
-                    club.leagueId
-                  ) ===
-                  String(
-                    selectedLeagueId
-                  )
-              )
-              .sort((a, b) =>
-                a.name.localeCompare(
-                  b.name
-                )
-              );
-
-          setClubs(filtered);
-
-          if (
-            filtered.length > 0
-          ) {
-            setSelectedClubId(
-              filtered[0].id
-            );
-          } else {
-            setSelectedClubId("");
-          }
-
-          setError("");
-        } catch (fallbackError) {
-          console.error(
-            "Fallback clubs error:",
-            fallbackError
-          );
-
-          setError(
-            fallbackError?.message ||
-            "Failed to load clubs."
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadClubs();
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [selectedLeagueId]);
-
-
-  // ==========================================================
-  // SELECTED CLUB
-  // ==========================================================
-
-  const selectedClub =
-    useMemo(
-      () =>
-        clubs.find(
-          (club) =>
-            club.id ===
-            selectedClubId
-        ) || null,
-      [
-        clubs,
-        selectedClubId,
-      ]
+  const displayName = useMemo(() => {
+    return (
+      userData?.displayName ||
+      userData?.username ||
+      user?.email?.split("@")[0] ||
+      "Manager"
     );
+  }, [userData, user]);
 
+  /* =======================================================
+     ADMIN CHECK
+  ======================================================= */
 
-  // ==========================================================
-  // FILTERED CLUBS
-  // ==========================================================
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
 
-  const filteredClubs =
-    useMemo(() => {
-      const value =
-        search
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    const normalizedName = String(displayName)
+      .trim()
+      .toLowerCase();
+
+    const admin =
+      normalizedName === "navio" ||
+      userData?.role === "admin" ||
+      userData?.isAdmin === true;
+
+    setIsAdmin(admin);
+    setCheckingAdmin(false);
+
+    if (!admin) {
+      toast.error(
+        "You are not authorized to access this page."
+      );
+
+      router.replace("/dashboard");
+    }
+  }, [
+    user,
+    userData,
+    loading,
+    displayName,
+    router,
+  ]);
+
+  /* =======================================================
+     LOAD LEAGUES + CLUBS
+  ======================================================= */
+
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoadingData(true);
+
+      const [
+        leaguesSnapshot,
+        clubsSnapshot,
+      ] = await Promise.all([
+        getDocs(
+          collection(
+            db,
+            "leagues"
+          )
+        ),
+
+        getDocs(
+          collection(
+            db,
+            "clubs"
+          )
+        ),
+      ]);
+
+      const loadedLeagues =
+        leaguesSnapshot.docs.map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          })
+        );
+
+      const loadedClubs =
+        clubsSnapshot.docs.map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          })
+        );
+
+      loadedLeagues.sort((a, b) =>
+        String(a.name || "").localeCompare(
+          String(b.name || "")
+        )
+      );
+
+      loadedClubs.sort((a, b) =>
+        String(
+          a.name ||
+            a.clubName ||
+            ""
+        ).localeCompare(
+          String(
+            b.name ||
+              b.clubName ||
+              ""
+          )
+        )
+      );
+
+      setLeagues(loadedLeagues);
+      setClubs(loadedClubs);
+    } catch (error) {
+      console.error(
+        "Club manager loading error:",
+        error
+      );
+
+      toast.error(
+        "Failed to load leagues and clubs."
+      );
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    loadData();
+  }, [
+    isAdmin,
+    loadData,
+  ]);
+
+  /* =======================================================
+     CLUBS OF SELECTED LEAGUE
+  ======================================================= */
+
+  const leagueClubs = useMemo(() => {
+    if (!selectedLeagueId) {
+      return [];
+    }
+
+    const selectedLeague =
+      leagues.find(
+        (league) =>
+          league.id ===
+          selectedLeagueId
+      );
+
+    const leagueName =
+      String(
+        selectedLeague?.name || ""
+      )
+        .trim()
+        .toLowerCase();
+
+    return clubs.filter((club) => {
+      const clubLeagueId =
+        String(
+          club.leagueId || ""
+        );
+
+      const clubLeagueName =
+        String(
+          club.leagueName || ""
+        )
           .trim()
           .toLowerCase();
 
-      if (!value) {
-        return clubs;
+      /*
+       * Primary match:
+       * leagueId
+       */
+      if (
+        clubLeagueId &&
+        clubLeagueId ===
+          selectedLeagueId
+      ) {
+        return true;
       }
 
-      return clubs.filter(
-        (club) =>
-          club.name
-            .toLowerCase()
-            .includes(value) ||
-          club.shortName
-            ?.toLowerCase()
-            .includes(value)
-      );
-    }, [
-      clubs,
-      search,
-    ]);
+      /*
+       * Fallback:
+       * leagueName
+       */
+      if (
+        leagueName &&
+        clubLeagueName ===
+          leagueName
+      ) {
+        return true;
+      }
 
+      return false;
+    });
+  }, [
+    clubs,
+    leagues,
+    selectedLeagueId,
+  ]);
 
-  // ==========================================================
-  // SELECT CLUB
-  // ==========================================================
+  /* =======================================================
+     SELECT LEAGUE
+  ======================================================= */
 
-  const selectClub =
-    useCallback(
-      (club) => {
-        setSelectedClubId(
-          club.id
-        );
+  const handleLeagueChange = (
+    event
+  ) => {
+    const leagueId =
+      event.target.value;
 
-        setForm({
-          reputation:
-            numberValue(
-              club.reputation,
-              DEFAULT_REPUTATION
-            ),
-
-          balance:
-            numberValue(
-              club.balance,
-              DEFAULT_BALANCE
-            ),
-
-          transferBudget:
-            numberValue(
-              club.transferBudget,
-              DEFAULT_TRANSFER_BUDGET
-            ),
-
-          wageBudget:
-            numberValue(
-              club.wageBudget,
-              DEFAULT_WAGE_BUDGET
-            ),
-        });
-
-        setSuccess("");
-        setError("");
-      },
-      []
+    setSelectedLeagueId(
+      leagueId
     );
 
+    setSelectedClubId("");
 
-  // ==========================================================
-  // WHEN SELECTED CLUB CHANGES
-  // ==========================================================
+    setForm(
+      EMPTY_FORM
+    );
+  };
 
-  useEffect(() => {
-    if (!selectedClub) {
+  /* =======================================================
+     SELECT CLUB
+  ======================================================= */
+
+  const handleClubChange = (
+    event
+  ) => {
+    const clubId =
+      event.target.value;
+
+    setSelectedClubId(
+      clubId
+    );
+
+    const club =
+      clubs.find(
+        (item) =>
+          item.id === clubId
+      );
+
+    if (!club) {
+      setForm(
+        EMPTY_FORM
+      );
+
       return;
     }
 
     setForm({
-      reputation:
-        numberValue(
-          selectedClub.reputation,
-          DEFAULT_REPUTATION
-        ),
+      reputation: toNumber(
+        club.reputation,
+        50
+      ),
 
-      balance:
-        numberValue(
-          selectedClub.balance,
-          DEFAULT_BALANCE
-        ),
+      balance: toNumber(
+        club.balance,
+        0
+      ),
 
-      transferBudget:
-        numberValue(
-          selectedClub.transferBudget,
-          DEFAULT_TRANSFER_BUDGET
-        ),
+      transferBudget: toNumber(
+        club.transferBudget,
+        0
+      ),
 
-      wageBudget:
-        numberValue(
-          selectedClub.wageBudget,
-          DEFAULT_WAGE_BUDGET
-        ),
+      wageBudget: toNumber(
+        club.wageBudget,
+        0
+      ),
     });
-  }, [selectedClub]);
+  };
 
+  /* =======================================================
+     INPUT CHANGE
+  ======================================================= */
 
-  // ==========================================================
-  // FORM CHANGE
-  // ==========================================================
-
-  function handleChange(
+  const handleChange = (
     event
-  ) {
+  ) => {
     const {
       name,
       value,
     } = event.target;
 
-    setForm((current) => ({
-      ...current,
-
-      [name]:
-        value === ""
-          ? ""
-          : value,
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
     }));
+  };
 
-    setSuccess("");
-  }
+  /* =======================================================
+     SELECTED CLUB
+  ======================================================= */
 
+  const selectedClub = useMemo(() => {
+    return (
+      clubs.find(
+        (club) =>
+          club.id ===
+          selectedClubId
+      ) || null
+    );
+  }, [
+    clubs,
+    selectedClubId,
+  ]);
 
-  // ==========================================================
-  // SAVE CLUB
-  // ==========================================================
+  /* =======================================================
+     SAVE CLUB
+  ======================================================= */
 
-  async function saveClub(
+  const saveClub = async (
     event
-  ) {
+  ) => {
     event.preventDefault();
 
-    if (!selectedClub) {
-      setError(
+    if (!selectedClubId) {
+      toast.error(
         "Please select a club first."
       );
 
       return;
     }
 
-    setSaving(true);
-    setError("");
-    setSuccess("");
+    if (!selectedClub) {
+      toast.error(
+        "Selected club was not found."
+      );
+
+      return;
+    }
+
+    const reputation =
+      toNumber(
+        form.reputation,
+        50
+      );
+
+    const balance =
+      toNumber(
+        form.balance,
+        0
+      );
+
+    const transferBudget =
+      toNumber(
+        form.transferBudget,
+        0
+      );
+
+    const wageBudget =
+      toNumber(
+        form.wageBudget,
+        0
+      );
+
+    if (
+      reputation < 0 ||
+      reputation > 100
+    ) {
+      toast.error(
+        "Reputation must be between 0 and 100."
+      );
+
+      return;
+    }
+
+    if (balance < 0) {
+      toast.error(
+        "Balance cannot be negative."
+      );
+
+      return;
+    }
+
+    if (transferBudget < 0) {
+      toast.error(
+        "Transfer budget cannot be negative."
+      );
+
+      return;
+    }
+
+    if (wageBudget < 0) {
+      toast.error(
+        "Wage budget cannot be negative."
+      );
+
+      return;
+    }
 
     try {
-      const reputation =
-        Math.max(
-          0,
-          Math.min(
-            100,
-            numberValue(
-              form.reputation,
-              DEFAULT_REPUTATION
-            )
-          )
-        );
-
-      const balance =
-        Math.max(
-          0,
-          numberValue(
-            form.balance,
-            DEFAULT_BALANCE
-          )
-        );
-
-      const transferBudget =
-        Math.max(
-          0,
-          numberValue(
-            form.transferBudget,
-            DEFAULT_TRANSFER_BUDGET
-          )
-        );
-
-      const wageBudget =
-        Math.max(
-          0,
-          numberValue(
-            form.wageBudget,
-            DEFAULT_WAGE_BUDGET
-          )
-        );
+      setIsSaving(true);
 
       const clubRef =
         doc(
           db,
           "clubs",
-          selectedClub.id
+          selectedClubId
         );
 
       await updateDoc(
@@ -689,94 +523,150 @@ export default function AdminLeaguesPage() {
           wageBudget,
 
           updatedAt:
-            new Date(),
+            serverTimestamp(),
         }
       );
 
-      /*
-       * Update local state immediately.
-       */
+      setClubs((previous) =>
+        previous.map(
+          (club) => {
+            if (
+              club.id !==
+              selectedClubId
+            ) {
+              return club;
+            }
 
-      setClubs(
-        (current) =>
-          current.map(
-            (club) =>
-              club.id ===
-              selectedClub.id
-                ? {
-                    ...club,
+            return {
+              ...club,
 
-                    reputation,
+              reputation,
 
-                    balance,
+              balance,
 
-                    transferBudget,
+              transferBudget,
 
-                    wageBudget,
-                  }
-                : club
-          )
+              wageBudget,
+            };
+          }
+        )
       );
 
-      setSuccess(
-        `${selectedClub.name} updated successfully.`
+      toast.success(
+        `${selectedClub.name || selectedClub.clubName} updated successfully.`
       );
-    } catch (err) {
+    } catch (error) {
       console.error(
-        "Save club error:",
-        err
+        "Club update error:",
+        error
       );
 
-      setError(
-        err?.message ||
-        "Failed to update club."
+      toast.error(
+        error?.message ||
+          "Failed to update club."
       );
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
-  }
+  };
 
+  /* =======================================================
+     RESET
+  ======================================================= */
 
-  // ==========================================================
-  // LEAGUE CHANGE
-  // ==========================================================
+  const resetForm = () => {
+    if (!selectedClub) {
+      setForm(
+        EMPTY_FORM
+      );
 
-  function handleLeagueChange(
-    event
+      return;
+    }
+
+    setForm({
+      reputation: toNumber(
+        selectedClub.reputation,
+        50
+      ),
+
+      balance: toNumber(
+        selectedClub.balance,
+        0
+      ),
+
+      transferBudget: toNumber(
+        selectedClub.transferBudget,
+        0
+      ),
+
+      wageBudget: toNumber(
+        selectedClub.wageBudget,
+        0
+      ),
+    });
+  };
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (
+    loading ||
+    checkingAdmin
   ) {
-    const value =
-      event.target.value;
+    return (
+      <>
+        <Head>
+          <title>
+            Club Manager
+          </title>
+        </Head>
 
-    setSelectedLeagueId(
-      value
+        <main
+          className={
+            styles.page
+          }
+        >
+          <div
+            className={
+              styles.loadingBox
+            }
+          >
+            <div
+              className={
+                styles.spinner
+              }
+            />
+
+            <p>
+              Checking admin access...
+            </p>
+          </div>
+        </main>
+      </>
     );
-
-    setSelectedClubId("");
-
-    setSearch("");
-
-    setSuccess("");
-    setError("");
   }
 
+  if (!user || !isAdmin) {
+    return null;
+  }
 
-  // ==========================================================
-  // RENDER
-  // ==========================================================
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <>
       <Head>
         <title>
-          League & Club Manager
+          Club Manager | Virtual Football Manager
         </title>
 
         <meta
           name="description"
-          content="Manage leagues and football clubs."
+          content="Manage football league clubs, reputation, balance, transfer budget and wage budget."
         />
       </Head>
-
 
       <main
         className={
@@ -788,10 +678,9 @@ export default function AdminLeaguesPage() {
             styles.container
           }
         >
-
-          {/* ==================================================
+          {/* =================================================
               HEADER
-          ================================================== */}
+          ================================================= */}
 
           <header
             className={
@@ -812,7 +701,7 @@ export default function AdminLeaguesPage() {
                   styles.title
                 }
               >
-                League & Club Manager
+                Club Manager
               </h1>
 
               <p
@@ -821,402 +710,360 @@ export default function AdminLeaguesPage() {
                 }
               >
                 Select a league, choose a club,
-                and edit its financial and
-                reputation settings.
+                then edit its financial and reputation
+                settings.
               </p>
             </div>
 
-            <button
-              type="button"
+            <div
               className={
-                styles.backButton
-              }
-              onClick={() =>
-                router.push(
-                  "/admin"
-                )
+                styles.adminBadge
               }
             >
-              ← Back to Admin
-            </button>
+              <span>
+                Admin
+              </span>
+
+              <strong>
+                {displayName}
+              </strong>
+            </div>
           </header>
 
+          {/* =================================================
+              LOADING DATA
+          ================================================= */}
 
-          {/* ==================================================
-              MESSAGES
-          ================================================== */}
-
-          {error && (
-            <div
+          {isLoadingData ? (
+            <section
               className={
-                styles.error
+                styles.loadingCard
               }
             >
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div
-              className={
-                styles.success
-              }
-            >
-              {success}
-            </div>
-          )}
-
-
-          {/* ==================================================
-              LEAGUE SELECTOR
-          ================================================== */}
-
-          <section
-            className={
-              styles.panel
-            }
-          >
-            <div
-              className={
-                styles.panelHeader
-              }
-            >
-              <div>
-                <h2>
-                  Select League
-                </h2>
-
-                <p>
-                  Choose the competition
-                  whose clubs you want
-                  to manage.
-                </p>
-              </div>
-            </div>
-
-            <div
-              className={
-                styles.leagueGrid
-              }
-            >
-              {loading &&
-                leagues.length ===
-                  0 && (
-                  <div
-                    className={
-                      styles.loading
-                    }
-                  >
-                    Loading leagues...
-                  </div>
-                )}
-
-              {!loading &&
-                leagues.length ===
-                  0 && (
-                  <div
-                    className={
-                      styles.empty
-                    }
-                  >
-                    No leagues found.
-                  </div>
-                )}
-
-              {leagues.map(
-                (league) => {
-                  const active =
-                    league.id ===
-                    selectedLeagueId;
-
-                  return (
-                    <button
-                      key={
-                        league.id
-                      }
-                      type="button"
-                      className={`${styles.leagueCard} ${
-                        active
-                          ? styles.leagueCardActive
-                          : ""
-                      }`}
-                      onClick={() =>
-                        handleLeagueChange({
-                          target: {
-                            value:
-                              league.id,
-                          },
-                        })
-                      }
-                    >
-                      <div
-                        className={
-                          styles.leagueLogo
-                        }
-                      >
-                        {league.logo ? (
-                          <img
-                            src={
-                              league.logo
-                            }
-                            alt={
-                              league.name
-                            }
-                          />
-                        ) : (
-                          <span>
-                            ⚽
-                          </span>
-                        )}
-                      </div>
-
-                      <div
-                        className={
-                          styles.leagueInfo
-                        }
-                      >
-                        <strong>
-                          {
-                            league.name
-                          }
-                        </strong>
-
-                        {league.country && (
-                          <span>
-                            {
-                              league.country
-                            }
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
+              <div
+                className={
+                  styles.spinner
                 }
-              )}
-            </div>
-          </section>
+              />
 
-
-          {/* ==================================================
-              MAIN CONTENT
-          ================================================== */}
-
-          {selectedLeagueId && (
-            <div
-              className={
-                styles.workspace
-              }
-            >
-
-              {/* ==============================================
-                  CLUB LIST
+              <p>
+                Loading leagues and clubs...
+              </p>
+            </section>
+          ) : (
+            <>
+              {/* =============================================
+                  SELECTORS
               ============================================== */}
 
               <section
                 className={
-                  styles.panel
+                  styles.selectionCard
                 }
               >
                 <div
                   className={
-                    styles.panelHeader
+                    styles.sectionHeader
                   }
                 >
                   <div>
-                    <h2>
-                      Clubs
-                    </h2>
-
-                    <p>
-                      {
-                        clubs.length
-                      }{" "}
-                      clubs in this league
-                    </p>
-                  </div>
-
-                  <div
-                    className={
-                      styles.clubCount
-                    }
-                  >
-                    {
-                      filteredClubs.length
-                    }
-                  </div>
-                </div>
-
-
-                <div
-                  className={
-                    styles.searchBox
-                  }
-                >
-                  <span>
-                    🔎
-                  </span>
-
-                  <input
-                    type="search"
-                    value={
-                      search
-                    }
-                    onChange={(event) =>
-                      setSearch(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Search club..."
-                  />
-                </div>
-
-
-                <div
-                  className={
-                    styles.clubList
-                  }
-                >
-                  {loading && (
-                    <div
+                    <span
                       className={
-                        styles.loading
+                        styles.sectionLabel
                       }
                     >
-                      Loading clubs...
-                    </div>
-                  )}
+                      STEP 1
+                    </span>
 
-                  {!loading &&
-                    filteredClubs.length ===
-                      0 && (
-                      <div
-                        className={
-                          styles.empty
-                        }
-                      >
-                        No clubs were found
-                        for this league.
-                      </div>
-                    )}
+                    <h2>
+                      Choose League
+                    </h2>
+                  </div>
+                </div>
 
-                  {filteredClubs.map(
-                    (club) => {
-                      const active =
-                        club.id ===
-                        selectedClubId;
+                <div
+                  className={
+                    styles.field
+                  }
+                >
+                  <label
+                    htmlFor="league"
+                  >
+                    League
+                  </label>
 
-                      return (
-                        <button
-                          type="button"
+                  <select
+                    id="league"
+                    value={
+                      selectedLeagueId
+                    }
+                    onChange={
+                      handleLeagueChange
+                    }
+                    className={
+                      styles.select
+                    }
+                  >
+                    <option value="">
+                      Select a league
+                    </option>
+
+                    {leagues.map(
+                      (league) => (
+                        <option
                           key={
-                            club.id
+                            league.id
                           }
-                          className={`${styles.clubItem} ${
-                            active
-                              ? styles.clubItemActive
-                              : ""
-                          }`}
-                          onClick={() =>
-                            selectClub(
-                              club
-                            )
+                          value={
+                            league.id
                           }
                         >
-                          <div
-                            className={
-                              styles.clubLogo
-                            }
-                          >
-                            {club.logo ? (
-                              <img
-                                src={
-                                  club.logo
-                                }
-                                alt={
-                                  club.name
-                                }
-                              />
-                            ) : (
-                              <span>
-                                ⚽
-                              </span>
-                            )}
-                          </div>
-
-                          <div
-                            className={
-                              styles.clubDetails
-                            }
-                          >
-                            <strong>
-                              {
-                                club.name
-                              }
-                            </strong>
-
-                            {club.shortName && (
-                              <small>
-                                {
-                                  club.shortName
-                                }
-                              </small>
-                            )}
-                          </div>
-
-                          <span
-                            className={
-                              styles.arrow
-                            }
-                          >
-                            →
-                          </span>
-                        </button>
-                      );
-                    }
-                  )}
+                          {league.name ||
+                            "Unnamed League"}
+                          {league.countryName
+                            ? ` • ${league.countryName}`
+                            : ""}
+                        </option>
+                      )
+                    )}
+                  </select>
                 </div>
-              </section>
 
-
-              {/* ==============================================
-                  EDIT FORM
-              ============================================== */}
-
-              <section
-                className={
-                  styles.panel
-                }
-              >
-                {!selectedClub ? (
+                {selectedLeagueId && (
                   <div
                     className={
-                      styles.noSelection
+                      styles.leagueInfo
+                    }
+                  >
+                    <span>
+                      Clubs found
+                    </span>
+
+                    <strong>
+                      {
+                        leagueClubs.length
+                      }
+                    </strong>
+                  </div>
+                )}
+              </section>
+
+              {/* =============================================
+                  CLUB SELECTOR
+              ============================================== */}
+
+              {selectedLeagueId && (
+                <section
+                  className={
+                    styles.selectionCard
+                  }
+                >
+                  <div
+                    className={
+                      styles.sectionHeader
                     }
                   >
                     <div>
-                      ⚽
+                      <span
+                        className={
+                          styles.sectionLabel
+                        }
+                      >
+                        STEP 2
+                      </span>
+
+                      <h2>
+                        Choose Club
+                      </h2>
                     </div>
-
-                    <h2>
-                      Select a club
-                    </h2>
-
-                    <p>
-                      Choose a club from
-                      the list to edit
-                      its settings.
-                    </p>
                   </div>
-                ) : (
-                  <>
+
+                  {leagueClubs.length ===
+                  0 ? (
                     <div
                       className={
-                        styles.clubHero
+                        styles.emptyState
                       }
                     >
                       <div
                         className={
-                          styles.heroLogo
+                          styles.emptyIcon
+                        }
+                      >
+                        ⚽
+                      </div>
+
+                      <h3>
+                        No clubs found
+                      </h3>
+
+                      <p>
+                        This league currently
+                        has no clubs connected
+                        through <code>leagueId</code>
+                        or <code>leagueName</code>.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        className={
+                          styles.field
+                        }
+                      >
+                        <label
+                          htmlFor="club"
+                        >
+                          Club
+                        </label>
+
+                        <select
+                          id="club"
+                          value={
+                            selectedClubId
+                          }
+                          onChange={
+                            handleClubChange
+                          }
+                          className={
+                            styles.select
+                          }
+                        >
+                          <option value="">
+                            Select a club
+                          </option>
+
+                          {leagueClubs.map(
+                            (club) => (
+                              <option
+                                key={
+                                  club.id
+                                }
+                                value={
+                                  club.id
+                                }
+                              >
+                                {club.name ||
+                                  club.clubName ||
+                                  "Unnamed Club"}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </div>
+
+                      {/* =======================================
+                          CLUB LIST
+                      ======================================== */}
+
+                      <div
+                        className={
+                          styles.clubGrid
+                        }
+                      >
+                        {leagueClubs.map(
+                          (club) => {
+                            const active =
+                              club.id ===
+                              selectedClubId;
+
+                            return (
+                              <button
+                                type="button"
+                                key={
+                                  club.id
+                                }
+                                className={`${styles.clubCard} ${
+                                  active
+                                    ? styles.clubCardActive
+                                    : ""
+                                }`}
+                                onClick={() => {
+                                  handleClubChange(
+                                    {
+                                      target: {
+                                        value:
+                                          club.id,
+                                      },
+                                    }
+                                  );
+                                }}
+                              >
+                                <div
+                                  className={
+                                    styles.clubLogo
+                                  }
+                                >
+                                  {club.logo ? (
+                                    <img
+                                      src={
+                                        club.logo
+                                      }
+                                      alt={
+                                        club.name ||
+                                        club.clubName ||
+                                        "Club logo"
+                                      }
+                                    />
+                                  ) : (
+                                    <span>
+                                      ⚽
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div
+                                  className={
+                                    styles.clubCardContent
+                                  }
+                                >
+                                  <strong>
+                                    {club.name ||
+                                      club.clubName ||
+                                      "Unnamed Club"}
+                                  </strong>
+
+                                  <span>
+                                    Reputation:{" "}
+                                    {toNumber(
+                                      club.reputation,
+                                      50
+                                    )}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          }
+                        )}
+                      </div>
+                    </>
+                  )}
+                </section>
+              )}
+
+              {/* =============================================
+                  EDIT CLUB
+              ============================================== */}
+
+              {selectedClub && (
+                <section
+                  className={
+                    styles.editorCard
+                  }
+                >
+                  <div
+                    className={
+                      styles.editorHeader
+                    }
+                  >
+                    <div
+                      className={
+                        styles.selectedClub
+                      }
+                    >
+                      <div
+                        className={
+                          styles.selectedLogo
                         }
                       >
                         {selectedClub.logo ? (
@@ -1225,7 +1072,9 @@ export default function AdminLeaguesPage() {
                               selectedClub.logo
                             }
                             alt={
-                              selectedClub.name
+                              selectedClub.name ||
+                              selectedClub.clubName ||
+                              "Club logo"
                             }
                           />
                         ) : (
@@ -1238,37 +1087,121 @@ export default function AdminLeaguesPage() {
                       <div>
                         <span
                           className={
-                            styles.heroLabel
+                            styles.sectionLabel
                           }
                         >
-                          SELECTED CLUB
+                          EDITING CLUB
                         </span>
 
                         <h2>
-                          {
-                            selectedClub.name
-                          }
+                          {selectedClub.name ||
+                            selectedClub.clubName ||
+                            "Unnamed Club"}
                         </h2>
 
                         <p>
-                          {
-                            selectedClub.country ||
-                            "Football Club"
-                          }
+                          {selectedClub.leagueName ||
+                            "League"}
                         </p>
                       </div>
                     </div>
+                  </div>
 
+                  {/* =========================================
+                      CURRENT VALUES
+                  ========================================== */}
 
-                    <form
+                  <div
+                    className={
+                      styles.statsGrid
+                    }
+                  >
+                    <div
                       className={
-                        styles.form
-                      }
-                      onSubmit={
-                        saveClub
+                        styles.statCard
                       }
                     >
+                      <span>
+                        Reputation
+                      </span>
 
+                      <strong>
+                        {toNumber(
+                          selectedClub.reputation,
+                          50
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      className={
+                        styles.statCard
+                      }
+                    >
+                      <span>
+                        Balance
+                      </span>
+
+                      <strong>
+                        {formatMoney(
+                          selectedClub.balance,
+                          selectedClub.currency
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      className={
+                        styles.statCard
+                      }
+                    >
+                      <span>
+                        Transfer Budget
+                      </span>
+
+                      <strong>
+                        {formatMoney(
+                          selectedClub.transferBudget,
+                          selectedClub.currency
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      className={
+                        styles.statCard
+                      }
+                    >
+                      <span>
+                        Wage Budget
+                      </span>
+
+                      <strong>
+                        {formatMoney(
+                          selectedClub.wageBudget,
+                          selectedClub.currency
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* =========================================
+                      FORM
+                  ========================================== */}
+
+                  <form
+                    onSubmit={
+                      saveClub
+                    }
+                    className={
+                      styles.form
+                    }
+                  >
+                    <div
+                      className={
+                        styles.formGrid
+                      }
+                    >
                       {/* REPUTATION */}
 
                       <div
@@ -1282,38 +1215,28 @@ export default function AdminLeaguesPage() {
                           Reputation
                         </label>
 
-                        <div
-                          className={
-                            styles.inputWithSuffix
+                        <input
+                          id="reputation"
+                          name="reputation"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={
+                            form.reputation
                           }
-                        >
-                          <input
-                            id="reputation"
-                            name="reputation"
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={
-                              form.reputation
-                            }
-                            onChange={
-                              handleChange
-                            }
-                          />
-
-                          <span>
-                            / 100
-                          </span>
-                        </div>
+                          onChange={
+                            handleChange
+                          }
+                          className={
+                            styles.input
+                          }
+                        />
 
                         <small>
-                          Club reputation
-                          affects its
-                          overall standing.
+                          Value from 0 to 100.
                         </small>
                       </div>
-
 
                       {/* BALANCE */}
 
@@ -1325,43 +1248,30 @@ export default function AdminLeaguesPage() {
                         <label
                           htmlFor="balance"
                         >
-                          Club Balance
+                          Balance
                         </label>
 
-                        <div
-                          className={
-                            styles.inputWithSuffix
+                        <input
+                          id="balance"
+                          name="balance"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={
+                            form.balance
                           }
-                        >
-                          <input
-                            id="balance"
-                            name="balance"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={
-                              form.balance
-                            }
-                            onChange={
-                              handleChange
-                            }
-                          />
-
-                          <span>
-                            {
-                              selectedClub.currency ||
-                              DEFAULT_CURRENCY
-                            }
-                          </span>
-                        </div>
+                          onChange={
+                            handleChange
+                          }
+                          className={
+                            styles.input
+                          }
+                        />
 
                         <small>
-                          Current money
-                          available to the
-                          club.
+                          Current club money.
                         </small>
                       </div>
-
 
                       {/* TRANSFER BUDGET */}
 
@@ -1376,39 +1286,27 @@ export default function AdminLeaguesPage() {
                           Transfer Budget
                         </label>
 
-                        <div
-                          className={
-                            styles.inputWithSuffix
+                        <input
+                          id="transferBudget"
+                          name="transferBudget"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={
+                            form.transferBudget
                           }
-                        >
-                          <input
-                            id="transferBudget"
-                            name="transferBudget"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={
-                              form.transferBudget
-                            }
-                            onChange={
-                              handleChange
-                            }
-                          />
-
-                          <span>
-                            {
-                              selectedClub.currency ||
-                              DEFAULT_CURRENCY
-                            }
-                          </span>
-                        </div>
+                          onChange={
+                            handleChange
+                          }
+                          className={
+                            styles.input
+                          }
+                        />
 
                         <small>
-                          Money available for
-                          player transfers.
+                          Money available for transfers.
                         </small>
                       </div>
-
 
                       {/* WAGE BUDGET */}
 
@@ -1423,126 +1321,126 @@ export default function AdminLeaguesPage() {
                           Wage Budget
                         </label>
 
-                        <div
-                          className={
-                            styles.inputWithSuffix
+                        <input
+                          id="wageBudget"
+                          name="wageBudget"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={
+                            form.wageBudget
                           }
-                        >
-                          <input
-                            id="wageBudget"
-                            name="wageBudget"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={
-                              form.wageBudget
-                            }
-                            onChange={
-                              handleChange
-                            }
-                          />
-
-                          <span>
-                            {
-                              selectedClub.currency ||
-                              DEFAULT_CURRENCY
-                            }
-                          </span>
-                        </div>
+                          onChange={
+                            handleChange
+                          }
+                          className={
+                            styles.input
+                          }
+                        />
 
                         <small>
-                          Budget available for
-                          player and staff
-                          wages.
+                          Budget available for player wages.
                         </small>
                       </div>
+                    </div>
 
+                    {/* =======================================
+                        ACTIONS
+                    ======================================== */}
 
-                      {/* CURRENT VALUES */}
-
-                      <div
+                    <div
+                      className={
+                        styles.actions
+                      }
+                    >
+                      <button
+                        type="button"
+                        onClick={
+                          resetForm
+                        }
+                        disabled={
+                          isSaving
+                        }
                         className={
-                          styles.summary
+                          styles.resetButton
                         }
                       >
-                        <div>
-                          <span>
-                            Reputation
-                          </span>
-
-                          <strong>
-                            {
-                              form.reputation ||
-                              0
-                            }
-                            /100
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Balance
-                          </span>
-
-                          <strong>
-                            {
-                              formatMoney(
-                                form.balance
-                              )
-                            }
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Transfers
-                          </span>
-
-                          <strong>
-                            {
-                              formatMoney(
-                                form.transferBudget
-                              )
-                            }
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Wages
-                          </span>
-
-                          <strong>
-                            {
-                              formatMoney(
-                                form.wageBudget
-                              )
-                            }
-                          </strong>
-                        </div>
-                      </div>
-
-
-                      {/* SAVE */}
+                        Reset
+                      </button>
 
                       <button
                         type="submit"
                         disabled={
-                          saving
+                          isSaving
                         }
                         className={
                           styles.saveButton
                         }
                       >
-                        {saving
+                        {isSaving
                           ? "Saving..."
-                          : "Save Club Changes"}
+                          : "Save Changes"}
                       </button>
-                    </form>
-                  </>
-                )}
-              </section>
-            </div>
+                    </div>
+                  </form>
+
+                  {/* =========================================
+                      CLUB INFORMATION
+                  ========================================== */}
+
+                  <div
+                    className={
+                      styles.infoGrid
+                    }
+                  >
+                    <div>
+                      <span>
+                        Country
+                      </span>
+
+                      <strong>
+                        {selectedClub.countryName ||
+                          "Not specified"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Stadium
+                      </span>
+
+                      <strong>
+                        {selectedClub.stadium ||
+                          "Not specified"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Currency
+                      </span>
+
+                      <strong>
+                        {selectedClub.currency ||
+                          "EUR"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Players
+                      </span>
+
+                      <strong>
+                        {formatNumber(
+                          selectedClub.squadSize
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </div>
       </main>
