@@ -43,10 +43,8 @@ const ThreePitch = dynamic(
 // CONSTANTS
 // ============================================================
 
-// Real match duration in seconds (4 minutes)
-const MATCH_REAL_DURATION_SECONDS = 240;
-// Timer tick in milliseconds (500ms = 2 plays per second)
-const MATCH_TICK_MS = 500;
+const MATCH_REAL_DURATION_SECONDS = 240; // 4 minuti nyazo
+const MATCH_TICK_MS = 500; // buri 0.5 sec hakaba play
 
 const MATCH_MINUTE = 90;
 
@@ -1201,9 +1199,19 @@ export default function MatchPage() {
   const ballActionIdRef =
     useRef(0);
 
-  // Real time match start timestamp
   const startTimeRef =
     useRef(null);
+
+  const isPausedRef =
+    useRef(false);
+
+  // ==========================================================
+  // SYNC isPausedRef
+  // ==========================================================
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   // ==========================================================
   // LOAD USER PROFILE
@@ -1764,14 +1772,12 @@ export default function MatchPage() {
         // ====================================================
 
         if (loadedStatus === "live") {
-          // Estimate startTime so that current minute matches real elapsed
           const minutesPerSecond =
-            90 / MATCH_REAL_DURATION_SECONDS; // 0.375
+            90 / MATCH_REAL_DURATION_SECONDS;
           startTimeRef.current =
             Date.now() -
             (loadedMinute / minutesPerSecond) * 1000;
         } else if (loadedStatus === "half-time") {
-          // Half-time: set to minute 45
           const minutesPerSecond =
             90 / MATCH_REAL_DURATION_SECONDS;
           startTimeRef.current =
@@ -1792,13 +1798,16 @@ export default function MatchPage() {
           "half-time"
         ) {
           setIsPaused(true);
+          isPausedRef.current = true;
         } else if (
           loadedStatus ===
           "finished"
         ) {
           setIsPaused(true);
+          isPausedRef.current = true;
         } else {
           setIsPaused(false);
+          isPausedRef.current = false;
         }
 
         console.log(
@@ -2980,7 +2989,7 @@ export default function MatchPage() {
   useEffect(() => {
     if (
       matchStatus !== "live" ||
-      isPaused ||
+      isPausedRef.current ||
       loading
     ) {
       return;
@@ -3087,6 +3096,7 @@ export default function MatchPage() {
           );
 
           setIsPaused(true);
+          isPausedRef.current = true;
 
           minuteRef.current = 45;
           setMatchMinute(45);
@@ -3118,6 +3128,7 @@ export default function MatchPage() {
           );
 
           setIsPaused(true);
+          isPausedRef.current = true;
 
           minuteRef.current = MATCH_MINUTE;
           setMatchMinute(MATCH_MINUTE);
@@ -3153,7 +3164,6 @@ export default function MatchPage() {
     };
   }, [
     matchStatus,
-    isPaused,
     loading,
     simulatePlay,
     runAITactics,
@@ -3201,6 +3211,7 @@ export default function MatchPage() {
         );
 
         setIsPaused(false);
+        isPausedRef.current = false;
 
         const minutesPerSecond =
           90 / MATCH_REAL_DURATION_SECONDS;
@@ -3251,8 +3262,11 @@ export default function MatchPage() {
       }
 
       setIsPaused(
-        (previous) =>
-          !previous
+        (previous) => {
+          isPausedRef.current =
+            !previous;
+          return !previous;
+        }
       );
     }, [
       matchStatus,
