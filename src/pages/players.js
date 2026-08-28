@@ -8,8 +8,6 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
-  query,
-  where,
   updateDoc,
   arrayUnion,
   serverTimestamp,
@@ -23,10 +21,16 @@ import toast from 'react-hot-toast';
 import styles from './players.module.css';
 
 /* =========================================================
-   HELPERS
+   CONSTANTS
 ========================================================= */
 
 const MAX_SCOUT_RESULTS = 8;
+const TRANSFER_RESPONSE_DAYS = 2;
+const LOAN_RESPONSE_DAYS = 3;
+
+/* =========================================================
+   HELPERS
+========================================================= */
 
 function safeNumber(value, fallback = 0) {
   const number = Number(value);
@@ -48,7 +52,6 @@ function getPlayerAge(player) {
 
   if (player.dateOfBirth) {
     const dob = new Date(player.dateOfBirth);
-
     if (!Number.isNaN(dob.getTime())) {
       const today = new Date();
       let age = today.getFullYear() - dob.getFullYear();
@@ -136,15 +139,49 @@ function getContractEnd(player) {
   );
 }
 
-function daysUntil(date) {
-  if (!date) return null;
+function gameDateValue(value) {
+  if (!value) return null;
 
-  const target = new Date(date);
-
-  if (Number.isNaN(target.getTime())) {
-    return null;
+  if (
+    typeof value === 'object' &&
+    typeof value.toDate === 'function'
+  ) {
+    return value.toDate();
   }
 
+  if (
+    typeof value === 'object' &&
+    typeof value.seconds === 'number'
+  ) {
+    return new Date(value.seconds * 1000);
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addGameDays(date, days) {
+  const base = gameDateValue(date) || new Date();
+  return new Date(
+    base.getTime() +
+      safeNumber(days, 0) * 24 * 60 * 60 * 1000
+  ).toISOString();
+}
+
+function formatGameDate(date) {
+  const parsed = gameDateValue(date);
+  if (!parsed) return 'Not set';
+  return parsed.toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function daysUntil(date) {
+  if (!date) return null;
+  const target = new Date(date);
+  if (Number.isNaN(target.getTime())) return null;
   return Math.ceil(
     (target.getTime() - Date.now()) /
       (1000 * 60 * 60 * 24)
@@ -277,9 +314,12 @@ export default function PlayersPage({
   const [careerData, setCareerData] = useState(null);
   const [currentClub, setCurrentClub] = useState(null);
 
-  // Budget states – sourced EXCLUSIVELY from clubs/{clubId}
+  // Budgets – sourced EXCLUSIVELY from clubs/{clubId}
   const [transferBudget, setTransferBudget] = useState(0);
   const [wageBudget, setWageBudget] = useState(0);
+
+  // Game date – sourced from careerData.currentDate
+  const [gameDate, setGameDate] = useState(null);
 
   const [activeTab, setActiveTab] = useState('squad');
   const [search, setSearch] = useState('');
@@ -330,6 +370,10 @@ export default function PlayersPage({
       const career = data.careerData || {};
       setCareerData(career);
 
+      // Set game date from career
+      const parsedGameDate = gameDateValue(career.currentDate);
+      setGameDate(parsedGameDate);
+
       if (career.currentClub) {
         const clubRef = doc(db, 'clubs', career.currentClub);
         const clubSnapshot = await getDoc(clubRef);
@@ -340,7 +384,6 @@ export default function PlayersPage({
             id: clubSnapshot.id,
             ...clubData,
           });
-          // Initial budget from club doc
           setTransferBudget(Number(clubData.transferBudget || 0));
           setWageBudget(Number(clubData.wageBudget || 0));
         }
@@ -391,6 +434,31 @@ export default function PlayersPage({
 
     return () => unsubscribe();
   }, [careerData?.currentClub]);
+
+  /* =======================================================
+     REAL-TIME PLAYERS
+  ======================================================= */
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'players'),
+      (snapshot) => {
+        setPlayers(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            ...item.data(),
+          }))
+        );
+      },
+      (error) => {
+        console.error('Players realtime error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   /* =======================================================
      CURRENT CLUB ID & PLAYERS
@@ -654,6 +722,8 @@ export default function PlayersPage({
 
   /* =======================================================
      MAKE TRANSFER OFFER
+     Uses GAME DATE for createdAt and responseDeadline
+     Reads budget from clubs/{clubId}.transferBudget
   ======================================================= */
 
   const makeTransferOffer = async () => {
@@ -665,11 +735,28 @@ export default function PlayersPage({
       return;
     }
 
-    const budget = transferBudget; // from club doc
-    if (budget > 0 && offer > budget) {
+    // READ club document directly
+    const clubRef = doc(db, 'clubs', currentClubId);
+    const clubSnap = await getDoc(clubRef);
+
+    if (!clubSnap.exists()) {
+      toast.error('Club not found');
+      return;
+    }
+
+    const clubData = clubSnap.data();
+    const currentBudget = Number(clubData.transferBudget || 0);
+
+    if (offer > currentBudget) {
       toast.error('The offer exceeds your transfer budget');
       return;
     }
+
+    const currentGameDate = gameDate || new Date();
+    const responseDeadline = addGameDays(
+      currentGameDate,
+      TRANSFER_RESPONSE_DAYS
+    );
 
     try {
       setSaving(true);
@@ -677,7 +764,10 @@ export default function PlayersPage({
       const offerData = {
         buyerClubId: currentClubId,
         buyerClubName:
-          currentClub?.name || careerData?.currentClubName || '',
+          clubData.name ||
+          clubData.clubName ||
+          careerData?.currentClubName ||
+          '',
         playerId: selectedPlayer.id,
         playerName:
           selectedPlayer.name || selectedPlayer.fullName || '',
@@ -685,7 +775,8 @@ export default function PlayersPage({
         askingPrice: getAskingPrice(selectedPlayer),
         type: 'transfer',
         status: 'pending',
-        createdAt: new Date().toISOString(),
+        createdAt: currentGameDate.toISOString(),
+        responseDeadline,
       };
 
       await updateDoc(doc(db, 'players', selectedPlayer.id), {
@@ -723,6 +814,7 @@ export default function PlayersPage({
 
   /* =======================================================
      LOAN OFFER
+     Uses GAME DATE for createdAt and responseDeadline
   ======================================================= */
 
   const openLoanOffer = (player) => {
@@ -743,6 +835,12 @@ export default function PlayersPage({
       return;
     }
 
+    const currentGameDate = gameDate || new Date();
+    const responseDeadline = addGameDays(
+      currentGameDate,
+      LOAN_RESPONSE_DAYS
+    );
+
     try {
       setSaving(true);
 
@@ -757,7 +855,8 @@ export default function PlayersPage({
         durationMonths: duration * 12,
         type: 'loan',
         status: 'pending',
-        createdAt: new Date().toISOString(),
+        createdAt: currentGameDate.toISOString(),
+        responseDeadline,
       };
 
       await updateDoc(doc(db, 'players', selectedPlayer.id), {
@@ -778,6 +877,7 @@ export default function PlayersPage({
 
   /* =======================================================
      BUY / SIGN PLAYER
+     Uses GAME DATE and club budget
   ======================================================= */
 
   const buyPlayer = async (player) => {
@@ -786,7 +886,7 @@ export default function PlayersPage({
     const price = getAskingPrice(player);
     const budget = transferBudget; // from club doc
 
-    if (budget > 0 && price > budget) {
+    if (price > budget) {
       toast.error('The asking price is above your transfer budget');
       return;
     }
@@ -850,7 +950,6 @@ export default function PlayersPage({
      DERIVED VALUES
   ======================================================= */
 
-  // transferBudget and wageBudget come directly from club doc via state.
   const listedPlayers = currentClubPlayers.filter((player) => {
     const status = normalize(getTransferStatus(player));
     return (
@@ -891,6 +990,11 @@ export default function PlayersPage({
               <span className={styles.eyebrow}>FOOTBALL OPERATIONS</span>
               <h1>Players & Transfers</h1>
               <p>{currentClub?.name || careerData?.currentClubName}</p>
+              {gameDate && (
+                <small>
+                  Game date: {formatGameDate(gameDate)}
+                </small>
+              )}
             </div>
           </div>
 
