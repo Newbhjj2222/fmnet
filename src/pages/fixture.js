@@ -1,22 +1,23 @@
 // pages/fixture.js
 
-import { useCallback, useEffect, useState } from 'react';
-import Head from 'next/head';
+import { useCallback, useEffect, useState } from "react";
+import Head from "next/head";
 
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   where,
   writeBatch,
   serverTimestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 
-import { db } from '../components/firebase';
-import { useAuth } from '../context/AuthContext';
+import { db } from "../components/firebase";
+import { useAuth } from "../context/AuthContext";
 
-import styles from './fixture.module.css';
+import styles from "./fixture.module.css";
 
 /* =========================================================
    CONFIG
@@ -28,19 +29,20 @@ const MAX_CLUBS = 5000;
 const FIRESTORE_BATCH_SIZE = 450;
 
 /*
- * Football season:
- * 2026/27 = starts in 2026
- * 2027/28 = starts in 2027
+ * Season:
+ *
+ * July 2026 -> June 2027 = 2026/27
  */
 
 const SEASON_START_MONTH = 6; // July
 
 /*
- * League must start between:
+ * League fixture generation window.
  *
- * August 1
- * and
- * September 30
+ * This is only used when there is NO current date
+ * available inside the season.
+ *
+ * August 1 -> September 30
  */
 
 const EARLIEST_LEAGUE_START_MONTH = 7; // August
@@ -50,7 +52,7 @@ const LATEST_LEAGUE_START_MONTH = 8; // September
 const LATEST_LEAGUE_START_DAY = 30;
 
 /*
- * One league round per weekend.
+ * One round per weekend.
  */
 
 const MATCH_WEEKS_INTERVAL = 1;
@@ -67,18 +69,18 @@ const DEFAULT_KICKOFF_MINUTE = 0;
 ========================================================= */
 
 function normalizeCountry(value) {
-  if (!value) return '';
+  if (!value) return "";
 
   return String(value)
     .trim()
     .toLowerCase()
-    .replace(/[áàäâã]/g, 'a')
-    .replace(/[éèëê]/g, 'e')
-    .replace(/[íìïî]/g, 'i')
-    .replace(/[óòöôõ]/g, 'o')
-    .replace(/[úùüû]/g, 'u')
-    .replace(/ñ/g, 'n')
-    .replace(/[^a-z0-9]+/g, '');
+    .replace(/[áàäâã]/g, "a")
+    .replace(/[éèëê]/g, "e")
+    .replace(/[íìïî]/g, "i")
+    .replace(/[óòöôõ]/g, "o")
+    .replace(/[úùüû]/g, "u")
+    .replace(/ñ/g, "n")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 /* =========================================================
@@ -141,24 +143,28 @@ function makeKickoff(date) {
 }
 
 function isoDate(date) {
-  if (!date) return '';
+  if (!date) return "";
 
   const d = cloneDate(date);
 
   return [
     d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-');
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function safeDate(value) {
   if (!value) return null;
 
   try {
+    /*
+     * Firestore Timestamp
+     */
+
     if (
       value?.toDate &&
-      typeof value.toDate === 'function'
+      typeof value.toDate === "function"
     ) {
       const date = value.toDate();
 
@@ -166,6 +172,37 @@ function safeDate(value) {
         ? null
         : date;
     }
+
+    /*
+     * JavaScript Date
+     */
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime())
+        ? null
+        : value;
+    }
+
+    /*
+     * Firestore timestamp-like object
+     */
+
+    if (
+      typeof value === "object" &&
+      typeof value.seconds === "number"
+    ) {
+      const date = new Date(
+        value.seconds * 1000
+      );
+
+      return Number.isNaN(date.getTime())
+        ? null
+        : date;
+    }
+
+    /*
+     * String / number
+     */
 
     const date = new Date(value);
 
@@ -181,14 +218,22 @@ function safeDate(value) {
    SEASON
 ========================================================= */
 
-function getSeasonYear(date) {
-  if (!date) {
-    date = new Date();
-  }
+function getSeasonYear(date = new Date()) {
+  const d = safeDate(date) || new Date();
 
-  return date.getMonth() >= SEASON_START_MONTH
-    ? date.getFullYear()
-    : date.getFullYear() - 1;
+  /*
+   * July -> December
+   *
+   * 2026-08-28 => 2026/27
+   *
+   * January -> June
+   *
+   * 2027-02-10 => 2026/27
+   */
+
+  return d.getMonth() >= SEASON_START_MONTH
+    ? d.getFullYear()
+    : d.getFullYear() - 1;
 }
 
 function getSeasonName(seasonYear) {
@@ -206,7 +251,7 @@ function getLeagueName(league) {
     league?.name ||
     league?.leagueName ||
     league?.title ||
-    'Unknown League'
+    "Unknown League"
   );
 }
 
@@ -216,7 +261,7 @@ function getLeagueCountry(league) {
     league?.countryName ||
     league?.nation ||
     league?.countryCode ||
-    'International'
+    "International"
   );
 }
 
@@ -234,7 +279,7 @@ function getClubName(club) {
     club?.name ||
     club?.clubName ||
     club?.shortName ||
-    'Unknown Club'
+    "Unknown Club"
   );
 }
 
@@ -243,24 +288,21 @@ function getClubLogo(club) {
     club?.logo ||
     club?.logoUrl ||
     club?.badge ||
-    ''
+    ""
   );
 }
 
 /* =========================================================
-   GET CLUBS OF LEAGUE
+   GET LEAGUE CLUBS
 ========================================================= */
 
-function getLeagueClubs(
-  league,
-  clubs
-) {
+function getLeagueClubs(league, clubs) {
   if (!league || !Array.isArray(clubs)) {
     return [];
   }
 
   /*
-   * First try explicit club IDs
+   * First try configured IDs.
    */
 
   const configuredIds =
@@ -275,7 +317,7 @@ function getLeagueClubs(
   ) {
     const ids = configuredIds
       .map((item) => {
-        if (typeof item === 'string') {
+        if (typeof item === "string") {
           return item;
         }
 
@@ -288,10 +330,9 @@ function getLeagueClubs(
       })
       .filter(Boolean);
 
-    const selected =
-      clubs.filter((club) =>
-        ids.includes(club.id)
-      );
+    const selected = clubs.filter((club) =>
+      ids.includes(club.id)
+    );
 
     if (selected.length >= 2) {
       return selected;
@@ -299,35 +340,19 @@ function getLeagueClubs(
   }
 
   /*
-   * Otherwise use club.leagueId
+   * Otherwise match leagueId.
    */
 
   return clubs.filter(
     (club) =>
-      getLeagueId(club) === league.id
+      String(getLeagueId(club) || "") ===
+      String(league.id || "")
   );
 }
 
 /* =========================================================
-   COUNTRY START DATE
+   COUNTRY START RULES
 ========================================================= */
-
-/*
- * League start window:
- *
- * August -> September
- *
- * Different countries receive different
- * preferred starting dates.
- *
- * These are DEFAULTS.
- *
- * If a league document has:
- *
- * startDate
- *
- * then that date takes priority.
- */
 
 const COUNTRY_START_RULES = {
   rwanda: {
@@ -451,23 +476,18 @@ const COUNTRY_START_RULES = {
   },
 };
 
-function getCountryStartRule(
-  country
-) {
+function getCountryStartRule(country) {
   const normalized =
     normalizeCountry(country);
 
   return (
-    COUNTRY_START_RULES[
-      normalized
-    ] ||
-    COUNTRY_START_RULES
-      .international
+    COUNTRY_START_RULES[normalized] ||
+    COUNTRY_START_RULES.international
   );
 }
 
 /* =========================================================
-   EASTER CALCULATION
+   EASTER
 ========================================================= */
 
 function getEasterSunday(year) {
@@ -482,10 +502,18 @@ function getEasterSunday(year) {
   const g = Math.floor(
     (b - f + 1) / 3
   );
+
   const h =
-    (19 * a + b - d - g + 15) % 30;
+    (19 * a +
+      b -
+      d -
+      g +
+      15) %
+    30;
+
   const i = Math.floor(c / 4);
   const k = c % 4;
+
   const l =
     (32 +
       2 * e +
@@ -493,16 +521,28 @@ function getEasterSunday(year) {
       h -
       k) %
     7;
+
   const m = Math.floor(
-    (a + 11 * h + 22 * l) / 451
+    (a +
+      11 * h +
+      22 * l) /
+      451
   );
 
   const month = Math.floor(
-    (h + l - 7 * m + 114) / 31
+    (h +
+      l -
+      7 * m +
+      114) /
+      31
   );
 
   const day =
-    ((h + l - 7 * m + 114) % 31) +
+    ((h +
+      l -
+      7 * m +
+      114) %
+      31) +
     1;
 
   return new Date(
@@ -516,13 +556,6 @@ function getEasterSunday(year) {
    PUBLIC HOLIDAYS
 ========================================================= */
 
-/*
- * Izi ni holidays rusange tuzi.
- *
- * Kandi system iracyakira holidays
- * zibitswe muri Firestore.
- */
-
 function getFixedHolidayDates(
   year,
   country
@@ -533,32 +566,20 @@ function getFixedHolidayDates(
     normalizeCountry(country);
 
   /*
-   * New Year
+   * General holidays
    */
 
   holidays.push(
     makeDate(year, 0, 1)
   );
 
-  /*
-   * Labour Day
-   */
-
   holidays.push(
     makeDate(year, 4, 1)
   );
 
-  /*
-   * Christmas
-   */
-
   holidays.push(
     makeDate(year, 11, 25)
   );
-
-  /*
-   * Boxing Day.
-   */
 
   holidays.push(
     makeDate(year, 11, 26)
@@ -568,15 +589,14 @@ function getFixedHolidayDates(
    * Rwanda
    */
 
-  if (
-    normalized === 'rwanda'
-  ) {
+  if (normalized === "rwanda") {
     holidays.push(
-      makeDate(year, 1, 1), // Heroes Day
-      makeDate(year, 6, 4), // Liberation Day
-      makeDate(year, 6, 1), // Independence Day
-      makeDate(year, 4, 17), // Genocide Memorial Day
-      makeDate(year, 12, 31) // Last day
+      makeDate(year, 1, 1),
+      makeDate(year, 3, 7),
+      makeDate(year, 4, 1),
+      makeDate(year, 6, 1),
+      makeDate(year, 6, 4),
+      makeDate(year, 12, 31)
     );
   }
 
@@ -584,9 +604,7 @@ function getFixedHolidayDates(
    * Tanzania
    */
 
-  if (
-    normalized === 'tanzania'
-  ) {
+  if (normalized === "tanzania") {
     holidays.push(
       makeDate(year, 0, 12),
       makeDate(year, 3, 7),
@@ -600,13 +618,11 @@ function getFixedHolidayDates(
    * Kenya
    */
 
-  if (
-    normalized === 'kenya'
-  ) {
+  if (normalized === "kenya") {
     holidays.push(
       makeDate(year, 5, 1),
-      makeDate(year, 9, 20),
       makeDate(year, 9, 10),
+      makeDate(year, 9, 20),
       makeDate(year, 10, 12)
     );
   }
@@ -615,9 +631,7 @@ function getFixedHolidayDates(
    * Uganda
    */
 
-  if (
-    normalized === 'uganda'
-  ) {
+  if (normalized === "uganda") {
     holidays.push(
       makeDate(year, 0, 26),
       makeDate(year, 2, 8),
@@ -630,9 +644,7 @@ function getFixedHolidayDates(
    * Burundi
    */
 
-  if (
-    normalized === 'burundi'
-  ) {
+  if (normalized === "burundi") {
     holidays.push(
       makeDate(year, 0, 1),
       makeDate(year, 0, 5),
@@ -646,9 +658,7 @@ function getFixedHolidayDates(
    * France
    */
 
-  if (
-    normalized === 'france'
-  ) {
+  if (normalized === "france") {
     holidays.push(
       makeDate(year, 6, 14),
       makeDate(year, 7, 15),
@@ -660,9 +670,7 @@ function getFixedHolidayDates(
    * Germany
    */
 
-  if (
-    normalized === 'germany'
-  ) {
+  if (normalized === "germany") {
     holidays.push(
       makeDate(year, 9, 3)
     );
@@ -672,9 +680,7 @@ function getFixedHolidayDates(
    * Italy
    */
 
-  if (
-    normalized === 'italy'
-  ) {
+  if (normalized === "italy") {
     holidays.push(
       makeDate(year, 3, 25),
       makeDate(year, 5, 2),
@@ -688,9 +694,7 @@ function getFixedHolidayDates(
    * Spain
    */
 
-  if (
-    normalized === 'spain'
-  ) {
+  if (normalized === "spain") {
     holidays.push(
       makeDate(year, 9, 12),
       makeDate(year, 11, 6)
@@ -701,9 +705,7 @@ function getFixedHolidayDates(
    * Brazil
    */
 
-  if (
-    normalized === 'brazil'
-  ) {
+  if (normalized === "brazil") {
     holidays.push(
       makeDate(year, 8, 7),
       makeDate(year, 9, 12),
@@ -715,14 +717,12 @@ function getFixedHolidayDates(
    * South Africa
    */
 
-  if (
-    normalized === 'southafrica'
-  ) {
+  if (normalized === "southafrica") {
     holidays.push(
       makeDate(year, 3, 27),
       makeDate(year, 5, 16),
       makeDate(year, 8, 24),
-      makeDate(year, 12, 16)
+      makeDate(year, 11, 16)
     );
   }
 
@@ -730,9 +730,7 @@ function getFixedHolidayDates(
    * Nigeria
    */
 
-  if (
-    normalized === 'nigeria'
-  ) {
+  if (normalized === "nigeria") {
     holidays.push(
       makeDate(year, 4, 29),
       makeDate(year, 9, 1)
@@ -779,10 +777,10 @@ function getMovableHolidayDates(
    */
 
   if (
-    normalized === 'rwanda' ||
-    normalized === 'uganda' ||
-    normalized === 'kenya' ||
-    normalized === 'tanzania'
+    normalized === "rwanda" ||
+    normalized === "uganda" ||
+    normalized === "kenya" ||
+    normalized === "tanzania"
   ) {
     holidays.push(
       addDays(easter, 39)
@@ -795,23 +793,6 @@ function getMovableHolidayDates(
 /* =========================================================
    FIRESTORE HOLIDAYS
 ========================================================= */
-
-/*
- * Expected structure:
- *
- * holidays/{id}
- *
- * {
- *   date: "2026-08-15",
- *   country: "Rwanda",
- *   name: "Holiday",
- *   year: 2026
- * }
- *
- * country can also be:
- * "all"
- * "international"
- */
 
 async function getFirestoreHolidays(
   year,
@@ -827,11 +808,11 @@ async function getFirestoreHolidays(
       query(
         collection(
           db,
-          'holidays'
+          "holidays"
         ),
         where(
-          'year',
-          '==',
+          "year",
+          "==",
           year
         )
       );
@@ -841,50 +822,49 @@ async function getFirestoreHolidays(
         holidayQuery
       );
 
-    snapshot.forEach(
-      (item) => {
-        const data =
-          item.data();
+    snapshot.forEach((item) => {
+      const data =
+        item.data();
 
-        const holidayCountry =
-          normalizeCountry(
-            data?.country ||
-              data?.countryName ||
-              ''
-          );
+      const holidayCountry =
+        normalizeCountry(
+          data?.country ||
+            data?.countryName ||
+            ""
+        );
 
-        const appliesToAll =
-          holidayCountry === '' ||
-          holidayCountry === 'all' ||
-          holidayCountry ===
-            'international';
+      const appliesToAll =
+        holidayCountry === "" ||
+        holidayCountry === "all" ||
+        holidayCountry ===
+          "international";
 
-        const appliesToCountry =
-          holidayCountry ===
-          normalized;
+      const appliesToCountry =
+        holidayCountry === normalized;
 
-        if (
-          !appliesToAll &&
-          !appliesToCountry
-        ) {
-          return;
-        }
-
-        const date =
-          safeDate(
-            data?.date
-          );
-
-        if (date) {
-          dates.add(
-            isoDate(date)
-          );
-        }
+      if (
+        !appliesToAll &&
+        !appliesToCountry
+      ) {
+        return;
       }
-    );
+
+      /*
+       * Prefer date field.
+       */
+
+      const date =
+        safeDate(data?.date);
+
+      if (date) {
+        dates.add(
+          isoDate(date)
+        );
+      }
+    });
   } catch (error) {
     console.warn(
-      '[FIXTURE GENERATOR] Holiday collection could not be loaded:',
+      "[FIXTURE GENERATOR] Could not load holidays:",
       error
     );
   }
@@ -923,10 +903,6 @@ async function buildHolidaySet(
     );
   });
 
-  /*
-   * Add Firestore custom holidays.
-   */
-
   const firestoreHolidays =
     await getFirestoreHolidays(
       year,
@@ -943,7 +919,7 @@ async function buildHolidaySet(
 }
 
 /* =========================================================
-   WEEKEND HELPERS
+   WEEKEND
 ========================================================= */
 
 function isSaturday(date) {
@@ -971,28 +947,44 @@ function isHoliday(
 }
 
 /* =========================================================
-   FIND VALID WEEKEND
+   FIND NEXT WEEKEND
 ========================================================= */
 
 /*
- * Match ntabwo ijya:
+ * IMPORTANT:
  *
- * Monday
- * Tuesday
- * Wednesday
- * Thursday
- * Friday
+ * Iyi function itangira kuri startDate
+ * maze ikajya kuri WEEKEND IKURIKIRA.
  *
- * kandi ntabwo ijya kuri holiday.
+ * Niba current date ari:
  *
- * Iyo Saturday ari holiday,
- * igerageza Sunday.
+ * Friday 28 Aug 2026
  *
- * Iyo Saturday na Sunday ari holiday,
- * ijya weekend ikurikira.
+ * return:
+ *
+ * Saturday 29 Aug 2026
+ *
+ * Niba current date ari:
+ *
+ * Saturday 29 Aug 2026
+ *
+ * return:
+ *
+ * Sunday 30 Aug 2026
+ *
+ * Niba current date ari:
+ *
+ * Sunday 30 Aug 2026
+ *
+ * return:
+ *
+ * Saturday 5 Sep 2026
+ *
+ * Ibi birinda gukina match kuri weekend
+ * yamaze gutangira cyangwa yarangiye.
  */
 
-function findNextValidWeekendDate(
+function findNextWeekendAfter(
   startDate,
   holidaySet
 ) {
@@ -1000,15 +992,23 @@ function findNextValidWeekendDate(
     startOfDay(startDate);
 
   /*
-   * Move forward until Saturday.
+   * Always move at least one day forward.
    */
 
-  while (!isWeekend(date)) {
-    date = addDays(date, 1);
+  date =
+    addDays(date, 1);
+
+  /*
+   * Move to Saturday.
+   */
+
+  while (!isSaturday(date)) {
+    date =
+      addDays(date, 1);
   }
 
   /*
-   * Search maximum 100 weekends.
+   * Check up to 100 weekends.
    */
 
   for (
@@ -1020,10 +1020,13 @@ function findNextValidWeekendDate(
       startOfDay(date);
 
     const sunday =
-      addDays(saturday, 1);
+      addDays(
+        saturday,
+        1
+      );
 
     /*
-     * Saturday available
+     * Saturday available.
      */
 
     if (
@@ -1038,7 +1041,7 @@ function findNextValidWeekendDate(
     }
 
     /*
-     * Sunday available
+     * Saturday holiday but Sunday free.
      */
 
     if (
@@ -1053,26 +1056,101 @@ function findNextValidWeekendDate(
     }
 
     /*
-     * Entire weekend blocked.
+     * Both blocked.
+     *
+     * Go to next Saturday.
      */
 
-    date = addDays(
-      saturday,
-      7
-    );
+    date =
+      addDays(
+        saturday,
+        7
+      );
   }
 
   /*
    * Safety fallback.
    */
 
-  return makeKickoff(
-    date
-  );
+  return makeKickoff(date);
 }
 
 /* =========================================================
-   COUNTRY START DATE
+   FIND WEEKEND ON OR AFTER DATE
+========================================================= */
+
+function findWeekendOnOrAfter(
+  startDate,
+  holidaySet
+) {
+  let date =
+    startOfDay(startDate);
+
+  /*
+   * If Monday-Friday,
+   * move to upcoming Saturday.
+   */
+
+  if (!isWeekend(date)) {
+    while (!isSaturday(date)) {
+      date =
+        addDays(date, 1);
+    }
+  }
+
+  /*
+   * If Saturday, use Saturday
+   * unless holiday.
+   */
+
+  for (
+    let attempt = 0;
+    attempt < 100;
+    attempt += 1
+  ) {
+    const saturday =
+      startOfDay(date);
+
+    const sunday =
+      addDays(
+        saturday,
+        1
+      );
+
+    if (
+      !isHoliday(
+        saturday,
+        holidaySet
+      )
+    ) {
+      return makeKickoff(
+        saturday
+      );
+    }
+
+    if (
+      !isHoliday(
+        sunday,
+        holidaySet
+      )
+    ) {
+      return makeKickoff(
+        sunday
+      );
+    }
+
+    date =
+      addDays(
+        saturday,
+        7
+      );
+  }
+
+  return makeKickoff(date);
+}
+
+/* =========================================================
+   COUNTRY DEFAULT START
 ========================================================= */
 
 function getPreferredLeagueStart(
@@ -1080,8 +1158,7 @@ function getPreferredLeagueStart(
   seasonYear
 ) {
   /*
-   * If admin explicitly set startDate
-   * on league, use it.
+   * Custom startDate.
    */
 
   const customDate =
@@ -1090,30 +1167,19 @@ function getPreferredLeagueStart(
     );
 
   if (customDate) {
-    const customYear =
-      customDate.getFullYear();
-
-    /*
-     * Make sure the date belongs to
-     * the requested season.
-     */
-
     if (
-      customYear === seasonYear
+      customDate.getFullYear() ===
+      seasonYear
     ) {
       return customDate;
     }
   }
 
   const country =
-    getLeagueCountry(
-      league
-    );
+    getLeagueCountry(league);
 
   const rule =
-    getCountryStartRule(
-      country
-    );
+    getCountryStartRule(country);
 
   return makeDate(
     seasonYear,
@@ -1125,7 +1191,7 @@ function getPreferredLeagueStart(
 }
 
 /* =========================================================
-   VALIDATE START WINDOW
+   START WINDOW
 ========================================================= */
 
 function clampStartIntoSeasonWindow(
@@ -1165,9 +1231,7 @@ function clampStartIntoSeasonWindow(
    ROUND ROBIN
 ========================================================= */
 
-function buildRounds(
-  clubs
-) {
+function buildRounds(clubs) {
   if (
     !Array.isArray(clubs) ||
     clubs.length < 2
@@ -1178,13 +1242,11 @@ function buildRounds(
   const teams = [...clubs];
 
   /*
-   * Odd number of clubs:
+   * Odd number of teams:
    * add BYE.
    */
 
-  if (
-    teams.length % 2 !== 0
-  ) {
+  if (teams.length % 2 !== 0) {
     teams.push(null);
   }
 
@@ -1225,15 +1287,12 @@ function buildRounds(
             i
         ];
 
-      if (
-        !teamA ||
-        !teamB
-      ) {
+      if (!teamA || !teamB) {
         continue;
       }
 
       /*
-       * Home/Away balancing.
+       * Home / Away balance.
        */
 
       if (
@@ -1251,9 +1310,7 @@ function buildRounds(
       }
     }
 
-    firstLeg.push(
-      matches
-    );
+    firstLeg.push(matches);
 
     /*
      * Circle rotation.
@@ -1268,9 +1325,7 @@ function buildRounds(
     const last =
       rotating.pop();
 
-    rotating.unshift(
-      last
-    );
+    rotating.unshift(last);
 
     rotation = [
       fixed,
@@ -1280,6 +1335,8 @@ function buildRounds(
 
   /*
    * SECOND LEG
+   *
+   * Reverse home / away.
    */
 
   const secondLeg =
@@ -1306,12 +1363,12 @@ function buildRounds(
 ========================================================= */
 
 function cleanIdPart(value) {
-  return String(value || '')
+  return String(value || "")
     .trim()
-    .replace(/\s+/g, '-')
+    .replace(/\s+/g, "-")
     .replace(
       /[^a-zA-Z0-9_-]/g,
-      ''
+      ""
     );
 }
 
@@ -1323,19 +1380,13 @@ function makeFixtureId({
   awayClubId,
 }) {
   return [
-    'fixture',
+    "fixture",
     seasonYear,
-    cleanIdPart(
-      leagueId
-    ),
+    cleanIdPart(leagueId),
     round,
-    cleanIdPart(
-      homeClubId
-    ),
-    cleanIdPart(
-      awayClubId
-    ),
-  ].join('_');
+    cleanIdPart(homeClubId),
+    cleanIdPart(awayClubId),
+  ].join("_");
 }
 
 /* =========================================================
@@ -1353,23 +1404,21 @@ function createFixture({
   const id =
     makeFixtureId({
       seasonYear,
-      leagueId:
-        league.id,
+      leagueId: league.id,
       round,
-      homeClubId:
-        home.id,
-      awayClubId:
-        away.id,
+      homeClubId: home.id,
+      awayClubId: away.id,
     });
 
   return {
     id,
 
-    type: 'league',
+    type: "league",
 
     generated: true,
+
     generatedBy:
-      'automatic-fixture-generator',
+      "automatic-fixture-generator",
 
     seasonYear,
 
@@ -1397,70 +1446,47 @@ function createFixture({
       home.id,
 
     homeClubName:
-      getClubName(
-        home
-      ),
+      getClubName(home),
 
     homeLogo:
-      getClubLogo(
-        home
-      ),
+      getClubLogo(home),
 
     awayClubId:
       away.id,
 
     awayClubName:
-      getClubName(
-        away
-      ),
+      getClubName(away),
 
     awayLogo:
-      getClubLogo(
-        away
-      ),
+      getClubLogo(away),
 
     stadium:
       home?.stadium ||
       home?.stadiumName ||
-      'Club Stadium',
+      "Club Stadium",
 
     date:
       date.toISOString(),
 
     status:
-      'scheduled',
+      "scheduled",
 
-    result:
-      null,
+    result: null,
 
-    homeScore:
-      null,
+    homeScore: null,
 
-    awayScore:
-      null,
+    awayScore: null,
 
     homeOverall:
-      Number(
-        home?.overall
-      ) ||
-      Number(
-        home?.rating
-      ) ||
-      Number(
-        home?.teamOverall
-      ) ||
+      Number(home?.overall) ||
+      Number(home?.rating) ||
+      Number(home?.teamOverall) ||
       60,
 
     awayOverall:
-      Number(
-        away?.overall
-      ) ||
-      Number(
-        away?.rating
-      ) ||
-      Number(
-        away?.teamOverall
-      ) ||
+      Number(away?.overall) ||
+      Number(away?.rating) ||
+      Number(away?.teamOverall) ||
       60,
 
     createdAt:
@@ -1472,14 +1498,15 @@ function createFixture({
 }
 
 /* =========================================================
-   GENERATE LEAGUE
+   GENERATE LEAGUE FIXTURES
 ========================================================= */
 
-async function generateLeagueFixtures(
+async function generateLeagueFixtures({
   league,
   clubs,
-  seasonYear
-) {
+  seasonYear,
+  currentDate,
+}) {
   const leagueClubs =
     getLeagueClubs(
       league,
@@ -1487,7 +1514,7 @@ async function generateLeagueFixtures(
     );
 
   /*
-   * League must have at least 2 clubs.
+   * Minimum two clubs.
    */
 
   if (
@@ -1496,33 +1523,19 @@ async function generateLeagueFixtures(
     return [];
   }
 
-  /*
-   * Country.
-   */
-
   const country =
-    getLeagueCountry(
-      league
-    );
+    getLeagueCountry(league);
 
   /*
-   * Build holiday set for the
-   * season calendar.
-   *
-   * We need both season years because
-   * fixtures can continue into next year.
+   * Holiday cache.
    */
 
   const holidaySets =
     new Map();
 
-  async function getHolidays(
-    year
-  ) {
+  async function getHolidays(year) {
     if (
-      holidaySets.has(
-        year
-      )
+      holidaySets.has(year)
     ) {
       return holidaySets.get(
         year
@@ -1544,7 +1557,7 @@ async function generateLeagueFixtures(
   }
 
   /*
-   * Generate rounds.
+   * Build round-robin.
    */
 
   const rounds =
@@ -1557,70 +1570,115 @@ async function generateLeagueFixtures(
   }
 
   /*
-   * Determine starting weekend.
+   * =======================================================
+   * CURRENT DATE LOGIC
+   * =======================================================
+   *
+   * THIS IS THE IMPORTANT PART.
+   *
+   * Example:
+   *
+   * currentDate = 28 Aug 2026
+   *
+   * season = 2026/27
+   *
+   * first fixture weekend:
+   *
+   * 29 Aug 2026
+   *
+   * If currentDate is already Saturday/Sunday,
+   * it moves to the following weekend.
    */
 
-  let preferredStart =
-    getPreferredLeagueStart(
-      league,
-      seasonYear
-    );
+  let startDate =
+    safeDate(currentDate) ||
+    new Date();
 
-  preferredStart =
-    clampStartIntoSeasonWindow(
-      preferredStart,
-      seasonYear
+  /*
+   * Season beginning.
+   */
+
+  const seasonStart =
+    makeDate(
+      seasonYear,
+      SEASON_START_MONTH,
+      1,
+      DEFAULT_KICKOFF_HOUR,
+      DEFAULT_KICKOFF_MINUTE
     );
 
   /*
-   * Get holidays for start year.
+   * If current date is before season,
+   * use normal league start.
+   */
+
+  if (
+    startDate < seasonStart
+  ) {
+    startDate =
+      getPreferredLeagueStart(
+        league,
+        seasonYear
+      );
+
+    startDate =
+      clampStartIntoSeasonWindow(
+        startDate,
+        seasonYear
+      );
+  }
+
+  /*
+   * Holiday calendar for current year.
    */
 
   let holidaySet =
     await getHolidays(
-      seasonYear
+      startDate.getFullYear()
     );
 
   /*
-   * First valid weekend.
+   * Find the weekend AFTER current date.
+   *
+   * This is intentional.
    */
 
   let currentWeekend =
-    findNextValidWeekendDate(
-      preferredStart,
+    findNextWeekendAfter(
+      startDate,
       holidaySet
     );
-
-  /*
-   * Important:
-   *
-   * If country start date falls on
-   * a holiday, the match moves to
-   * another valid weekend.
-   */
 
   const fixtures = [];
 
   /*
-   * Each round gets ONE weekend.
+   * =======================================================
+   * GENERATE ALL ROUNDS
+   * =======================================================
    */
 
   for (
     let roundIndex = 0;
-    roundIndex <
-    rounds.length;
+    roundIndex < rounds.length;
     roundIndex += 1
   ) {
     const round =
       roundIndex + 1;
 
     /*
-     * If year changed, load next year's
-     * holiday calendar.
+     * Current calendar year.
+     *
+     * This automatically changes:
+     *
+     * 2026 -> 2027
      */
 
     const currentYear =
       currentWeekend.getFullYear();
+
+    /*
+     * Load correct year's holidays.
+     */
 
     holidaySet =
       await getHolidays(
@@ -1628,23 +1686,20 @@ async function generateLeagueFixtures(
       );
 
     /*
-     * Make absolutely sure this date
-     * is still a valid weekend.
+     * Make sure weekend is valid.
      */
 
     currentWeekend =
-      findNextValidWeekendDate(
+      findWeekendOnOrAfter(
         currentWeekend,
         holidaySet
       );
 
     /*
-     * Create all matches for this round.
+     * Create matches for this round.
      */
 
-    rounds[
-      roundIndex
-    ].forEach(
+    rounds[roundIndex].forEach(
       ({
         home,
         away,
@@ -1664,23 +1719,24 @@ async function generateLeagueFixtures(
     );
 
     /*
-     * Next round:
-     * next weekend.
+     * =====================================================
+     * NEXT ROUND
+     * =====================================================
+     *
+     * Normally one week later.
+     *
+     * If that weekend is holiday,
+     * it automatically moves forward.
      */
 
-    currentWeekend =
+    const nextWeekendCandidate =
       addWeeks(
         currentWeekend,
         MATCH_WEEKS_INTERVAL
       );
 
-    /*
-     * Find next available weekend
-     * after possible holiday.
-     */
-
     const nextYear =
-      currentWeekend.getFullYear();
+      nextWeekendCandidate.getFullYear();
 
     const nextHolidaySet =
       await getHolidays(
@@ -1688,8 +1744,8 @@ async function generateLeagueFixtures(
       );
 
     currentWeekend =
-      findNextValidWeekendDate(
-        currentWeekend,
+      findWeekendOnOrAfter(
+        nextWeekendCandidate,
         nextHolidaySet
       );
   }
@@ -1698,7 +1754,7 @@ async function generateLeagueFixtures(
 }
 
 /* =========================================================
-   CHUNK
+   CHUNK ARRAY
 ========================================================= */
 
 function chunkArray(
@@ -1734,11 +1790,11 @@ async function getExistingFixtureIds(
     query(
       collection(
         db,
-        'matches'
+        "matches"
       ),
       where(
-        'seasonYear',
-        '==',
+        "seasonYear",
+        "==",
         seasonYear
       )
     );
@@ -1753,9 +1809,7 @@ async function getExistingFixtureIds(
 
   snapshot.forEach(
     (item) => {
-      ids.add(
-        item.id
-      );
+      ids.add(item.id);
     }
   );
 
@@ -1769,9 +1823,7 @@ async function getExistingFixtureIds(
 async function saveFixtures(
   fixtures
 ) {
-  if (
-    !fixtures.length
-  ) {
+  if (!fixtures.length) {
     return 0;
   }
 
@@ -1794,7 +1846,7 @@ async function saveFixtures(
         const fixtureRef =
           doc(
             db,
-            'matches',
+            "matches",
             fixture.id
           );
 
@@ -1824,14 +1876,11 @@ async function generateSeasonFixtures({
   leagues,
   clubs,
   seasonYear,
+  currentDate,
 }) {
   if (
-    !Array.isArray(
-      leagues
-    ) ||
-    !Array.isArray(
-      clubs
-    )
+    !Array.isArray(leagues) ||
+    !Array.isArray(clubs)
   ) {
     return {
       generated: 0,
@@ -1841,7 +1890,7 @@ async function generateSeasonFixtures({
   }
 
   /*
-   * Existing fixtures.
+   * Get existing fixtures first.
    */
 
   const existingIds =
@@ -1849,22 +1898,18 @@ async function generateSeasonFixtures({
       seasonYear
     );
 
-  const fixturesToCreate =
-    [];
+  const fixturesToCreate = [];
 
-  let leaguesProcessed =
-    0;
+  let leaguesProcessed = 0;
 
   /*
-   * Generate each league.
+   * Process leagues.
    */
 
   for (
     const league of leagues
   ) {
-    if (
-      !league?.id
-    ) {
+    if (!league?.id) {
       continue;
     }
 
@@ -1875,8 +1920,7 @@ async function generateSeasonFixtures({
       );
 
     /*
-     * No league schedule if
-     * fewer than 2 teams.
+     * At least two teams.
      */
 
     if (
@@ -1888,16 +1932,17 @@ async function generateSeasonFixtures({
     leaguesProcessed += 1;
 
     const generatedFixtures =
-      await generateLeagueFixtures(
+      await generateLeagueFixtures({
         league,
-        leagueClubs,
-        seasonYear
-      );
+        clubs: leagueClubs,
+        seasonYear,
+        currentDate,
+      });
 
     generatedFixtures.forEach(
       (fixture) => {
         /*
-         * Never duplicate fixture.
+         * Existing fixture.
          */
 
         if (
@@ -1909,8 +1954,7 @@ async function generateSeasonFixtures({
         }
 
         /*
-         * Avoid duplicates inside
-         * current generation.
+         * Duplicate in current generation.
          */
 
         if (
@@ -1965,37 +2009,29 @@ export default function FixturesPage({
   const [
     status,
     setStatus,
-  ] = useState(
-    'waiting'
-  );
+  ] = useState("waiting");
 
   const [
     message,
     setMessage,
   ] = useState(
-    'Waiting...'
+    "Waiting..."
   );
 
   const [
     seasonYear,
     setSeasonYear,
-  ] = useState(
-    null
-  );
+  ] = useState(null);
 
   const [
     result,
     setResult,
-  ] = useState(
-    null
-  );
+  ] = useState(null);
 
   const [
     hasGenerated,
     setHasGenerated,
-  ] = useState(
-    false
-  );
+  ] = useState(false);
 
   /* =======================================================
      AUTOMATIC GENERATOR
@@ -2013,53 +2049,51 @@ export default function FixturesPage({
 
         try {
           setStatus(
-            'generating'
+            "generating"
           );
 
           setMessage(
-            'Checking current season...'
+            "Reading current date..."
           );
 
           /*
-           * Current real date.
+           * =================================================
+           * CURRENT DATE
+           * =================================================
            *
-           * The season is automatically
-           * determined from the current year.
+           * First use real current date.
            */
 
           let currentDate =
             new Date();
 
           /*
-           * Try to read career currentDate.
+           * =================================================
+           * USER CAREER DATE
+           * =================================================
+           *
+           * If the game has a simulated
+           * currentDate, use it.
            */
 
           try {
-            const userQuery =
-              query(
-                collection(
-                  db,
-                  'users'
-                ),
-                where(
-                  '__name__',
-                  '==',
-                  user.uid
-                )
+            const userRef =
+              doc(
+                db,
+                "users",
+                user.uid
               );
 
-            const snapshot =
-              await getDocs(
-                userQuery
+            const userSnapshot =
+              await getDoc(
+                userRef
               );
 
             if (
-              !snapshot.empty
+              userSnapshot.exists()
             ) {
               const data =
-                snapshot
-                  .docs[0]
-                  .data();
+                userSnapshot.data();
 
               const savedDate =
                 safeDate(
@@ -2068,9 +2102,7 @@ export default function FixturesPage({
                     ?.currentDate
                 );
 
-              if (
-                savedDate
-              ) {
+              if (savedDate) {
                 currentDate =
                   savedDate;
               }
@@ -2079,13 +2111,15 @@ export default function FixturesPage({
             careerError
           ) {
             console.warn(
-              '[FIXTURE GENERATOR] Career date unavailable:',
+              "[FIXTURE GENERATOR] Career date unavailable:",
               careerError
             );
           }
 
           /*
-           * Determine season.
+           * =================================================
+           * SEASON
+           * =================================================
            */
 
           const currentSeason =
@@ -2097,27 +2131,37 @@ export default function FixturesPage({
             currentSeason
           );
 
+          /*
+           * =================================================
+           * MESSAGE
+           * =================================================
+           */
+
           setMessage(
-            `Generating ${getSeasonName(
+            `Current date: ${currentDate.toLocaleDateString()} | Generating ${getSeasonName(
               currentSeason
             )} fixtures...`
           );
 
           /*
-           * Generate.
+           * =================================================
+           * GENERATE
+           * =================================================
            */
 
           const generationResult =
-            await generateSeasonFixtures(
-              {
-                leagues:
-                  initialLeagues,
-                clubs:
-                  initialClubs,
-                seasonYear:
-                  currentSeason,
-              }
-            );
+            await generateSeasonFixtures({
+              leagues:
+                initialLeagues,
+
+              clubs:
+                initialClubs,
+
+              seasonYear:
+                currentSeason,
+
+              currentDate,
+            });
 
           setResult(
             generationResult
@@ -2128,15 +2172,21 @@ export default function FixturesPage({
           );
 
           setStatus(
-            'complete'
+            "complete"
           );
+
+          /*
+           * =================================================
+           * MESSAGE RESULT
+           * =================================================
+           */
 
           if (
             generationResult.generated >
             0
           ) {
             setMessage(
-              `${generationResult.generated} fixtures generated automatically.`
+              `${generationResult.generated} fixtures generated successfully.`
             );
           } else {
             setMessage(
@@ -2145,20 +2195,19 @@ export default function FixturesPage({
               )} already exist.`
             );
           }
-        } catch (
-          error
-        ) {
+        } catch (error) {
           console.error(
-            '[FIXTURE GENERATOR ERROR]',
+            "[FIXTURE GENERATOR ERROR]",
             error
           );
 
           setStatus(
-            'error'
+            "error"
           );
 
           setMessage(
-            'Automatic fixture generation failed.'
+            error?.message ||
+              "Automatic fixture generation failed."
           );
         }
       },
@@ -2181,11 +2230,11 @@ export default function FixturesPage({
 
     if (!user) {
       setStatus(
-        'waiting'
+        "waiting"
       );
 
       setMessage(
-        'Login required.'
+        "Login required."
       );
 
       return;
@@ -2202,9 +2251,7 @@ export default function FixturesPage({
      LOADING
   ======================================================= */
 
-  if (
-    loading
-  ) {
+  if (loading) {
     return (
       <div
         className={
@@ -2305,7 +2352,7 @@ export default function FixturesPage({
             }
           >
             {status ===
-              'generating' && (
+              "generating" && (
               <>
                 <div
                   className={
@@ -2320,14 +2367,14 @@ export default function FixturesPage({
             )}
 
             {status ===
-              'complete' && (
+              "complete" && (
               <>
                 <div
                   style={{
                     fontSize:
-                      '42px',
+                      "42px",
                     marginBottom:
-                      '10px',
+                      "10px",
                   }}
                 >
                   ✓
@@ -2339,7 +2386,7 @@ export default function FixturesPage({
 
                 {seasonYear && (
                   <p>
-                    Season:{' '}
+                    Season:{" "}
                     <strong>
                       {getSeasonName(
                         seasonYear
@@ -2350,23 +2397,25 @@ export default function FixturesPage({
 
                 {result && (
                   <p>
-                    New fixtures:{' '}
+                    New fixtures:{" "}
                     <strong>
                       {
                         result.generated
                       }
                     </strong>
+
                     <br />
 
-                    Existing fixtures:{' '}
+                    Existing fixtures:{" "}
                     <strong>
                       {
                         result.existing
                       }
                     </strong>
+
                     <br />
 
-                    Leagues processed:{' '}
+                    Leagues processed:{" "}
                     <strong>
                       {
                         result.leaguesProcessed
@@ -2384,14 +2433,14 @@ export default function FixturesPage({
             )}
 
             {status ===
-              'error' && (
+              "error" && (
               <>
                 <div
                   style={{
                     fontSize:
-                      '42px',
+                      "42px",
                     marginBottom:
-                      '10px',
+                      "10px",
                   }}
                 >
                   !
@@ -2408,7 +2457,7 @@ export default function FixturesPage({
             )}
 
             {status ===
-              'waiting' && (
+              "waiting" && (
               <p>
                 {message}
               </p>
@@ -2433,17 +2482,21 @@ export async function getServerSideProps() {
       getDocs(
         collection(
           db,
-          'leagues'
+          "leagues"
         )
       ),
 
       getDocs(
         collection(
           db,
-          'clubs'
+          "clubs"
         )
       ),
     ]);
+
+    /*
+     * LEAGUES
+     */
 
     const leagues =
       leaguesSnapshot.docs
@@ -2458,6 +2511,10 @@ export async function getServerSideProps() {
             ...item.data(),
           })
         );
+
+    /*
+     * CLUBS
+     */
 
     const clubs =
       clubsSnapshot.docs
@@ -2490,11 +2547,9 @@ export async function getServerSideProps() {
           ),
       },
     };
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
-      '[FIXTURE SSR ERROR]',
+      "[FIXTURE SSR ERROR]",
       error
     );
 
