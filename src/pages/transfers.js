@@ -1190,6 +1190,14 @@ export default function TransferPage({
         ↓
        completed
 
+     NOTE:
+     When buyer club is AI-managed,
+     the system creates a contract
+     automatically.
+
+     When buyer club is user-managed,
+     the user must offer a contract
+     manually from the Joining tab.
   ======================================================= */
 
   const completeDueTransfers =
@@ -1345,111 +1353,6 @@ export default function TransferPage({
               }
             );
 
-          /*
-            If no matching offer was found,
-            keep existing offers.
-          */
-
-          /*
-            Contract is created NOW,
-            after the player actually
-            reaches the new club.
-          */
-
-          const currentWage =
-            safeNumber(
-              player.wage ||
-                player.salary,
-              500
-            );
-
-          const weeklyWage =
-            Math.round(
-              currentWage * 1.2
-            );
-
-          const contractId =
-            `transfer-contract-${toClubId}-${player.id}-${gameDate.getTime()}`;
-
-          const contract = {
-            id: contractId,
-
-            clubId: toClubId,
-
-            clubName: buyerName,
-
-            playerId: player.id,
-
-            playerName:
-              playerName(player),
-
-            weeklyWage,
-
-            signingBonus: 0,
-
-            years: 3,
-
-            status:
-              "contract-offered",
-
-            negotiationRound: 1,
-
-            secondChanceUsed: false,
-
-            createdAt:
-              gameDate.toISOString(),
-
-            responseDeadline:
-              addGameDays(
-                gameDate,
-                CONTRACT_WAIT_DAYS
-              ),
-
-            createdBy:
-              "system-ai",
-
-            transferId:
-              pending.id || null,
-
-            transferFee,
-          };
-
-          const existingContracts =
-            Array.isArray(
-              player.contractOffers
-            )
-              ? player.contractOffers
-              : [];
-
-          /*
-            Prevent duplicate contract
-            creation.
-          */
-
-          const alreadyHasContract =
-            existingContracts.some(
-              (offer) =>
-                offer.transferId ===
-                  pending.id &&
-                (
-                  offer.status ===
-                    "contract-offered" ||
-                  offer.status ===
-                    "contract-accepted"
-                )
-            );
-
-          const newContractOffers =
-            alreadyHasContract
-              ? existingContracts
-              : [
-                  ...existingContracts,
-                  contract,
-                ];
-
-          const newTransferStatus =
-            "contract-pending";
-
           const playerUpdate = {
             clubId: toClubId,
 
@@ -1461,13 +1364,8 @@ export default function TransferPage({
 
             currentClubName: buyerName,
 
-            /*
-              IMPORTANT:
-              Not "completed" yet.
-            */
-
             transferStatus:
-              newTransferStatus,
+              "contract-pending",
 
             pendingTransfer: null,
 
@@ -1475,15 +1373,6 @@ export default function TransferPage({
 
             latestOffer:
               pending,
-
-            contractOffers:
-              newContractOffers,
-
-            latestContractOffer:
-              alreadyHasContract
-                ? player.latestContractOffer ||
-                  null
-                : contract,
 
             lastTransferFee:
               transferFee,
@@ -1494,6 +1383,112 @@ export default function TransferPage({
             updatedAt:
               serverTimestamp(),
           };
+
+          /*
+            Only AI clubs get an automatic
+            contract from the system.
+
+            User-managed clubs must use the
+            Transfer Centre UI to offer a
+            contract to the arriving player.
+          */
+
+          if (!buyerClub.managerId) {
+            const currentWage =
+              safeNumber(
+                player.wage ||
+                  player.salary,
+                500
+              );
+
+            const weeklyWage =
+              Math.round(
+                currentWage * 1.2
+              );
+
+            const contractId =
+              `transfer-contract-${toClubId}-${player.id}-${gameDate.getTime()}`;
+
+            const contract = {
+              id: contractId,
+
+              clubId: toClubId,
+
+              clubName: buyerName,
+
+              playerId: player.id,
+
+              playerName:
+                playerName(player),
+
+              weeklyWage,
+
+              signingBonus: 0,
+
+              years: 3,
+
+              status:
+                "contract-offered",
+
+              negotiationRound: 1,
+
+              secondChanceUsed: false,
+
+              createdAt:
+                gameDate.toISOString(),
+
+              responseDeadline:
+                addGameDays(
+                  gameDate,
+                  CONTRACT_WAIT_DAYS
+                ),
+
+              createdBy:
+                "system-ai",
+
+              transferId:
+                pending.id || null,
+
+              transferFee,
+            };
+
+            const existingContracts =
+              Array.isArray(
+                player.contractOffers
+              )
+                ? player.contractOffers
+                : [];
+
+            const alreadyHasContract =
+              existingContracts.some(
+                (offer) =>
+                  offer.transferId ===
+                    pending.id &&
+                  (
+                    offer.status ===
+                      "contract-offered" ||
+                    offer.status ===
+                      "contract-accepted"
+                  )
+              );
+
+            const newContractOffers =
+              alreadyHasContract
+                ? existingContracts
+                : [
+                    ...existingContracts,
+                    contract,
+                  ];
+
+            playerUpdate.contractOffers =
+              newContractOffers;
+
+            playerUpdate.latestContractOffer =
+              alreadyHasContract
+                ? player.latestContractOffer ||
+                  null
+                : contract;
+          }
 
           batch.update(
             doc(
@@ -1578,7 +1573,7 @@ export default function TransferPage({
               completedCount > 1
                 ? "s"
                 : ""
-            } reached the new club and received a contract offer.`
+            } reached the new club.`
           );
         }
       },
@@ -1780,12 +1775,6 @@ export default function TransferPage({
                     gameDate.toISOString(),
 
                   joiningDate,
-
-                  /*
-                    This marks the transfer
-                    as accepted, but not
-                    completed.
-                  */
                 };
 
                 updatedOffers[index] =
@@ -3066,7 +3055,7 @@ export default function TransferPage({
         Step 1:
         Players whose joining date has arrived
         move to their new club and receive
-        contract offers.
+        contract offers (AI clubs only).
       */
 
       await completeDueTransfers(
@@ -3349,11 +3338,6 @@ export default function TransferPage({
               ) {
                 return;
               }
-
-              /*
-                Show relevant contract
-                statuses only.
-              */
 
               const status =
                 offerStatus(
