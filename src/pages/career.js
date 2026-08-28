@@ -47,6 +47,18 @@ function safeString(value, fallback = '') {
   return String(value);
 }
 
+function getGameDate(value) {
+  if (!value) return new Date();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function getSeasonYear(gameDate) {
+  return gameDate.getMonth() >= 6
+    ? gameDate.getFullYear()
+    : gameDate.getFullYear() - 1;
+}
+
 /* =========================================================
    PAGE
 ========================================================= */
@@ -75,6 +87,7 @@ export default function Career() {
 
   const [clubInfo, setClubInfo] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [gameDate, setGameDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
 
   /* =======================================================
@@ -109,6 +122,10 @@ export default function Career() {
         const data = userSnapshot.data();
         careerData = data.careerData || {};
       }
+
+      // IMPORTANT: Game date comes from careerData.currentDate
+      const currentGameDate = getGameDate(careerData.currentDate);
+      setGameDate(currentGameDate);
 
       setCareer((prev) => ({
         ...prev,
@@ -149,7 +166,14 @@ export default function Career() {
   };
 
   /* =======================================================
+     SEASON YEAR - BASED ON GAME DATE, NOT REAL DATE
+  ======================================================= */
+
+  const seasonYear = useMemo(() => getSeasonYear(gameDate), [gameDate]);
+
+  /* =======================================================
      LOAD MATCHES FOR CURRENT CLUB (REAL-TIME)
+     Uses game-date based seasonYear
   ======================================================= */
 
   useEffect(() => {
@@ -162,7 +186,7 @@ export default function Career() {
 
     const matchesQuery = query(
       collection(db, 'matches'),
-      where('seasonYear', '==', getSeasonYear())
+      where('seasonYear', '==', seasonYear)
     );
 
     const unsubscribe = onSnapshot(
@@ -204,16 +228,7 @@ export default function Career() {
     );
 
     return () => unsubscribe();
-  }, [user, career.currentClub]);
-
-  /* =======================================================
-     GET SEASON YEAR
-  ======================================================= */
-
-  function getSeasonYear() {
-    const now = new Date();
-    return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-  }
+  }, [user, career.currentClub, seasonYear]);
 
   /* =======================================================
      CALCULATE CAREER STATS FROM MATCHES
