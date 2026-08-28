@@ -109,12 +109,26 @@ function addYears(date, years) {
   return result.toISOString();
 }
 
-function getContractStatus(contract) {
+// =========================================================
+// GAME DATE HELPERS
+// =========================================================
+
+function getGameDate(careerData) {
+  if (!careerData?.currentDate) return new Date();
+  const parsed = new Date(careerData.currentDate);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function getGameDateISO(careerData) {
+  return getGameDate(careerData).toISOString();
+}
+
+function getContractStatus(contract, gameDate) {
   if (!contract) return 'none';
   if (contract.status === 'terminated') return 'terminated';
   if (!contract.endDate) return 'active';
   const remaining = daysBetween(
-    new Date().toISOString(),
+    gameDate.toISOString(),
     dateToISOString(contract.endDate)
   );
   if (remaining <= 0) return 'expired';
@@ -172,7 +186,7 @@ function allocatePrizeMoney(totalPrize) {
    YOUTH PLAYER GENERATION
 ========================================================= */
 
-function generateYouthPlayer(club, index, seasonYear) {
+function generateYouthPlayer(club, index, seasonYear, gameDate) {
   const firstNames = [
     'Alex', 'Sam', 'Jordan', 'Chris', 'Ryan', 'Kevin', 'David', 'Mike',
     'Daniel', 'James', 'John', 'Paul', 'Mark', 'Luke', 'Ethan', 'Noah',
@@ -226,7 +240,7 @@ function generateYouthPlayer(club, index, seasonYear) {
     country: club.countryName || 'Unknown',
     seasonYear,
     needsContractDecision: false,
-    createdAt: new Date().toISOString(),
+    createdAt: gameDate.toISOString(),
   };
 }
 
@@ -506,6 +520,20 @@ export default function ClubPage({ initialClubs = [] }) {
     'Manager';
 
   /* =======================================================
+     GAME DATE
+  ======================================================= */
+
+  const gameDate = useMemo(
+    () => getGameDate(careerData),
+    [careerData]
+  );
+
+  const gameDateISO = useMemo(
+    () => gameDate.toISOString(),
+    [gameDate]
+  );
+
+  /* =======================================================
      AUTH + CAREER
   ======================================================= */
 
@@ -525,13 +553,10 @@ export default function ClubPage({ initialClubs = [] }) {
   ======================================================= */
 
   const seasonYear = useMemo(() => {
-    const gameDate = careerData?.currentDate
-      ? new Date(careerData.currentDate)
-      : new Date();
     return gameDate.getMonth() >= 6
       ? gameDate.getFullYear()
       : gameDate.getFullYear() - 1;
-  }, [careerData?.currentDate]);
+  }, [gameDate]);
 
   /* =======================================================
      LOAD CAREER
@@ -681,6 +706,41 @@ export default function ClubPage({ initialClubs = [] }) {
   };
 
   /* =======================================================
+     REAL-TIME CLUB UPDATES
+  ======================================================= */
+
+  useEffect(() => {
+    if (!user || !careerData?.currentClub) return;
+
+    const clubRef = doc(db, 'clubs', careerData.currentClub);
+    const unsubscribe = onSnapshot(
+      clubRef,
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setClubInfo(null);
+          return;
+        }
+        const clubData = snapshot.data();
+        setClubInfo((prev) => ({
+          ...(prev || {}),
+          ...clubData,
+          id: snapshot.id,
+          name: clubData.name || clubData.clubName || prev?.name || 'Unnamed Club',
+          transferBudget: safeNumber(clubData.transferBudget, 0),
+          wageBudget: safeNumber(clubData.wageBudget, 0),
+          balance: safeNumber(clubData.balance ?? clubData.budget, 0),
+          reputation: safeNumber(clubData.reputation, 50),
+        }));
+      },
+      (error) => {
+        console.error('Club realtime error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user, careerData?.currentClub]);
+
+  /* =======================================================
      LOAD MATCHES FOR CURRENT CLUB (REAL-TIME)
   ======================================================= */
 
@@ -811,7 +871,7 @@ export default function ClubPage({ initialClubs = [] }) {
       const newYouthPlayers = [];
 
       for (let i = 0; i < 8; i++) {
-        const youthPlayer = generateYouthPlayer(clubInfo, i, seasonYear);
+        const youthPlayer = generateYouthPlayer(clubInfo, i, seasonYear, gameDate);
         newYouthPlayers.push(youthPlayer);
         const playerRef = doc(db, 'players', youthPlayer.id);
         batch.set(playerRef, youthPlayer);
@@ -826,7 +886,7 @@ export default function ClubPage({ initialClubs = [] }) {
     } finally {
       setIsGeneratingYouth(false);
     }
-  }, [clubInfo, youthSquad, seasonYear, isGeneratingYouth]);
+  }, [clubInfo, youthSquad, seasonYear, gameDate, isGeneratingYouth]);
 
   useEffect(() => {
     if (!clubInfo || !clubInfo.id) return;
@@ -854,7 +914,7 @@ export default function ClubPage({ initialClubs = [] }) {
     try {
       setSaving(true);
       const contractEnd = new Date(
-        Date.now() + 3 * 365 * 24 * 60 * 60 * 1000
+        gameDate.getTime() + 3 * 365 * 24 * 60 * 60 * 1000
       ).toISOString();
       const wage = 500 + Math.floor(Math.random() * 1500);
 
@@ -866,7 +926,7 @@ export default function ClubPage({ initialClubs = [] }) {
         transferStatus: 'available',
         status: 'available',
         needsContractDecision: false,
-        signedAt: new Date().toISOString(),
+        signedAt: gameDateISO,
         updatedAt: serverTimestamp(),
       });
 
@@ -915,7 +975,7 @@ export default function ClubPage({ initialClubs = [] }) {
         status: 'free-agent',
         contractEnd: null,
         needsContractDecision: false,
-        releasedAt: new Date().toISOString(),
+        releasedAt: gameDateISO,
         updatedAt: serverTimestamp(),
       });
 
@@ -937,7 +997,7 @@ export default function ClubPage({ initialClubs = [] }) {
 
   const currentClubId = careerData?.currentClub || null;
   const contract = careerData?.clubContract || null;
-  const contractStatus = getContractStatus(contract);
+  const contractStatus = getContractStatus(contract, gameDate);
   const boardConfidence = safeNumber(careerData?.boardConfidence, 70);
   const objectives = careerData?.clubObjectives || clubInfo?.objectives || [];
 
@@ -962,7 +1022,6 @@ export default function ClubPage({ initialClubs = [] }) {
     const value = search.trim().toLowerCase();
 
     return clubs.filter((club) => {
-      // Skip clubs that are already occupied by another manager
       if (club.managerId && club.managerId !== user?.uid) {
         return false;
       }
@@ -1010,7 +1069,6 @@ export default function ClubPage({ initialClubs = [] }) {
   ======================================================= */
 
   const openClubSelection = (club) => {
-    // Double-check club is available
     if (club.managerId && club.managerId !== user?.uid) {
       toast.error('This club has already been taken by another manager.');
       return;
@@ -1048,7 +1106,7 @@ export default function ClubPage({ initialClubs = [] }) {
         return;
       }
 
-      const startDate = new Date().toISOString();
+      const startDate = gameDateISO;
       const endDate = addYears(startDate, DEFAULT_CONTRACT_YEARS);
 
       const contractData = {
@@ -1102,9 +1160,7 @@ export default function ClubPage({ initialClubs = [] }) {
         clubObjectives: objectives,
         boardConfidence: 70,
         managerSalary: contractData.salary,
-        transferBudget: safeNumber(selectedClub.transferBudget, 0),
-        wageBudget: safeNumber(selectedClub.wageBudget, 0),
-        clubBalance: safeNumber(selectedClub.balance, 0),
+        // We no longer store budgets in careerData; they live in clubs collection.
         clubJoinedAt: startDate,
         clubSeasons: 1,
       };
@@ -1122,7 +1178,13 @@ export default function ClubPage({ initialClubs = [] }) {
       });
 
       setCareerData(updatedCareer);
-      setClubInfo(selectedClub);
+      setClubInfo({
+        ...selectedClub,
+        id: selectedClub.id,
+        transferBudget: safeNumber(clubData.transferBudget, 0),
+        wageBudget: safeNumber(clubData.wageBudget, 0),
+        balance: safeNumber(clubData.balance ?? clubData.budget, 0),
+      });
       setClubs((previous) =>
         previous.map((club) =>
           club.id === selectedClub.id
@@ -1161,7 +1223,7 @@ export default function ClubPage({ initialClubs = [] }) {
       const newEndDate = addYears(
         contract.endDate
           ? dateToISOString(contract.endDate)
-          : new Date().toISOString(),
+          : gameDateISO,
         1
       );
 
@@ -1171,7 +1233,7 @@ export default function ClubPage({ initialClubs = [] }) {
         endDate: newEndDate,
         durationYears: safeNumber(contract.durationYears, 2) + 1,
         renewalOffered: false,
-        updatedAt: new Date().toISOString(),
+        updatedAt: gameDateISO,
       };
 
       const updatedCareer = {
@@ -1220,14 +1282,11 @@ export default function ClubPage({ initialClubs = [] }) {
         clubContract: {
           ...(careerData.clubContract || {}),
           status: 'terminated',
-          terminatedAt: new Date().toISOString(),
+          terminatedAt: gameDateISO,
           terminationReason: 'Manager resignation',
         },
         clubObjectives: [],
         managerSalary: 0,
-        transferBudget: 0,
-        wageBudget: 0,
-        clubBalance: 0,
         clubSeasons: 0,
       };
 
@@ -1501,25 +1560,15 @@ export default function ClubPage({ initialClubs = [] }) {
   ======================================================= */
 
   const remainingDays = contract?.endDate
-    ? daysBetween(new Date().toISOString(), dateToISOString(contract.endDate))
+    ? daysBetween(gameDateISO, dateToISOString(contract.endDate))
     : null;
 
   const confidenceLabel = getConfidenceLabel(boardConfidence);
 
-  const transferBudget = safeNumber(
-    careerData?.transferBudget,
-    clubInfo?.transferBudget || 0
-  );
-
-  const wageBudget = safeNumber(
-    careerData?.wageBudget,
-    clubInfo?.wageBudget || 0
-  );
-
-  const balance = safeNumber(
-    careerData?.clubBalance,
-    clubInfo?.balance || 0
-  );
+  // Budgets come DIRECTLY from clubs collection (via clubInfo)
+  const transferBudget = safeNumber(clubInfo?.transferBudget, 0);
+  const wageBudget = safeNumber(clubInfo?.wageBudget, 0);
+  const balance = safeNumber(clubInfo?.balance, 0);
 
   const clubLeague =
     clubInfo?.leagueName ||
