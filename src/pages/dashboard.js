@@ -80,6 +80,18 @@ function getClubName(club, fallback = 'Unknown Club') {
   );
 }
 
+function getGameDate(value) {
+  if (!value) return new Date();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function getSeasonYearFromDate(gameDate) {
+  return gameDate.getMonth() >= 6
+    ? gameDate.getFullYear()
+    : gameDate.getFullYear() - 1;
+}
+
 /* =========================================================
    PAGE
 ========================================================= */
@@ -106,6 +118,10 @@ export default function Dashboard() {
   const [allMatches, setAllMatches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isClubOccupied, setIsClubOccupied] = useState(false);
+  const [gameDate, setGameDate] = useState(new Date());
+  const [seasonYear, setSeasonYear] = useState(
+    getSeasonYearFromDate(new Date())
+  );
 
   /* =======================================================
      AUTH
@@ -121,15 +137,6 @@ export default function Dashboard() {
       fetchDashboardData();
     }
   }, [user, loading, router]);
-
-  /* =======================================================
-     GET SEASON YEAR
-  ======================================================= */
-
-  function getSeasonYear() {
-    const now = new Date();
-    return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-  }
 
   /* =======================================================
      FETCH DASHBOARD DATA
@@ -148,6 +155,11 @@ export default function Dashboard() {
         const data = userDoc.data();
         careerData = data.careerData || {};
       }
+
+      // IMPORTANT: game date from careerData.currentDate
+      const currentGameDate = getGameDate(careerData.currentDate);
+      setGameDate(currentGameDate);
+      setSeasonYear(getSeasonYearFromDate(currentGameDate));
 
       if (careerData.currentClub) {
         const clubRef = doc(db, 'clubs', careerData.currentClub);
@@ -191,9 +203,12 @@ export default function Dashboard() {
         setClubInfo(null);
       }
 
-      // Load matches for current club
+      // Load matches for current club using game-date-based seasonYear
       if (careerData.currentClub && !isClubOccupied) {
-        await loadClubMatches(careerData.currentClub);
+        await loadClubMatches(
+          careerData.currentClub,
+          getSeasonYearFromDate(currentGameDate)
+        );
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -205,13 +220,14 @@ export default function Dashboard() {
 
   /* =======================================================
      LOAD CLUB MATCHES (REAL-TIME)
+     seasonYear passed from game calendar
   ======================================================= */
 
-  const loadClubMatches = useCallback(async (clubId) => {
+  const loadClubMatches = useCallback(async (clubId, seasonYearParam) => {
     try {
       const matchesQuery = query(
         collection(db, 'matches'),
-        where('seasonYear', '==', getSeasonYear())
+        where('seasonYear', '==', seasonYearParam)
       );
 
       const unsubscribe = onSnapshot(
@@ -513,6 +529,9 @@ export default function Dashboard() {
               user?.email?.split('@')[0] ||
               'Manager'}
             !
+          </p>
+          <p className={styles.gameDate}>
+            Game Date: {gameDate.toLocaleDateString()}
           </p>
         </div>
 
