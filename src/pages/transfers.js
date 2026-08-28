@@ -1038,20 +1038,6 @@ export default function TransferPage({
   }, [user]);
 
   /* =======================================================
-     SYNC currentClub WITH CLUBS DATA
-     (so budget updates immediately)
-  ======================================================= */
-
-  useEffect(() => {
-    if (currentClubId && clubs.length > 0) {
-      const updatedClub = clubs.find(
-        (club) => club.id === currentClubId
-      );
-      setCurrentClub(updatedClub || null);
-    }
-  }, [clubs, currentClubId]);
-
-  /* =======================================================
      REALTIME YOUTH
   ======================================================= */
 
@@ -1188,9 +1174,6 @@ export default function TransferPage({
   /* =======================================================
      COMPLETE DUE TRANSFERS
 
-     IMPORTANT:
-     Transfer is NOT completed here.
-
      The player:
        seller
         ↓
@@ -1204,14 +1187,9 @@ export default function TransferPage({
         ↓
        completed
 
-     NOTE:
-     When buyer club is AI-managed,
-     the system creates a contract
-     automatically.
-
-     When buyer club is user-managed,
-     the user must offer a contract
-     manually from the Joining tab.
+     Transfer money is paid ONLY when
+     the player actually moves to the
+     new club (joining date).
   ======================================================= */
 
   const completeDueTransfers =
@@ -1336,11 +1314,6 @@ export default function TransferPage({
             buyerClub.clubName ||
             "";
 
-          /*
-            Keep the actual transfer offer
-            as accepted/joining.
-          */
-
           const existingOffers =
             Array.isArray(
               player.transferOffers
@@ -1397,15 +1370,6 @@ export default function TransferPage({
             updatedAt:
               serverTimestamp(),
           };
-
-          /*
-            Only AI clubs get an automatic
-            contract from the system.
-
-            User-managed clubs must use the
-            Transfer Centre UI to offer a
-            contract to the arriving player.
-          */
 
           if (!buyerClub.managerId) {
             const currentWage =
@@ -1515,11 +1479,6 @@ export default function TransferPage({
 
           operationCount++;
           completedCount++;
-
-          /*
-            Transfer money is paid only once,
-            when the player actually moves.
-          */
 
           if (transferFee > 0) {
             const buyerBudget =
@@ -1634,10 +1593,6 @@ export default function TransferPage({
               continue;
             }
 
-            /*
-              User's own club handles offers manually.
-            */
-
             if (
               sellerClubId ===
               currentClub.id
@@ -1647,11 +1602,6 @@ export default function TransferPage({
 
             const sellerClub =
               clubMap[sellerClubId];
-
-            /*
-              User-managed clubs don't get
-              AI responses.
-            */
 
             if (
               sellerClub?.managerId
@@ -1693,16 +1643,6 @@ export default function TransferPage({
               ) {
                 continue;
               }
-
-              /*
-                Only AI buyer offers
-                need system response
-                from the seller.
-
-                If buyer is current user,
-                seller is AI and this page
-                may be showing outgoing bids.
-              */
 
               if (
                 offer.buyerClubId ===
@@ -1942,8 +1882,8 @@ export default function TransferPage({
   /* =======================================================
      SYSTEM CONTRACT RESPONSES
 
-     This is where contract acceptance
-     finally completes the transfer.
+     Contract acceptance completes
+     the transfer.
   ======================================================= */
 
   const processSystemContractResponses =
@@ -2027,14 +1967,6 @@ export default function TransferPage({
                 continue;
               }
 
-              /*
-                IMPORTANT FIX:
-                Use the club stored inside
-                the contract.
-
-                Never use currentClub here.
-              */
-
               const contractClub =
                 clubMap[
                   offer.clubId
@@ -2078,14 +2010,6 @@ export default function TransferPage({
 
               changed = true;
 
-              /*
-                CONTRACT ACCEPTED
-                =================
-
-                Only here can transfer
-                become COMPLETED.
-              */
-
               if (
                 response.status ===
                 "contract-accepted"
@@ -2110,11 +2034,6 @@ export default function TransferPage({
               updatedOffers[
                 updatedOffers.length - 1
               ];
-
-            /*
-              Find the most recent
-              accepted contract.
-            */
 
             const acceptedContract =
               [...updatedOffers]
@@ -2174,11 +2093,6 @@ export default function TransferPage({
                 serverTimestamp(),
             };
 
-            /*
-              CONTRACT ACCEPTED
-              = TRANSFER COMPLETED
-            */
-
             if (
               item.acceptedContract
             ) {
@@ -2217,11 +2131,6 @@ export default function TransferPage({
 
               data.contractStartDate =
                 gameDate.toISOString();
-
-              /*
-                Once the contract is accepted,
-                no joining transfer remains.
-              */
 
               data.pendingTransfer =
                 null;
@@ -2319,11 +2228,6 @@ export default function TransferPage({
           setIsProcessingSystem(
             true
           );
-
-          /*
-            June, July, August
-            + January.
-          */
 
           const month =
             gameDate.getUTCMonth();
@@ -2716,10 +2620,6 @@ export default function TransferPage({
 
   /* =======================================================
      AI CONTRACT SIGNINGS
-
-     AI clubs can offer contracts to
-     players who don't have an active
-     contract.
   ======================================================= */
 
   const processAIContractSignings =
@@ -2827,13 +2727,6 @@ export default function TransferPage({
                   if (hasActive) {
                     return false;
                   }
-
-                  /*
-                    Don't create a new
-                    contract for a player
-                    whose transfer is not
-                    yet completed.
-                  */
 
                   if (
                     normalize(
@@ -3042,13 +2935,6 @@ export default function TransferPage({
 
   /* =======================================================
      RUN GAME CALENDAR
-
-     ORDER MATTERS:
-
-     1. Due players move.
-     2. Existing contracts get responses.
-     3. AI creates transfer bids.
-     4. AI creates normal contracts.
   ======================================================= */
 
   useEffect(() => {
@@ -3065,50 +2951,23 @@ export default function TransferPage({
     async function run() {
       if (cancelled) return;
 
-      /*
-        Step 1:
-        Players whose joining date has arrived
-        move to their new club and receive
-        contract offers (AI clubs only).
-      */
-
       await completeDueTransfers(
         currentGameDate
       );
 
       if (cancelled) return;
 
-      /*
-        Step 2:
-        AI responds to transfer bids.
-      */
-
       await processSystemResponses();
 
       if (cancelled) return;
-
-      /*
-        Step 3:
-        AI responds to contracts.
-      */
 
       await processSystemContractResponses();
 
       if (cancelled) return;
 
-      /*
-        Step 4:
-        AI starts new transfers.
-      */
-
       await processSystemAITransfers();
 
       if (cancelled) return;
-
-      /*
-        Step 5:
-        AI sends normal contracts.
-      */
 
       await processAIContractSignings();
     }
@@ -3526,6 +3385,7 @@ export default function TransferPage({
     useMemo(() => {
       const budget =
         safeNumber(
+          careerData?.transferBudget,
           currentClub?.transferBudget ||
             0
         );
@@ -3668,6 +3528,7 @@ export default function TransferPage({
       players,
       currentClubPlayers,
       currentClubId,
+      careerData,
       currentClub,
     ]);
 
@@ -3950,6 +3811,7 @@ export default function TransferPage({
 
     const budget =
       safeNumber(
+        careerData?.transferBudget,
         currentClub?.transferBudget ||
           0
       );
@@ -4217,13 +4079,6 @@ export default function TransferPage({
           latestContractOffer:
             contract,
 
-          /*
-            If the player is already
-            in this club but contract
-            was missing, keep it
-            contract-pending.
-          */
-
           transferStatus:
             "contract-pending",
         }
@@ -4484,12 +4339,14 @@ export default function TransferPage({
 
   const transferBudget =
     safeNumber(
+      careerData?.transferBudget,
       currentClub?.transferBudget ||
         0
     );
 
   const wageBudget =
     safeNumber(
+      careerData?.wageBudget,
       currentClub?.wageBudget ||
         0
     );
@@ -4518,10 +4375,7 @@ export default function TransferPage({
           styles.page
         }
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
+        {/* HEADER */}
         <header
           className={
             styles.header
@@ -4610,10 +4464,7 @@ export default function TransferPage({
           </div>
         </header>
 
-        {/* =================================================
-            SUMMARY
-        ================================================= */}
-
+        {/* SUMMARY */}
         <section
           className={
             styles.summaryGrid
@@ -4733,10 +4584,7 @@ export default function TransferPage({
           </article>
         </section>
 
-        {/* =================================================
-            GM
-        ================================================= */}
-
+        {/* GM */}
         {suggestions.length >
           0 && (
           <section
@@ -4783,10 +4631,7 @@ export default function TransferPage({
           </section>
         )}
 
-        {/* =================================================
-            NAVIGATION
-        ================================================= */}
-
+        {/* NAVIGATION */}
         <nav
           className={
             styles.tabs
@@ -4892,10 +4737,7 @@ export default function TransferPage({
           </button>
         </nav>
 
-        {/* =================================================
-            BIDS
-        ================================================= */}
-
+        {/* BIDS */}
         {(
           activeTab ===
             "incoming" ||
@@ -5280,10 +5122,7 @@ export default function TransferPage({
           </section>
         )}
 
-        {/* =================================================
-            JOINING
-        ================================================= */}
-
+        {/* JOINING */}
         {activeTab ===
           "joining" && (
           <section
@@ -5464,10 +5303,7 @@ export default function TransferPage({
           </section>
         )}
 
-        {/* =================================================
-            CONTRACTS
-        ================================================= */}
-
+        {/* CONTRACTS */}
         {activeTab ===
           "contracts" && (
           <section
@@ -5718,10 +5554,7 @@ export default function TransferPage({
           </section>
         )}
 
-        {/* =================================================
-            GM SUGGESTIONS
-        ================================================= */}
-
+        {/* GM SUGGESTIONS */}
         {activeTab ===
           "suggestions" && (
           <section
@@ -5930,10 +5763,7 @@ export default function TransferPage({
           </section>
         )}
 
-        {/* =================================================
-            BID MODAL
-        ================================================= */}
-
+        {/* BID MODAL */}
         {showBidModal &&
           selectedBid && (
             <div
@@ -6230,10 +6060,7 @@ export default function TransferPage({
             </div>
           )}
 
-        {/* =================================================
-            CONTRACT MODAL
-        ================================================= */}
-
+        {/* CONTRACT MODAL */}
         {showContractModal &&
           contractPlayer && (
             <div
