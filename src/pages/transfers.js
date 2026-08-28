@@ -1017,14 +1017,23 @@ export default function TransferPage({
       onSnapshot(
         collection(db, "clubs"),
         (snapshot) => {
-          setClubs(
-            snapshot.docs.map(
-              (item) => ({
-                id: item.id,
-                ...item.data(),
-              })
-            )
+          const clubList = snapshot.docs.map(
+            (item) => ({
+              id: item.id,
+              ...item.data(),
+            })
           );
+
+          setClubs(clubList);
+
+          // Update currentClub in real-time
+          setCurrentClub((previous) => {
+            if (!previous?.id) return previous;
+            const updated = clubList.find(
+              (club) => club.id === previous.id
+            );
+            return updated || previous;
+          });
         },
         (error) => {
           console.error(
@@ -1558,6 +1567,8 @@ export default function TransferPage({
 
   /* =======================================================
      SYSTEM TRANSFER RESPONSES
+
+     FIXED: Now processes user outgoing bids too.
   ======================================================= */
 
   const processSystemResponses =
@@ -1593,6 +1604,10 @@ export default function TransferPage({
               continue;
             }
 
+            /*
+              User's own club handles offers manually.
+            */
+
             if (
               sellerClubId ===
               currentClub.id
@@ -1602,6 +1617,11 @@ export default function TransferPage({
 
             const sellerClub =
               clubMap[sellerClubId];
+
+            /*
+              User-managed clubs don't get
+              AI responses.
+            */
 
             if (
               sellerClub?.managerId
@@ -1640,13 +1660,6 @@ export default function TransferPage({
                 offerStatus(
                   offer
                 ) !== "pending"
-              ) {
-                continue;
-              }
-
-              if (
-                offer.buyerClubId ===
-                currentClub.id
               ) {
                 continue;
               }
@@ -1881,9 +1894,6 @@ export default function TransferPage({
 
   /* =======================================================
      SYSTEM CONTRACT RESPONSES
-
-     Contract acceptance completes
-     the transfer.
   ======================================================= */
 
   const processSystemContractResponses =
