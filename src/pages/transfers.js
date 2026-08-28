@@ -799,6 +799,16 @@ export default function TransferPage({
   ] = useState(null);
 
   const [
+    transferBudget,
+    setTransferBudget,
+  ] = useState(0);
+
+  const [
+    wageBudget,
+    setWageBudget,
+  ] = useState(0);
+
+  const [
     isLoading,
     setIsLoading,
   ] = useState(true);
@@ -942,10 +952,13 @@ export default function TransferPage({
       setCareerData(career);
 
       if (career.currentClub) {
+        const clubId =
+          career.currentClub;
+
         const clubRef = doc(
           db,
           "clubs",
-          career.currentClub
+          clubId
         );
 
         const clubSnapshot =
@@ -954,15 +967,36 @@ export default function TransferPage({
         if (
           clubSnapshot.exists()
         ) {
+          const clubData =
+            clubSnapshot.data();
+
           setCurrentClub({
             id: clubSnapshot.id,
-            ...clubSnapshot.data(),
+            ...clubData,
           });
+
+          setTransferBudget(
+            Number(
+              clubData.transferBudget ||
+                0
+            )
+          );
+
+          setWageBudget(
+            Number(
+              clubData.wageBudget ||
+                0
+            )
+          );
         } else {
           setCurrentClub(null);
+          setTransferBudget(0);
+          setWageBudget(0);
         }
       } else {
         setCurrentClub(null);
+        setTransferBudget(0);
+        setWageBudget(0);
       }
     } catch (error) {
       console.error(error);
@@ -1017,23 +1051,15 @@ export default function TransferPage({
       onSnapshot(
         collection(db, "clubs"),
         (snapshot) => {
-          const clubList = snapshot.docs.map(
-            (item) => ({
-              id: item.id,
-              ...item.data(),
-            })
-          );
+          const clubList =
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...item.data(),
+              })
+            );
 
           setClubs(clubList);
-
-          // Update currentClub in real-time
-          setCurrentClub((previous) => {
-            if (!previous?.id) return previous;
-            const updated = clubList.find(
-              (club) => club.id === previous.id
-            );
-            return updated || previous;
-          });
         },
         (error) => {
           console.error(
@@ -1045,6 +1071,74 @@ export default function TransferPage({
 
     return () => unsubscribe();
   }, [user]);
+
+  /* =======================================================
+     REALTIME CLUB BUDGET
+
+     This is the ONLY source of truth for
+     transfer budget on this page.
+  ======================================================= */
+
+  useEffect(() => {
+    const clubId =
+      careerData?.currentClub;
+
+    if (!clubId) {
+      setTransferBudget(0);
+      setWageBudget(0);
+      return undefined;
+    }
+
+    const clubRef = doc(
+      db,
+      "clubs",
+      clubId
+    );
+
+    const unsubscribe = onSnapshot(
+      clubRef,
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setTransferBudget(0);
+          setWageBudget(0);
+          return;
+        }
+
+        const clubData =
+          snapshot.data();
+
+        setTransferBudget(
+          Number(
+            clubData.transferBudget ||
+              0
+          )
+        );
+
+        setWageBudget(
+          Number(
+            clubData.wageBudget ||
+              0
+          )
+        );
+
+        setCurrentClub((previous) => ({
+          ...(previous || {}),
+          ...clubData,
+          id: snapshot.id,
+        }));
+      },
+      (error) => {
+        console.error(
+          "Club budget realtime error:",
+          error
+        );
+      }
+    );
+
+    return () => unsubscribe();
+  }, [
+    careerData?.currentClub,
+  ]);
 
   /* =======================================================
      REALTIME YOUTH
@@ -1199,6 +1293,10 @@ export default function TransferPage({
      Transfer money is paid ONLY when
      the player actually moves to the
      new club (joining date).
+
+     IMPORTANT:
+     Transfer budget is read from and
+     written to clubs/{clubId}.transferBudget
   ======================================================= */
 
   const completeDueTransfers =
@@ -1567,8 +1665,6 @@ export default function TransferPage({
 
   /* =======================================================
      SYSTEM TRANSFER RESPONSES
-
-     FIXED: Now processes user outgoing bids too.
   ======================================================= */
 
   const processSystemResponses =
@@ -3394,11 +3490,7 @@ export default function TransferPage({
   const suggestions =
     useMemo(() => {
       const budget =
-        safeNumber(
-          careerData?.transferBudget,
-          currentClub?.transferBudget ||
-            0
-        );
+        transferBudget;
 
       const positions =
         getPositionNeed(
@@ -3538,8 +3630,7 @@ export default function TransferPage({
       players,
       currentClubPlayers,
       currentClubId,
-      careerData,
-      currentClub,
+      transferBudget,
     ]);
 
   /* =======================================================
@@ -3820,11 +3911,7 @@ export default function TransferPage({
       );
 
     const budget =
-      safeNumber(
-        careerData?.transferBudget,
-        currentClub?.transferBudget ||
-          0
-      );
+      transferBudget;
 
     if (
       counterAmount >
@@ -4342,24 +4429,6 @@ export default function TransferPage({
       </>
     );
   }
-
-  /* =======================================================
-     BUDGETS
-  ======================================================= */
-
-  const transferBudget =
-    safeNumber(
-      careerData?.transferBudget,
-      currentClub?.transferBudget ||
-        0
-    );
-
-  const wageBudget =
-    safeNumber(
-      careerData?.wageBudget,
-      currentClub?.wageBudget ||
-        0
-    );
 
   /* =======================================================
      RENDER
