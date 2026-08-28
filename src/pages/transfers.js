@@ -1038,6 +1038,20 @@ export default function TransferPage({
   }, [user]);
 
   /* =======================================================
+     SYNC currentClub WITH CLUBS DATA
+     (so budget updates immediately)
+  ======================================================= */
+
+  useEffect(() => {
+    if (currentClubId && clubs.length > 0) {
+      const updatedClub = clubs.find(
+        (club) => club.id === currentClubId
+      );
+      setCurrentClub(updatedClub || null);
+    }
+  }, [clubs, currentClubId]);
+
+  /* =======================================================
      REALTIME YOUTH
   ======================================================= */
 
@@ -3512,7 +3526,6 @@ export default function TransferPage({
     useMemo(() => {
       const budget =
         safeNumber(
-          careerData?.transferBudget,
           currentClub?.transferBudget ||
             0
         );
@@ -3655,7 +3668,6 @@ export default function TransferPage({
       players,
       currentClubPlayers,
       currentClubId,
-      careerData,
       currentClub,
     ]);
 
@@ -3938,7 +3950,6 @@ export default function TransferPage({
 
     const budget =
       safeNumber(
-        careerData?.transferBudget,
         currentClub?.transferBudget ||
           0
       );
@@ -4473,14 +4484,12 @@ export default function TransferPage({
 
   const transferBudget =
     safeNumber(
-      careerData?.transferBudget,
       currentClub?.transferBudget ||
         0
     );
 
   const wageBudget =
     safeNumber(
-      careerData?.wageBudget,
       currentClub?.wageBudget ||
         0
     );
