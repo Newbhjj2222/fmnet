@@ -1,3 +1,5 @@
+// pages/news.js
+
 import {
   useCallback,
   useEffect,
@@ -47,82 +49,20 @@ const AI_MAX_LIKE_DELAY = 180000;
 const POST_COOLDOWN = 5000;
 
 const MEDIA_OUTLETS = [
-  {
-    id: 'football_world_tv',
-    name: 'Football World TV',
-    shortName: 'FWTV',
-    icon: '📺',
-    color: '#38bdf8',
-    type: 'Television',
-  },
-  {
-    id: 'global_football_daily',
-    name: 'Global Football Daily',
-    shortName: 'GFD',
-    icon: '📰',
-    color: '#f59e0b',
-    type: 'Newspaper',
-  },
-  {
-    id: 'football_insider',
-    name: 'Football Insider',
-    shortName: 'FI',
-    icon: '🎙️',
-    color: '#22c55e',
-    type: 'Media',
-  },
-  {
-    id: 'stadium_press',
-    name: 'The Stadium Press',
-    shortName: 'TSP',
-    icon: '🏟️',
-    color: '#ef4444',
-    type: 'Newspaper',
-  },
-  {
-    id: 'football_focus',
-    name: 'Football Focus',
-    shortName: 'FF',
-    icon: '🎥',
-    color: '#8b5cf6',
-    type: 'Television',
-  },
-  {
-    id: 'transfer_central',
-    name: 'Transfer Central',
-    shortName: 'TC',
-    icon: '🔄',
-    color: '#ec4899',
-    type: 'Transfer Media',
-  },
+  { id: 'football_world_tv', name: 'Football World TV', shortName: 'FWTV', icon: '📺', color: '#38bdf8', type: 'Television' },
+  { id: 'global_football_daily', name: 'Global Football Daily', shortName: 'GFD', icon: '📰', color: '#f59e0b', type: 'Newspaper' },
+  { id: 'football_insider', name: 'Football Insider', shortName: 'FI', icon: '🎙️', color: '#22c55e', type: 'Media' },
+  { id: 'stadium_press', name: 'The Stadium Press', shortName: 'TSP', icon: '🏟️', color: '#ef4444', type: 'Newspaper' },
+  { id: 'football_focus', name: 'Football Focus', shortName: 'FF', icon: '🎥', color: '#8b5cf6', type: 'Television' },
+  { id: 'transfer_central', name: 'Transfer Central', shortName: 'TC', icon: '🔄', color: '#ec4899', type: 'Transfer Media' },
 ];
 
 const AI_PERSONAS = [
-  {
-    id: 'ai-john',
-    name: 'John Football',
-    avatar: '👨🏾‍💼',
-  },
-  {
-    id: 'ai-marc',
-    name: 'Marc Analyst',
-    avatar: '🧠',
-  },
-  {
-    id: 'ai-david',
-    name: 'David Fan',
-    avatar: '⚽',
-  },
-  {
-    id: 'ai-sarah',
-    name: 'Sarah Sports',
-    avatar: '🎙️',
-  },
-  {
-    id: 'ai-alex',
-    name: 'Alex Reporter',
-    avatar: '📰',
-  },
+  { id: 'ai-john', name: 'John Football', avatar: '👨🏾‍💼' },
+  { id: 'ai-marc', name: 'Marc Analyst', avatar: '🧠' },
+  { id: 'ai-david', name: 'David Fan', avatar: '⚽' },
+  { id: 'ai-sarah', name: 'Sarah Sports', avatar: '🎙️' },
+  { id: 'ai-alex', name: 'Alex Reporter', avatar: '📰' },
 ];
 
 /* =========================================================
@@ -130,83 +70,19 @@ const AI_PERSONAS = [
 ========================================================= */
 
 const NEWS_TEMPLATES = {
-  match_result: {
-    icon: '⚽',
-    title: 'Match Result',
-    color: '#38bdf8',
-  },
-
-  upcoming_match: {
-    icon: '📅',
-    title: 'Upcoming Fixture',
-    color: '#f59e0b',
-  },
-
-  transfer: {
-    icon: '🔄',
-    title: 'Transfer News',
-    color: '#22c55e',
-  },
-
-  loan: {
-    icon: '📋',
-    title: 'Loan Update',
-    color: '#8b5cf6',
-  },
-
-  injury: {
-    icon: '🩹',
-    title: 'Injury Report',
-    color: '#ef4444',
-  },
-
-  youth: {
-    icon: '🌟',
-    title: 'Youth Academy',
-    color: '#ec4899',
-  },
-
-  finance: {
-    icon: '💰',
-    title: 'Financial News',
-    color: '#f59e0b',
-  },
-
-  board: {
-    icon: '👔',
-    title: 'Board Update',
-    color: '#6366f1',
-  },
-
-  achievement: {
-    icon: '🏆',
-    title: 'Achievement',
-    color: '#fbbf24',
-  },
-
-  league: {
-    icon: '📊',
-    title: 'League Update',
-    color: '#0ea5e9',
-  },
-
-  interview: {
-    icon: '🎤',
-    title: 'Exclusive Interview',
-    color: '#a855f7',
-  },
-
-  media: {
-    icon: '📺',
-    title: 'Media Report',
-    color: '#14b8a6',
-  },
-
-  general: {
-    icon: '📰',
-    title: 'Club News',
-    color: '#94a3b8',
-  },
+  match_result: { icon: '⚽', title: 'Match Result', color: '#38bdf8' },
+  upcoming_match: { icon: '📅', title: 'Upcoming Fixture', color: '#f59e0b' },
+  transfer: { icon: '🔄', title: 'Transfer News', color: '#22c55e' },
+  loan: { icon: '📋', title: 'Loan Update', color: '#8b5cf6' },
+  injury: { icon: '🩹', title: 'Injury Report', color: '#ef4444' },
+  youth: { icon: '🌟', title: 'Youth Academy', color: '#ec4899' },
+  finance: { icon: '💰', title: 'Financial News', color: '#f59e0b' },
+  board: { icon: '👔', title: 'Board Update', color: '#6366f1' },
+  achievement: { icon: '🏆', title: 'Achievement', color: '#fbbf24' },
+  league: { icon: '📊', title: 'League Update', color: '#0ea5e9' },
+  interview: { icon: '🎤', title: 'Exclusive Interview', color: '#a855f7' },
+  media: { icon: '📺', title: 'Media Report', color: '#14b8a6' },
+  general: { icon: '📰', title: 'Club News', color: '#94a3b8' },
 };
 
 /* =========================================================
@@ -214,36 +90,18 @@ const NEWS_TEMPLATES = {
 ========================================================= */
 
 function safeNumber(value, fallback = 0) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === '' ||
-    Number.isNaN(Number(value))
-  ) {
+  if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
     return fallback;
   }
-
   const number = Number(value);
-
   return Number.isFinite(number) ? number : fallback;
 }
 
 function safeString(value, fallback = '') {
-  if (value === null || value === undefined) {
-    return fallback;
-  }
-
+  if (value === null || value === undefined) return fallback;
   if (typeof value === 'object') {
-    return (
-      value.name ||
-      value.title ||
-      value.label ||
-      value.displayName ||
-      value.id ||
-      fallback
-    );
+    return value.name || value.title || value.label || value.displayName || value.id || fallback;
   }
-
   return String(value);
 }
 
@@ -258,86 +116,44 @@ function getPlayerName(player) {
 }
 
 function getPlayerPosition(player) {
-  return (
-    player?.position ||
-    player?.primaryPosition ||
-    player?.role ||
-    'MID'
-  );
+  return player?.position || player?.primaryPosition || player?.role || 'MID';
 }
 
 function getPlayerOverall(player) {
-  return safeNumber(
-    player?.overall ??
-      player?.rating ??
-      player?.overallRating,
-    0
-  );
+  return safeNumber(player?.overall ?? player?.rating ?? player?.overallRating, 0);
 }
 
 function toDate(value) {
   if (!value) return null;
-
-  if (
-    typeof value === 'object' &&
-    typeof value.toDate === 'function'
-  ) {
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
     return value.toDate();
   }
-
-  if (
-    typeof value === 'object' &&
-    typeof value.seconds === 'number'
-  ) {
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
     return new Date(value.seconds * 1000);
   }
-
   const date = new Date(value);
-
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function timeAgo(value) {
   const date = toDate(value);
-
-  if (!date) {
-    return 'Just now';
-  }
-
+  if (!date) return 'Just now';
   const now = new Date();
-
   const diffMs = now.getTime() - date.getTime();
-
-  if (diffMs < 0) {
-    return 'Upcoming';
-  }
-
+  if (diffMs < 0) return 'Upcoming';
   const diffMin = Math.floor(diffMs / 60000);
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
-
   if (diffMin < 1) return 'Just now';
-
-  if (diffMin < 60) {
-    return `${diffMin}m ago`;
-  }
-
-  if (diffHour < 24) {
-    return `${diffHour}h ago`;
-  }
-
-  if (diffDay < 7) {
-    return `${diffDay}d ago`;
-  }
-
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
   return date.toLocaleDateString();
 }
 
 function formatDate(value) {
   const date = toDate(value);
-
   if (!date) return '-';
-
   return date.toLocaleDateString('en-US', {
     weekday: 'short',
     day: 'numeric',
@@ -348,9 +164,7 @@ function formatDate(value) {
 
 function formatTime(value) {
   const date = toDate(value);
-
   if (!date) return '-';
-
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -363,15 +177,11 @@ function formatMoney(value) {
 
 function getTimestampValue(value) {
   const date = toDate(value);
-
   return date ? date.getTime() : 0;
 }
 
 function getRandomItem(items) {
-  if (!Array.isArray(items) || items.length === 0) {
-    return null;
-  }
-
+  if (!Array.isArray(items) || items.length === 0) return null;
   return items[Math.floor(Math.random() * items.length)];
 }
 
@@ -380,68 +190,48 @@ function clamp(value, min, max) {
 }
 
 /* =========================================================
-   SEASON
+   GAME DATE HELPERS
 ========================================================= */
 
-function getSeasonYear() {
-  const now = new Date();
+function getGameDate(careerData) {
+  if (!careerData?.currentDate) return new Date();
+  const date = new Date(careerData.currentDate);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
 
-  return now.getMonth() >= 6
-    ? now.getFullYear()
-    : now.getFullYear() - 1;
+function getGameDateISO(careerData) {
+  return getGameDate(careerData).toISOString();
+}
+
+function getSeasonYear(gameDate) {
+  return gameDate.getMonth() >= 6
+    ? gameDate.getFullYear()
+    : gameDate.getFullYear() - 1;
 }
 
 /* =========================================================
-   MATCH NEWS
+   MATCH NEWS (uses game date)
 ========================================================= */
 
-function generateMatchNews(matches, clubId, clubName) {
+function generateMatchNews(matches, clubId, clubName, gameDate) {
   const news = [];
 
   matches.forEach((match) => {
     const result = match.result || {};
+    const homeScore = safeNumber(result.homeScore ?? match.homeScore);
+    const awayScore = safeNumber(result.awayScore ?? match.awayScore);
 
-    const homeScore = safeNumber(
-      result.homeScore ?? match.homeScore
-    );
+    const isHome = match.homeClubId === clubId || match.homeTeamId === clubId;
+    const isAway = match.awayClubId === clubId || match.awayTeamId === clubId;
 
-    const awayScore = safeNumber(
-      result.awayScore ?? match.awayScore
-    );
-
-    const isHome =
-      match.homeClubId === clubId ||
-      match.homeTeamId === clubId;
-
-    const isAway =
-      match.awayClubId === clubId ||
-      match.awayTeamId === clubId;
-
-    if (!isHome && !isAway) {
-      return;
-    }
+    if (!isHome && !isAway) return;
 
     const opponent = isHome
-      ? safeString(
-          match.awayClubName ??
-            match.awayTeam ??
-            match.awayName,
-          'Opponent'
-        )
-      : safeString(
-          match.homeClubName ??
-            match.homeTeam ??
-            match.homeName,
-          'Opponent'
-        );
+      ? safeString(match.awayClubName ?? match.awayTeam ?? match.awayName, 'Opponent')
+      : safeString(match.homeClubName ?? match.homeTeam ?? match.homeName, 'Opponent');
 
-    const teamScore = isHome
-      ? homeScore
-      : awayScore;
-
-    const opponentScore = isHome
-      ? awayScore
-      : homeScore;
+    const teamScore = isHome ? homeScore : awayScore;
+    const opponentScore = isHome ? awayScore : homeScore;
 
     const isFinished =
       match.status === 'finished' ||
@@ -453,23 +243,14 @@ function generateMatchNews(matches, clubId, clubName) {
       let body;
 
       if (teamScore > opponentScore) {
-        headline =
-          `${clubName} defeat ${opponent} ${teamScore}-${opponentScore}`;
-
-        body =
-          `${clubName} secured three points after beating ${opponent} ${teamScore}-${opponentScore}.`;
+        headline = `${clubName} defeat ${opponent} ${teamScore}-${opponentScore}`;
+        body = `${clubName} secured three points after beating ${opponent} ${teamScore}-${opponentScore}.`;
       } else if (teamScore < opponentScore) {
-        headline =
-          `${clubName} lose to ${opponent} ${teamScore}-${opponentScore}`;
-
-        body =
-          `${clubName} suffered defeat against ${opponent} in their latest fixture.`;
+        headline = `${clubName} lose to ${opponent} ${teamScore}-${opponentScore}`;
+        body = `${clubName} suffered defeat against ${opponent} in their latest fixture.`;
       } else {
-        headline =
-          `${clubName} draw ${teamScore}-${opponentScore} with ${opponent}`;
-
-        body =
-          `${clubName} and ${opponent} shared the points after a ${teamScore}-${opponentScore} draw.`;
+        headline = `${clubName} draw ${teamScore}-${opponentScore} with ${opponent}`;
+        body = `${clubName} and ${opponent} shared the points after a ${teamScore}-${opponentScore} draw.`;
       }
 
       news.push({
@@ -480,10 +261,7 @@ function generateMatchNews(matches, clubId, clubName) {
         color: NEWS_TEMPLATES.match_result.color,
         headline,
         body,
-        date:
-          match.finishedAt ||
-          match.date ||
-          new Date().toISOString(),
+        date: match.finishedAt || match.date || gameDate.toISOString(),
         matchId: match.id,
       });
     } else {
@@ -493,13 +271,9 @@ function generateMatchNews(matches, clubId, clubName) {
         icon: NEWS_TEMPLATES.upcoming_match.icon,
         title: NEWS_TEMPLATES.upcoming_match.title,
         color: NEWS_TEMPLATES.upcoming_match.color,
-        headline:
-          `${clubName} to face ${opponent}`,
-        body:
-          `Upcoming fixture between ${clubName} and ${opponent}.`,
-        date:
-          match.date ||
-          new Date().toISOString(),
+        headline: `${clubName} to face ${opponent}`,
+        body: `Upcoming fixture between ${clubName} and ${opponent}.`,
+        date: match.date || gameDate.toISOString(),
         matchId: match.id,
       });
     }
@@ -509,19 +283,16 @@ function generateMatchNews(matches, clubId, clubName) {
 }
 
 /* =========================================================
-   TRANSFER NEWS
+   TRANSFER NEWS (uses game date)
 ========================================================= */
 
-function generateTransferNews(players, clubId, clubName) {
+function generateTransferNews(players, clubId, clubName, gameDate) {
   const news = [];
 
   players.forEach((player) => {
     const name = getPlayerName(player);
-
     const status = safeString(
-      player.transferStatus ||
-        player.status ||
-        player.transferState,
+      player.transferStatus || player.status || player.transferState,
       ''
     ).toLowerCase();
 
@@ -536,17 +307,10 @@ function generateTransferNews(players, clubId, clubName) {
       status.includes('sold');
 
     const transferTo =
-      player.transferToClubName ||
-      player.toClubName ||
-      player.newClubName ||
-      'another club';
+      player.transferToClubName || player.toClubName || player.newClubName || 'another club';
 
     if (isCompleted) {
-      const fee =
-        player.transferFee ??
-        player.fee ??
-        player.transferAmount ??
-        player.askingPrice;
+      const fee = player.transferFee ?? player.fee ?? player.transferAmount ?? player.askingPrice;
 
       news.push({
         id: `news-transfer-completed-${player.id}`,
@@ -554,26 +318,16 @@ function generateTransferNews(players, clubId, clubName) {
         icon: NEWS_TEMPLATES.transfer.icon,
         title: NEWS_TEMPLATES.transfer.title,
         color: NEWS_TEMPLATES.transfer.color,
-        headline:
-          `${name} completes transfer to ${transferTo}`,
-        body:
-          `${clubName} have completed the transfer of ${name} for €${formatMoney(fee)}.`,
-        date:
-          player.transferCompletedAt ||
-          player.updatedAt ||
-          new Date().toISOString(),
+        headline: `${name} completes transfer to ${transferTo}`,
+        body: `${clubName} have completed the transfer of ${name} for €${formatMoney(fee)}.`,
+        date: player.transferCompletedAt || player.updatedAt || gameDate.toISOString(),
         playerId: player.id,
       });
-
       return;
     }
 
     if (isListed) {
-      const askingPrice =
-        player.askingPrice ??
-        player.transferFee ??
-        player.marketValue ??
-        0;
+      const askingPriceValue = player.askingPrice ?? player.transferFee ?? player.marketValue ?? 0;
 
       news.push({
         id: `news-transfer-listed-${player.id}`,
@@ -581,21 +335,14 @@ function generateTransferNews(players, clubId, clubName) {
         icon: NEWS_TEMPLATES.transfer.icon,
         title: NEWS_TEMPLATES.transfer.title,
         color: NEWS_TEMPLATES.transfer.color,
-        headline:
-          `${name} placed on the transfer list`,
-        body:
-          `${clubName} are listening to offers for ${name}. Current asking price: €${formatMoney(askingPrice)}.`,
-        date:
-          player.transferListedAt ||
-          player.updatedAt ||
-          new Date().toISOString(),
+        headline: `${name} placed on the transfer list`,
+        body: `${clubName} are listening to offers for ${name}. Current asking price: €${formatMoney(askingPriceValue)}.`,
+        date: player.transferListedAt || player.updatedAt || gameDate.toISOString(),
         playerId: player.id,
       });
     }
 
-    const isLoan =
-      player.loanListed === true ||
-      status.includes('loan');
+    const isLoan = player.loanListed === true || status.includes('loan');
 
     if (isLoan) {
       news.push({
@@ -604,31 +351,16 @@ function generateTransferNews(players, clubId, clubName) {
         icon: NEWS_TEMPLATES.loan.icon,
         title: NEWS_TEMPLATES.loan.title,
         color: NEWS_TEMPLATES.loan.color,
-        headline:
-          `${name} available for loan`,
-        body:
-          `${clubName} are open to loan offers for ${name} to gain regular first-team experience.`,
-        date:
-          player.loanListedAt ||
-          player.updatedAt ||
-          new Date().toISOString(),
+        headline: `${name} available for loan`,
+        body: `${clubName} are open to loan offers for ${name} to gain regular first-team experience.`,
+        date: player.loanListedAt || player.updatedAt || gameDate.toISOString(),
         playerId: player.id,
       });
     }
 
-    if (
-      player.transferOfferReceived === true ||
-      player.hasTransferOffer === true
-    ) {
-      const offer =
-        player.transferOfferAmount ??
-        player.offerAmount ??
-        0;
-
-      const fromClub =
-        player.offerFromClubName ||
-        player.interestedClubName ||
-        'an interested club';
+    if (player.transferOfferReceived === true || player.hasTransferOffer === true) {
+      const offer = player.transferOfferAmount ?? player.offerAmount ?? 0;
+      const fromClub = player.offerFromClubName || player.interestedClubName || 'an interested club';
 
       news.push({
         id: `news-transfer-offer-${player.id}`,
@@ -636,14 +368,9 @@ function generateTransferNews(players, clubId, clubName) {
         icon: '💼',
         title: 'Transfer Offer',
         color: '#10b981',
-        headline:
-          `${fromClub} make offer for ${name}`,
-        body:
-          `${fromClub} have submitted an offer of €${formatMoney(offer)} for ${name}.`,
-        date:
-          player.transferOfferAt ||
-          player.updatedAt ||
-          new Date().toISOString(),
+        headline: `${fromClub} make offer for ${name}`,
+        body: `${fromClub} have submitted an offer of €${formatMoney(offer)} for ${name}.`,
+        date: player.transferOfferAt || player.updatedAt || gameDate.toISOString(),
         playerId: player.id,
       });
     }
@@ -653,42 +380,27 @@ function generateTransferNews(players, clubId, clubName) {
 }
 
 /* =========================================================
-   INJURY NEWS
+   INJURY NEWS (uses game date)
 ========================================================= */
 
-function generateInjuryNews(players, clubName) {
+function generateInjuryNews(players, clubName, gameDate) {
   const news = [];
 
   players.forEach((player) => {
     const name = getPlayerName(player);
-
     const injured =
       player.injured === true ||
       player.isInjured === true ||
       player.injuryStatus === 'injured' ||
       Boolean(player.injury);
 
-    if (!injured) {
-      return;
-    }
+    if (!injured) return;
 
-    const injuryName =
-      player.injuryName ||
-      player.injuryType ||
-      player.injury ||
-      'an injury';
-
-    const days =
-      player.injuryDaysRemaining ??
-      player.daysOut ??
-      player.injuryDuration ??
-      null;
-
+    const injuryName = player.injuryName || player.injuryType || player.injury || 'an injury';
+    const days = player.injuryDaysRemaining ?? player.daysOut ?? player.injuryDuration ?? null;
     let recoveryText = '';
-
     if (days !== null) {
-      recoveryText =
-        ` Estimated recovery time: ${safeNumber(days)} day(s).`;
+      recoveryText = ` Estimated recovery time: ${safeNumber(days)} day(s).`;
     }
 
     news.push({
@@ -697,15 +409,9 @@ function generateInjuryNews(players, clubName) {
       icon: NEWS_TEMPLATES.injury.icon,
       title: NEWS_TEMPLATES.injury.title,
       color: NEWS_TEMPLATES.injury.color,
-      headline:
-        `${name} sidelined with ${injuryName}`,
-      body:
-        `${clubName} will be without ${name} while the player recovers from ${injuryName}.${recoveryText}`,
-      date:
-        player.injuryReportedAt ||
-        player.injuredAt ||
-        player.updatedAt ||
-        new Date().toISOString(),
+      headline: `${name} sidelined with ${injuryName}`,
+      body: `${clubName} will be without ${name} while the player recovers from ${injuryName}.${recoveryText}`,
+      date: player.injuryReportedAt || player.injuredAt || player.updatedAt || gameDate.toISOString(),
       playerId: player.id,
     });
   });
@@ -714,55 +420,38 @@ function generateInjuryNews(players, clubName) {
 }
 
 /* =========================================================
-   YOUTH NEWS
+   YOUTH NEWS (uses game date)
 ========================================================= */
 
-function generateYouthNews(players, clubName) {
+function generateYouthNews(players, clubName, gameDate) {
   return players
-    .filter(
-      (player) =>
-        player.isYouth === true ||
-        player.squadType === 'youth'
-    )
+    .filter((player) => player.isYouth === true || player.squadType === 'youth')
     .slice(0, 5)
     .map((player) => {
       const name = getPlayerName(player);
-
       return {
         id: `news-youth-${player.id}`,
         type: 'youth',
         icon: NEWS_TEMPLATES.youth.icon,
         title: NEWS_TEMPLATES.youth.title,
         color: NEWS_TEMPLATES.youth.color,
-        headline:
-          `Young talent ${name} attracts attention`,
-        body:
-          `${clubName}'s academy prospect ${name} is showing promise with an OVR of ${getPlayerOverall(player)} and potential of ${safeNumber(player.potential, '?')}.`,
-        date:
-          player.createdAt ||
-          player.updatedAt ||
-          new Date().toISOString(),
+        headline: `Young talent ${name} attracts attention`,
+        body: `${clubName}'s academy prospect ${name} is showing promise with an OVR of ${getPlayerOverall(player)} and potential of ${safeNumber(player.potential, '?')}.`,
+        date: player.createdAt || player.updatedAt || gameDate.toISOString(),
         playerId: player.id,
       };
     });
 }
 
 /* =========================================================
-   FINANCE NEWS
+   FINANCE NEWS (uses game date)
 ========================================================= */
 
-function generateFinanceNews(clubInfo, careerData) {
+function generateFinanceNews(clubInfo, careerData, gameDate) {
   const news = [];
 
-  if (
-    clubInfo?.totalPrizeMoney !== undefined ||
-    clubInfo?.prizeMoney !== undefined
-  ) {
-    const prize = safeNumber(
-      clubInfo.totalPrizeMoney ??
-        clubInfo.prizeMoney
-    );
-
+  if (clubInfo?.totalPrizeMoney !== undefined || clubInfo?.prizeMoney !== undefined) {
+    const prize = safeNumber(clubInfo.totalPrizeMoney ?? clubInfo.prizeMoney);
     if (prize > 0) {
       news.push({
         id: `news-prize-${clubInfo.id}`,
@@ -770,14 +459,9 @@ function generateFinanceNews(clubInfo, careerData) {
         icon: NEWS_TEMPLATES.finance.icon,
         title: NEWS_TEMPLATES.finance.title,
         color: NEWS_TEMPLATES.finance.color,
-        headline:
-          `${clubInfo.name || 'The club'} receive €${formatMoney(prize)} prize money`,
-        body:
-          `The club has received prize money of €${formatMoney(prize)} for its competition performance.`,
-        date:
-          clubInfo.prizeMoneyAt ||
-          clubInfo.updatedAt ||
-          new Date().toISOString(),
+        headline: `${clubInfo.name || 'The club'} receive €${formatMoney(prize)} prize money`,
+        body: `The club has received prize money of €${formatMoney(prize)} for its competition performance.`,
+        date: clubInfo.prizeMoneyAt || clubInfo.updatedAt || gameDate.toISOString(),
       });
     }
   }
@@ -789,13 +473,9 @@ function generateFinanceNews(clubInfo, careerData) {
       icon: NEWS_TEMPLATES.finance.icon,
       title: NEWS_TEMPLATES.finance.title,
       color: NEWS_TEMPLATES.finance.color,
-      headline:
-        `Monthly wages of €${formatMoney(careerData.lastWagePayment)} paid`,
-      body:
-        `The club has processed its latest player wage payment.`,
-      date:
-        careerData.lastWagePaymentAt ||
-        new Date().toISOString(),
+      headline: `Monthly wages of €${formatMoney(careerData.lastWagePayment)} paid`,
+      body: `The club has processed its latest player wage payment.`,
+      date: careerData.lastWagePaymentAt || gameDate.toISOString(),
     });
   }
 
@@ -803,15 +483,12 @@ function generateFinanceNews(clubInfo, careerData) {
 }
 
 /* =========================================================
-   LEAGUE NEWS
+   LEAGUE NEWS (uses game date)
 ========================================================= */
 
-function generateLeagueNews(clubInfo, careerData) {
+function generateLeagueNews(clubInfo, careerData, gameDate) {
   const matches = safeNumber(careerData?.totalMatches);
-
-  if (matches <= 0) {
-    return [];
-  }
+  if (matches <= 0) return [];
 
   const wins = safeNumber(careerData?.totalWins);
   const draws = safeNumber(careerData?.totalDraws);
@@ -825,74 +502,43 @@ function generateLeagueNews(clubInfo, careerData) {
       icon: NEWS_TEMPLATES.league.icon,
       title: NEWS_TEMPLATES.league.title,
       color: NEWS_TEMPLATES.league.color,
-      headline:
-        `${clubInfo?.name || 'Your club'} currently sit ${careerData?.currentPosition || '-'} in the league`,
-      body:
-        `${clubInfo?.name || 'Your club'} have ${points} points from ${matches} matches: ${wins} wins, ${draws} draws and ${losses} defeats.`,
-      date:
-        careerData?.lastMatchAt ||
-        new Date().toISOString(),
+      headline: `${clubInfo?.name || 'Your club'} currently sit ${careerData?.currentPosition || '-'} in the league`,
+      body: `${clubInfo?.name || 'Your club'} have ${points} points from ${matches} matches: ${wins} wins, ${draws} draws and ${losses} defeats.`,
+      date: careerData?.lastMatchAt || gameDate.toISOString(),
     },
   ];
 }
 
 /* =========================================================
-   MEDIA GENERATOR
+   MEDIA GENERATOR (uses game date)
 ========================================================= */
 
-function generateMediaReports({
-  clubInfo,
-  careerData,
-  players,
-  matches,
-}) {
+function generateMediaReports({ clubInfo, careerData, players, matches, gameDate }) {
   const clubName = clubInfo?.name || 'Your Club';
-
   const media = [];
-
-  const outlet =
-    getRandomItem(MEDIA_OUTLETS) ||
-    MEDIA_OUTLETS[0];
+  const outlet = getRandomItem(MEDIA_OUTLETS) || MEDIA_OUTLETS[0];
 
   if (players.length > 0) {
-    const player =
-      [...players].sort(
-        (a, b) =>
-          getPlayerOverall(b) -
-          getPlayerOverall(a)
-      )[0];
-
+    const player = [...players].sort((a, b) => getPlayerOverall(b) - getPlayerOverall(a))[0];
     media.push({
       id: `media-player-${player.id}`,
       type: 'media',
       icon: outlet.icon,
       title: outlet.name,
       color: outlet.color,
-      headline:
-        `${outlet.name}: ${getPlayerName(player)} becoming one to watch`,
-      body:
-        `${outlet.name} are monitoring ${getPlayerName(player)} after a series of promising performances for ${clubName}.`,
-      date: new Date().toISOString(),
+      headline: `${outlet.name}: ${getPlayerName(player)} becoming one to watch`,
+      body: `${outlet.name} are monitoring ${getPlayerName(player)} after a series of promising performances for ${clubName}.`,
+      date: gameDate.toISOString(),
       mediaOutletId: outlet.id,
     });
   }
 
   if (matches.length > 0) {
-    const latest =
-      [...matches].sort(
-        (a, b) =>
-          getTimestampValue(b.date) -
-          getTimestampValue(a.date)
-      )[0];
-
+    const latest = [...matches].sort((a, b) => getTimestampValue(b.date) - getTimestampValue(a.date))[0];
     const opponent =
       latest?.homeClubId === clubInfo?.id
-        ? latest?.awayClubName ||
-          latest?.awayTeam ||
-          'the opposition'
-        : latest?.homeClubName ||
-          latest?.homeTeam ||
-          'the opposition';
+        ? latest?.awayClubName || latest?.awayTeam || 'the opposition'
+        : latest?.homeClubName || latest?.homeTeam || 'the opposition';
 
     media.push({
       id: `media-match-${latest.id}`,
@@ -900,36 +546,24 @@ function generateMediaReports({
       icon: '📺',
       title: 'Football World TV',
       color: '#38bdf8',
-      headline:
-        `Football World TV: ${clubName} under the spotlight`,
-      body:
-        `Our analysts are reviewing ${clubName}'s latest fixture against ${opponent} and the manager's tactical decisions.`,
-      date:
-        latest.date ||
-        new Date().toISOString(),
+      headline: `Football World TV: ${clubName} under the spotlight`,
+      body: `Our analysts are reviewing ${clubName}'s latest fixture against ${opponent} and the manager's tactical decisions.`,
+      date: latest.date || gameDate.toISOString(),
       mediaOutletId: 'football_world_tv',
     });
   }
 
-  if (
-    careerData?.boardConfidence !== undefined
-  ) {
-    const confidence = safeNumber(
-      careerData.boardConfidence,
-      70
-    );
-
+  if (careerData?.boardConfidence !== undefined) {
+    const confidence = safeNumber(careerData.boardConfidence, 70);
     media.push({
       id: `media-board-${confidence}`,
       type: 'media',
       icon: '🎙️',
       title: 'Football Insider',
       color: '#22c55e',
-      headline:
-        `Football Insider analyse ${clubName}'s project`,
-      body:
-        `With board confidence currently at ${confidence}%, media analysts are debating whether the club is moving in the right direction.`,
-      date: new Date().toISOString(),
+      headline: `Football Insider analyse ${clubName}'s project`,
+      body: `With board confidence currently at ${confidence}%, media analysts are debating whether the club is moving in the right direction.`,
+      date: gameDate.toISOString(),
       mediaOutletId: 'football_insider',
     });
   }
@@ -938,23 +572,13 @@ function generateMediaReports({
 }
 
 /* =========================================================
-   INTERVIEW GENERATOR
+   INTERVIEW GENERATOR (uses game date)
 ========================================================= */
 
-function generateInterview({
-  clubInfo,
-  careerData,
-  players,
-}) {
+function generateInterview({ clubInfo, careerData, players, gameDate }) {
   const clubName = clubInfo?.name || 'Your Club';
-
-  const player =
-    getRandomItem(players) || null;
-
-  const confidence = safeNumber(
-    careerData?.boardConfidence,
-    70
-  );
+  const player = getRandomItem(players) || null;
+  const confidence = safeNumber(careerData?.boardConfidence, 70);
 
   const questions = [
     `Your team has been under pressure recently. How do you assess the current situation?`,
@@ -965,59 +589,39 @@ function generateInterview({
     `How important is squad depth for your current campaign?`,
   ];
 
-  const question =
-    getRandomItem(questions);
-
+  const question = getRandomItem(questions);
   let answer;
 
   if (confidence >= 75) {
-    answer =
-      `We are happy with the direction of the team. There is still work to do, but the players are responding well and we want to keep improving.`;
+    answer = `We are happy with the direction of the team. There is still work to do, but the players are responding well and we want to keep improving.`;
   } else if (confidence >= 50) {
-    answer =
-      `We know there are areas we need to improve. The important thing is to stay focused, work together and respond on the pitch.`;
+    answer = `We know there are areas we need to improve. The important thing is to stay focused, work together and respond on the pitch.`;
   } else {
-    answer =
-      `We understand the concerns. The responsibility is ours, and we have to find solutions quickly and give the supporters something to believe in.`;
+    answer = `We understand the concerns. The responsibility is ours, and we have to find solutions quickly and give the supporters something to believe in.`;
   }
 
   return {
     id: `interview-${Date.now()}`,
     type: 'interview',
     icon: NEWS_TEMPLATES.interview.icon,
-    title: getRandomItem(MEDIA_OUTLETS)?.name ||
-      'Football Insider',
+    title: getRandomItem(MEDIA_OUTLETS)?.name || 'Football Insider',
     color: NEWS_TEMPLATES.interview.color,
-    headline:
-      `${clubName} manager speaks to the media`,
-    body:
-      `🎤 Interview question: "${question}"\n\nManager: "${answer}"`,
-    date: new Date().toISOString(),
+    headline: `${clubName} manager speaks to the media`,
+    body: `🎤 Interview question: "${question}"\n\nManager: "${answer}"`,
+    date: gameDate.toISOString(),
     featuredPlayerId: player?.id || null,
   };
 }
 
 /* =========================================================
-   AI COMMENT GENERATOR
+   AI COMMENT GENERATOR (unchanged)
 ========================================================= */
 
-function generateAIComment({
-  post,
-  clubInfo,
-}) {
-  const text = safeString(
-    post.content,
-    ''
-  ).toLowerCase();
+function generateAIComment({ post, clubInfo }) {
+  const text = safeString(post.content, '').toLowerCase();
+  const clubName = clubInfo?.name || 'the club';
 
-  const clubName =
-    clubInfo?.name || 'the club';
-
-  if (
-    text.includes('transfer') ||
-    text.includes('sign') ||
-    text.includes('player')
-  ) {
+  if (text.includes('transfer') || text.includes('sign') || text.includes('player')) {
     return getRandomItem([
       `Interesting transfer development. ${clubName} need to get this decision right.`,
       `This could become one of the most important moves of the season.`,
@@ -1026,11 +630,7 @@ function generateAIComment({
     ]);
   }
 
-  if (
-    text.includes('win') ||
-    text.includes('victory') ||
-    text.includes('three points')
-  ) {
+  if (text.includes('win') || text.includes('victory') || text.includes('three points')) {
     return getRandomItem([
       `What a result. The team looked much more confident today.`,
       `Three points that could be very important later in the season.`,
@@ -1039,11 +639,7 @@ function generateAIComment({
     ]);
   }
 
-  if (
-    text.includes('loss') ||
-    text.includes('lose') ||
-    text.includes('defeat')
-  ) {
+  if (text.includes('loss') || text.includes('lose') || text.includes('defeat')) {
     return getRandomItem([
       `Tough result, but there is still plenty of football left to play.`,
       `The team needs to react quickly from this setback.`,
@@ -1052,10 +648,7 @@ function generateAIComment({
     ]);
   }
 
-  if (
-    text.includes('injury') ||
-    text.includes('injured')
-  ) {
+  if (text.includes('injury') || text.includes('injured')) {
     return getRandomItem([
       `Hopefully the player makes a quick recovery.`,
       `Injuries can change a season very quickly. Squad depth will matter.`,
@@ -1074,169 +667,69 @@ function generateAIComment({
 }
 
 /* =========================================================
-   AI ENGAGEMENT
+   AI ENGAGEMENT (uses serverTimestamp - real time is OK)
 ========================================================= */
 
-async function simulateAIEngagement({
-  postId,
-  post,
-  clubInfo,
-}) {
-  if (!postId || !post) {
-    return;
-  }
+async function simulateAIEngagement({ postId, post, clubInfo }) {
+  if (!postId || !post) return;
 
-  const postRef = doc(
-    db,
-    'posts',
-    postId
-  );
+  const postRef = doc(db, 'posts', postId);
 
   try {
     await runTransaction(db, async (transaction) => {
-      const snapshot =
-        await transaction.get(postRef);
+      const snapshot = await transaction.get(postRef);
+      if (!snapshot.exists()) return;
 
-      if (!snapshot.exists()) {
-        return;
-      }
-
-      const current =
-        snapshot.data();
-
-      const lastAI =
-        getTimestampValue(
-          current.aiEngagedAt
-        );
-
+      const current = snapshot.data();
+      const lastAI = getTimestampValue(current.aiEngagedAt);
       const now = Date.now();
 
-      if (
-        lastAI &&
-        now - lastAI < AI_MIN_LIKE_DELAY
-      ) {
-        return;
-      }
+      if (lastAI && now - lastAI < AI_MIN_LIKE_DELAY) return;
 
-      const currentLikes =
-        Array.isArray(current.aiLikes)
-          ? current.aiLikes
-          : [];
-
-      const aiPool =
-        AI_PERSONAS.filter(
-          (ai) =>
-            !currentLikes.includes(ai.id)
-        );
-
-      const numberOfLikes =
-        Math.floor(
-          Math.random() * 3
-        );
-
-      const selectedAI =
-        aiPool
-          .sort(() => Math.random() - 0.5)
-          .slice(0, numberOfLikes);
-
-      const aiLikeIds =
-        selectedAI.map(
-          (ai) => ai.id
-        );
+      const currentLikes = Array.isArray(current.aiLikes) ? current.aiLikes : [];
+      const aiPool = AI_PERSONAS.filter((ai) => !currentLikes.includes(ai.id));
+      const numberOfLikes = Math.floor(Math.random() * 3);
+      const selectedAI = aiPool.sort(() => Math.random() - 0.5).slice(0, numberOfLikes);
+      const aiLikeIds = selectedAI.map((ai) => ai.id);
 
       const updates = {
-        aiEngagedAt:
-          serverTimestamp(),
+        aiEngagedAt: serverTimestamp(),
       };
 
       if (aiLikeIds.length > 0) {
-        updates.aiLikes =
-          arrayUnion(...aiLikeIds);
-
-        updates.likeCount =
-          increment(
-            aiLikeIds.length
-          );
+        updates.aiLikes = arrayUnion(...aiLikeIds);
+        updates.likeCount = increment(aiLikeIds.length);
       }
 
-      transaction.update(
-        postRef,
-        updates
-      );
+      transaction.update(postRef, updates);
     });
 
-    /*
-      AI comments are intentionally limited.
-      We do them separately so a single post
-      does not suddenly receive a stadium full
-      of robots shouting at it.
-    */
+    const shouldComment = Math.random() < 0.35;
+    if (!shouldComment) return;
 
-    const shouldComment =
-      Math.random() < 0.35;
+    const commentsRef = collection(db, 'posts', postId, 'comments');
+    const commentsSnapshot = await getDocs(query(commentsRef, limit(MAX_COMMENTS)));
+    const existingAIComments = commentsSnapshot.docs.filter(
+      (commentDoc) => commentDoc.data()?.isAI === true
+    );
 
-    if (!shouldComment) {
-      return;
-    }
+    if (existingAIComments.length >= 3) return;
 
-    const commentsRef =
-      collection(
-        db,
-        'posts',
-        postId,
-        'comments'
-      );
-
-    const commentsSnapshot =
-      await getDocs(
-        query(
-          commentsRef,
-          limit(MAX_COMMENTS)
-        )
-      );
-
-    const existingAIComments =
-      commentsSnapshot.docs.filter(
-        (commentDoc) =>
-          commentDoc.data()?.isAI === true
-      );
-
-    if (
-      existingAIComments.length >= 3
-    ) {
-      return;
-    }
-
-    const ai =
-      getRandomItem(
-        AI_PERSONAS
-      );
-
+    const ai = getRandomItem(AI_PERSONAS);
     if (!ai) return;
 
-    const comment =
-      generateAIComment({
-        post,
-        clubInfo,
-      });
+    const comment = generateAIComment({ post, clubInfo });
 
-    await addDoc(
-      commentsRef,
-      {
-        userId: ai.id,
-        username: ai.name,
-        avatar: ai.avatar,
-        content: comment,
-        isAI: true,
-        createdAt:
-          serverTimestamp(),
-      }
-    );
+    await addDoc(commentsRef, {
+      userId: ai.id,
+      username: ai.name,
+      avatar: ai.avatar,
+      content: comment,
+      isAI: true,
+      createdAt: serverTimestamp(),
+    });
   } catch (error) {
-    console.error(
-      'AI engagement error:',
-      error
-    );
+    console.error('AI engagement error:', error);
   }
 }
 
@@ -1246,444 +739,243 @@ async function simulateAIEngagement({
 
 export default function NewsPage() {
   const router = useRouter();
+  const { user, userData, loading } = useAuth();
 
-  const {
-    user,
-    userData,
-    loading,
-  } = useAuth();
+  const [careerData, setCareerData] = useState(null);
+  const [clubInfo, setClubInfo] = useState(null);
+  const [matches, setMatches] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [comments, setComments] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [postText, setPostText] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [commentText, setCommentText] = useState({});
+  const [openComments, setOpenComments] = useState({});
+  const [loadingComments, setLoadingComments] = useState({});
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [mediaInterview, setMediaInterview] = useState(null);
 
-  const [careerData, setCareerData] =
-    useState(null);
-
-  const [clubInfo, setClubInfo] =
-    useState(null);
-
-  const [matches, setMatches] =
-    useState([]);
-
-  const [players, setPlayers] =
-    useState([]);
-
-  const [posts, setPosts] =
-    useState([]);
-
-  const [comments, setComments] =
-    useState({});
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [activeFilter, setActiveFilter] =
-    useState('all');
-
-  const [searchTerm, setSearchTerm] =
-    useState('');
-
-  const [postText, setPostText] =
-    useState('');
-
-  const [posting, setPosting] =
-    useState(false);
-
-  const [commentText, setCommentText] =
-    useState({});
-
-  const [openComments, setOpenComments] =
-    useState({});
-
-  const [loadingComments, setLoadingComments] =
-    useState({});
-
-  const [selectedMedia, setSelectedMedia] =
-    useState(null);
-
-  const [mediaInterview, setMediaInterview] =
-    useState(null);
-
-  const aiTimers =
-    useRef({});
-
-  const lastPostTime =
-    useRef(0);
-
-  // NEW: store comment unsubscribe functions
+  const aiTimers = useRef({});
+  const lastPostTime = useRef(0);
   const commentUnsubscribes = useRef({});
+
+  /* =======================================================
+     GAME DATE
+  ======================================================= */
+
+  const gameDate = useMemo(() => getGameDate(careerData), [careerData]);
+  const gameDateISO = useMemo(() => gameDate.toISOString(), [gameDate]);
+  const seasonYear = useMemo(() => getSeasonYear(gameDate), [gameDate]);
 
   /* =======================================================
      AUTH
   ======================================================= */
 
   useEffect(() => {
-    if (loading) {
-      return;
-    }
-
+    if (loading) return;
     if (!user) {
       router.push('/login');
     }
-  }, [
-    loading,
-    user,
-    router,
-  ]);
+  }, [loading, user, router]);
 
   /* =======================================================
      LOAD USER / CLUB / PLAYERS / MATCHES
   ======================================================= */
 
-  const fetchBaseData =
-    useCallback(async () => {
-      if (!user) {
+  const fetchBaseData = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      setIsLoading(true);
+
+      const userRef = doc(db, 'users', user.uid);
+      const userSnapshot = await getDoc(userRef);
+
+      if (!userSnapshot.exists()) {
+        toast.error('User account not found');
         return;
       }
 
-      try {
-        setIsLoading(true);
+      const data = userSnapshot.data();
+      const career = data.careerData || {};
+      setCareerData(career);
 
-        const userRef =
-          doc(
-            db,
-            'users',
-            user.uid
-          );
+      if (!career.currentClub) {
+        setMatches([]);
+        setPlayers([]);
+        setClubInfo(null);
+        return;
+      }
 
-        const userSnapshot =
-          await getDoc(userRef);
+      const clubRef = doc(db, 'clubs', career.currentClub);
+      const clubSnapshot = await getDoc(clubRef);
 
-        if (!userSnapshot.exists()) {
-          toast.error(
-            'User account not found'
-          );
+      if (clubSnapshot.exists()) {
+        setClubInfo({
+          id: clubSnapshot.id,
+          ...clubSnapshot.data(),
+        });
+      }
 
-          return;
-        }
+      /* PLAYERS */
+      const playersQuery = query(
+        collection(db, 'players'),
+        where('clubId', '==', career.currentClub)
+      );
+      const playersSnapshot = await getDocs(playersQuery);
+      const playerList = [];
+      playersSnapshot.forEach((playerDoc) => {
+        playerList.push({
+          id: playerDoc.id,
+          ...playerDoc.data(),
+        });
+      });
+      setPlayers(playerList);
 
-        const data =
-          userSnapshot.data();
+      /* MATCHES - use game-date-based seasonYear */
+      const careerGameDate = getGameDate(career);
+      const careerSeasonYear = getSeasonYear(careerGameDate);
 
-        const career =
-          data.careerData || {};
+      const matchesQuery = query(
+        collection(db, 'matches'),
+        where('seasonYear', '==', careerSeasonYear)
+      );
+      const matchesSnapshot = await getDocs(matchesQuery);
+      const matchList = [];
+      matchesSnapshot.forEach((matchDoc) => {
+        const match = matchDoc.data();
+        const belongsToClub =
+          match.homeClubId === career.currentClub ||
+          match.awayClubId === career.currentClub ||
+          match.homeTeamId === career.currentClub ||
+          match.awayTeamId === career.currentClub;
 
-        setCareerData(career);
-
-        if (!career.currentClub) {
-          setMatches([]);
-          setPlayers([]);
-          setClubInfo(null);
-          return;
-        }
-
-        const clubRef =
-          doc(
-            db,
-            'clubs',
-            career.currentClub
-          );
-
-        const clubSnapshot =
-          await getDoc(clubRef);
-
-        if (
-          clubSnapshot.exists()
-        ) {
-          setClubInfo({
-            id:
-              clubSnapshot.id,
-            ...clubSnapshot.data(),
+        if (belongsToClub) {
+          matchList.push({
+            id: matchDoc.id,
+            ...match,
           });
         }
-
-        /* ---------------------------------------------
-           PLAYERS
-        --------------------------------------------- */
-
-        const playersQuery =
-          query(
-            collection(
-              db,
-              'players'
-            ),
-            where(
-              'clubId',
-              '==',
-              career.currentClub
-            )
-          );
-
-        const playersSnapshot =
-          await getDocs(
-            playersQuery
-          );
-
-        const playerList = [];
-
-        playersSnapshot.forEach(
-          (playerDoc) => {
-            playerList.push({
-              id:
-                playerDoc.id,
-              ...playerDoc.data(),
-            });
-          }
-        );
-
-        setPlayers(
-          playerList
-        );
-
-        /* ---------------------------------------------
-           MATCHES
-        --------------------------------------------- */
-
-        const matchesQuery =
-          query(
-            collection(
-              db,
-              'matches'
-            ),
-            where(
-              'seasonYear',
-              '==',
-              getSeasonYear()
-            )
-          );
-
-        const matchesSnapshot =
-          await getDocs(
-            matchesQuery
-          );
-
-        const matchList = [];
-
-        matchesSnapshot.forEach(
-          (matchDoc) => {
-            const match =
-              matchDoc.data();
-
-            const belongsToClub =
-              match.homeClubId ===
-                career.currentClub ||
-              match.awayClubId ===
-                career.currentClub ||
-              match.homeTeamId ===
-                career.currentClub ||
-              match.awayTeamId ===
-                career.currentClub;
-
-            if (
-              belongsToClub
-            ) {
-              matchList.push({
-                id:
-                  matchDoc.id,
-                ...match,
-              });
-            }
-          }
-        );
-
-        setMatches(
-          matchList
-        );
-      } catch (error) {
-        console.error(
-          'Fetch news error:',
-          error
-        );
-
-        toast.error(
-          'Failed to load football data'
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    }, [user]);
+      });
+      setMatches(matchList);
+    } catch (error) {
+      console.error('Fetch news error:', error);
+      toast.error('Failed to load football data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!loading && user) {
       fetchBaseData();
     }
-  }, [
-    loading,
-    user,
-    fetchBaseData,
-  ]);
+  }, [loading, user, fetchBaseData]);
 
   /* =======================================================
      REAL-TIME COMMUNITY POSTS
   ======================================================= */
 
   useEffect(() => {
-    if (!user) {
-      return undefined;
-    }
+    if (!user) return undefined;
 
-    const postsRef =
-      collection(
-        db,
-        'posts'
-      );
+    const postsRef = collection(db, 'posts');
+    const postsQuery = query(postsRef, limit(MAX_POSTS));
 
-    const postsQuery =
-      query(
-        postsRef,
-        limit(MAX_POSTS)
-      );
+    const unsubscribe = onSnapshot(
+      postsQuery,
+      (snapshot) => {
+        const list = snapshot.docs.map((postDoc) => ({
+          id: postDoc.id,
+          ...postDoc.data(),
+        }));
 
-    const unsubscribe =
-      onSnapshot(
-        postsQuery,
-        (snapshot) => {
-          const list =
-            snapshot.docs.map(
-              (postDoc) => ({
-                id:
-                  postDoc.id,
-                ...postDoc.data(),
-              })
-            );
+        list.sort((a, b) => getTimestampValue(b.createdAt) - getTimestampValue(a.createdAt));
+        setPosts(list);
+      },
+      (error) => {
+        console.error('Posts listener error:', error);
+      }
+    );
 
-          list.sort(
-            (a, b) =>
-              getTimestampValue(
-                b.createdAt
-              ) -
-              getTimestampValue(
-                a.createdAt
-              )
-          );
-
-          setPosts(list);
-        },
-        (error) => {
-          console.error(
-            'Posts listener error:',
-            error
-          );
-        }
-      );
-
-    return () =>
-      unsubscribe();
+    return () => unsubscribe();
   }, [user]);
 
   /* =======================================================
      REAL-TIME COMMENTS
   ======================================================= */
 
-  const subscribeComments =
-    useCallback(
-      (postId) => {
-        if (!postId) {
-          return () => {};
-        }
+  const subscribeComments = useCallback((postId) => {
+    if (!postId) return () => {};
 
-        const commentsRef =
-          collection(
-            db,
-            'posts',
-            postId,
-            'comments'
-          );
+    const commentsRef = collection(db, 'posts', postId, 'comments');
+    const commentsQuery = query(commentsRef, limit(MAX_COMMENTS));
 
-        const commentsQuery =
-          query(
-            commentsRef,
-            limit(MAX_COMMENTS)
-          );
+    const unsubscribe = onSnapshot(
+      commentsQuery,
+      (snapshot) => {
+        const list = snapshot.docs.map((commentDoc) => ({
+          id: commentDoc.id,
+          ...commentDoc.data(),
+        }));
 
-        const unsubscribe =
-          onSnapshot(
-            commentsQuery,
-            (snapshot) => {
-              const list =
-                snapshot.docs.map(
-                  (commentDoc) => ({
-                    id:
-                      commentDoc.id,
-                    ...commentDoc.data(),
-                  })
-                );
-
-              list.sort(
-                (a, b) =>
-                  getTimestampValue(
-                    a.createdAt
-                  ) -
-                  getTimestampValue(
-                    b.createdAt
-                  )
-              );
-
-              setComments(
-                (previous) => ({
-                  ...previous,
-                  [postId]: list,
-                })
-              );
-            },
-            (error) => {
-              console.error(
-                'Comments listener error:',
-                error
-              );
-            }
-          );
-
-        return unsubscribe;
+        list.sort((a, b) => getTimestampValue(a.createdAt) - getTimestampValue(b.createdAt));
+        setComments((previous) => ({
+          ...previous,
+          [postId]: list,
+        }));
       },
-      []
+      (error) => {
+        console.error('Comments listener error:', error);
+      }
     );
 
-  const toggleComments =
-    useCallback(
-      (postId) => {
-        setOpenComments(
-          (previous) => {
-            const isOpen = !!previous[postId];
-            const nextOpen = {
-              ...previous,
-              [postId]: !isOpen,
-            };
+    return unsubscribe;
+  }, []);
 
-            // If opening, subscribe and store unsubscribe
-            if (!isOpen) {
-              const unsubscribe = subscribeComments(postId);
-              commentUnsubscribes.current[postId] = unsubscribe;
-              setLoadingComments((prev) => ({
-                ...prev,
-                [postId]: true,
-              }));
-              // Simulate loading delay
-              setTimeout(() => {
-                setLoadingComments((prev) => ({
-                  ...prev,
-                  [postId]: false,
-                }));
-              }, 500);
-            } else {
-              // If closing, unsubscribe and remove
-              const unsub = commentUnsubscribes.current[postId];
-              if (unsub) {
-                unsub();
-                delete commentUnsubscribes.current[postId];
-              }
-              // Also clear comments for this post
-              setComments((prev) => {
-                const newComments = { ...prev };
-                delete newComments[postId];
-                return newComments;
-              });
-            }
-            return nextOpen;
+  const toggleComments = useCallback(
+    (postId) => {
+      setOpenComments((previous) => {
+        const isOpen = !!previous[postId];
+        const nextOpen = {
+          ...previous,
+          [postId]: !isOpen,
+        };
+
+        if (!isOpen) {
+          const unsubscribe = subscribeComments(postId);
+          commentUnsubscribes.current[postId] = unsubscribe;
+          setLoadingComments((prev) => ({
+            ...prev,
+            [postId]: true,
+          }));
+          setTimeout(() => {
+            setLoadingComments((prev) => ({
+              ...prev,
+              [postId]: false,
+            }));
+          }, 500);
+        } else {
+          const unsub = commentUnsubscribes.current[postId];
+          if (unsub) {
+            unsub();
+            delete commentUnsubscribes.current[postId];
           }
-        );
-      },
-      [subscribeComments]
-    );
+          setComments((prev) => {
+            const newComments = { ...prev };
+            delete newComments[postId];
+            return newComments;
+          });
+        }
+        return nextOpen;
+      });
+    },
+    [subscribeComments]
+  );
 
-  // Cleanup all comment subscriptions on unmount
   useEffect(() => {
     return () => {
       Object.values(commentUnsubscribes.current).forEach((unsub) => unsub());
@@ -1696,746 +988,328 @@ export default function NewsPage() {
   ======================================================= */
 
   useEffect(() => {
-    if (
-      !user ||
-      posts.length === 0 ||
-      !clubInfo
-    ) {
-      return undefined;
-    }
+    if (!user || posts.length === 0 || !clubInfo) return undefined;
 
     posts
-      .filter(
-        (post) =>
-          !post.isAIOnly
-      )
+      .filter((post) => !post.isAIOnly)
       .slice(0, 15)
       .forEach((post) => {
-        if (
-          aiTimers.current[
-            post.id
-          ]
-        ) {
-          return;
-        }
+        if (aiTimers.current[post.id]) return;
 
-        const delay =
-          AI_MIN_LIKE_DELAY +
-          Math.random() *
-            (
-              AI_MAX_LIKE_DELAY -
-              AI_MIN_LIKE_DELAY
-            );
+        const delay = AI_MIN_LIKE_DELAY + Math.random() * (AI_MAX_LIKE_DELAY - AI_MIN_LIKE_DELAY);
 
-        aiTimers.current[
-          post.id
-        ] = setTimeout(
-          () => {
-            simulateAIEngagement({
-              postId:
-                post.id,
-              post,
-              clubInfo,
-            });
-
-            delete aiTimers.current[
-              post.id
-            ];
-          },
-          delay
-        );
+        aiTimers.current[post.id] = setTimeout(() => {
+          simulateAIEngagement({
+            postId: post.id,
+            post,
+            clubInfo,
+          });
+          delete aiTimers.current[post.id];
+        }, delay);
       });
 
     return () => {
-      Object.values(
-        aiTimers.current
-      ).forEach(
-        (timer) =>
-          clearTimeout(timer)
-      );
-
+      Object.values(aiTimers.current).forEach((timer) => clearTimeout(timer));
       aiTimers.current = {};
     };
-  }, [
-    user,
-    posts,
-    clubInfo,
-  ]);
+  }, [user, posts, clubInfo]);
 
   /* =======================================================
-     GENERATE NEWS
+     GENERATE NEWS - all dates use game date
   ======================================================= */
 
-  const generatedNews =
-    useMemo(() => {
-      if (!clubInfo) {
-        return [];
-      }
+  const generatedNews = useMemo(() => {
+    if (!clubInfo) return [];
 
-      const clubName =
-        clubInfo.name ||
-        'Your Club';
+    const clubName = clubInfo.name || 'Your Club';
+    const clubId = clubInfo.id;
+    const newsItems = [];
 
-      const clubId =
-        clubInfo.id;
+    newsItems.push(...generateMatchNews(matches, clubId, clubName, gameDate));
+    newsItems.push(...generateTransferNews(players, clubId, clubName, gameDate));
+    newsItems.push(...generateInjuryNews(players, clubName, gameDate));
+    newsItems.push(...generateYouthNews(players, clubName, gameDate));
+    newsItems.push(...generateFinanceNews(clubInfo, careerData, gameDate));
+    newsItems.push(...generateLeagueNews(clubInfo, careerData, gameDate));
 
-      const newsItems = [];
+    newsItems.push(
+      ...generateMediaReports({
+        clubInfo,
+        careerData,
+        players,
+        matches,
+        gameDate,
+      })
+    );
 
-      newsItems.push(
-        ...generateMatchNews(
-          matches,
-          clubId,
-          clubName
-        )
-      );
+    if (careerData?.boardConfidence !== undefined) {
+      const confidence = safeNumber(careerData.boardConfidence, 70);
 
-      newsItems.push(
-        ...generateTransferNews(
-          players,
-          clubId,
-          clubName
-        )
-      );
+      newsItems.push({
+        id: `news-board-${confidence}`,
+        type: 'board',
+        icon: NEWS_TEMPLATES.board.icon,
+        title: NEWS_TEMPLATES.board.title,
+        color: NEWS_TEMPLATES.board.color,
+        headline: `Board confidence is ${confidence}%`,
+        body:
+          confidence >= 75
+            ? 'The board is pleased with the direction of the club.'
+            : confidence >= 50
+              ? 'The board remains patient but expects improved results.'
+              : 'The board is becoming increasingly concerned about the club.',
+        date: careerData.boardConfidenceUpdatedAt || gameDateISO,
+      });
+    }
 
-      newsItems.push(
-        ...generateInjuryNews(
-          players,
-          clubName
-        )
-      );
+    newsItems.sort((a, b) => getTimestampValue(b.date) - getTimestampValue(a.date));
 
-      newsItems.push(
-        ...generateYouthNews(
-          players,
-          clubName
-        )
-      );
-
-      newsItems.push(
-        ...generateFinanceNews(
-          clubInfo,
-          careerData
-        )
-      );
-
-      newsItems.push(
-        ...generateLeagueNews(
-          clubInfo,
-          careerData
-        )
-      );
-
-      newsItems.push(
-        ...generateMediaReports({
-          clubInfo,
-          careerData,
-          players,
-          matches,
-        })
-      );
-
-      if (
-        careerData?.boardConfidence !==
-        undefined
-      ) {
-        const confidence =
-          safeNumber(
-            careerData.boardConfidence,
-            70
-          );
-
-        newsItems.push({
-          id:
-            `news-board-${confidence}`,
-          type: 'board',
-          icon:
-            NEWS_TEMPLATES.board.icon,
-          title:
-            NEWS_TEMPLATES.board.title,
-          color:
-            NEWS_TEMPLATES.board.color,
-          headline:
-            `Board confidence is ${confidence}%`,
-          body:
-            confidence >= 75
-              ? 'The board is pleased with the direction of the club.'
-              : confidence >= 50
-                ? 'The board remains patient but expects improved results.'
-                : 'The board is becoming increasingly concerned about the club.',
-          date:
-            careerData.boardConfidenceUpdatedAt ||
-            new Date().toISOString(),
-        });
-      }
-
-      newsItems.sort(
-        (a, b) =>
-          getTimestampValue(
-            b.date
-          ) -
-          getTimestampValue(
-            a.date
-          )
-      );
-
-      return newsItems.slice(
-        0,
-        MAX_NEWS
-      );
-    }, [
-      clubInfo,
-      matches,
-      players,
-      careerData,
-    ]);
+    return newsItems.slice(0, MAX_NEWS);
+  }, [clubInfo, matches, players, careerData, gameDate, gameDateISO]);
 
   /* =======================================================
      COMMUNITY POSTS AS NEWS
   ======================================================= */
 
-  const communityNews =
-    useMemo(() => {
-      return posts.map(
-        (post) => ({
-          ...post,
-          isCommunityPost:
-            true,
-          type:
-            'community',
-          icon: '👥',
-          title:
-            post.isAI
-              ? 'AI Football Community'
-              : 'Manager Community',
-          color:
-            '#06b6d4',
-          headline:
-            post.title ||
-            `${post.username || 'Manager'} posted an update`,
-          body:
-            post.content || '',
-          date:
-            post.createdAt ||
-            new Date().toISOString(),
-        })
-      );
-    }, [posts]);
+  const communityNews = useMemo(() => {
+    return posts.map((post) => ({
+      ...post,
+      isCommunityPost: true,
+      type: 'community',
+      icon: '👥',
+      title: post.isAI ? 'AI Football Community' : 'Manager Community',
+      color: '#06b6d4',
+      headline: post.title || `${post.username || 'Manager'} posted an update`,
+      body: post.content || '',
+      date: post.createdAt || gameDateISO,
+    }));
+  }, [posts, gameDateISO]);
 
   /* =======================================================
      ALL FEED
   ======================================================= */
 
-  const allFeed =
-    useMemo(() => {
-      return [
-        ...generatedNews,
-        ...communityNews,
-      ].sort(
-        (a, b) =>
-          getTimestampValue(
-            b.date
-          ) -
-          getTimestampValue(
-            a.date
-          )
-      );
-    }, [
-      generatedNews,
-      communityNews,
-    ]);
+  const allFeed = useMemo(() => {
+    return [...generatedNews, ...communityNews].sort(
+      (a, b) => getTimestampValue(b.date) - getTimestampValue(a.date)
+    );
+  }, [generatedNews, communityNews]);
 
   /* =======================================================
      FILTERS
   ======================================================= */
 
-  const filterTypes =
-    useMemo(() => {
-      const available =
-        new Set(
-          allFeed.map(
-            (item) =>
-              item.type
-          )
-        );
+  const filterTypes = useMemo(() => {
+    const available = new Set(allFeed.map((item) => item.type));
 
-      const filters = [
-        {
-          value: 'all',
-          label: 'All',
-          icon: '📰',
-        },
-        {
-          value: 'match_result',
-          label: 'Matches',
-          icon: '⚽',
-        },
-        {
-          value: 'transfer',
-          label: 'Transfers',
-          icon: '🔄',
-        },
-        {
-          value: 'injury',
-          label: 'Injuries',
-          icon: '🩹',
-        },
-        {
-          value: 'media',
-          label: 'Media',
-          icon: '📺',
-        },
-        {
-          value: 'interview',
-          label: 'Interviews',
-          icon: '🎤',
-        },
-        {
-          value: 'community',
-          label: 'Community',
-          icon: '👥',
-        },
-        {
-          value: 'finance',
-          label: 'Finance',
-          icon: '💰',
-        },
-        {
-          value: 'league',
-          label: 'League',
-          icon: '📊',
-        },
-      ];
+    const filters = [
+      { value: 'all', label: 'All', icon: '📰' },
+      { value: 'match_result', label: 'Matches', icon: '⚽' },
+      { value: 'transfer', label: 'Transfers', icon: '🔄' },
+      { value: 'injury', label: 'Injuries', icon: '🩹' },
+      { value: 'media', label: 'Media', icon: '📺' },
+      { value: 'interview', label: 'Interviews', icon: '🎤' },
+      { value: 'community', label: 'Community', icon: '👥' },
+      { value: 'finance', label: 'Finance', icon: '💰' },
+      { value: 'league', label: 'League', icon: '📊' },
+    ];
 
-      return filters.filter(
-        (filter) =>
-          filter.value ===
-            'all' ||
-          available.has(
-            filter.value
-          )
+    return filters.filter(
+      (filter) => filter.value === 'all' || available.has(filter.value)
+    );
+  }, [allFeed]);
+
+  const filteredFeed = useMemo(() => {
+    let result = allFeed;
+
+    if (activeFilter !== 'all') {
+      result = result.filter((item) => item.type === activeFilter);
+    }
+
+    if (searchTerm.trim()) {
+      const search = searchTerm.trim().toLowerCase();
+      result = result.filter(
+        (item) =>
+          safeString(item.headline).toLowerCase().includes(search) ||
+          safeString(item.body).toLowerCase().includes(search) ||
+          safeString(item.username).toLowerCase().includes(search)
       );
-    }, [allFeed]);
+    }
 
-  const filteredFeed =
-    useMemo(() => {
-      let result =
-        allFeed;
-
-      if (
-        activeFilter !==
-        'all'
-      ) {
-        result =
-          result.filter(
-            (item) =>
-              item.type ===
-              activeFilter
-          );
-      }
-
-      if (
-        searchTerm.trim()
-      ) {
-        const search =
-          searchTerm
-            .trim()
-            .toLowerCase();
-
-        result =
-          result.filter(
-            (item) =>
-              safeString(
-                item.headline
-              )
-                .toLowerCase()
-                .includes(search) ||
-              safeString(
-                item.body
-              )
-                .toLowerCase()
-                .includes(search) ||
-              safeString(
-                item.username
-              )
-                .toLowerCase()
-                .includes(search)
-          );
-      }
-
-      return result;
-    }, [
-      allFeed,
-      activeFilter,
-      searchTerm,
-    ]);
+    return result;
+  }, [allFeed, activeFilter, searchTerm]);
 
   /* =======================================================
-     CREATE USER POST
+     CREATE USER POST (serverTimestamp for real-time posts)
   ======================================================= */
 
-  const createPost =
-    async () => {
-      if (!user) {
-        toast.error(
-          'You must be logged in'
-        );
-        return;
-      }
+  const createPost = async () => {
+    if (!user) {
+      toast.error('You must be logged in');
+      return;
+    }
 
-      const content =
-        postText.trim();
+    const content = postText.trim();
+    if (!content) {
+      toast.error('Write something first');
+      return;
+    }
 
-      if (!content) {
-        toast.error(
-          'Write something first'
-        );
-        return;
-      }
+    if (content.length > 1000) {
+      toast.error('Post is too long. Maximum 1000 characters.');
+      return;
+    }
 
-      if (
-        content.length > 1000
-      ) {
-        toast.error(
-          'Post is too long. Maximum 1000 characters.'
-        );
-        return;
-      }
+    const now = Date.now();
+    if (now - lastPostTime.current < POST_COOLDOWN) {
+      toast.error('Please wait a few seconds before posting again');
+      return;
+    }
 
-      const now =
-        Date.now();
+    try {
+      setPosting(true);
 
-      if (
-        now -
-          lastPostTime.current <
-        POST_COOLDOWN
-      ) {
-        toast.error(
-          'Please wait a few seconds before posting again'
-        );
-        return;
-      }
+      const username =
+        userData?.username ||
+        userData?.displayName ||
+        user.displayName ||
+        user.email?.split('@')[0] ||
+        'Manager';
 
-      try {
-        setPosting(true);
+      await addDoc(collection(db, 'posts'), {
+        userId: user.uid,
+        username,
+        avatar: userData?.photoURL || user.photoURL || '',
+        title: `${clubInfo?.name || 'Club'} Update`,
+        content,
+        type: 'manager_post',
+        likeCount: 0,
+        commentCount: 0,
+        likes: [],
+        aiLikes: [],
+        isAI: false,
+        isAIOnly: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        aiEngagedAt: null,
+      });
 
-        const username =
-          userData?.username ||
-          userData?.displayName ||
-          user.displayName ||
-          user.email?.split(
-            '@'
-          )[0] ||
-          'Manager';
-
-        await addDoc(
-          collection(
-            db,
-            'posts'
-          ),
-          {
-            userId:
-              user.uid,
-
-            username,
-
-            avatar:
-              userData?.photoURL ||
-              user.photoURL ||
-              '',
-
-            title:
-              `${clubInfo?.name || 'Club'} Update`,
-
-            content,
-
-            type:
-              'manager_post',
-
-            likeCount:
-              0,
-
-            commentCount:
-              0,
-
-            likes: [],
-
-            aiLikes: [],
-
-            isAI:
-              false,
-
-            isAIOnly:
-              false,
-
-            createdAt:
-              serverTimestamp(),
-
-            updatedAt:
-              serverTimestamp(),
-
-            aiEngagedAt:
-              null,
-          }
-        );
-
-        setPostText('');
-
-        lastPostTime.current =
-          Date.now();
-
-        toast.success(
-          'Post published'
-        );
-      } catch (error) {
-        console.error(
-          'Create post error:',
-          error
-        );
-
-        toast.error(
-          'Could not publish post'
-        );
-      } finally {
-        setPosting(false);
-      }
-    };
+      setPostText('');
+      lastPostTime.current = Date.now();
+      toast.success('Post published');
+    } catch (error) {
+      console.error('Create post error:', error);
+      toast.error('Could not publish post');
+    } finally {
+      setPosting(false);
+    }
+  };
 
   /* =======================================================
      LIKE / UNLIKE
   ======================================================= */
 
-  const toggleLike =
-    async (post) => {
-      if (!user) {
-        return;
-      }
+  const toggleLike = async (post) => {
+    if (!user) return;
 
-      const postRef =
-        doc(
-          db,
-          'posts',
-          post.id
-        );
+    const postRef = doc(db, 'posts', post.id);
 
-      try {
-        await runTransaction(
-          db,
-          async (
-            transaction
-          ) => {
-            const snapshot =
-              await transaction.get(
-                postRef
-              );
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(postRef);
+        if (!snapshot.exists()) return;
 
-            if (
-              !snapshot.exists()
-            ) {
-              return;
-            }
+        const data = snapshot.data();
+        const likes = Array.isArray(data.likes) ? data.likes : [];
+        const alreadyLiked = likes.includes(user.uid);
 
-            const data =
-              snapshot.data();
-
-            const likes =
-              Array.isArray(
-                data.likes
-              )
-                ? data.likes
-                : [];
-
-            const alreadyLiked =
-              likes.includes(
-                user.uid
-              );
-
-            transaction.update(
-              postRef,
-              {
-                likes:
-                  alreadyLiked
-                    ? arrayRemove(
-                        user.uid
-                      )
-                    : arrayUnion(
-                        user.uid
-                      ),
-
-                likeCount:
-                  increment(
-                    alreadyLiked
-                      ? -1
-                      : 1
-                  ),
-
-                updatedAt:
-                  serverTimestamp(),
-              }
-            );
-          }
-        );
-      } catch (error) {
-        console.error(
-          'Like error:',
-          error
-        );
-
-        toast.error(
-          'Could not update like'
-        );
-      }
-    };
+        transaction.update(postRef, {
+          likes: alreadyLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+          likeCount: increment(alreadyLiked ? -1 : 1),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      console.error('Like error:', error);
+      toast.error('Could not update like');
+    }
+  };
 
   /* =======================================================
      ADD COMMENT
   ======================================================= */
 
-  const addComment =
-    async (post) => {
-      if (!user) {
-        return;
-      }
+  const addComment = async (post) => {
+    if (!user) return;
 
-      const text =
-        safeString(
-          commentText[post.id],
-          ''
-        ).trim();
+    const text = safeString(commentText[post.id], '').trim();
+    if (!text) return;
 
-      if (!text) {
-        return;
-      }
+    if (text.length > 500) {
+      toast.error('Comment is too long');
+      return;
+    }
 
-      if (
-        text.length > 500
-      ) {
-        toast.error(
-          'Comment is too long'
-        );
-        return;
-      }
+    try {
+      const username =
+        userData?.username ||
+        userData?.displayName ||
+        user.displayName ||
+        user.email?.split('@')[0] ||
+        'Manager';
 
-      try {
-        const username =
-          userData?.username ||
-          userData?.displayName ||
-          user.displayName ||
-          user.email?.split(
-            '@'
-          )[0] ||
-          'Manager';
+      await addDoc(collection(db, 'posts', post.id, 'comments'), {
+        userId: user.uid,
+        username,
+        avatar: userData?.photoURL || user.photoURL || '',
+        content: text,
+        isAI: false,
+        createdAt: serverTimestamp(),
+      });
 
-        await addDoc(
-          collection(
-            db,
-            'posts',
-            post.id,
-            'comments'
-          ),
-          {
-            userId:
-              user.uid,
+      await updateDoc(doc(db, 'posts', post.id), {
+        commentCount: increment(1),
+        updatedAt: serverTimestamp(),
+      });
 
-            username,
-
-            avatar:
-              userData?.photoURL ||
-              user.photoURL ||
-              '',
-
-            content:
-              text,
-
-            isAI:
-              false,
-
-            createdAt:
-              serverTimestamp(),
-          }
-        );
-
-        await updateDoc(
-          doc(
-            db,
-            'posts',
-            post.id
-          ),
-          {
-            commentCount:
-              increment(1),
-
-            updatedAt:
-              serverTimestamp(),
-          }
-        );
-
-        setCommentText(
-          (previous) => ({
-            ...previous,
-            [post.id]:
-              '',
-          })
-        );
-      } catch (error) {
-        console.error(
-          'Comment error:',
-          error
-        );
-
-        toast.error(
-          'Could not add comment'
-        );
-      }
-    };
+      setCommentText((previous) => ({
+        ...previous,
+        [post.id]: '',
+      }));
+    } catch (error) {
+      console.error('Comment error:', error);
+      toast.error('Could not add comment');
+    }
+  };
 
   /* =======================================================
-     MEDIA INTERVIEW
+     MEDIA INTERVIEW - uses game date
   ======================================================= */
 
-  const openInterview =
-    () => {
-      const interview =
-        generateInterview({
-          clubInfo,
-          careerData,
-          players,
-        });
-
-      setMediaInterview(
-        interview
-      );
-    };
+  const openInterview = () => {
+    const interview = generateInterview({
+      clubInfo,
+      careerData,
+      players,
+      gameDate,
+    });
+    setMediaInterview(interview);
+  };
 
   /* =======================================================
      LOADING
   ======================================================= */
 
-  if (
-    loading ||
-    isLoading
-  ) {
+  if (loading || isLoading) {
     return (
-      <div
-        className={
-          styles.loadingContainer
-        }
-      >
-        <div
-          className={
-            styles.spinner
-          }
-        />
-
-        <p>
-          Loading football world...
-        </p>
+      <div className={styles.loadingContainer}>
+        <div className={styles.spinner} />
+        <p>Loading football world...</p>
       </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   /* =======================================================
      RENDER
@@ -2444,1100 +1318,350 @@ export default function NewsPage() {
   return (
     <>
       <Head>
-        <title>
-          Football News - Virtual Football Manager
-        </title>
-
+        <title>Football News - Virtual Football Manager</title>
         <meta
           name="description"
           content="Live football news, transfers, injuries, media reports and manager community."
         />
       </Head>
 
-      <main
-        className={
-          styles.page
-        }
-      >
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
-        <header
-          className={
-            styles.header
-          }
-        >
+      <main className={styles.page}>
+        {/* HEADER */}
+        <header className={styles.header}>
           <div>
-            <span
-              className={
-                styles.eyebrow
-              }
-            >
-              GLOBAL FOOTBALL NETWORK
-            </span>
-
-            <h1>
-              Football News
-            </h1>
-
-            <p>
-              Transfers, injuries,
-              results, interviews,
-              media reports and
-              manager discussions.
-            </p>
+            <span className={styles.eyebrow}>GLOBAL FOOTBALL NETWORK</span>
+            <h1>Football News</h1>
+            <p>Transfers, injuries, results, interviews, media reports and manager discussions.</p>
+            <small className={styles.gameDate}>
+              Game Date: {gameDate.toLocaleDateString()}
+            </small>
           </div>
 
-          <div
-            className={
-              styles.headerStats
-            }
-          >
-            <div
-              className={
-                styles.statBox
-              }
-            >
-              <strong>
-                {allFeed.length}
-              </strong>
-
-              <span>
-                Stories
-              </span>
+          <div className={styles.headerStats}>
+            <div className={styles.statBox}>
+              <strong>{allFeed.length}</strong>
+              <span>Stories</span>
             </div>
-
-            <div
-              className={
-                styles.statBox
-              }
-            >
-              <strong>
-                {posts.length}
-              </strong>
-
-              <span>
-                Community Posts
-              </span>
+            <div className={styles.statBox}>
+              <strong>{posts.length}</strong>
+              <span>Community Posts</span>
             </div>
           </div>
         </header>
 
-        {/* =================================================
-            MEDIA BAR
-        ================================================= */}
-
-        <section
-          className={
-            styles.mediaBar
-          }
-        >
-          <div
-            className={
-              styles.mediaBarTitle
-            }
-          >
-            <span>
-              📺
-            </span>
-
+        {/* MEDIA BAR */}
+        <section className={styles.mediaBar}>
+          <div className={styles.mediaBarTitle}>
+            <span>📺</span>
             <div>
-              <strong>
-                Football Media
-              </strong>
-
-              <small>
-                Latest reports from
-                around the football
-                world
-              </small>
+              <strong>Football Media</strong>
+              <small>Latest reports from around the football world</small>
             </div>
           </div>
 
-          <div
-            className={
-              styles.mediaOutlets
-            }
-          >
-            {MEDIA_OUTLETS
-              .slice(0, 4)
-              .map(
-                (outlet) => (
-                  <button
-                    key={
-                      outlet.id
-                    }
-                    type="button"
-                    className={
-                      styles.mediaOutlet
-                    }
-                    style={{
-                      '--media-color':
-                        outlet.color,
-                    }}
-                    onClick={() =>
-                      setSelectedMedia(
-                        outlet
-                      )
-                    }
-                  >
-                    <span>
-                      {
-                        outlet.icon
-                      }
-                    </span>
-
-                    <div>
-                      <strong>
-                        {
-                          outlet.name
-                        }
-                      </strong>
-
-                      <small>
-                        {
-                          outlet.type
-                        }
-                      </small>
-                    </div>
-                  </button>
-                )
-              )}
+          <div className={styles.mediaOutlets}>
+            {MEDIA_OUTLETS.slice(0, 4).map((outlet) => (
+              <button
+                key={outlet.id}
+                type="button"
+                className={styles.mediaOutlet}
+                style={{ '--media-color': outlet.color }}
+                onClick={() => setSelectedMedia(outlet)}
+              >
+                <span>{outlet.icon}</span>
+                <div>
+                  <strong>{outlet.name}</strong>
+                  <small>{outlet.type}</small>
+                </div>
+              </button>
+            ))}
           </div>
 
-          <button
-            type="button"
-            className={
-              styles.interviewButton
-            }
-            onClick={
-              openInterview
-            }
-          >
+          <button type="button" className={styles.interviewButton} onClick={openInterview}>
             🎤
-            <span>
-              Media Interview
-            </span>
+            <span>Media Interview</span>
           </button>
         </section>
 
-        {/* =================================================
-            CREATE POST
-        ================================================= */}
-
-        <section
-          className={
-            styles.createPost
-          }
-        >
-          <div
-            className={
-              styles.createPostHeader
-            }
-          >
-            <div
-              className={
-                styles.userAvatar
-              }
-            >
-              {(
-                userData?.username ||
-                user.displayName ||
-                'M'
-              )
-                .charAt(0)
-                .toUpperCase()}
+        {/* CREATE POST */}
+        <section className={styles.createPost}>
+          <div className={styles.createPostHeader}>
+            <div className={styles.userAvatar}>
+              {(userData?.username || user.displayName || 'M').charAt(0).toUpperCase()}
             </div>
-
             <div>
-              <strong>
-                Share with football world
-              </strong>
-
-              <small>
-                Post an update,
-                opinion or club news.
-              </small>
+              <strong>Share with football world</strong>
+              <small>Post an update, opinion or club news.</small>
             </div>
           </div>
 
           <textarea
-            className={
-              styles.postTextarea
-            }
-            value={
-              postText
-            }
+            className={styles.postTextarea}
+            value={postText}
             maxLength={1000}
-            onChange={(event) =>
-              setPostText(
-                event.target.value
-              )
-            }
+            onChange={(event) => setPostText(event.target.value)}
             placeholder="What's happening at your club?"
           />
 
-          <div
-            className={
-              styles.createPostFooter
-            }
-          >
-            <span>
-              {postText.length}
-              /1000
-            </span>
-
+          <div className={styles.createPostFooter}>
+            <span>{postText.length}/1000</span>
             <button
               type="button"
-              className={
-                styles.publishButton
-              }
-              disabled={
-                posting ||
-                !postText.trim()
-              }
-              onClick={
-                createPost
-              }
+              className={styles.publishButton}
+              disabled={posting || !postText.trim()}
+              onClick={createPost}
             >
-              {posting
-                ? 'Publishing...'
-                : '🚀 Publish Post'}
+              {posting ? 'Publishing...' : '🚀 Publish Post'}
             </button>
           </div>
         </section>
 
-        {/* =================================================
-            SEARCH
-        ================================================= */}
-
-        <section
-          className={
-            styles.searchSection
-          }
-        >
-          <div
-            className={
-              styles.searchBox
-            }
-          >
-            <span>
-              🔎
-            </span>
-
+        {/* SEARCH */}
+        <section className={styles.searchSection}>
+          <div className={styles.searchBox}>
+            <span>🔎</span>
             <input
               type="text"
-              value={
-                searchTerm
-              }
-              onChange={(
-                event
-              ) =>
-                setSearchTerm(
-                  event.target.value
-                )
-              }
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search football news..."
             />
           </div>
         </section>
 
-        {/* =================================================
-            FILTERS
-        ================================================= */}
-
-        <nav
-          className={
-            styles.filters
-          }
-        >
-          {filterTypes.map(
-            (filter) => (
-              <button
-                key={
-                  filter.value
-                }
-                type="button"
-                className={
-                  activeFilter ===
-                  filter.value
-                    ? styles.activeFilter
-                    : ''
-                }
-                onClick={() =>
-                  setActiveFilter(
-                    filter.value
-                  )
-                }
-              >
-                <span>
-                  {
-                    filter.icon
-                  }
-                </span>
-
-                {
-                  filter.label
-                }
-              </button>
-            )
-          )}
+        {/* FILTERS */}
+        <nav className={styles.filters}>
+          {filterTypes.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              className={activeFilter === filter.value ? styles.activeFilter : ''}
+              onClick={() => setActiveFilter(filter.value)}
+            >
+              <span>{filter.icon}</span>
+              {filter.label}
+            </button>
+          ))}
         </nav>
 
-        {/* =================================================
-            FEED
-        ================================================= */}
-
-        <section
-          className={
-            styles.newsList
-          }
-        >
-          {filteredFeed.length >
-          0 ? (
-            filteredFeed.map(
-              (item) => {
-                /* =========================================
-                   COMMUNITY POST
-                ========================================= */
-
-                if (
-                  item.isCommunityPost
-                ) {
-                  const post =
-                    posts.find(
-                      (p) =>
-                        p.id ===
-                        item.id
-                    ) ||
-                    item;
-
-                  const likes =
-                    Array.isArray(
-                      post.likes
-                    )
-                      ? post.likes
-                      : [];
-
-                  const aiLikes =
-                    Array.isArray(
-                      post.aiLikes
-                    )
-                      ? post.aiLikes
-                      : [];
-
-                  const liked =
-                    user &&
-                    likes.includes(
-                      user.uid
-                    );
-
-                  const postComments =
-                    comments[
-                      post.id
-                    ] || [];
-
-                  return (
-                    <article
-                      key={
-                        item.id
-                      }
-                      className={
-                        styles.communityPost
-                      }
-                    >
-                      <div
-                        className={
-                          styles.postHeader
-                        }
-                      >
-                        <div
-                          className={
-                            styles.postAvatar
-                          }
-                        >
-                          {post.avatar ? (
-                            <img
-                              src={
-                                post.avatar
-                              }
-                              alt={
-                                post.username ||
-                                'Manager'
-                              }
-                            />
-                          ) : (
-                            safeString(
-                              post.username,
-                              'M'
-                            )
-                              .charAt(
-                                0
-                              )
-                              .toUpperCase()
-                          )}
-                        </div>
-
-                        <div
-                          className={
-                            styles.postAuthor
-                          }
-                        >
-                          <strong>
-                            {
-                              post.username ||
-                              'Manager'
-                            }
-                          </strong>
-
-                          <small>
-                            Manager
-                            Community
-                            •{' '}
-                            {timeAgo(
-                              post.createdAt
-                            )}
-                          </small>
-                        </div>
-
-                        {post.isAI && (
-                          <span
-                            className={
-                              styles.aiBadge
-                            }
-                          >
-                            🤖 AI
-                          </span>
-                        )}
-                      </div>
-
-                      <div
-                        className={
-                          styles.postBody
-                        }
-                      >
-                        {post.title && (
-                          <h2>
-                            {
-                              post.title
-                            }
-                          </h2>
-                        )}
-
-                        <p>
-                          {
-                            post.content
-                          }
-                        </p>
-                      </div>
-
-                      <div
-                        className={
-                          styles.postStats
-                        }
-                      >
-                        <span>
-                          ❤️{' '}
-                          {
-                            safeNumber(
-                              post.likeCount
-                            )
-                          }
-                        </span>
-
-                        <span>
-                          🤖{' '}
-                          {
-                            aiLikes.length
-                          } AI
-                        </span>
-
-                        <span>
-                          💬{' '}
-                          {
-                            safeNumber(
-                              post.commentCount
-                            )
-                          }
-                        </span>
-                      </div>
-
-                      <div
-                        className={
-                          styles.postActions
-                        }
-                      >
-                        <button
-                          type="button"
-                          className={
-                            liked
-                              ? styles.likedButton
-                              : ''
-                          }
-                          onClick={() =>
-                            toggleLike(
-                              post
-                            )
-                          }
-                        >
-                          {liked
-                            ? '❤️ Liked'
-                            : '🤍 Like'}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            toggleComments(
-                              post.id
-                            )
-                          }
-                        >
-                          💬 Comments
-                        </button>
-                      </div>
-
-                      {openComments[
-                        post.id
-                      ] && (
-                        <div
-                          className={
-                            styles.commentsArea
-                          }
-                        >
-                          <div
-                            className={
-                              styles.commentInput
-                            }
-                          >
-                            <input
-                              type="text"
-                              value={
-                                commentText[
-                                  post.id
-                                ] || ''
-                              }
-                              onChange={(
-                                event
-                              ) =>
-                                setCommentText(
-                                  (
-                                    previous
-                                  ) => ({
-                                    ...previous,
-                                    [post.id]:
-                                      event
-                                        .target
-                                        .value,
-                                  })
-                                )
-                              }
-                              onKeyDown={(
-                                event
-                              ) => {
-                                if (
-                                  event.key ===
-                                  'Enter'
-                                ) {
-                                  addComment(
-                                    post
-                                  );
-                                }
-                              }}
-                              placeholder="Write a comment..."
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                addComment(
-                                  post
-                                )
-                              }
-                            >
-                              Send
-                            </button>
-                          </div>
-
-                          {loadingComments[
-                            post.id
-                          ] ? (
-                            <div
-                              className={
-                                styles.commentLoading
-                              }
-                            >
-                              Loading
-                              comments...
-                            </div>
-                          ) : postComments.length >
-                            0 ? (
-                            <div
-                              className={
-                                styles.commentsList
-                              }
-                            >
-                              {postComments.map(
-                                (
-                                  comment
-                                ) => (
-                                  <div
-                                    key={
-                                      comment.id
-                                    }
-                                    className={
-                                      styles.comment
-                                    }
-                                  >
-                                    <div
-                                      className={
-                                        styles.commentAvatar
-                                      }
-                                    >
-                                      {
-                                        comment.avatar ||
-                                        safeString(
-                                          comment.username,
-                                          'U'
-                                        )
-                                          .charAt(
-                                            0
-                                          )
-                                          .toUpperCase()
-                                      }
-                                    </div>
-
-                                    <div
-                                      className={
-                                        styles.commentContent
-                                      }
-                                    >
-                                      <div
-                                        className={
-                                          styles.commentTop
-                                        }
-                                      >
-                                        <strong>
-                                          {
-                                            comment.username
-                                          }
-                                        </strong>
-
-                                        {comment.isAI && (
-                                          <span
-                                            className={
-                                              styles.aiCommentBadge
-                                            }
-                                          >
-                                            🤖 AI
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      <p>
-                                        {
-                                          comment.content
-                                        }
-                                      </p>
-
-                                      <small>
-                                        {
-                                          timeAgo(
-                                            comment.createdAt
-                                          )
-                                        }
-                                      </small>
-                                    </div>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          ) : (
-                            <div
-                              className={
-                                styles.emptyComments
-                              }
-                            >
-                              No comments
-                              yet.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </article>
-                  );
-                }
-
-                /* =========================================
-                   NORMAL NEWS CARD
-                ========================================= */
+        {/* FEED */}
+        <section className={styles.newsList}>
+          {filteredFeed.length > 0 ? (
+            filteredFeed.map((item) => {
+              /* COMMUNITY POST */
+              if (item.isCommunityPost) {
+                const post = posts.find((p) => p.id === item.id) || item;
+                const likes = Array.isArray(post.likes) ? post.likes : [];
+                const aiLikes = Array.isArray(post.aiLikes) ? post.aiLikes : [];
+                const liked = user && likes.includes(user.uid);
+                const postComments = comments[post.id] || [];
 
                 return (
-                  <article
-                    key={
-                      item.id
-                    }
-                    className={
-                      styles.newsCard
-                    }
-                    style={{
-                      borderLeftColor:
-                        item.color,
-                    }}
-                  >
-                    <div
-                      className={
-                        styles.newsIcon
-                      }
-                      style={{
-                        background:
-                          `${item.color}18`,
-                      }}
-                    >
-                      <span>
-                        {
-                          item.icon
-                        }
-                      </span>
+                  <article key={item.id} className={styles.communityPost}>
+                    <div className={styles.postHeader}>
+                      <div className={styles.postAvatar}>
+                        {post.avatar ? (
+                          <img src={post.avatar} alt={post.username || 'Manager'} />
+                        ) : (
+                          safeString(post.username, 'M').charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className={styles.postAuthor}>
+                        <strong>{post.username || 'Manager'}</strong>
+                        <small>Manager Community • {timeAgo(post.createdAt)}</small>
+                      </div>
+                      {post.isAI && <span className={styles.aiBadge}>🤖 AI</span>}
                     </div>
 
-                    <div
-                      className={
-                        styles.newsContent
-                      }
-                    >
-                      <div
-                        className={
-                          styles.newsHeader
-                        }
-                      >
-                        <span
-                          className={
-                            styles.newsType
-                          }
-                          style={{
-                            color:
-                              item.color,
-                          }}
-                        >
-                          {
-                            item.title
-                          }
-                        </span>
-
-                        <span
-                          className={
-                            styles.newsTime
-                          }
-                        >
-                          {timeAgo(
-                            item.date
-                          )}
-                        </span>
-                      </div>
-
-                      <h2
-                        className={
-                          styles.newsHeadline
-                        }
-                      >
-                        {
-                          item.headline
-                        }
-                      </h2>
-
-                      <p
-                        className={
-                          styles.newsBody
-                        }
-                      >
-                        {
-                          item.body
-                        }
-                      </p>
-
-                      {item.type ===
-                        'media' && (
-                        <button
-                          type="button"
-                          className={
-                            styles.readReportButton
-                          }
-                          onClick={() =>
-                            setSelectedMedia(
-                              MEDIA_OUTLETS.find(
-                                (
-                                  outlet
-                                ) =>
-                                  outlet.id ===
-                                  item.mediaOutletId
-                              ) ||
-                                MEDIA_OUTLETS[0]
-                            )
-                          }
-                        >
-                          📺 Read
-                          full media
-                          report
-                        </button>
-                      )}
-
-                      <div
-                        className={
-                          styles.newsFooter
-                        }
-                      >
-                        <span>
-                          {
-                            formatDate(
-                              item.date
-                            )
-                          }
-                        </span>
-
-                        <span>
-                          {
-                            formatTime(
-                              item.date
-                            )
-                          }
-                        </span>
-                      </div>
+                    <div className={styles.postBody}>
+                      {post.title && <h2>{post.title}</h2>}
+                      <p>{post.content}</p>
                     </div>
+
+                    <div className={styles.postStats}>
+                      <span>❤️ {safeNumber(post.likeCount)}</span>
+                      <span>🤖 {aiLikes.length} AI</span>
+                      <span>💬 {safeNumber(post.commentCount)}</span>
+                    </div>
+
+                    <div className={styles.postActions}>
+                      <button
+                        type="button"
+                        className={liked ? styles.likedButton : ''}
+                        onClick={() => toggleLike(post)}
+                      >
+                        {liked ? '❤️ Liked' : '🤍 Like'}
+                      </button>
+                      <button type="button" onClick={() => toggleComments(post.id)}>
+                        💬 Comments
+                      </button>
+                    </div>
+
+                    {openComments[post.id] && (
+                      <div className={styles.commentsArea}>
+                        <div className={styles.commentInput}>
+                          <input
+                            type="text"
+                            value={commentText[post.id] || ''}
+                            onChange={(event) =>
+                              setCommentText((previous) => ({
+                                ...previous,
+                                [post.id]: event.target.value,
+                              }))
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') addComment(post);
+                            }}
+                            placeholder="Write a comment..."
+                          />
+                          <button type="button" onClick={() => addComment(post)}>
+                            Send
+                          </button>
+                        </div>
+
+                        {loadingComments[post.id] ? (
+                          <div className={styles.commentLoading}>Loading comments...</div>
+                        ) : postComments.length > 0 ? (
+                          <div className={styles.commentsList}>
+                            {postComments.map((comment) => (
+                              <div key={comment.id} className={styles.comment}>
+                                <div className={styles.commentAvatar}>
+                                  {comment.avatar ||
+                                    safeString(comment.username, 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div className={styles.commentContent}>
+                                  <div className={styles.commentTop}>
+                                    <strong>{comment.username}</strong>
+                                    {comment.isAI && (
+                                      <span className={styles.aiCommentBadge}>🤖 AI</span>
+                                    )}
+                                  </div>
+                                  <p>{comment.content}</p>
+                                  <small>{timeAgo(comment.createdAt)}</small>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.emptyComments}>No comments yet.</div>
+                        )}
+                      </div>
+                    )}
                   </article>
                 );
               }
-            )
+
+              /* NORMAL NEWS CARD */
+              return (
+                <article
+                  key={item.id}
+                  className={styles.newsCard}
+                  style={{ borderLeftColor: item.color }}
+                >
+                  <div className={styles.newsIcon} style={{ background: `${item.color}18` }}>
+                    <span>{item.icon}</span>
+                  </div>
+
+                  <div className={styles.newsContent}>
+                    <div className={styles.newsHeader}>
+                      <span className={styles.newsType} style={{ color: item.color }}>
+                        {item.title}
+                      </span>
+                      <span className={styles.newsTime}>{timeAgo(item.date)}</span>
+                    </div>
+
+                    <h2 className={styles.newsHeadline}>{item.headline}</h2>
+                    <p className={styles.newsBody}>{item.body}</p>
+
+                    {item.type === 'media' && (
+                      <button
+                        type="button"
+                        className={styles.readReportButton}
+                        onClick={() =>
+                          setSelectedMedia(
+                            MEDIA_OUTLETS.find((outlet) => outlet.id === item.mediaOutletId) ||
+                              MEDIA_OUTLETS[0]
+                          )
+                        }
+                      >
+                        📺 Read full media report
+                      </button>
+                    )}
+
+                    <div className={styles.newsFooter}>
+                      <span>{formatDate(item.date)}</span>
+                      <span>{formatTime(item.date)}</span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })
           ) : (
-            <div
-              className={
-                styles.emptyState
-              }
-            >
-              <span>
-                📰
-              </span>
-
-              <h3>
-                No news found
-              </h3>
-
-              <p>
-                There are no stories
-                matching your current
-                filters.
-              </p>
+            <div className={styles.emptyState}>
+              <span>📰</span>
+              <h3>No news found</h3>
+              <p>There are no stories matching your current filters.</p>
             </div>
           )}
         </section>
 
-        {/* =================================================
-            MEDIA MODAL
-        ================================================= */}
-
+        {/* MEDIA MODAL */}
         {selectedMedia && (
-          <div
-            className={
-              styles.modalOverlay
-            }
-            onClick={() =>
-              setSelectedMedia(
-                null
-              )
-            }
-          >
-            <div
-              className={
-                styles.modal
-              }
-              onClick={(event) =>
-                event.stopPropagation()
-              }
-            >
-              <div
-                className={
-                  styles.modalHeader
-                }
-              >
+          <div className={styles.modalOverlay} onClick={() => setSelectedMedia(null)}>
+            <div className={styles.modal} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.modalHeader}>
                 <div>
-                  <span
-                    className={
-                      styles.modalIcon
-                    }
-                  >
-                    {
-                      selectedMedia.icon
-                    }
-                  </span>
-
+                  <span className={styles.modalIcon}>{selectedMedia.icon}</span>
                   <div>
-                    <strong>
-                      {
-                        selectedMedia.name
-                      }
-                    </strong>
-
-                    <small>
-                      {
-                        selectedMedia.type
-                      }
-                    </small>
+                    <strong>{selectedMedia.name}</strong>
+                    <small>{selectedMedia.type}</small>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedMedia(
-                      null
-                    )
-                  }
-                >
+                <button type="button" onClick={() => setSelectedMedia(null)}>
                   ×
                 </button>
               </div>
 
-              <div
-                className={
-                  styles.modalBody
-                }
-              >
-                <span
-                  className={
-                    styles.liveLabel
-                  }
-                >
-                  ● LIVE MEDIA
-                </span>
-
-                <h2>
-                  {
-                    selectedMedia.name
-                  } is following
-                  the story
-                </h2>
-
+              <div className={styles.modalBody}>
+                <span className={styles.liveLabel}>● LIVE MEDIA</span>
+                <h2>{selectedMedia.name} is following the story</h2>
                 <p>
-                  Our journalists are
-                  monitoring developments
-                  around{' '}
-                  <strong>
-                    {
-                      clubInfo?.name ||
-                      'your club'
-                    }
-                  </strong>
-                  .
+                  Our journalists are monitoring developments around{' '}
+                  <strong>{clubInfo?.name || 'your club'}</strong>.
                 </p>
-
                 <p>
-                  Transfer activity,
-                  tactical decisions,
-                  player performances
-                  and manager decisions
-                  will continue to be
-                  analysed throughout
-                  the season.
+                  Transfer activity, tactical decisions, player performances and manager
+                  decisions will continue to be analysed throughout the season.
                 </p>
-
-                <div
-                  className={
-                    styles.mediaQuote
-                  }
-                >
-                  “The story is still
-                  developing. Our
-                  reporters will continue
-                  following every major
-                  development.”
+                <div className={styles.mediaQuote}>
+                  "The story is still developing. Our reporters will continue following every
+                  major development."
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* =================================================
-            INTERVIEW MODAL
-        ================================================= */}
-
+        {/* INTERVIEW MODAL */}
         {mediaInterview && (
-          <div
-            className={
-              styles.modalOverlay
-            }
-            onClick={() =>
-              setMediaInterview(
-                null
-              )
-            }
-          >
-            <div
-              className={
-                styles.interviewModal
-              }
-              onClick={(event) =>
-                event.stopPropagation()
-              }
-            >
-              <div
-                className={
-                  styles.interviewHero
-                }
-              >
-                <span>
-                  🎤
-                </span>
-
+          <div className={styles.modalOverlay} onClick={() => setMediaInterview(null)}>
+            <div className={styles.interviewModal} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.interviewHero}>
+                <span>🎤</span>
                 <div>
-                  <small>
-                    EXCLUSIVE
-                  </small>
-
-                  <h2>
-                    {
-                      mediaInterview.title
-                    }
-                  </h2>
+                  <small>EXCLUSIVE</small>
+                  <h2>{mediaInterview.title}</h2>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMediaInterview(
-                      null
-                    )
-                  }
-                >
+                <button type="button" onClick={() => setMediaInterview(null)}>
                   ×
                 </button>
               </div>
 
-              <div
-                className={
-                  styles.interviewBody
-                }
-              >
-                <h3>
-                  {
-                    mediaInterview.headline
-                  }
-                </h3>
-
-                <p>
-                  {
-                    mediaInterview.body
-                  }
-                </p>
-
-                <span
-                  className={
-                    styles.interviewDisclaimer
-                  }
-                >
-                  🎙️ Simulated media
-                  interview from the
-                  football world.
+              <div className={styles.interviewBody}>
+                <h3>{mediaInterview.headline}</h3>
+                <p>{mediaInterview.body}</p>
+                <span className={styles.interviewDisclaimer}>
+                  🎙️ Simulated media interview from the football world.
                 </span>
               </div>
             </div>
