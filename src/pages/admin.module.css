@@ -629,6 +629,73 @@
 }
 
 /* =========================================================
+   NEW: FORM SECTIONS & MULTI-SELECT
+========================================================= */
+
+.formSection {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.formSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.formSectionHeader h4 {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+
+.multiSelect {
+  min-height: 80px;
+  padding: 6px;
+}
+
+.multiSelect option {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: #e5e7eb;
+}
+
+.multiSelect option:checked {
+  background: rgba(56, 189, 248, 0.2);
+  color: #fff;
+}
+
+.helperText {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 10px;
+}
+
+/* =========================================================
    FORM BUTTONS
 ========================================================= */
 
@@ -947,6 +1014,11 @@
 
   .formGrid {
     grid-template-columns: 1fr;
+  }
+
+  .formSectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
