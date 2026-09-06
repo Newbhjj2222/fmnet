@@ -1681,10 +1681,14 @@ async function generateCupFixtures({
   }
 
   /*
-   * Start date.
+   * IMPORTANT:
    *
-   * Cups start from the league's configured
-   * startDate if available.
+   * Cup fixtures start from the league's startDate.
+   * The startDate is obtained from league.startDate
+   * if available, otherwise from country rules.
+   *
+   * This ensures the cup schedule respects the
+   * user-defined starting date stored in the database.
    */
 
   let startDate =
