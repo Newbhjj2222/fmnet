@@ -10,6 +10,7 @@ import {
   query,
   where,
   writeBatch,
+  deleteDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -34,21 +35,6 @@ const FIRESTORE_BATCH_SIZE = 450;
 const SEASON_START_MONTH = 6; // July
 
 /*
- * League fixture generation window.
- */
-const EARLIEST_LEAGUE_START_MONTH = 7; // August
-const EARLIEST_LEAGUE_START_DAY = 1;
-
-const LATEST_LEAGUE_START_MONTH = 8; // September
-const LATEST_LEAGUE_START_DAY = 30;
-
-/*
- * League:
- * One round per week.
- */
-const MATCH_WEEKS_INTERVAL = 1;
-
-/*
  * Default kickoff.
  */
 const DEFAULT_KICKOFF_HOUR = 15;
@@ -63,70 +49,9 @@ const LEAGUE_ALLOWED_DAYS = [6, 0];
 const CUP_ALLOWED_DAYS = [2, 3];
 
 /*
- * =========================================================
- * CUP CONFIG
- * =========================================================
- *
- * 1/32 requires 64 teams.
- *
- * Cup bracket:
- *
- * 1/32 -> 32 matches
- * 1/16 -> 16 matches
- * 1/8  -> 8 matches
- * 1/4  -> 4 matches
- * 1/2  -> 2 matches
- * 3rd  -> 1 match
- * Final -> 1 match
- *
- * Total = 64 fixtures
+ * Cup group stage: 4 teams per group
  */
-
-const CUP_FIRST_ROUND_TEAMS = 64;
-
-const CUP_STAGES = {
-  ROUND_OF_64: {
-    key: "round_of_64",
-    name: "1/32",
-    matches: 32,
-  },
-
-  ROUND_OF_32: {
-    key: "round_of_32",
-    name: "1/16",
-    matches: 16,
-  },
-
-  ROUND_OF_16: {
-    key: "round_of_16",
-    name: "1/8",
-    matches: 8,
-  },
-
-  QUARTER_FINAL: {
-    key: "quarter_final",
-    name: "1/4",
-    matches: 4,
-  },
-
-  SEMI_FINAL: {
-    key: "semi_final",
-    name: "1/2",
-    matches: 2,
-  },
-
-  THIRD_PLACE: {
-    key: "third_place",
-    name: "Third Place",
-    matches: 1,
-  },
-
-  FINAL: {
-    key: "final",
-    name: "Final",
-    matches: 1,
-  },
-};
+const GROUP_SIZE = 4;
 
 /* =========================================================
    COUNTRY NORMALIZATION
@@ -134,7 +59,6 @@ const CUP_STAGES = {
 
 function normalizeCountry(value) {
   if (!value) return "";
-
   return String(value)
     .trim()
     .toLowerCase()
@@ -157,17 +81,13 @@ function cloneDate(date) {
 
 function startOfDay(date) {
   const d = cloneDate(date);
-
   d.setHours(0, 0, 0, 0);
-
   return d;
 }
 
 function addDays(date, days) {
   const d = cloneDate(date);
-
   d.setDate(d.getDate() + days);
-
   return d;
 }
 
@@ -195,22 +115,18 @@ function makeDate(
 
 function makeKickoff(date) {
   const d = cloneDate(date);
-
   d.setHours(
     DEFAULT_KICKOFF_HOUR,
     DEFAULT_KICKOFF_MINUTE,
     0,
     0
   );
-
   return d;
 }
 
 function isoDate(date) {
   if (!date) return "";
-
   const d = cloneDate(date);
-
   return [
     d.getFullYear(),
     String(d.getMonth() + 1).padStart(2, "0"),
@@ -220,55 +136,20 @@ function isoDate(date) {
 
 function safeDate(value) {
   if (!value) return null;
-
   try {
-    /*
-     * Firestore Timestamp
-     */
-    if (
-      value?.toDate &&
-      typeof value.toDate === "function"
-    ) {
+    if (value?.toDate && typeof value.toDate === "function") {
       const date = value.toDate();
-
-      return Number.isNaN(date.getTime())
-        ? null
-        : date;
+      return Number.isNaN(date.getTime()) ? null : date;
     }
-
-    /*
-     * JavaScript Date
-     */
     if (value instanceof Date) {
-      return Number.isNaN(value.getTime())
-        ? null
-        : value;
+      return Number.isNaN(value.getTime()) ? null : value;
     }
-
-    /*
-     * Firestore timestamp-like object
-     */
-    if (
-      typeof value === "object" &&
-      typeof value.seconds === "number"
-    ) {
-      const date = new Date(
-        value.seconds * 1000
-      );
-
-      return Number.isNaN(date.getTime())
-        ? null
-        : date;
+    if (typeof value === "object" && typeof value.seconds === "number") {
+      const date = new Date(value.seconds * 1000);
+      return Number.isNaN(date.getTime()) ? null : date;
     }
-
-    /*
-     * String / number
-     */
     const date = new Date(value);
-
-    return Number.isNaN(date.getTime())
-      ? null
-      : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   } catch {
     return null;
   }
@@ -278,17 +159,8 @@ function safeDate(value) {
    SEASON
 ========================================================= */
 
-function getSeasonYear(date = new Date()) {
+function getSeasonYearFromDate(date) {
   const d = safeDate(date) || new Date();
-
-  /*
-   * July -> December
-   * 2026-08-28 => 2026/27
-   *
-   * January -> June
-   * 2027-02-10 => 2026/27
-   */
-
   return d.getMonth() >= SEASON_START_MONTH
     ? d.getFullYear()
     : d.getFullYear() - 1;
@@ -355,59 +227,23 @@ function getClubLogo(club) {
 ========================================================= */
 
 function getLeagueClubs(league, clubs) {
-  if (
-    !league ||
-    !Array.isArray(clubs)
-  ) {
+  if (!league || !Array.isArray(clubs)) {
     return [];
   }
-
-  /*
-   * First try configured IDs.
-   */
-
-  const configuredIds =
-    league?.clubIds ||
-    league?.teamIds ||
-    league?.teams ||
-    [];
-
-  if (
-    Array.isArray(configuredIds) &&
-    configuredIds.length > 0
-  ) {
+  const configuredIds = league?.clubIds || league?.teamIds || league?.teams || [];
+  if (Array.isArray(configuredIds) && configuredIds.length > 0) {
     const ids = configuredIds
       .map((item) => {
-        if (typeof item === "string") {
-          return item;
-        }
-
-        return (
-          item?.id ||
-          item?.clubId ||
-          item?.teamId ||
-          null
-        );
+        if (typeof item === "string") return item;
+        return item?.id || item?.clubId || item?.teamId || null;
       })
       .filter(Boolean);
-
-    const selected = clubs.filter((club) =>
-      ids.includes(club.id)
-    );
-
-    if (selected.length >= 2) {
-      return selected;
-    }
+    const selected = clubs.filter((club) => ids.includes(club.id));
+    if (selected.length >= 2) return selected;
   }
-
-  /*
-   * Otherwise match leagueId.
-   */
-
   return clubs.filter(
     (club) =>
-      String(getLeagueId(club) || "") ===
-      String(league.id || "")
+      String(getLeagueId(club) || "") === String(league.id || "")
   );
 }
 
@@ -421,11 +257,9 @@ const COUNTRY_START_RULES = {
   kenya: { month: 7, day: 15 },
   tanzania: { month: 7, day: 15 },
   burundi: { month: 7, day: 15 },
-
   england: { month: 7, day: 10 },
   unitedkingdom: { month: 7, day: 10 },
   uk: { month: 7, day: 10 },
-
   spain: { month: 8, day: 20 },
   italy: { month: 7, day: 20 },
   germany: { month: 7, day: 15 },
@@ -433,27 +267,19 @@ const COUNTRY_START_RULES = {
   portugal: { month: 7, day: 15 },
   netherlands: { month: 7, day: 15 },
   belgium: { month: 7, day: 15 },
-
   brazil: { month: 7, day: 15 },
   argentina: { month: 7, day: 15 },
   southafrica: { month: 7, day: 15 },
   egypt: { month: 7, day: 15 },
   nigeria: { month: 7, day: 15 },
   ghana: { month: 7, day: 15 },
-
   japan: { month: 7, day: 15 },
   southkorea: { month: 7, day: 15 },
-
-  international: {
-    month: 7,
-    day: 15,
-  },
+  international: { month: 7, day: 15 },
 };
 
 function getCountryStartRule(country) {
-  const normalized =
-    normalizeCountry(country);
-
+  const normalized = normalizeCountry(country);
   return (
     COUNTRY_START_RULES[normalized] ||
     COUNTRY_START_RULES.international
@@ -471,79 +297,30 @@ function getEasterSunday(year) {
   const d = Math.floor(b / 4);
   const e = b % 4;
   const f = Math.floor((b + 8) / 25);
-  const g = Math.floor(
-    (b - f + 1) / 3
-  );
-
-  const h =
-    (19 * a + b - d - g + 15) % 30;
-
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
   const i = Math.floor(c / 4);
   const k = c % 4;
-
-  const l =
-    (32 +
-      2 * e +
-      2 * i -
-      h -
-      k) %
-    7;
-
-  const m = Math.floor(
-    (a + 11 * h + 22 * l) / 451
-  );
-
-  const month = Math.floor(
-    (h + l - 7 * m + 114) / 31
-  );
-
-  const day =
-    ((h + l - 7 * m + 114) % 31) + 1;
-
-  return new Date(
-    year,
-    month - 1,
-    day
-  );
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
 }
 
 /* =========================================================
    PUBLIC HOLIDAYS
 ========================================================= */
 
-function getFixedHolidayDates(
-  year,
-  country
-) {
+function getFixedHolidayDates(year, country) {
   const holidays = [];
-
-  const normalized =
-    normalizeCountry(country);
-
-  /*
-   * General holidays
-   */
-
+  const normalized = normalizeCountry(country);
   holidays.push(
-    makeDate(year, 0, 1)
-  );
-
-  holidays.push(
-    makeDate(year, 4, 1)
-  );
-
-  holidays.push(
-    makeDate(year, 11, 25)
-  );
-
-  holidays.push(
+    makeDate(year, 0, 1),
+    makeDate(year, 4, 1),
+    makeDate(year, 11, 25),
     makeDate(year, 11, 26)
   );
-
-  /*
-   * Rwanda
-   */
-
   if (normalized === "rwanda") {
     holidays.push(
       makeDate(year, 1, 1),
@@ -554,11 +331,6 @@ function getFixedHolidayDates(
       makeDate(year, 12, 31)
     );
   }
-
-  /*
-   * Tanzania
-   */
-
   if (normalized === "tanzania") {
     holidays.push(
       makeDate(year, 0, 12),
@@ -568,11 +340,6 @@ function getFixedHolidayDates(
       makeDate(year, 11, 9)
     );
   }
-
-  /*
-   * Kenya
-   */
-
   if (normalized === "kenya") {
     holidays.push(
       makeDate(year, 5, 1),
@@ -581,11 +348,6 @@ function getFixedHolidayDates(
       makeDate(year, 10, 12)
     );
   }
-
-  /*
-   * Uganda
-   */
-
   if (normalized === "uganda") {
     holidays.push(
       makeDate(year, 0, 26),
@@ -594,11 +356,6 @@ function getFixedHolidayDates(
       makeDate(year, 9, 9)
     );
   }
-
-  /*
-   * Burundi
-   */
-
   if (normalized === "burundi") {
     holidays.push(
       makeDate(year, 0, 1),
@@ -608,11 +365,6 @@ function getFixedHolidayDates(
       makeDate(year, 10, 28)
     );
   }
-
-  /*
-   * France
-   */
-
   if (normalized === "france") {
     holidays.push(
       makeDate(year, 6, 14),
@@ -620,21 +372,11 @@ function getFixedHolidayDates(
       makeDate(year, 10, 11)
     );
   }
-
-  /*
-   * Germany
-   */
-
   if (normalized === "germany") {
     holidays.push(
       makeDate(year, 9, 3)
     );
   }
-
-  /*
-   * Italy
-   */
-
   if (normalized === "italy") {
     holidays.push(
       makeDate(year, 3, 25),
@@ -644,22 +386,12 @@ function getFixedHolidayDates(
       makeDate(year, 10, 1)
     );
   }
-
-  /*
-   * Spain
-   */
-
   if (normalized === "spain") {
     holidays.push(
       makeDate(year, 9, 12),
       makeDate(year, 11, 6)
     );
   }
-
-  /*
-   * Brazil
-   */
-
   if (normalized === "brazil") {
     holidays.push(
       makeDate(year, 8, 7),
@@ -667,11 +399,6 @@ function getFixedHolidayDates(
       makeDate(year, 10, 15)
     );
   }
-
-  /*
-   * South Africa
-   */
-
   if (normalized === "southafrica") {
     holidays.push(
       makeDate(year, 3, 27),
@@ -680,18 +407,12 @@ function getFixedHolidayDates(
       makeDate(year, 11, 16)
     );
   }
-
-  /*
-   * Nigeria
-   */
-
   if (normalized === "nigeria") {
     holidays.push(
       makeDate(year, 4, 29),
       makeDate(year, 9, 1)
     );
   }
-
   return holidays;
 }
 
@@ -699,49 +420,22 @@ function getFixedHolidayDates(
    MOVABLE HOLIDAYS
 ========================================================= */
 
-function getMovableHolidayDates(
-  year,
-  country
-) {
+function getMovableHolidayDates(year, country) {
   const holidays = [];
-
-  const easter =
-    getEasterSunday(year);
-
-  /*
-   * Good Friday
-   */
-
+  const easter = getEasterSunday(year);
   holidays.push(
-    addDays(easter, -2)
-  );
-
-  /*
-   * Easter Monday
-   */
-
-  holidays.push(
+    addDays(easter, -2),
     addDays(easter, 1)
   );
-
-  const normalized =
-    normalizeCountry(country);
-
-  /*
-   * Ascension
-   */
-
+  const normalized = normalizeCountry(country);
   if (
     normalized === "rwanda" ||
     normalized === "uganda" ||
     normalized === "kenya" ||
     normalized === "tanzania"
   ) {
-    holidays.push(
-      addDays(easter, 39)
-    );
+    holidays.push(addDays(easter, 39));
   }
-
   return holidays;
 }
 
@@ -749,66 +443,34 @@ function getMovableHolidayDates(
    FIRESTORE HOLIDAYS
 ========================================================= */
 
-async function getFirestoreHolidays(
-  year,
-  country
-) {
-  const normalized =
-    normalizeCountry(country);
-
+async function getFirestoreHolidays(year, country) {
+  const normalized = normalizeCountry(country);
   const dates = new Set();
-
   try {
     const holidayQuery = query(
       collection(db, "holidays"),
       where("year", "==", year)
     );
-
-    const snapshot =
-      await getDocs(holidayQuery);
-
+    const snapshot = await getDocs(holidayQuery);
     snapshot.forEach((item) => {
       const data = item.data();
-
-      const holidayCountry =
-        normalizeCountry(
-          data?.country ||
-            data?.countryName ||
-            ""
-        );
-
+      const holidayCountry = normalizeCountry(
+        data?.country || data?.countryName || ""
+      );
       const appliesToAll =
         holidayCountry === "" ||
         holidayCountry === "all" ||
-        holidayCountry ===
-          "international";
-
-      const appliesToCountry =
-        holidayCountry === normalized;
-
-      if (
-        !appliesToAll &&
-        !appliesToCountry
-      ) {
-        return;
-      }
-
-      const date =
-        safeDate(data?.date);
-
+        holidayCountry === "international";
+      const appliesToCountry = holidayCountry === normalized;
+      if (!appliesToAll && !appliesToCountry) return;
+      const date = safeDate(data?.date);
       if (date) {
-        dates.add(
-          isoDate(date)
-        );
+        dates.add(isoDate(date));
       }
     });
   } catch (error) {
-    console.warn(
-      "[FIXTURE GENERATOR] Could not load holidays:",
-      error
-    );
+    console.warn("[FIXTURE GENERATOR] Could not load holidays:", error);
   }
-
   return dates;
 }
 
@@ -816,45 +478,17 @@ async function getFirestoreHolidays(
    HOLIDAY SET
 ========================================================= */
 
-async function buildHolidaySet(
-  year,
-  country
-) {
+async function buildHolidaySet(year, country) {
   const dates = new Set();
-
-  const fixed =
-    getFixedHolidayDates(
-      year,
-      country
-    );
-
-  const movable =
-    getMovableHolidayDates(
-      year,
-      country
-    );
-
-  [
-    ...fixed,
-    ...movable,
-  ].forEach((date) => {
-    dates.add(
-      isoDate(date)
-    );
+  const fixed = getFixedHolidayDates(year, country);
+  const movable = getMovableHolidayDates(year, country);
+  [...fixed, ...movable].forEach((date) => {
+    dates.add(isoDate(date));
   });
-
-  const firestoreHolidays =
-    await getFirestoreHolidays(
-      year,
-      country
-    );
-
-  firestoreHolidays.forEach(
-    (date) => {
-      dates.add(date);
-    }
-  );
-
+  const firestoreHolidays = await getFirestoreHolidays(year, country);
+  firestoreHolidays.forEach((date) => {
+    dates.add(date);
+  });
   return dates;
 }
 
@@ -862,13 +496,8 @@ async function buildHolidaySet(
    MATCH DAY FINDER
 ========================================================= */
 
-function isHoliday(
-  date,
-  holidaySet
-) {
-  return holidaySet.has(
-    isoDate(date)
-  );
+function isHoliday(date, holidaySet) {
+  return holidaySet.has(isoDate(date));
 }
 
 function findNextMatchDay(
@@ -876,46 +505,17 @@ function findNextMatchDay(
   holidaySet,
   allowedDays
 ) {
-  let date =
-    startOfDay(startDate);
-
-  const days =
-    Array.isArray(allowedDays)
-      ? allowedDays
-      : [allowedDays];
-
-  if (
-    days.includes(
-      date.getDay()
-    ) &&
-    !isHoliday(
-      date,
-      holidaySet
-    )
-  ) {
+  let date = startOfDay(startDate);
+  const days = Array.isArray(allowedDays) ? allowedDays : [allowedDays];
+  if (days.includes(date.getDay()) && !isHoliday(date, holidaySet)) {
     return makeKickoff(date);
   }
-
-  for (
-    let attempt = 0;
-    attempt < 365;
-    attempt += 1
-  ) {
+  for (let attempt = 0; attempt < 365; attempt += 1) {
     date = addDays(date, 1);
-
-    if (
-      days.includes(
-        date.getDay()
-      ) &&
-      !isHoliday(
-        date,
-        holidaySet
-      )
-    ) {
+    if (days.includes(date.getDay()) && !isHoliday(date, holidaySet)) {
       return makeKickoff(date);
     }
   }
-
   return makeKickoff(startDate);
 }
 
@@ -923,36 +523,15 @@ function findNextMatchDay(
    COUNTRY DEFAULT START
 ========================================================= */
 
-function getPreferredLeagueStart(
-  league,
-  seasonYear
-) {
-  /*
-   * Custom startDate.
-   */
-
-  const customDate =
-    safeDate(
-      league?.startDate
-    );
-
+function getPreferredLeagueStart(league, seasonYear) {
+  const customDate = safeDate(league?.startDate);
   if (customDate) {
-    if (
-      customDate.getFullYear() ===
-      seasonYear
-    ) {
+    if (customDate.getFullYear() === seasonYear) {
       return customDate;
     }
   }
-
-  const country =
-    getLeagueCountry(league);
-
-  const rule =
-    getCountryStartRule(
-      country
-    );
-
+  const country = getLeagueCountry(league);
+  const rule = getCountryStartRule(country);
   return makeDate(
     seasonYear,
     rule.month,
@@ -963,165 +542,42 @@ function getPreferredLeagueStart(
 }
 
 /* =========================================================
-   START WINDOW
+   SINGLE ROUND-ROBIN (for groups)
 ========================================================= */
 
-function clampStartIntoSeasonWindow(
-  date,
-  seasonYear
-) {
-  const earliest = makeDate(
-    seasonYear,
-    EARLIEST_LEAGUE_START_MONTH,
-    EARLIEST_LEAGUE_START_DAY,
-    DEFAULT_KICKOFF_HOUR,
-    DEFAULT_KICKOFF_MINUTE
-  );
-
-  const latest = makeDate(
-    seasonYear,
-    LATEST_LEAGUE_START_MONTH,
-    LATEST_LEAGUE_START_DAY,
-    DEFAULT_KICKOFF_HOUR,
-    DEFAULT_KICKOFF_MINUTE
-  );
-
-  if (date < earliest) {
-    return earliest;
-  }
-
-  if (date > latest) {
-    return latest;
-  }
-
-  return date;
-}
-
-/* =========================================================
-   ROUND ROBIN
-========================================================= */
-
-function buildRounds(clubs) {
-  if (
-    !Array.isArray(clubs) ||
-    clubs.length < 2
-  ) {
-    return [];
-  }
-
+function buildSingleRoundRobin(clubs) {
+  if (!Array.isArray(clubs) || clubs.length < 2) return [];
   const teams = [...clubs];
-
-  /*
-   * Odd number of teams:
-   * add BYE.
-   */
-
   if (teams.length % 2 !== 0) {
-    teams.push(null);
+    teams.push(null); // bye
   }
-
-  const totalTeams =
-    teams.length;
-
-  const roundsPerLeg =
-    totalTeams - 1;
-
-  const firstLeg = [];
-
-  let rotation =
-    [...teams];
-
-  /*
-   * FIRST LEG
-   */
-
-  for (
-    let roundIndex = 0;
-    roundIndex < roundsPerLeg;
-    roundIndex += 1
-  ) {
+  const totalTeams = teams.length;
+  const rounds = [];
+  let rotation = [...teams];
+  const numRounds = totalTeams - 1;
+  for (let roundIndex = 0; roundIndex < numRounds; roundIndex += 1) {
     const matches = [];
-
-    for (
-      let i = 0;
-      i < totalTeams / 2;
-      i += 1
-    ) {
-      const teamA =
-        rotation[i];
-
-      const teamB =
-        rotation[
-          totalTeams - 1 - i
-        ];
-
-      if (
-        !teamA ||
-        !teamB
-      ) {
-        continue;
-      }
-
-      if (
-        roundIndex % 2 === 0
-      ) {
-        matches.push({
-          home: teamA,
-          away: teamB,
-        });
-      } else {
-        matches.push({
-          home: teamB,
-          away: teamA,
-        });
+    for (let i = 0; i < totalTeams / 2; i += 1) {
+      const teamA = rotation[i];
+      const teamB = rotation[totalTeams - 1 - i];
+      if (teamA && teamB) {
+        // Home/away balance
+        if (roundIndex % 2 === 0) {
+          matches.push({ home: teamA, away: teamB });
+        } else {
+          matches.push({ home: teamB, away: teamA });
+        }
       }
     }
-
-    firstLeg.push(
-      matches
-    );
-
-    /*
-     * Circle rotation.
-     */
-
-    const fixed =
-      rotation[0];
-
-    const rotating =
-      rotation.slice(1);
-
-    const last =
-      rotating.pop();
-
+    rounds.push(matches);
+    // Circle rotation (fixed first)
+    const fixed = rotation[0];
+    const rotating = rotation.slice(1);
+    const last = rotating.pop();
     rotating.unshift(last);
-
-    rotation = [
-      fixed,
-      ...rotating,
-    ];
+    rotation = [fixed, ...rotating];
   }
-
-  /*
-   * SECOND LEG
-   * Reverse home / away.
-   */
-
-  const secondLeg =
-    firstLeg.map(
-      (round) =>
-        round.map(
-          (match) => ({
-            home: match.away,
-            away: match.home,
-          })
-        )
-    );
-
-  return [
-    ...firstLeg,
-    ...secondLeg,
-  ];
+  return rounds;
 }
 
 /* =========================================================
@@ -1132,10 +588,7 @@ function cleanIdPart(value) {
   return String(value || "")
     .trim()
     .replace(/\s+/g, "-")
-    .replace(
-      /[^a-zA-Z0-9_-]/g,
-      ""
-    );
+    .replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
 function makeFixtureId({
@@ -1144,20 +597,16 @@ function makeFixtureId({
   round,
   homeClubId,
   awayClubId,
+  stage = "league",
 }) {
   return [
     "fixture",
     seasonYear,
-    cleanIdPart(
-      leagueId
-    ),
+    cleanIdPart(leagueId),
+    stage,
     round,
-    cleanIdPart(
-      homeClubId
-    ),
-    cleanIdPart(
-      awayClubId
-    ),
+    cleanIdPart(homeClubId),
+    cleanIdPart(awayClubId),
   ].join("_");
 }
 
@@ -1173,118 +622,57 @@ function createLeagueFixture({
   round,
   date,
 }) {
-  const id =
-    makeFixtureId({
-      seasonYear,
-      leagueId:
-        league.id,
-      round,
-      homeClubId:
-        home.id,
-      awayClubId:
-        away.id,
-    });
-
+  const id = makeFixtureId({
+    seasonYear,
+    leagueId: league.id,
+    round,
+    homeClubId: home.id,
+    awayClubId: away.id,
+    stage: "league",
+  });
   return {
     id,
-
     type: "league",
-
     generated: true,
-
-    generatedBy:
-      "automatic-fixture-generator",
-
+    generatedBy: "automatic-fixture-generator",
     seasonYear,
-
-    season:
-      getSeasonName(
-        seasonYear
-      ),
-
-    leagueId:
-      league.id,
-
-    leagueName:
-      getLeagueName(
-        league
-      ),
-
-    country:
-      getLeagueCountry(
-        league
-      ),
-
+    season: getSeasonName(seasonYear),
+    leagueId: league.id,
+    leagueName: getLeagueName(league),
+    country: getLeagueCountry(league),
     round,
-
     stage: "league",
-
-    roundName:
-      `Round ${round}`,
-
-    homeClubId:
-      home.id,
-
-    homeClubName:
-      getClubName(home),
-
-    homeLogo:
-      getClubLogo(home),
-
-    awayClubId:
-      away.id,
-
-    awayClubName:
-      getClubName(away),
-
-    awayLogo:
-      getClubLogo(away),
-
-    stadium:
-      home?.stadium ||
-      home?.stadiumName ||
-      "Club Stadium",
-
-    date:
-      date.toISOString(),
-
+    roundName: `Round ${round}`,
+    homeClubId: home.id,
+    homeClubName: getClubName(home),
+    homeLogo: getClubLogo(home),
+    awayClubId: away.id,
+    awayClubName: getClubName(away),
+    awayLogo: getClubLogo(away),
+    stadium: home?.stadium || home?.stadiumName || "Club Stadium",
+    date: date.toISOString(),
     status: "scheduled",
-
     result: null,
-
     homeScore: null,
-
     awayScore: null,
-
     homeOverall:
-      Number(home?.overall) ||
-      Number(home?.rating) ||
-      Number(home?.teamOverall) ||
-      60,
-
+      Number(home?.overall) || Number(home?.rating) || Number(home?.teamOverall) || 60,
     awayOverall:
-      Number(away?.overall) ||
-      Number(away?.rating) ||
-      Number(away?.teamOverall) ||
-      60,
-
-    createdAt:
-      serverTimestamp(),
-
-    updatedAt:
-      serverTimestamp(),
+      Number(away?.overall) || Number(away?.rating) || Number(away?.teamOverall) || 60,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
 }
 
 /* =========================================================
-   CREATE CUP FIXTURE
+   CREATE CUP FIXTURE (group stage or knockout)
 ========================================================= */
 
 function createCupFixture({
   league,
   seasonYear,
   round,
-  stage,
+  stage, // "group" or "knockout"
   roundName,
   bracketPosition,
   date,
@@ -1292,163 +680,70 @@ function createCupFixture({
   away,
   homeSourceFixtureId = null,
   awaySourceFixtureId = null,
+  homeGroup = null,
+  awayGroup = null,
+  homePosition = null, // "winner" or "runner-up"
+  awayPosition = null,
 }) {
-  const homeId =
-    home?.id ||
-    `TBD_HOME_${bracketPosition}`;
-
-  const awayId =
-    away?.id ||
-    `TBD_AWAY_${bracketPosition}`;
-
-  const id = [
-    "fixture",
-    seasonYear,
-    cleanIdPart(
-      league.id
-    ),
-    "cup",
-    stage,
-    bracketPosition,
-  ].join("_");
+  const isGroup = stage === "group";
+  const id = isGroup
+    ? makeFixtureId({
+        seasonYear,
+        leagueId: league.id,
+        round,
+        homeClubId: home?.id || "TBD",
+        awayClubId: away?.id || "TBD",
+        stage: "cup_group",
+      })
+    : [
+        "fixture",
+        seasonYear,
+        cleanIdPart(league.id),
+        "cup_knockout",
+        roundName.replace(/\s+/g, "_"),
+        bracketPosition,
+      ].join("_");
 
   return {
     id,
-
     type: "cup",
-
     generated: true,
-
-    generatedBy:
-      "automatic-cup-fixture-generator",
-
+    generatedBy: "automatic-cup-fixture-generator",
     seasonYear,
-
-    season:
-      getSeasonName(
-        seasonYear
-      ),
-
-    leagueId:
-      league.id,
-
-    leagueName:
-      getLeagueName(
-        league
-      ),
-
-    country:
-      getLeagueCountry(
-        league
-      ),
-
-    /*
-     * Cup information
-     */
-
+    season: getSeasonName(seasonYear),
+    leagueId: league.id,
+    leagueName: getLeagueName(league),
+    country: getLeagueCountry(league),
     round,
-
     stage,
-
     roundName,
-
-    bracketPosition,
-
-    /*
-     * Home team
-     */
-
-    homeClubId:
-      home?.id || null,
-
-    homeClubName:
-      home
-        ? getClubName(home)
-        : "TBD",
-
-    homeLogo:
-      home
-        ? getClubLogo(home)
-        : "",
-
-    /*
-     * Away team
-     */
-
-    awayClubId:
-      away?.id || null,
-
-    awayClubName:
-      away
-        ? getClubName(away)
-        : "TBD",
-
-    awayLogo:
-      away
-        ? getClubLogo(away)
-        : "",
-
-    /*
-     * Where the team comes from.
-     *
-     * This is important for future automatic
-     * winner advancement.
-     */
-
+    bracketPosition: bracketPosition || null,
+    homeClubId: home?.id || null,
+    homeClubName: home ? getClubName(home) : (homeGroup ? `Winner of Group ${homeGroup}` : "TBD"),
+    homeLogo: home ? getClubLogo(home) : "",
+    awayClubId: away?.id || null,
+    awayClubName: away ? getClubName(away) : (awayGroup ? `Runner-up of Group ${awayGroup}` : "TBD"),
+    awayLogo: away ? getClubLogo(away) : "",
     homeSourceFixtureId,
-
     awaySourceFixtureId,
-
-    homeSlot:
-      home
-        ? "club"
-        : homeSourceFixtureId
-        ? "winner"
-        : "tbd",
-
-    awaySlot:
-      away
-        ? "club"
-        : awaySourceFixtureId
-        ? "winner"
-        : "tbd",
-
-    stadium:
-      home?.stadium ||
-      home?.stadiumName ||
-      "Club Stadium",
-
-    date:
-      date.toISOString(),
-
-    status:
-      home && away
-        ? "scheduled"
-        : "pending",
-
+    homeGroup,
+    awayGroup,
+    homePosition,
+    awayPosition,
+    homeSlot: home ? "club" : homeSourceFixtureId ? "winner" : "tbd",
+    awaySlot: away ? "club" : awaySourceFixtureId ? "winner" : "tbd",
+    stadium: home?.stadium || home?.stadiumName || "Club Stadium",
+    date: date.toISOString(),
+    status: home && away ? "scheduled" : "pending",
     result: null,
-
     homeScore: null,
-
     awayScore: null,
-
     homeOverall:
-      Number(home?.overall) ||
-      Number(home?.rating) ||
-      Number(home?.teamOverall) ||
-      null,
-
+      Number(home?.overall) || Number(home?.rating) || Number(home?.teamOverall) || null,
     awayOverall:
-      Number(away?.overall) ||
-      Number(away?.rating) ||
-      Number(away?.teamOverall) ||
-      null,
-
-    createdAt:
-      serverTimestamp(),
-
-    updatedAt:
-      serverTimestamp(),
+      Number(away?.overall) || Number(away?.rating) || Number(away?.teamOverall) || null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
 }
 
@@ -1461,157 +756,71 @@ async function generateLeagueFixtures({
   clubs,
   seasonYear,
 }) {
-  const leagueClubs =
-    getLeagueClubs(
-      league,
-      clubs
-    );
+  const leagueClubs = getLeagueClubs(league, clubs);
+  if (leagueClubs.length < 2) return [];
 
-  if (
-    leagueClubs.length < 2
-  ) {
-    return [];
-  }
+  const country = getLeagueCountry(league);
+  const allowedDays = LEAGUE_ALLOWED_DAYS;
+  const holidaySets = new Map();
 
-  const country =
-    getLeagueCountry(
-      league
-    );
-
-  const allowedDays =
-    LEAGUE_ALLOWED_DAYS;
-
-  const holidaySets =
-    new Map();
-
-  async function getHolidays(
-    year
-  ) {
-    if (
-      holidaySets.has(year)
-    ) {
-      return holidaySets.get(
-        year
-      );
-    }
-
-    const set =
-      await buildHolidaySet(
-        year,
-        country
-      );
-
-    holidaySets.set(
-      year,
-      set
-    );
-
+  async function getHolidays(year) {
+    if (holidaySets.has(year)) return holidaySets.get(year);
+    const set = await buildHolidaySet(year, country);
+    holidaySets.set(year, set);
     return set;
   }
 
-  const rounds =
-    buildRounds(
-      leagueClubs
-    );
+  const rounds = buildRounds(leagueClubs);
+  if (!rounds.length) return [];
 
-  if (!rounds.length) {
-    return [];
-  }
+  let startDate = getPreferredLeagueStart(league, seasonYear);
+  let holidaySet = await getHolidays(startDate.getFullYear());
+  let currentMatchDay = findNextMatchDay(
+    startDate,
+    holidaySet,
+    allowedDays
+  );
 
-  let startDate =
-    getPreferredLeagueStart(
-      league,
-      seasonYear
-    );
+  const fixtures = [];
 
-  startDate =
-    clampStartIntoSeasonWindow(
-      startDate,
-      seasonYear
-    );
-
-  let holidaySet =
-    await getHolidays(
-      startDate.getFullYear()
-    );
-
-  let currentMatchDay =
-    findNextMatchDay(
-      startDate,
+  for (let roundIndex = 0; roundIndex < rounds.length; roundIndex += 1) {
+    const round = roundIndex + 1;
+    const currentYear = currentMatchDay.getFullYear();
+    holidaySet = await getHolidays(currentYear);
+    currentMatchDay = findNextMatchDay(
+      currentMatchDay,
       holidaySet,
       allowedDays
     );
 
-  const fixtures = [];
-
-  for (
-    let roundIndex = 0;
-    roundIndex < rounds.length;
-    roundIndex += 1
-  ) {
-    const round =
-      roundIndex + 1;
-
-    const currentYear =
-      currentMatchDay.getFullYear();
-
-    holidaySet =
-      await getHolidays(
-        currentYear
+    rounds[roundIndex].forEach(({ home, away }) => {
+      fixtures.push(
+        createLeagueFixture({
+          league,
+          home,
+          away,
+          seasonYear,
+          round,
+          date: currentMatchDay,
+        })
       );
+    });
 
-    currentMatchDay =
-      findNextMatchDay(
-        currentMatchDay,
-        holidaySet,
-        allowedDays
-      );
-
-    rounds[
-      roundIndex
-    ].forEach(
-      ({ home, away }) => {
-        fixtures.push(
-          createLeagueFixture({
-            league,
-            home,
-            away,
-            seasonYear,
-            round,
-            date:
-              currentMatchDay,
-          })
-        );
-      }
+    const nextWeekCandidate = addWeeks(currentMatchDay, 1);
+    const nextYear = nextWeekCandidate.getFullYear();
+    const nextHolidaySet = await getHolidays(nextYear);
+    currentMatchDay = findNextMatchDay(
+      nextWeekCandidate,
+      nextHolidaySet,
+      allowedDays
     );
-
-    const nextWeekCandidate =
-      addWeeks(
-        currentMatchDay,
-        MATCH_WEEKS_INTERVAL
-      );
-
-    const nextYear =
-      nextWeekCandidate.getFullYear();
-
-    const nextHolidaySet =
-      await getHolidays(
-        nextYear
-      );
-
-    currentMatchDay =
-      findNextMatchDay(
-        nextWeekCandidate,
-        nextHolidaySet,
-        allowedDays
-      );
   }
 
   return fixtures;
 }
 
 /* =========================================================
-   GENERATE CUP FIXTURES
+   GENERATE CUP FIXTURES (with group stage)
 ========================================================= */
 
 async function generateCupFixtures({
@@ -1619,1024 +828,437 @@ async function generateCupFixtures({
   clubs,
   seasonYear,
 }) {
-  const cupClubs =
-    getLeagueClubs(
-      league,
-      clubs
-    );
+  const cupClubs = getLeagueClubs(league, clubs);
+  if (cupClubs.length < 4) return [];
 
-  if (
-    cupClubs.length < 2
-  ) {
-    return [];
-  }
+  const country = getLeagueCountry(league);
+  const holidaySets = new Map();
 
-  /*
-   * We need 64 slots for a complete 1/32 bracket.
-   *
-   * If the cup has more than 64 clubs,
-   * only the first 64 are used.
-   *
-   * If fewer than 64 clubs exist,
-   * the remaining slots become TBD.
-   */
-
-  const participants =
-    [...cupClubs].slice(
-      0,
-      CUP_FIRST_ROUND_TEAMS
-    );
-
-  const country =
-    getLeagueCountry(
-      league
-    );
-
-  const holidaySets =
-    new Map();
-
-  async function getHolidays(
-    year
-  ) {
-    if (
-      holidaySets.has(year)
-    ) {
-      return holidaySets.get(
-        year
-      );
-    }
-
-    const set =
-      await buildHolidaySet(
-        year,
-        country
-      );
-
-    holidaySets.set(
-      year,
-      set
-    );
-
+  async function getHolidays(year) {
+    if (holidaySets.has(year)) return holidaySets.get(year);
+    const set = await buildHolidaySet(year, country);
+    holidaySets.set(year, set);
     return set;
   }
 
-  /*
-   * IMPORTANT:
-   *
-   * Cup fixtures start from the league's startDate.
-   * The startDate is obtained from league.startDate
-   * if available, otherwise from country rules.
-   *
-   * This ensures the cup schedule respects the
-   * user-defined starting date stored in the database.
-   */
+  // Determine number of groups (4 teams per group)
+  const numGroups = Math.floor(cupClubs.length / GROUP_SIZE);
+  if (numGroups < 1) return [];
 
-  let startDate =
-    getPreferredLeagueStart(
-      league,
-      seasonYear
-    );
+  // Distribute teams into groups
+  const shuffled = [...cupClubs].sort(() => Math.random() - 0.5);
+  const groups = [];
+  for (let g = 0; g < numGroups; g++) {
+    groups.push(shuffled.slice(g * GROUP_SIZE, g * GROUP_SIZE + GROUP_SIZE));
+  }
+  // Add remaining teams to last groups if any (but we already floor, so we may have leftover; we can add to first groups)
+  const leftover = cupClubs.length - numGroups * GROUP_SIZE;
+  for (let i = 0; i < leftover; i++) {
+    groups[i % numGroups].push(shuffled[numGroups * GROUP_SIZE + i]);
+  }
 
-  startDate =
-    clampStartIntoSeasonWindow(
-      startDate,
-      seasonYear
-    );
+  const groupLabels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const groupNames = groupLabels.slice(0, numGroups);
 
-  let holidaySet =
-    await getHolidays(
-      startDate.getFullYear()
-    );
+  // Start date
+  let startDate = getPreferredLeagueStart(league, seasonYear);
+  let holidaySet = await getHolidays(startDate.getFullYear());
+  let currentMatchDay = findNextMatchDay(
+    startDate,
+    holidaySet,
+    CUP_ALLOWED_DAYS
+  );
 
-  let currentMatchDay =
-    findNextMatchDay(
-      startDate,
+  const fixtures = [];
+
+  // ----- GROUP STAGE -----
+  const groupMatches = []; // store all group fixtures for later reference
+  const groupFixturesByGroup = {};
+
+  // For each group, generate single round-robin
+  for (let g = 0; g < numGroups; g++) {
+    const groupLabel = groupNames[g];
+    const groupTeams = groups[g];
+    if (groupTeams.length < 2) continue;
+
+    const rounds = buildSingleRoundRobin(groupTeams);
+    const groupFixtures = [];
+
+    for (let r = 0; r < rounds.length; r++) {
+      // Each round we need to schedule matches on cup days
+      const currentYear = currentMatchDay.getFullYear();
+      holidaySet = await getHolidays(currentYear);
+      currentMatchDay = findNextMatchDay(
+        currentMatchDay,
+        holidaySet,
+        CUP_ALLOWED_DAYS
+      );
+
+      const roundMatches = rounds[r];
+      for (const match of roundMatches) {
+        const fixture = createCupFixture({
+          league,
+          seasonYear,
+          round: r + 1,
+          stage: "group",
+          roundName: `Group ${groupLabel} - Round ${r+1}`,
+          bracketPosition: null,
+          date: currentMatchDay,
+          home: match.home,
+          away: match.away,
+          homeGroup: groupLabel,
+          awayGroup: groupLabel,
+        });
+        fixtures.push(fixture);
+        groupFixtures.push(fixture);
+        groupMatches.push(fixture);
+      }
+      // Move to next week for next round
+      const nextWeekCandidate = addWeeks(currentMatchDay, 1);
+      const nextYear = nextWeekCandidate.getFullYear();
+      const nextHolidaySet = await getHolidays(nextYear);
+      currentMatchDay = findNextMatchDay(
+        nextWeekCandidate,
+        nextHolidaySet,
+        CUP_ALLOWED_DAYS
+      );
+    }
+    groupFixturesByGroup[groupLabel] = groupFixtures;
+  }
+
+  // ----- KNOCKOUT STAGE -----
+  // Number of advancing teams = 2 * numGroups
+  const advancingTeams = 2 * numGroups;
+  if (advancingTeams < 2) return fixtures;
+
+  // We need to generate a knockout bracket with 'advancingTeams' teams.
+  // We'll create slots: for each group, winner (position 1) and runner-up (position 2).
+  // Pairings: typically A1 vs B2, B1 vs A2, C1 vs D2, D1 vs C2, etc.
+  // We'll generate all knockout rounds.
+
+  // Create list of advancing slots
+  const slots = [];
+  for (let g = 0; g < numGroups; g++) {
+    const label = groupNames[g];
+    slots.push({
+      group: label,
+      position: "winner",
+      groupLabel: label,
+    });
+    slots.push({
+      group: label,
+      position: "runner-up",
+      groupLabel: label,
+    });
+  }
+
+  // Pair them according to standard format:
+  // We'll reorder to have winners vs runners-up from different groups
+  // Simple method: pair winners with runners-up from the next group
+  const pairedSlots = [];
+  for (let i = 0; i < numGroups; i++) {
+    const winner = slots[i * 2];
+    const runner = slots[(i * 2 + 1) % slots.length];
+    pairedSlots.push({ home: winner, away: runner });
+  }
+  // Now we have an array of pairs for the first knockout round.
+  // The number of pairs = numGroups, which should equal advancingTeams/2.
+
+  // Schedule knockout rounds
+  let knockoutRound = 1;
+  let currentKnockoutMatches = pairedSlots.map((pair, idx) => ({
+    homeSlot: pair.home,
+    awaySlot: pair.away,
+    bracketPosition: idx + 1,
+  }));
+
+  // We'll generate rounds until only one match remains (final)
+  while (currentKnockoutMatches.length > 0) {
+    const roundMatches = currentKnockoutMatches;
+    const roundLabel = getKnockoutRoundLabel(roundMatches.length);
+
+    // Schedule this round on cup days
+    const currentYear = currentMatchDay.getFullYear();
+    holidaySet = await getHolidays(currentYear);
+    currentMatchDay = findNextMatchDay(
+      currentMatchDay,
       holidaySet,
       CUP_ALLOWED_DAYS
     );
 
-  const fixtures = [];
-
-  /*
-   * ---------------------------------------------------------
-   * 1/32
-   * 32 matches
-   * ---------------------------------------------------------
-   */
-
-  const roundOf64Fixtures = [];
-
-  for (
-    let i = 0;
-    i < 32;
-    i += 1
-  ) {
-    const home =
-      participants[i * 2] ||
-      null;
-
-    const away =
-      participants[i * 2 + 1] ||
-      null;
-
-    const fixture =
-      createCupFixture({
+    // Create fixtures for this round
+    const roundFixtures = [];
+    for (const match of roundMatches) {
+      const homeSlot = match.homeSlot;
+      const awaySlot = match.awaySlot;
+      const fixture = createCupFixture({
         league,
         seasonYear,
-
-        round: 1,
-
-        stage:
-          CUP_STAGES.ROUND_OF_64.key,
-
-        roundName:
-          CUP_STAGES.ROUND_OF_64.name,
-
-        bracketPosition:
-          i + 1,
-
-        date:
-          currentMatchDay,
-
-        home,
-        away,
-      });
-
-    roundOf64Fixtures.push(
-      fixture
-    );
-
-    fixtures.push(
-      fixture
-    );
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * 1/16
-   * 16 matches
-   * ---------------------------------------------------------
-   */
-
-  currentMatchDay =
-    await getNextCupMatchDay(
-      currentMatchDay,
-      getHolidays,
-      1
-    );
-
-  const roundOf32Fixtures = [];
-
-  for (
-    let i = 0;
-    i < 16;
-    i += 1
-  ) {
-    const homeSource =
-      roundOf64Fixtures[
-        i * 2
-      ];
-
-    const awaySource =
-      roundOf64Fixtures[
-        i * 2 + 1
-      ];
-
-    const fixture =
-      createCupFixture({
-        league,
-        seasonYear,
-
-        round: 2,
-
-        stage:
-          CUP_STAGES.ROUND_OF_32.key,
-
-        roundName:
-          CUP_STAGES.ROUND_OF_32.name,
-
-        bracketPosition:
-          i + 1,
-
-        date:
-          currentMatchDay,
-
-        home: null,
+        round: knockoutRound,
+        stage: "knockout",
+        roundName: roundLabel,
+        bracketPosition: match.bracketPosition,
+        date: currentMatchDay,
+        home: null, // no direct club
         away: null,
-
-        homeSourceFixtureId:
-          homeSource.id,
-
-        awaySourceFixtureId:
-          awaySource.id,
+        homeGroup: homeSlot.group,
+        awayGroup: awaySlot.group,
+        homePosition: homeSlot.position,
+        awayPosition: awaySlot.position,
+        // We can also link to specific group fixtures if needed, but we'll store the group/position
       });
+      fixtures.push(fixture);
+      roundFixtures.push(fixture);
+    }
 
-    roundOf32Fixtures.push(
-      fixture
-    );
+    // Prepare next round: winners of these matches will advance
+    // We'll create a new list of matches for the next round, pairing consecutive matches
+    const nextRoundMatches = [];
+    for (let i = 0; i < roundFixtures.length; i += 2) {
+      if (i + 1 < roundFixtures.length) {
+        nextRoundMatches.push({
+          homeSlot: { fixtureId: roundFixtures[i].id, slot: "winner" },
+          awaySlot: { fixtureId: roundFixtures[i + 1].id, slot: "winner" },
+          bracketPosition: Math.floor(i / 2) + 1,
+        });
+      }
+    }
 
-    fixtures.push(
-      fixture
+    // If this round is the final (only one match), we don't need next round
+    if (roundFixtures.length === 1) {
+      // This is the final
+      break;
+    }
+
+    // Move to next round
+    currentKnockoutMatches = nextRoundMatches;
+    knockoutRound += 1;
+
+    // Advance date by one week for next knockout round
+    const nextWeekCandidate = addWeeks(currentMatchDay, 1);
+    const nextYear2 = nextWeekCandidate.getFullYear();
+    const nextHolidaySet2 = await getHolidays(nextYear2);
+    currentMatchDay = findNextMatchDay(
+      nextWeekCandidate,
+      nextHolidaySet2,
+      CUP_ALLOWED_DAYS
     );
   }
 
-  /*
-   * ---------------------------------------------------------
-   * 1/8
-   * 8 matches
-   * ---------------------------------------------------------
-   */
-
-  currentMatchDay =
-    await getNextCupMatchDay(
-      currentMatchDay,
-      getHolidays,
-      1
-    );
-
-  const roundOf16Fixtures = [];
-
-  for (
-    let i = 0;
-    i < 8;
-    i += 1
-  ) {
-    const homeSource =
-      roundOf32Fixtures[
-        i * 2
-      ];
-
-    const awaySource =
-      roundOf32Fixtures[
-        i * 2 + 1
-      ];
-
-    const fixture =
-      createCupFixture({
-        league,
-        seasonYear,
-
-        round: 3,
-
-        stage:
-          CUP_STAGES.ROUND_OF_16.key,
-
-        roundName:
-          CUP_STAGES.ROUND_OF_16.name,
-
-        bracketPosition:
-          i + 1,
-
-        date:
-          currentMatchDay,
-
-        home: null,
-        away: null,
-
-        homeSourceFixtureId:
-          homeSource.id,
-
-        awaySourceFixtureId:
-          awaySource.id,
-      });
-
-    roundOf16Fixtures.push(
-      fixture
-    );
-
-    fixtures.push(
-      fixture
-    );
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * 1/4
-   * 4 matches
-   * ---------------------------------------------------------
-   */
-
-  currentMatchDay =
-    await getNextCupMatchDay(
-      currentMatchDay,
-      getHolidays,
-      1
-    );
-
-  const quarterFinalFixtures = [];
-
-  for (
-    let i = 0;
-    i < 4;
-    i += 1
-  ) {
-    const homeSource =
-      roundOf16Fixtures[
-        i * 2
-      ];
-
-    const awaySource =
-      roundOf16Fixtures[
-        i * 2 + 1
-      ];
-
-    const fixture =
-      createCupFixture({
-        league,
-        seasonYear,
-
-        round: 4,
-
-        stage:
-          CUP_STAGES.QUARTER_FINAL.key,
-
-        roundName:
-          CUP_STAGES.QUARTER_FINAL.name,
-
-        bracketPosition:
-          i + 1,
-
-        date:
-          currentMatchDay,
-
-        home: null,
-        away: null,
-
-        homeSourceFixtureId:
-          homeSource.id,
-
-        awaySourceFixtureId:
-          awaySource.id,
-      });
-
-    quarterFinalFixtures.push(
-      fixture
-    );
-
-    fixtures.push(
-      fixture
-    );
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * 1/2
-   * 2 matches
-   * ---------------------------------------------------------
-   */
-
-  currentMatchDay =
-    await getNextCupMatchDay(
-      currentMatchDay,
-      getHolidays,
-      1
-    );
-
-  const semiFinalFixtures = [];
-
-  for (
-    let i = 0;
-    i < 2;
-    i += 1
-  ) {
-    const homeSource =
-      quarterFinalFixtures[
-        i * 2
-      ];
-
-    const awaySource =
-      quarterFinalFixtures[
-        i * 2 + 1
-      ];
-
-    const fixture =
-      createCupFixture({
-        league,
-        seasonYear,
-
-        round: 5,
-
-        stage:
-          CUP_STAGES.SEMI_FINAL.key,
-
-        roundName:
-          CUP_STAGES.SEMI_FINAL.name,
-
-        bracketPosition:
-          i + 1,
-
-        date:
-          currentMatchDay,
-
-        home: null,
-        away: null,
-
-        homeSourceFixtureId:
-          homeSource.id,
-
-        awaySourceFixtureId:
-          awaySource.id,
-      });
-
-    semiFinalFixtures.push(
-      fixture
-    );
-
-    fixtures.push(
-      fixture
-    );
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * THIRD PLACE
-   * ---------------------------------------------------------
-   *
-   * Loser of Semi 1
-   * vs
-   * Loser of Semi 2
-   */
-
-  const thirdPlaceDate =
-    await getNextCupMatchDay(
-      currentMatchDay,
-      getHolidays,
-      1
-    );
-
-  const thirdPlace =
-    createCupFixture({
+  // After final, we need to generate third place match if we had at least 4 teams?
+  // Actually, third place is between losers of semi-finals. We can add it as a separate fixture.
+  // But we don't have a straightforward way to link losers. We can create a placeholder fixture for third place.
+  // We'll generate it after the semi-finals, but we need to know the semi-final fixtures.
+  // Since we generated knockout rounds sequentially, we can identify the semi-final round (when number of matches = 2).
+  // However, we don't store the rounds separately. We can add third place fixture after the final.
+  // For simplicity, we can always add third place if the tournament had at least 4 teams in knockout.
+  if (advancingTeams >= 4) {
+    // Add third place match
+    const thirdPlaceDate = addWeeks(currentMatchDay, 1);
+    const thirdPlaceFixture = createCupFixture({
       league,
       seasonYear,
-
-      round: 6,
-
-      stage:
-        CUP_STAGES.THIRD_PLACE.key,
-
-      roundName:
-        CUP_STAGES.THIRD_PLACE.name,
-
+      round: knockoutRound + 1,
+      stage: "knockout",
+      roundName: "Third Place",
       bracketPosition: 1,
-
-      date:
-        thirdPlaceDate,
-
+      date: thirdPlaceDate,
       home: null,
       away: null,
-
-      homeSourceFixtureId:
-        semiFinalFixtures[0].id,
-
-      awaySourceFixtureId:
-        semiFinalFixtures[1].id,
+      homeGroup: null,
+      awayGroup: null,
+      homePosition: "loser_semi1",
+      awayPosition: "loser_semi2",
     });
-
-  /*
-   * Tell system that these are LOSERS.
-   */
-
-  thirdPlace.homeSlot =
-    "loser";
-
-  thirdPlace.awaySlot =
-    "loser";
-
-  fixtures.push(
-    thirdPlace
-  );
-
-  /*
-   * ---------------------------------------------------------
-   * FINAL
-   * ---------------------------------------------------------
-   *
-   * Winner of Semi 1
-   * vs
-   * Winner of Semi 2
-   */
-
-  const finalDate =
-    await getNextCupMatchDay(
-      thirdPlaceDate,
-      getHolidays,
-      1
-    );
-
-  const final =
-    createCupFixture({
-      league,
-      seasonYear,
-
-      round: 7,
-
-      stage:
-        CUP_STAGES.FINAL.key,
-
-      roundName:
-        CUP_STAGES.FINAL.name,
-
-      bracketPosition: 1,
-
-      date:
-        finalDate,
-
-      home: null,
-      away: null,
-
-      homeSourceFixtureId:
-        semiFinalFixtures[0].id,
-
-      awaySourceFixtureId:
-        semiFinalFixtures[1].id,
-    });
-
-  /*
-   * Final receives WINNERS.
-   */
-
-  final.homeSlot =
-    "winner";
-
-  final.awaySlot =
-    "winner";
-
-  fixtures.push(
-    final
-  );
-
-  /*
-   * ---------------------------------------------------------
-   * CONNECT BRACKET
-   * ---------------------------------------------------------
-   *
-   * Each previous fixture knows where its winner goes.
-   */
-
-  function setNextFixture(
-    sourceFixture,
-    nextFixture,
-    slot
-  ) {
-    if (!sourceFixture) {
-      return;
-    }
-
-    sourceFixture.nextFixtureId =
-      nextFixture.id;
-
-    sourceFixture.nextFixtureSlot =
-      slot;
+    fixtures.push(thirdPlaceFixture);
   }
-
-  /*
-   * 1/32 -> 1/16
-   */
-
-  roundOf64Fixtures.forEach(
-    (fixture, index) => {
-      const next =
-        roundOf32Fixtures[
-          Math.floor(index / 2)
-        ];
-
-      const slot =
-        index % 2 === 0
-          ? "home"
-          : "away";
-
-      setNextFixture(
-        fixture,
-        next,
-        slot
-      );
-    }
-  );
-
-  /*
-   * 1/16 -> 1/8
-   */
-
-  roundOf32Fixtures.forEach(
-    (fixture, index) => {
-      const next =
-        roundOf16Fixtures[
-          Math.floor(index / 2)
-        ];
-
-      const slot =
-        index % 2 === 0
-          ? "home"
-          : "away";
-
-      setNextFixture(
-        fixture,
-        next,
-        slot
-      );
-    }
-  );
-
-  /*
-   * 1/8 -> 1/4
-   */
-
-  roundOf16Fixtures.forEach(
-    (fixture, index) => {
-      const next =
-        quarterFinalFixtures[
-          Math.floor(index / 2)
-        ];
-
-      const slot =
-        index % 2 === 0
-          ? "home"
-          : "away";
-
-      setNextFixture(
-        fixture,
-        next,
-        slot
-      );
-    }
-  );
-
-  /*
-   * 1/4 -> 1/2
-   */
-
-  quarterFinalFixtures.forEach(
-    (fixture, index) => {
-      const next =
-        semiFinalFixtures[
-          Math.floor(index / 2)
-        ];
-
-      const slot =
-        index % 2 === 0
-          ? "home"
-          : "away";
-
-      setNextFixture(
-        fixture,
-        next,
-        slot
-      );
-    }
-  );
-
-  /*
-   * Semi -> Final / Third Place
-   */
-
-  semiFinalFixtures.forEach(
-    (fixture) => {
-      fixture.nextFinalFixtureId =
-        final.id;
-
-      fixture.nextThirdPlaceFixtureId =
-        thirdPlace.id;
-    }
-  );
 
   return fixtures;
 }
 
 /* =========================================================
-   CUP NEXT MATCH DAY
+   HELPER: get knockout round label
 ========================================================= */
 
-async function getNextCupMatchDay(
-  currentDate,
-  getHolidays,
-  weeks
-) {
-  const candidate =
-    addWeeks(
-      currentDate,
-      weeks
-    );
-
-  const holidaySet =
-    await getHolidays(
-      candidate.getFullYear()
-    );
-
-  return findNextMatchDay(
-    candidate,
-    holidaySet,
-    CUP_ALLOWED_DAYS
-  );
+function getKnockoutRoundLabel(numMatches) {
+  if (numMatches >= 16) return "1/32";
+  if (numMatches >= 8) return "1/16";
+  if (numMatches >= 4) return "1/8";
+  if (numMatches >= 2) return "1/4";
+  if (numMatches === 1) return "Final";
+  return "Unknown";
 }
 
 /* =========================================================
-   CHUNK ARRAY
+   ROUND ROBIN (for league)
 ========================================================= */
 
-function chunkArray(
-  array,
-  size
-) {
-  const chunks = [];
-
-  for (
-    let i = 0;
-    i < array.length;
-    i += size
-  ) {
-    chunks.push(
-      array.slice(
-        i,
-        i + size
-      )
-    );
+function buildRounds(clubs) {
+  if (!Array.isArray(clubs) || clubs.length < 2) return [];
+  const teams = [...clubs];
+  if (teams.length % 2 !== 0) {
+    teams.push(null);
   }
-
-  return chunks;
-}
-
-/* =========================================================
-   EXISTING FIXTURES
-========================================================= */
-
-async function getExistingFixtureIds(
-  seasonYear
-) {
-  const matchesQuery =
-    query(
-      collection(
-        db,
-        "matches"
-      ),
-      where(
-        "seasonYear",
-        "==",
-        seasonYear
-      )
-    );
-
-  const snapshot =
-    await getDocs(
-      matchesQuery
-    );
-
-  const ids =
-    new Set();
-
-  snapshot.forEach(
-    (item) => {
-      ids.add(
-        item.id
-      );
-    }
-  );
-
-  return ids;
-}
-
-/* =========================================================
-   SAVE FIXTURES
-========================================================= */
-
-async function saveFixtures(
-  fixtures
-) {
-  if (
-    !fixtures.length
-  ) {
-    return 0;
-  }
-
-  const chunks =
-    chunkArray(
-      fixtures,
-      FIRESTORE_BATCH_SIZE
-    );
-
-  let saved = 0;
-
-  for (
-    const chunk of chunks
-  ) {
-    const batch =
-      writeBatch(db);
-
-    chunk.forEach(
-      (fixture) => {
-        const fixtureRef =
-          doc(
-            db,
-            "matches",
-            fixture.id
-          );
-
-        batch.set(
-          fixtureRef,
-          fixture,
-          {
-            merge: true,
-          }
-        );
-
-        saved += 1;
+  const totalTeams = teams.length;
+  const roundsPerLeg = totalTeams - 1;
+  const firstLeg = [];
+  let rotation = [...teams];
+  for (let roundIndex = 0; roundIndex < roundsPerLeg; roundIndex += 1) {
+    const matches = [];
+    for (let i = 0; i < totalTeams / 2; i += 1) {
+      const teamA = rotation[i];
+      const teamB = rotation[totalTeams - 1 - i];
+      if (teamA && teamB) {
+        if (roundIndex % 2 === 0) {
+          matches.push({ home: teamA, away: teamB });
+        } else {
+          matches.push({ home: teamB, away: teamA });
+        }
       }
-    );
-
-    await batch.commit();
+    }
+    firstLeg.push(matches);
+    const fixed = rotation[0];
+    const rotating = rotation.slice(1);
+    const last = rotating.pop();
+    rotating.unshift(last);
+    rotation = [fixed, ...rotating];
   }
-
-  return saved;
+  const secondLeg = firstLeg.map((round) =>
+    round.map((match) => ({
+      home: match.away,
+      away: match.home,
+    }))
+  );
+  return [...firstLeg, ...secondLeg];
 }
 
 /* =========================================================
-   GENERATE SEASON FIXTURES
+   DELETE EXISTING FIXTURES FOR LEAGUE & SEASON
+========================================================= */
+
+async function deleteFixturesForLeagueAndSeason(leagueId, seasonYear) {
+  const matchesQuery = query(
+    collection(db, "matches"),
+    where("leagueId", "==", leagueId),
+    where("seasonYear", "==", seasonYear)
+  );
+  const snapshot = await getDocs(matchesQuery);
+  if (snapshot.empty) return 0;
+  const batch = writeBatch(db);
+  snapshot.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+  return snapshot.size;
+}
+
+/* =========================================================
+   GENERATE SEASON FIXTURES (updated)
 ========================================================= */
 
 async function generateSeasonFixtures({
   leagueIds,
   leagues,
   clubs,
-  seasonYear,
 }) {
-  if (
-    !Array.isArray(
-      leagueIds
-    ) ||
-    leagueIds.length === 0 ||
-    !Array.isArray(
-      leagues
-    ) ||
-    !Array.isArray(
-      clubs
-    )
-  ) {
+  if (!Array.isArray(leagueIds) || leagueIds.length === 0 || !Array.isArray(leagues) || !Array.isArray(clubs)) {
     return {
       generated: 0,
       existing: 0,
+      deleted: 0,
       leaguesProcessed: 0,
       cupFixtures: 0,
       leagueFixtures: 0,
     };
   }
 
-  /*
-   * Get existing fixtures first.
-   */
-
-  const existingIds =
-    await getExistingFixtureIds(
-      seasonYear
-    );
-
-  const fixturesToCreate = [];
-
+  let totalGenerated = 0;
+  let totalDeleted = 0;
   let leaguesProcessed = 0;
-
   let cupFixtures = 0;
   let leagueFixtures = 0;
 
-  /*
-   * Process each selected league.
-   */
+  for (const leagueId of leagueIds) {
+    const league = leagues.find((l) => l.id === leagueId);
+    if (!league) continue;
 
-  for (
-    const leagueId of leagueIds
-  ) {
-    const league =
-      leagues.find(
-        (l) =>
-          l.id ===
-          leagueId
-      );
+    const leagueClubs = getLeagueClubs(league, clubs);
+    if (leagueClubs.length < 2) continue;
 
-    if (!league) {
-      continue;
-    }
+    // Determine season year from league's startDate
+    const startDate = safeDate(league?.startDate);
+    if (!startDate) continue;
+    const seasonYear = getSeasonYearFromDate(startDate);
 
-    const leagueClubs =
-      getLeagueClubs(
-        league,
-        clubs
-      );
-
-    if (
-      leagueClubs.length < 2
-    ) {
-      continue;
-    }
+    // Delete existing fixtures for this league and season
+    const deleted = await deleteFixturesForLeagueAndSeason(leagueId, seasonYear);
+    totalDeleted += deleted;
 
     leaguesProcessed += 1;
 
-    /*
-     * =====================================================
-     * CUP
-     * =====================================================
-     */
-
-    if (
-      league.type === "cup"
-    ) {
-      const generatedCup =
-        await generateCupFixtures({
-          league,
-          clubs,
-          seasonYear,
-        });
-
-      generatedCup.forEach(
-        (fixture) => {
-          if (
-            existingIds.has(
-              fixture.id
-            )
-          ) {
-            return;
-          }
-
-          if (
-            fixturesToCreate.some(
-              (existing) =>
-                existing.id ===
-                fixture.id
-            )
-          ) {
-            return;
-          }
-
-          fixturesToCreate.push(
-            fixture
-          );
-
-          cupFixtures += 1;
-        }
-      );
-
-      continue;
-    }
-
-    /*
-     * =====================================================
-     * LEAGUE
-     * =====================================================
-     */
-
-    const generatedLeague =
-      await generateLeagueFixtures({
+    let generatedFixtures = [];
+    if (league.type === "cup") {
+      generatedFixtures = await generateCupFixtures({
         league,
-        clubs,
+        clubs: leagueClubs,
         seasonYear,
       });
+      cupFixtures += generatedFixtures.length;
+    } else {
+      generatedFixtures = await generateLeagueFixtures({
+        league,
+        clubs: leagueClubs,
+        seasonYear,
+      });
+      leagueFixtures += generatedFixtures.length;
+    }
 
-    generatedLeague.forEach(
-      (fixture) => {
-        if (
-          existingIds.has(
-            fixture.id
-          )
-        ) {
-          return;
-        }
-
-        if (
-          fixturesToCreate.some(
-            (existing) =>
-              existing.id ===
-              fixture.id
-          )
-        ) {
-          return;
-        }
-
-        fixturesToCreate.push(
-          fixture
-        );
-
-        leagueFixtures += 1;
-      }
-    );
+    // Save fixtures
+    if (generatedFixtures.length > 0) {
+      const saved = await saveFixtures(generatedFixtures);
+      totalGenerated += saved;
+    }
   }
 
-  /*
-   * Save.
-   */
-
-  const generated =
-    await saveFixtures(
-      fixturesToCreate
-    );
-
   return {
-    generated,
-
-    existing:
-      existingIds.size,
-
+    generated: totalGenerated,
+    deleted: totalDeleted,
     leaguesProcessed,
-
     cupFixtures,
-
     leagueFixtures,
   };
+}
+
+/* =========================================================
+   CHUNK ARRAY
+========================================================= */
+
+function chunkArray(array, size) {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/* =========================================================
+   SAVE FIXTURES
+========================================================= */
+
+async function saveFixtures(fixtures) {
+  if (!fixtures.length) return 0;
+  const chunks = chunkArray(fixtures, FIRESTORE_BATCH_SIZE);
+  let saved = 0;
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    chunk.forEach((fixture) => {
+      const fixtureRef = doc(db, "matches", fixture.id);
+      batch.set(fixtureRef, fixture, { merge: true });
+      saved += 1;
+    });
+    await batch.commit();
+  }
+  return saved;
 }
 
 /* =========================================================
@@ -2647,199 +1269,80 @@ export default function FixturesPage({
   initialLeagues = [],
   initialClubs = [],
 }) {
-  const {
-    user,
-    loading,
-  } = useAuth();
+  const { user, loading } = useAuth();
 
-  const [
-    status,
-    setStatus,
-  ] = useState("waiting");
-
-  const [
-    message,
-    setMessage,
-  ] = useState(
+  const [status, setStatus] = useState("waiting");
+  const [message, setMessage] = useState(
     "Select leagues and click Generate."
   );
-
-  const [
-    seasonYear,
-    setSeasonYear,
-  ] = useState(null);
-
-  const [
-    result,
-    setResult,
-  ] = useState(null);
-
-  const [
-    selectedLeagueIds,
-    setSelectedLeagueIds,
-  ] = useState([]);
-
-  const [
-    isGenerating,
-    setIsGenerating,
-  ] = useState(false);
+  const [result, setResult] = useState(null);
+  const [selectedLeagueIds, setSelectedLeagueIds] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   /* =======================================================
      GENERATE
   ======================================================= */
 
-  const handleGenerate =
-    useCallback(
-      async () => {
-        if (
-          !user ||
-          isGenerating ||
-          selectedLeagueIds.length ===
-            0
-        ) {
-          return;
-        }
+  const handleGenerate = useCallback(async () => {
+    if (!user || isGenerating || selectedLeagueIds.length === 0) return;
 
-        try {
-          setIsGenerating(
-            true
-          );
+    try {
+      setIsGenerating(true);
+      setStatus("generating");
+      setMessage("Generating fixtures...");
 
-          setStatus(
-            "generating"
-          );
+      const generationResult = await generateSeasonFixtures({
+        leagueIds: selectedLeagueIds,
+        leagues: initialLeagues,
+        clubs: initialClubs,
+      });
 
-          setMessage(
-            "Generating fixtures..."
-          );
+      setResult(generationResult);
+      setStatus("complete");
 
-          /*
-           * Determine current season.
-           */
-
-          const currentDate =
-            new Date();
-
-          const currentSeason =
-            getSeasonYear(
-              currentDate
-            );
-
-          setSeasonYear(
-            currentSeason
-          );
-
-          setMessage(
-            `Generating fixtures for ${getSeasonName(
-              currentSeason
-            )}...`
-          );
-
-          const generationResult =
-            await generateSeasonFixtures({
-              leagueIds:
-                selectedLeagueIds,
-
-              leagues:
-                initialLeagues,
-
-              clubs:
-                initialClubs,
-
-              seasonYear:
-                currentSeason,
-            });
-
-          setResult(
-            generationResult
-          );
-
-          setStatus(
-            "complete"
-          );
-
-          if (
-            generationResult.generated >
-            0
-          ) {
-            setMessage(
-              `${generationResult.generated} fixtures generated successfully.`
-            );
-          } else {
-            setMessage(
-              "Fixtures for selected competitions already exist or no fixtures were created."
-            );
-          }
-        } catch (error) {
-          console.error(
-            "[FIXTURE GENERATOR ERROR]",
-            error
-          );
-
-          setStatus(
-            "error"
-          );
-
-          setMessage(
-            error?.message ||
-              "Automatic fixture generation failed."
-          );
-        } finally {
-          setIsGenerating(
-            false
-          );
-        }
-      },
-      [
-        user,
-        isGenerating,
-        selectedLeagueIds,
-        initialLeagues,
-        initialClubs,
-      ]
-    );
+      if (generationResult.generated > 0) {
+        setMessage(
+          `${generationResult.generated} fixtures generated successfully.`
+        );
+      } else {
+        setMessage(
+          `No new fixtures created. ${generationResult.deleted} existing fixtures deleted.`
+        );
+      }
+    } catch (error) {
+      console.error("[FIXTURE GENERATOR ERROR]", error);
+      setStatus("error");
+      setMessage(error?.message || "Automatic fixture generation failed.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [
+    user,
+    isGenerating,
+    selectedLeagueIds,
+    initialLeagues,
+    initialClubs,
+  ]);
 
   /* =======================================================
      TOGGLE
   ======================================================= */
 
-  const toggleLeagueSelection =
-    (leagueId) => {
-      setSelectedLeagueIds(
-        (prev) => {
-          if (
-            prev.includes(
-              leagueId
-            )
-          ) {
-            return prev.filter(
-              (id) =>
-                id !==
-                leagueId
-            );
-          }
-
-          return [
-            ...prev,
-            leagueId,
-          ];
-        }
-      );
-    };
+  const toggleLeagueSelection = (leagueId) => {
+    setSelectedLeagueIds((prev) => {
+      if (prev.includes(leagueId)) {
+        return prev.filter((id) => id !== leagueId);
+      }
+      return [...prev, leagueId];
+    });
+  };
 
   const selectAll = () => {
-    setSelectedLeagueIds(
-      initialLeagues.map(
-        (league) =>
-          league.id
-      )
-    );
+    setSelectedLeagueIds(initialLeagues.map((league) => league.id));
   };
 
   const clearAll = () => {
-    setSelectedLeagueIds(
-      []
-    );
+    setSelectedLeagueIds([]);
   };
 
   /* =======================================================
@@ -2848,21 +1351,9 @@ export default function FixturesPage({
 
   if (loading) {
     return (
-      <div
-        className={
-          styles.loading
-        }
-      >
-        <div
-          className={
-            styles.spinner
-          }
-        />
-
-        <p>
-          Loading fixture
-          generator...
-        </p>
+      <div className={styles.loading}>
+        <div className={styles.spinner} />
+        <p>Loading fixture generator...</p>
       </div>
     );
   }
@@ -2875,30 +1366,12 @@ export default function FixturesPage({
     return (
       <>
         <Head>
-          <title>
-            Fixture Generator
-          </title>
-
-          <meta
-            name="description"
-            content="Automatic football fixture generator"
-          />
+          <title>Fixture Generator</title>
+          <meta name="description" content="Automatic football fixture generator" />
         </Head>
-
-        <main
-          className={
-            styles.emptyPage
-          }
-        >
-          <h1>
-            Login Required
-          </h1>
-
-          <p>
-            Login is required
-            for automatic
-            fixture generation.
-          </p>
+        <main className={styles.emptyPage}>
+          <h1>Login Required</h1>
+          <p>Login is required for automatic fixture generation.</p>
         </main>
       </>
     );
@@ -2911,39 +1384,16 @@ export default function FixturesPage({
   return (
     <>
       <Head>
-        <title>
-          Automatic Fixture Generator
-        </title>
-
-        <meta
-          name="description"
-          content="Automatic football league and cup fixture generator"
-        />
+        <title>Automatic Fixture Generator</title>
+        <meta name="description" content="Automatic football league and cup fixture generator" />
       </Head>
 
-      <main
-        className={
-          styles.page
-        }
-      >
-        <section
-          className={
-            styles.nextMatchCard
-          }
-        >
-          <div
-            className={
-              styles.nextMatchTop
-            }
-          >
+      <main className={styles.page}>
+        <section className={styles.nextMatchCard}>
+          <div className={styles.nextMatchTop}>
             <div>
-              <span>
-                FIXTURE ENGINE
-              </span>
-
-              <h1>
-                Automatic Fixtures
-              </h1>
+              <span>FIXTURE ENGINE</span>
+              <h1>Automatic Fixtures</h1>
             </div>
           </div>
 
@@ -2951,60 +1401,28 @@ export default function FixturesPage({
               CONTROLS
           ================================================= */}
 
-          <div
-            className={
-              styles.controls
-            }
-          >
-            <div
-              className={
-                styles.controlRow
-              }
-            >
+          <div className={styles.controls}>
+            <div className={styles.controlRow}>
               <button
-                className={
-                  styles.selectButton
-                }
-                onClick={
-                  selectAll
-                }
-                disabled={
-                  isGenerating
-                }
+                className={styles.selectButton}
+                onClick={selectAll}
+                disabled={isGenerating}
               >
                 Select All
               </button>
-
               <button
-                className={
-                  styles.selectButton
-                }
-                onClick={
-                  clearAll
-                }
-                disabled={
-                  isGenerating
-                }
+                className={styles.selectButton}
+                onClick={clearAll}
+                disabled={isGenerating}
               >
                 Clear All
               </button>
-
               <button
-                className={
-                  styles.generateButton
-                }
-                onClick={
-                  handleGenerate
-                }
-                disabled={
-                  isGenerating ||
-                  selectedLeagueIds.length ===
-                    0
-                }
+                className={styles.generateButton}
+                onClick={handleGenerate}
+                disabled={isGenerating || selectedLeagueIds.length === 0}
               >
-                {isGenerating
-                  ? "Generating..."
-                  : "Generate Fixtures"}
+                {isGenerating ? "Generating..." : "Generate Fixtures"}
               </button>
             </div>
 
@@ -3012,98 +1430,36 @@ export default function FixturesPage({
                 LEAGUE LIST
             ================================================= */}
 
-            <div
-              className={
-                styles.leagueList
-              }
-            >
-              {initialLeagues.length ===
-                0 && (
-                <p>
-                  No leagues found.
-                  Please create
-                  leagues first.
-                </p>
+            <div className={styles.leagueList}>
+              {initialLeagues.length === 0 && (
+                <p>No leagues found. Please create leagues first.</p>
               )}
 
-              {initialLeagues.map(
-                (league) => {
-                  const clubCount =
-                    getLeagueClubs(
-                      league,
-                      initialClubs
-                    ).length;
+              {initialLeagues.map((league) => {
+                const clubCount = getLeagueClubs(league, initialClubs).length;
+                const isCup = league.type === "cup";
 
-                  const isCup =
-                    league.type ===
-                    "cup";
-
-                  return (
-                    <label
-                      key={
-                        league.id
-                      }
-                      className={
-                        styles.leagueCheckbox
-                      }
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedLeagueIds.includes(
-                          league.id
-                        )}
-                        onChange={() =>
-                          toggleLeagueSelection(
-                            league.id
-                          )
-                        }
-                        disabled={
-                          isGenerating
-                        }
-                      />
-
-                      <span>
-                        {league.name}
-
-                        {" "}
-
-                        <small>
-                          (
-                          {isCup
-                            ? "cup"
-                            : league.type ||
-                              "league"}
-                          )
+                return (
+                  <label key={league.id} className={styles.leagueCheckbox}>
+                    <input
+                      type="checkbox"
+                      checked={selectedLeagueIds.includes(league.id)}
+                      onChange={() => toggleLeagueSelection(league.id)}
+                      disabled={isGenerating}
+                    />
+                    <span>
+                      {league.name}{" "}
+                      <small>({isCup ? "cup" : league.type || "league"})</small>{" "}
+                      <em>({clubCount} clubs)</em>
+                      {isCup && (
+                        <small style={{ display: "block", marginTop: "4px" }}>
+                          Group stage → Knockout (1/32 → Final)
                         </small>
-
-                        {" "}
-
-                        <em>
-                          ({clubCount}{" "}
-                          clubs)
-                        </em>
-
-                        {isCup && (
-                          <small
-                            style={{
-                              display:
-                                "block",
-                              marginTop:
-                                "4px",
-                            }}
-                          >
-                            1/32 → 1/16
-                            → 1/8 →
-                            1/4 → 1/2
-                            → 3rd Place
-                            → Final
-                          </small>
-                        )}
-                      </span>
-                    </label>
-                  );
-                }
-              )}
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
 
@@ -3111,155 +1467,50 @@ export default function FixturesPage({
               STATUS
           ================================================= */}
 
-          <div
-            className={
-              styles.noNextMatch
-            }
-          >
-            {status ===
-              "generating" && (
+          <div className={styles.noNextMatch}>
+            {status === "generating" && (
               <>
-                <div
-                  className={
-                    styles.spinner
-                  }
-                />
-
-                <p>
-                  {message}
-                </p>
+                <div className={styles.spinner} />
+                <p>{message}</p>
               </>
             )}
 
-            {status ===
-              "complete" && (
+            {status === "complete" && (
               <>
-                <div
-                  style={{
-                    fontSize:
-                      "42px",
-                    marginBottom:
-                      "10px",
-                  }}
-                >
-                  ✓
-                </div>
-
-                <h2>
-                  {message}
-                </h2>
-
-                {seasonYear && (
-                  <p>
-                    Season:{" "}
-                    <strong>
-                      {getSeasonName(
-                        seasonYear
-                      )}
-                    </strong>
-                  </p>
-                )}
-
+                <div style={{ fontSize: "42px", marginBottom: "10px" }}>✓</div>
+                <h2>{message}</h2>
                 {result && (
                   <p>
-                    New fixtures:{" "}
-                    <strong>
-                      {
-                        result.generated
-                      }
-                    </strong>
-
+                    New fixtures: <strong>{result.generated}</strong>
                     <br />
-
-                    Existing fixtures:{" "}
-                    <strong>
-                      {
-                        result.existing
-                      }
-                    </strong>
-
+                    Deleted (old) fixtures: <strong>{result.deleted}</strong>
                     <br />
-
-                    Competitions processed:{" "}
-                    <strong>
-                      {
-                        result.leaguesProcessed
-                      }
-                    </strong>
-
+                    Competitions processed: <strong>{result.leaguesProcessed}</strong>
                     <br />
-
-                    League fixtures:{" "}
-                    <strong>
-                      {
-                        result.leagueFixtures
-                      }
-                    </strong>
-
+                    League fixtures: <strong>{result.leagueFixtures}</strong>
                     <br />
-
-                    Cup fixtures:{" "}
-                    <strong>
-                      {
-                        result.cupFixtures
-                      }
-                    </strong>
+                    Cup fixtures: <strong>{result.cupFixtures}</strong>
+                    {result.cupFixtures > 0 && (
+                      <>
+                        <br />
+                        Cup format: Group stage (4 teams per group) + Knockout
+                      </>
+                    )}
                   </p>
                 )}
-
-                <p>
-                  Fixtures are
-                  stored
-                  automatically
-                  in Firestore.
-                </p>
-
-                {result?.cupFixtures >
-                  0 && (
-                  <p>
-                    Cup bracket:
-                    <br />
-                    <strong>
-                      1/32 → 1/16 →
-                      1/8 → 1/4 →
-                      1/2 → Third
-                      Place → Final
-                    </strong>
-                  </p>
-                )}
+                <p>Fixtures are stored automatically in Firestore.</p>
               </>
             )}
 
-            {status ===
-              "error" && (
+            {status === "error" && (
               <>
-                <div
-                  style={{
-                    fontSize:
-                      "42px",
-                    marginBottom:
-                      "10px",
-                  }}
-                >
-                  !
-                </div>
-
-                <h2>
-                  Generation Error
-                </h2>
-
-                <p>
-                  {message}
-                </p>
+                <div style={{ fontSize: "42px", marginBottom: "10px" }}>!</div>
+                <h2>Generation Error</h2>
+                <p>{message}</p>
               </>
             )}
 
-            {status ===
-              "waiting" && (
-              <p>
-                {message}
-              </p>
-            )}
+            {status === "waiting" && <p>{message}</p>}
           </div>
         </section>
       </main>
@@ -3273,82 +1524,27 @@ export default function FixturesPage({
 
 export async function getServerSideProps() {
   try {
-    const [
-      leaguesSnapshot,
-      clubsSnapshot,
-    ] = await Promise.all([
-      getDocs(
-        collection(
-          db,
-          "leagues"
-        )
-      ),
-
-      getDocs(
-        collection(
-          db,
-          "clubs"
-        )
-      ),
+    const [leaguesSnapshot, clubsSnapshot] = await Promise.all([
+      getDocs(collection(db, "leagues")),
+      getDocs(collection(db, "clubs")),
     ]);
 
-    /*
-     * LEAGUES
-     */
+    const leagues = leaguesSnapshot.docs
+      .slice(0, MAX_LEAGUES)
+      .map((item) => ({ id: item.id, ...item.data() }));
 
-    const leagues =
-      leaguesSnapshot.docs
-        .slice(
-          0,
-          MAX_LEAGUES
-        )
-        .map(
-          (item) => ({
-            id: item.id,
-            ...item.data(),
-          })
-        );
-
-    /*
-     * CLUBS
-     */
-
-    const clubs =
-      clubsSnapshot.docs
-        .slice(
-          0,
-          MAX_CLUBS
-        )
-        .map(
-          (item) => ({
-            id: item.id,
-            ...item.data(),
-          })
-        );
+    const clubs = clubsSnapshot.docs
+      .slice(0, MAX_CLUBS)
+      .map((item) => ({ id: item.id, ...item.data() }));
 
     return {
       props: {
-        initialLeagues:
-          JSON.parse(
-            JSON.stringify(
-              leagues
-            )
-          ),
-
-        initialClubs:
-          JSON.parse(
-            JSON.stringify(
-              clubs
-            )
-          ),
+        initialLeagues: JSON.parse(JSON.stringify(leagues)),
+        initialClubs: JSON.parse(JSON.stringify(clubs)),
       },
     };
   } catch (error) {
-    console.error(
-      "[FIXTURE SSR ERROR]",
-      error
-    );
-
+    console.error("[FIXTURE SSR ERROR]", error);
     return {
       props: {
         initialLeagues: [],
