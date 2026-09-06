@@ -52,7 +52,7 @@ const LATEST_LEAGUE_START_MONTH = 8; // September
 const LATEST_LEAGUE_START_DAY = 30;
 
 /*
- * One round per weekend.
+ * One round per week.
  */
 
 const MATCH_WEEKS_INTERVAL = 1;
@@ -63,6 +63,13 @@ const MATCH_WEEKS_INTERVAL = 1;
 
 const DEFAULT_KICKOFF_HOUR = 15;
 const DEFAULT_KICKOFF_MINUTE = 0;
+
+/*
+ * Match days: league -> Saturday/Sunday; cup -> Tuesday/Wednesday
+ */
+
+const LEAGUE_ALLOWED_DAYS = [6, 0]; // Saturday, Sunday
+const CUP_ALLOWED_DAYS = [2, 3]; // Tuesday, Wednesday
 
 /* =========================================================
    COUNTRY NORMALIZATION
@@ -919,22 +926,57 @@ async function buildHolidaySet(
 }
 
 /* =========================================================
-   WEEKEND
+   MATCH DAY FINDER
 ========================================================= */
 
-function isSaturday(date) {
-  return date.getDay() === 6;
-}
+/*
+ * Find the next date on or after startDate
+ * that falls on one of the allowedDays (0=Sunday, 1=Monday, ..., 6=Saturday)
+ * and is not a holiday.
+ *
+ * Returns a Date object at DEFAULT_KICKOFF_HOUR.
+ */
 
-function isSunday(date) {
-  return date.getDay() === 0;
-}
+function findNextMatchDay(
+  startDate,
+  holidaySet,
+  allowedDays
+) {
+  let date =
+    startOfDay(startDate);
 
-function isWeekend(date) {
-  return (
-    isSaturday(date) ||
-    isSunday(date)
-  );
+  // Ensure allowedDays is an array
+  const days = Array.isArray(allowedDays)
+    ? allowedDays
+    : [allowedDays];
+
+  // If the current day is allowed and not a holiday, use it
+  if (
+    days.includes(date.getDay()) &&
+    !isHoliday(date, holidaySet)
+  ) {
+    return makeKickoff(date);
+  }
+
+  // Otherwise, move forward day by day
+  for (
+    let attempt = 0;
+    attempt < 365;
+    attempt += 1
+  ) {
+    date =
+      addDays(date, 1);
+
+    if (
+      days.includes(date.getDay()) &&
+      !isHoliday(date, holidaySet)
+    ) {
+      return makeKickoff(date);
+    }
+  }
+
+  // Fallback: return startDate as kickoff
+  return makeKickoff(startDate);
 }
 
 function isHoliday(
@@ -944,209 +986,6 @@ function isHoliday(
   return holidaySet.has(
     isoDate(date)
   );
-}
-
-/* =========================================================
-   FIND NEXT WEEKEND
-========================================================= */
-
-/*
- * IMPORTANT:
- *
- * Iyi function itangira kuri startDate
- * maze ikajya kuri WEEKEND IKURIKIRA.
- *
- * Niba current date ari:
- *
- * Friday 28 Aug 2026
- *
- * return:
- *
- * Saturday 29 Aug 2026
- *
- * Niba current date ari:
- *
- * Saturday 29 Aug 2026
- *
- * return:
- *
- * Sunday 30 Aug 2026
- *
- * Niba current date ari:
- *
- * Sunday 30 Aug 2026
- *
- * return:
- *
- * Saturday 5 Sep 2026
- *
- * Ibi birinda gukina match kuri weekend
- * yamaze gutangira cyangwa yarangiye.
- */
-
-function findNextWeekendAfter(
-  startDate,
-  holidaySet
-) {
-  let date =
-    startOfDay(startDate);
-
-  /*
-   * Always move at least one day forward.
-   */
-
-  date =
-    addDays(date, 1);
-
-  /*
-   * Move to Saturday.
-   */
-
-  while (!isSaturday(date)) {
-    date =
-      addDays(date, 1);
-  }
-
-  /*
-   * Check up to 100 weekends.
-   */
-
-  for (
-    let attempt = 0;
-    attempt < 100;
-    attempt += 1
-  ) {
-    const saturday =
-      startOfDay(date);
-
-    const sunday =
-      addDays(
-        saturday,
-        1
-      );
-
-    /*
-     * Saturday available.
-     */
-
-    if (
-      !isHoliday(
-        saturday,
-        holidaySet
-      )
-    ) {
-      return makeKickoff(
-        saturday
-      );
-    }
-
-    /*
-     * Saturday holiday but Sunday free.
-     */
-
-    if (
-      !isHoliday(
-        sunday,
-        holidaySet
-      )
-    ) {
-      return makeKickoff(
-        sunday
-      );
-    }
-
-    /*
-     * Both blocked.
-     *
-     * Go to next Saturday.
-     */
-
-    date =
-      addDays(
-        saturday,
-        7
-      );
-  }
-
-  /*
-   * Safety fallback.
-   */
-
-  return makeKickoff(date);
-}
-
-/* =========================================================
-   FIND WEEKEND ON OR AFTER DATE
-========================================================= */
-
-function findWeekendOnOrAfter(
-  startDate,
-  holidaySet
-) {
-  let date =
-    startOfDay(startDate);
-
-  /*
-   * If Monday-Friday,
-   * move to upcoming Saturday.
-   */
-
-  if (!isWeekend(date)) {
-    while (!isSaturday(date)) {
-      date =
-        addDays(date, 1);
-    }
-  }
-
-  /*
-   * If Saturday, use Saturday
-   * unless holiday.
-   */
-
-  for (
-    let attempt = 0;
-    attempt < 100;
-    attempt += 1
-  ) {
-    const saturday =
-      startOfDay(date);
-
-    const sunday =
-      addDays(
-        saturday,
-        1
-      );
-
-    if (
-      !isHoliday(
-        saturday,
-        holidaySet
-      )
-    ) {
-      return makeKickoff(
-        saturday
-      );
-    }
-
-    if (
-      !isHoliday(
-        sunday,
-        holidaySet
-      )
-    ) {
-      return makeKickoff(
-        sunday
-      );
-    }
-
-    date =
-      addDays(
-        saturday,
-        7
-      );
-  }
-
-  return makeKickoff(date);
 }
 
 /* =========================================================
@@ -1410,10 +1249,12 @@ function createFixture({
       awayClubId: away.id,
     });
 
+  const isCup = league.type === "cup";
+
   return {
     id,
 
-    type: "league",
+    type: isCup ? "cup" : "league",
 
     generated: true,
 
@@ -1505,7 +1346,6 @@ async function generateLeagueFixtures({
   league,
   clubs,
   seasonYear,
-  currentDate,
 }) {
   const leagueClubs =
     getLeagueClubs(
@@ -1525,6 +1365,15 @@ async function generateLeagueFixtures({
 
   const country =
     getLeagueCountry(league);
+
+  /*
+   * Determine allowed match days based on type.
+   */
+
+  const isCup = league.type === "cup";
+  const allowedDays = isCup
+    ? CUP_ALLOWED_DAYS
+    : LEAGUE_ALLOWED_DAYS;
 
   /*
    * Holiday cache.
@@ -1570,66 +1419,23 @@ async function generateLeagueFixtures({
   }
 
   /*
-   * =======================================================
-   * CURRENT DATE LOGIC
-   * =======================================================
-   *
-   * THIS IS THE IMPORTANT PART.
-   *
-   * Example:
-   *
-   * currentDate = 28 Aug 2026
-   *
-   * season = 2026/27
-   *
-   * first fixture weekend:
-   *
-   * 29 Aug 2026
-   *
-   * If currentDate is already Saturday/Sunday,
-   * it moves to the following weekend.
+   * Determine start date.
    */
 
   let startDate =
-    safeDate(currentDate) ||
-    new Date();
+    getPreferredLeagueStart(
+      league,
+      seasonYear
+    );
 
-  /*
-   * Season beginning.
-   */
-
-  const seasonStart =
-    makeDate(
-      seasonYear,
-      SEASON_START_MONTH,
-      1,
-      DEFAULT_KICKOFF_HOUR,
-      DEFAULT_KICKOFF_MINUTE
+  startDate =
+    clampStartIntoSeasonWindow(
+      startDate,
+      seasonYear
     );
 
   /*
-   * If current date is before season,
-   * use normal league start.
-   */
-
-  if (
-    startDate < seasonStart
-  ) {
-    startDate =
-      getPreferredLeagueStart(
-        league,
-        seasonYear
-      );
-
-    startDate =
-      clampStartIntoSeasonWindow(
-        startDate,
-        seasonYear
-      );
-  }
-
-  /*
-   * Holiday calendar for current year.
+   * Load holidays for start year.
    */
 
   let holidaySet =
@@ -1638,23 +1444,20 @@ async function generateLeagueFixtures({
     );
 
   /*
-   * Find the weekend AFTER current date.
-   *
-   * This is intentional.
+   * Find first match day.
    */
 
-  let currentWeekend =
-    findNextWeekendAfter(
+  let currentMatchDay =
+    findNextMatchDay(
       startDate,
-      holidaySet
+      holidaySet,
+      allowedDays
     );
 
   const fixtures = [];
 
   /*
-   * =======================================================
-   * GENERATE ALL ROUNDS
-   * =======================================================
+   * Generate all rounds.
    */
 
   for (
@@ -1667,14 +1470,10 @@ async function generateLeagueFixtures({
 
     /*
      * Current calendar year.
-     *
-     * This automatically changes:
-     *
-     * 2026 -> 2027
      */
 
     const currentYear =
-      currentWeekend.getFullYear();
+      currentMatchDay.getFullYear();
 
     /*
      * Load correct year's holidays.
@@ -1686,13 +1485,14 @@ async function generateLeagueFixtures({
       );
 
     /*
-     * Make sure weekend is valid.
+     * Make sure match day is valid.
      */
 
-    currentWeekend =
-      findWeekendOnOrAfter(
-        currentWeekend,
-        holidaySet
+    currentMatchDay =
+      findNextMatchDay(
+        currentMatchDay,
+        holidaySet,
+        allowedDays
       );
 
     /*
@@ -1712,41 +1512,35 @@ async function generateLeagueFixtures({
             seasonYear,
             round,
             date:
-              currentWeekend,
+              currentMatchDay,
           })
         );
       }
     );
 
     /*
-     * =====================================================
-     * NEXT ROUND
-     * =====================================================
-     *
-     * Normally one week later.
-     *
-     * If that weekend is holiday,
-     * it automatically moves forward.
+     * Next round: one week later.
      */
 
-    const nextWeekendCandidate =
+    const nextWeekCandidate =
       addWeeks(
-        currentWeekend,
+        currentMatchDay,
         MATCH_WEEKS_INTERVAL
       );
 
     const nextYear =
-      nextWeekendCandidate.getFullYear();
+      nextWeekCandidate.getFullYear();
 
     const nextHolidaySet =
       await getHolidays(
         nextYear
       );
 
-    currentWeekend =
-      findWeekendOnOrAfter(
-        nextWeekendCandidate,
-        nextHolidaySet
+    currentMatchDay =
+      findNextMatchDay(
+        nextWeekCandidate,
+        nextHolidaySet,
+        allowedDays
       );
   }
 
@@ -1869,16 +1663,18 @@ async function saveFixtures(
 }
 
 /* =========================================================
-   GENERATE SEASON
+   GENERATE SEASON FOR SELECTED LEAGUES
 ========================================================= */
 
 async function generateSeasonFixtures({
+  leagueIds,
   leagues,
   clubs,
   seasonYear,
-  currentDate,
 }) {
   if (
+    !Array.isArray(leagueIds) ||
+    leagueIds.length === 0 ||
     !Array.isArray(leagues) ||
     !Array.isArray(clubs)
   ) {
@@ -1903,13 +1699,19 @@ async function generateSeasonFixtures({
   let leaguesProcessed = 0;
 
   /*
-   * Process leagues.
+   * Process each selected league.
    */
 
   for (
-    const league of leagues
+    const leagueId of leagueIds
   ) {
-    if (!league?.id) {
+    const league =
+      leagues.find(
+        (l) =>
+          l.id === leagueId
+      );
+
+    if (!league) {
       continue;
     }
 
@@ -1918,10 +1720,6 @@ async function generateSeasonFixtures({
         league,
         clubs
       );
-
-    /*
-     * At least two teams.
-     */
 
     if (
       leagueClubs.length < 2
@@ -1936,15 +1734,10 @@ async function generateSeasonFixtures({
         league,
         clubs: leagueClubs,
         seasonYear,
-        currentDate,
       });
 
     generatedFixtures.forEach(
       (fixture) => {
-        /*
-         * Existing fixture.
-         */
-
         if (
           existingIds.has(
             fixture.id
@@ -1952,10 +1745,6 @@ async function generateSeasonFixtures({
         ) {
           return;
         }
-
-        /*
-         * Duplicate in current generation.
-         */
 
         if (
           fixturesToCreate.some(
@@ -2015,7 +1804,7 @@ export default function FixturesPage({
     message,
     setMessage,
   ] = useState(
-    "Waiting..."
+    "Select leagues and click Generate."
   );
 
   const [
@@ -2033,219 +1822,162 @@ export default function FixturesPage({
     setHasGenerated,
   ] = useState(false);
 
+  const [
+    selectedLeagueIds,
+    setSelectedLeagueIds,
+  ] = useState([]);
+
+  const [
+    isGenerating,
+    setIsGenerating,
+  ] = useState(false);
+
   /* =======================================================
-     AUTOMATIC GENERATOR
+     GENERATE FUNCTION
   ======================================================= */
 
-  const generateAutomatically =
-    useCallback(
-      async () => {
-        if (
-          !user ||
-          hasGenerated
-        ) {
-          return;
-        }
+  const handleGenerate = useCallback(
+    async () => {
+      if (
+        !user ||
+        isGenerating ||
+        selectedLeagueIds.length === 0
+      ) {
+        return;
+      }
 
-        try {
-          setStatus(
-            "generating"
+      try {
+        setIsGenerating(true);
+        setStatus("generating");
+        setMessage("Generating fixtures...");
+        setHasGenerated(false);
+
+        /*
+         * Determine current season.
+         */
+
+        const currentDate =
+          new Date();
+
+        const currentSeason =
+          getSeasonYear(
+            currentDate
           );
 
-          setMessage(
-            "Reading current date..."
-          );
+        setSeasonYear(
+          currentSeason
+        );
 
-          /*
-           * =================================================
-           * CURRENT DATE
-           * =================================================
-           *
-           * First use real current date.
-           */
-
-          let currentDate =
-            new Date();
-
-          /*
-           * =================================================
-           * USER CAREER DATE
-           * =================================================
-           *
-           * If the game has a simulated
-           * currentDate, use it.
-           */
-
-          try {
-            const userRef =
-              doc(
-                db,
-                "users",
-                user.uid
-              );
-
-            const userSnapshot =
-              await getDoc(
-                userRef
-              );
-
-            if (
-              userSnapshot.exists()
-            ) {
-              const data =
-                userSnapshot.data();
-
-              const savedDate =
-                safeDate(
-                  data
-                    ?.careerData
-                    ?.currentDate
-                );
-
-              if (savedDate) {
-                currentDate =
-                  savedDate;
-              }
-            }
-          } catch (
-            careerError
-          ) {
-            console.warn(
-              "[FIXTURE GENERATOR] Career date unavailable:",
-              careerError
-            );
-          }
-
-          /*
-           * =================================================
-           * SEASON
-           * =================================================
-           */
-
-          const currentSeason =
-            getSeasonYear(
-              currentDate
-            );
-
-          setSeasonYear(
+        setMessage(
+          `Generating fixtures for ${getSeasonName(
             currentSeason
-          );
+          )}...`
+        );
 
-          /*
-           * =================================================
-           * MESSAGE
-           * =================================================
-           */
+        const generationResult =
+          await generateSeasonFixtures({
+            leagueIds:
+              selectedLeagueIds,
+            leagues:
+              initialLeagues,
+            clubs:
+              initialClubs,
+            seasonYear:
+              currentSeason,
+          });
 
+        setResult(
+          generationResult
+        );
+
+        setHasGenerated(
+          true
+        );
+
+        setStatus(
+          "complete"
+        );
+
+        if (
+          generationResult.generated >
+          0
+        ) {
           setMessage(
-            `Current date: ${currentDate.toLocaleDateString()} | Generating ${getSeasonName(
-              currentSeason
-            )} fixtures...`
+            `${generationResult.generated} fixtures generated successfully.`
           );
-
-          /*
-           * =================================================
-           * GENERATE
-           * =================================================
-           */
-
-          const generationResult =
-            await generateSeasonFixtures({
-              leagues:
-                initialLeagues,
-
-              clubs:
-                initialClubs,
-
-              seasonYear:
-                currentSeason,
-
-              currentDate,
-            });
-
-          setResult(
-            generationResult
-          );
-
-          setHasGenerated(
-            true
-          );
-
-          setStatus(
-            "complete"
-          );
-
-          /*
-           * =================================================
-           * MESSAGE RESULT
-           * =================================================
-           */
-
-          if (
-            generationResult.generated >
-            0
-          ) {
-            setMessage(
-              `${generationResult.generated} fixtures generated successfully.`
-            );
-          } else {
-            setMessage(
-              `Fixtures for ${getSeasonName(
-                currentSeason
-              )} already exist.`
-            );
-          }
-        } catch (error) {
-          console.error(
-            "[FIXTURE GENERATOR ERROR]",
-            error
-          );
-
-          setStatus(
-            "error"
-          );
-
+        } else {
           setMessage(
-            error?.message ||
-              "Automatic fixture generation failed."
+            `Fixtures for selected leagues already exist or no fixtures were created.`
           );
         }
-      },
-      [
-        user,
-        hasGenerated,
-        initialLeagues,
-        initialClubs,
-      ]
-    );
+      } catch (error) {
+        console.error(
+          "[FIXTURE GENERATOR ERROR]",
+          error
+        );
+
+        setStatus(
+          "error"
+        );
+
+        setMessage(
+          error?.message ||
+            "Automatic fixture generation failed."
+        );
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [
+      user,
+      isGenerating,
+      selectedLeagueIds,
+      initialLeagues,
+      initialClubs,
+    ]
+  );
 
   /* =======================================================
-     START AUTOMATICALLY
+     TOGGLE SELECTION
   ======================================================= */
 
-  useEffect(() => {
-    if (loading) {
-      return;
-    }
+  const toggleLeagueSelection = (
+    leagueId
+  ) => {
+    setSelectedLeagueIds(
+      (prev) => {
+        if (
+          prev.includes(
+            leagueId
+          )
+        ) {
+          return prev.filter(
+            (id) =>
+              id !== leagueId
+          );
+        } else {
+          return [
+            ...prev,
+            leagueId,
+          ];
+        }
+      }
+    );
+  };
 
-    if (!user) {
-      setStatus(
-        "waiting"
-      );
+  const selectAll = () => {
+    setSelectedLeagueIds(
+      initialLeagues.map(
+        (l) => l.id
+      )
+    );
+  };
 
-      setMessage(
-        "Login required."
-      );
-
-      return;
-    }
-
-    generateAutomatically();
-  }, [
-    loading,
-    user,
-    generateAutomatically,
-  ]);
+  const clearAll = () => {
+    setSelectedLeagueIds(
+      []
+    );
+  };
 
   /* =======================================================
      LOADING
@@ -2270,10 +2002,6 @@ export default function FixturesPage({
       </div>
     );
   }
-
-  /* =======================================================
-     NOT AUTHENTICATED
-  ======================================================= */
 
   if (!user) {
     return (
@@ -2343,6 +2071,115 @@ export default function FixturesPage({
               <h1>
                 Automatic Fixtures
               </h1>
+            </div>
+          </div>
+
+          <div
+            className={
+              styles.controls
+            }
+          >
+            <div
+              className={
+                styles.controlRow
+              }
+            >
+              <button
+                className={
+                  styles.selectButton
+                }
+                onClick={
+                  selectAll
+                }
+              >
+                Select All
+              </button>
+
+              <button
+                className={
+                  styles.selectButton
+                }
+                onClick={
+                  clearAll
+                }
+              >
+                Clear All
+              </button>
+
+              <button
+                className={
+                  styles.generateButton
+                }
+                onClick={
+                  handleGenerate
+                }
+                disabled={
+                  isGenerating ||
+                  selectedLeagueIds.length ===
+                    0
+                }
+              >
+                {isGenerating
+                  ? "Generating..."
+                  : "Generate Fixtures"}
+              </button>
+            </div>
+
+            <div
+              className={
+                styles.leagueList
+              }
+            >
+              {initialLeagues.length ===
+                0 && (
+                <p>
+                  No leagues found.
+                  Please create
+                  leagues first.
+                </p>
+              )}
+
+              {initialLeagues.map(
+                (league) => (
+                  <label
+                    key={
+                      league.id
+                    }
+                    className={
+                      styles.leagueCheckbox
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedLeagueIds.includes(
+                        league.id
+                      )}
+                      onChange={() =>
+                        toggleLeagueSelection(
+                          league.id
+                        )
+                      }
+                    />
+
+                    <span>
+                      {league.name}{" "}
+                      <small>
+                        ({league.type ||
+                          "league"})
+                      </small>
+
+                      <em>
+                        (
+                        {getLeagueClubs(
+                          league,
+                          initialClubs
+                        ).length}{" "}
+                        clubs)
+                      </em>
+                    </span>
+                  </label>
+                )
+              )}
             </div>
           </div>
 
