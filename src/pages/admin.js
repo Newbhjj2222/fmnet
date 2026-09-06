@@ -38,6 +38,10 @@ const EMPTY_LEAGUE = {
   logo: "",
   level: 1,
   season: "",
+  type: "league", // "league" or "cup"
+  clubIds: [], // array of club IDs
+  prizeMoney: 0,
+  startDate: "",
 };
 
 const EMPTY_CLUB = {
@@ -629,6 +633,9 @@ export default function Admin() {
     isLoadingData,
     setIsLoadingData,
   ] = useState(true);
+
+  // For league form: filter clubs by country? (checkbox)
+  const [filterClubsByCountry, setFilterClubsByCountry] = useState(false);
 
   /* =========================================================
      DISPLAY NAME
@@ -2047,7 +2054,7 @@ export default function Admin() {
   };
 
   /* =========================================================
-     LEAGUE
+     LEAGUE (UPDATED)
   ========================================================= */
 
   const saveLeague = async (
@@ -2108,6 +2115,22 @@ export default function Admin() {
         season:
           leagueForm.season.trim(),
 
+        // New fields
+        type:
+          leagueForm.type || "league",
+        clubIds:
+          Array.isArray(
+            leagueForm.clubIds
+          )
+            ? leagueForm.clubIds
+            : [],
+        prizeMoney:
+          Number(
+            leagueForm.prizeMoney
+          ) || 0,
+        startDate:
+          leagueForm.startDate || "",
+
         updatedAt:
           serverTimestamp(),
       };
@@ -2149,6 +2172,7 @@ export default function Admin() {
       );
 
       setEditingLeague(null);
+      setFilterClubsByCountry(false);
 
       await loadAllData();
     } catch (error) {
@@ -2183,6 +2207,20 @@ export default function Admin() {
 
       season:
         league.season || "",
+
+      // New fields
+      type:
+        league.type || "league",
+      clubIds:
+        Array.isArray(
+          league.clubIds
+        )
+          ? league.clubIds
+          : [],
+      prizeMoney:
+        league.prizeMoney || 0,
+      startDate:
+        league.startDate || "",
     });
 
     setEditingLeague(
@@ -2931,6 +2969,7 @@ export default function Admin() {
     setPlayerForm(
       EMPTY_PLAYER
     );
+    setFilterClubsByCountry(false);
   };
 
   /* =========================================================
@@ -3772,7 +3811,7 @@ export default function Admin() {
               )}
 
               {/* =================================================
-                  LEAGUES
+                  LEAGUES (UPDATED)
               ================================================= */}
 
               {activeTab ===
@@ -3794,6 +3833,10 @@ export default function Admin() {
                         Create and manage
                         football
                         competitions.
+                        You can set type,
+                        participants,
+                        prize money and
+                        start date.
                       </p>
                     </div>
                   </div>
@@ -3922,6 +3965,170 @@ export default function Admin() {
                           )
                         }
                       />
+
+                      {/* New fields */}
+                      <Select
+                        label="Type"
+                        value={
+                          leagueForm.type
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setLeagueForm(
+                            {
+                              ...leagueForm,
+                              type:
+                                e.target
+                                  .value,
+                            }
+                          )
+                        }
+                        options={[
+                          {
+                            value:
+                              "league",
+                            label:
+                              "League",
+                          },
+                          {
+                            value:
+                              "cup",
+                            label:
+                              "Cup",
+                          },
+                        ]}
+                      />
+
+                      <Input
+                        label="Prize Money"
+                        type="number"
+                        min="0"
+                        value={
+                          leagueForm.prizeMoney
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setLeagueForm(
+                            {
+                              ...leagueForm,
+                              prizeMoney:
+                                e.target
+                                  .value,
+                            }
+                          )
+                        }
+                        placeholder="0"
+                      />
+
+                      <Input
+                        label="Start Date"
+                        type="date"
+                        value={
+                          leagueForm.startDate
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setLeagueForm(
+                            {
+                              ...leagueForm,
+                              startDate:
+                                e.target
+                                  .value,
+                            }
+                          )
+                        }
+                      />
+                    </div>
+
+                    {/* Club selection */}
+                    <div
+                      className={
+                        styles.formSection
+                      }
+                    >
+                      <div
+                        className={
+                          styles.formSectionHeader
+                        }
+                      >
+                        <h4>
+                          Participants
+                        </h4>
+
+                        <label
+                          className={
+                            styles.checkboxLabel
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              filterClubsByCountry
+                            }
+                            onChange={(
+                              e
+                            ) =>
+                              setFilterClubsByCountry(
+                                e.target
+                                  .checked
+                              )
+                            }
+                          />
+                          Filter clubs
+                          by country
+                        </label>
+                      </div>
+
+                      <MultiSelect
+                        label="Select Clubs"
+                        value={
+                          leagueForm.clubIds
+                        }
+                        onChange={(
+                          value
+                        ) =>
+                          setLeagueForm(
+                            {
+                              ...leagueForm,
+                              clubIds:
+                                value,
+                            }
+                          )
+                        }
+                        options={clubs
+                          .filter(
+                            (
+                              club
+                            ) =>
+                              !filterClubsByCountry ||
+                              club.countryId ===
+                                leagueForm.countryId
+                          )
+                          .map(
+                            (
+                              club
+                            ) => ({
+                              value:
+                                club.id,
+                              label:
+                                club.name,
+                            })
+                          )}
+                        placeholder="Choose clubs"
+                      />
+
+                      <small
+                        className={
+                          styles.helperText
+                        }
+                      >
+                        Hold Ctrl (or Cmd)
+                        to select multiple
+                        clubs.
+                      </small>
                     </div>
 
                     <FormButtons
@@ -4011,6 +4218,70 @@ export default function Admin() {
                           ) =>
                             item.level ||
                             1,
+                      },
+
+                      {
+                        title:
+                          "Type",
+
+                        render:
+                          (
+                            item
+                          ) =>
+                            item.type ===
+                            "cup"
+                              ? "🏆 Cup"
+                              : "📊 League",
+                      },
+
+                      {
+                        title:
+                          "Participants",
+
+                        render:
+                          (
+                            item
+                          ) => {
+                            const count =
+                              Array.isArray(
+                                item.clubIds
+                              )
+                                ? item
+                                    .clubIds
+                                    .length
+                                : 0;
+
+                            return `${count} ${
+                              count === 1
+                                ? "club"
+                                : "clubs"
+                            }`;
+                          },
+                      },
+
+                      {
+                        title:
+                          "Prize",
+
+                        render:
+                          (
+                            item
+                          ) =>
+                            formatMoney(
+                              item.prizeMoney
+                            ),
+                      },
+
+                      {
+                        title:
+                          "Start Date",
+
+                        render:
+                          (
+                            item
+                          ) =>
+                            item.startDate ||
+                            "-",
                       },
                     ]}
                     onEdit={
@@ -5647,6 +5918,69 @@ function Select({
       >
         {placeholder && (
           <option value="">
+            {placeholder}
+          </option>
+        )}
+
+        {options.map(
+          (option) => (
+            <option
+              key={
+                option.value
+              }
+              value={
+                option.value
+              }
+            >
+              {
+                option.label
+              }
+            </option>
+          )
+        )}
+      </select>
+    </div>
+  );
+}
+
+/* =========================================================
+   MULTI-SELECT COMPONENT (NEW)
+========================================================= */
+
+function MultiSelect({
+  label,
+  value = [],
+  onChange,
+  options = [],
+  placeholder,
+}) {
+  const handleChange = (e) => {
+    const selectedOptions = e.target.options;
+    const selectedValues = [];
+    for (let i = 0; i < selectedOptions.length; i++) {
+      if (selectedOptions[i].selected) {
+        selectedValues.push(selectedOptions[i].value);
+      }
+    }
+    onChange(selectedValues);
+  };
+
+  return (
+    <div
+      className={styles.field}
+    >
+      <label>
+        {label}
+      </label>
+
+      <select
+        multiple
+        value={value}
+        onChange={handleChange}
+        className={styles.multiSelect}
+      >
+        {placeholder && (
+          <option value="" disabled>
             {placeholder}
           </option>
         )}
