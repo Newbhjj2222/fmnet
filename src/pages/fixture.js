@@ -1,12 +1,11 @@
 // pages/fixture.js
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Head from "next/head";
 
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   query,
   where,
@@ -30,21 +29,13 @@ const FIRESTORE_BATCH_SIZE = 450;
 
 /*
  * Season:
- *
  * July 2026 -> June 2027 = 2026/27
  */
-
 const SEASON_START_MONTH = 6; // July
 
 /*
  * League fixture generation window.
- *
- * This is only used when there is NO current date
- * available inside the season.
- *
- * August 1 -> September 30
  */
-
 const EARLIEST_LEAGUE_START_MONTH = 7; // August
 const EARLIEST_LEAGUE_START_DAY = 1;
 
@@ -52,24 +43,90 @@ const LATEST_LEAGUE_START_MONTH = 8; // September
 const LATEST_LEAGUE_START_DAY = 30;
 
 /*
+ * League:
  * One round per week.
  */
-
 const MATCH_WEEKS_INTERVAL = 1;
 
 /*
  * Default kickoff.
  */
-
 const DEFAULT_KICKOFF_HOUR = 15;
 const DEFAULT_KICKOFF_MINUTE = 0;
 
 /*
- * Match days: league -> Saturday/Sunday; cup -> Tuesday/Wednesday
+ * Match days:
+ * League -> Saturday / Sunday
+ * Cup -> Tuesday / Wednesday
+ */
+const LEAGUE_ALLOWED_DAYS = [6, 0];
+const CUP_ALLOWED_DAYS = [2, 3];
+
+/*
+ * =========================================================
+ * CUP CONFIG
+ * =========================================================
+ *
+ * 1/32 requires 64 teams.
+ *
+ * Cup bracket:
+ *
+ * 1/32 -> 32 matches
+ * 1/16 -> 16 matches
+ * 1/8  -> 8 matches
+ * 1/4  -> 4 matches
+ * 1/2  -> 2 matches
+ * 3rd  -> 1 match
+ * Final -> 1 match
+ *
+ * Total = 64 fixtures
  */
 
-const LEAGUE_ALLOWED_DAYS = [6, 0]; // Saturday, Sunday
-const CUP_ALLOWED_DAYS = [2, 3]; // Tuesday, Wednesday
+const CUP_FIRST_ROUND_TEAMS = 64;
+
+const CUP_STAGES = {
+  ROUND_OF_64: {
+    key: "round_of_64",
+    name: "1/32",
+    matches: 32,
+  },
+
+  ROUND_OF_32: {
+    key: "round_of_32",
+    name: "1/16",
+    matches: 16,
+  },
+
+  ROUND_OF_16: {
+    key: "round_of_16",
+    name: "1/8",
+    matches: 8,
+  },
+
+  QUARTER_FINAL: {
+    key: "quarter_final",
+    name: "1/4",
+    matches: 4,
+  },
+
+  SEMI_FINAL: {
+    key: "semi_final",
+    name: "1/2",
+    matches: 2,
+  },
+
+  THIRD_PLACE: {
+    key: "third_place",
+    name: "Third Place",
+    matches: 1,
+  },
+
+  FINAL: {
+    key: "final",
+    name: "Final",
+    matches: 1,
+  },
+};
 
 /* =========================================================
    COUNTRY NORMALIZATION
@@ -168,7 +225,6 @@ function safeDate(value) {
     /*
      * Firestore Timestamp
      */
-
     if (
       value?.toDate &&
       typeof value.toDate === "function"
@@ -183,7 +239,6 @@ function safeDate(value) {
     /*
      * JavaScript Date
      */
-
     if (value instanceof Date) {
       return Number.isNaN(value.getTime())
         ? null
@@ -193,7 +248,6 @@ function safeDate(value) {
     /*
      * Firestore timestamp-like object
      */
-
     if (
       typeof value === "object" &&
       typeof value.seconds === "number"
@@ -210,7 +264,6 @@ function safeDate(value) {
     /*
      * String / number
      */
-
     const date = new Date(value);
 
     return Number.isNaN(date.getTime())
@@ -230,11 +283,9 @@ function getSeasonYear(date = new Date()) {
 
   /*
    * July -> December
-   *
    * 2026-08-28 => 2026/27
    *
    * January -> June
-   *
    * 2027-02-10 => 2026/27
    */
 
@@ -304,7 +355,10 @@ function getClubLogo(club) {
 ========================================================= */
 
 function getLeagueClubs(league, clubs) {
-  if (!league || !Array.isArray(clubs)) {
+  if (
+    !league ||
+    !Array.isArray(clubs)
+  ) {
     return [];
   }
 
@@ -362,120 +416,33 @@ function getLeagueClubs(league, clubs) {
 ========================================================= */
 
 const COUNTRY_START_RULES = {
-  rwanda: {
-    month: 7,
-    day: 15,
-  },
+  rwanda: { month: 7, day: 15 },
+  uganda: { month: 7, day: 15 },
+  kenya: { month: 7, day: 15 },
+  tanzania: { month: 7, day: 15 },
+  burundi: { month: 7, day: 15 },
 
-  uganda: {
-    month: 7,
-    day: 15,
-  },
+  england: { month: 7, day: 10 },
+  unitedkingdom: { month: 7, day: 10 },
+  uk: { month: 7, day: 10 },
 
-  kenya: {
-    month: 7,
-    day: 15,
-  },
+  spain: { month: 8, day: 20 },
+  italy: { month: 7, day: 20 },
+  germany: { month: 7, day: 15 },
+  france: { month: 7, day: 15 },
+  portugal: { month: 7, day: 15 },
+  netherlands: { month: 7, day: 15 },
+  belgium: { month: 7, day: 15 },
 
-  tanzania: {
-    month: 7,
-    day: 15,
-  },
+  brazil: { month: 7, day: 15 },
+  argentina: { month: 7, day: 15 },
+  southafrica: { month: 7, day: 15 },
+  egypt: { month: 7, day: 15 },
+  nigeria: { month: 7, day: 15 },
+  ghana: { month: 7, day: 15 },
 
-  burundi: {
-    month: 7,
-    day: 15,
-  },
-
-  england: {
-    month: 7,
-    day: 10,
-  },
-
-  unitedkingdom: {
-    month: 7,
-    day: 10,
-  },
-
-  uk: {
-    month: 7,
-    day: 10,
-  },
-
-  spain: {
-    month: 8,
-    day: 20,
-  },
-
-  italy: {
-    month: 7,
-    day: 20,
-  },
-
-  germany: {
-    month: 7,
-    day: 15,
-  },
-
-  france: {
-    month: 7,
-    day: 15,
-  },
-
-  portugal: {
-    month: 7,
-    day: 15,
-  },
-
-  netherlands: {
-    month: 7,
-    day: 15,
-  },
-
-  belgium: {
-    month: 7,
-    day: 15,
-  },
-
-  brazil: {
-    month: 7,
-    day: 15,
-  },
-
-  argentina: {
-    month: 7,
-    day: 15,
-  },
-
-  southafrica: {
-    month: 7,
-    day: 15,
-  },
-
-  egypt: {
-    month: 7,
-    day: 15,
-  },
-
-  nigeria: {
-    month: 7,
-    day: 15,
-  },
-
-  ghana: {
-    month: 7,
-    day: 15,
-  },
-
-  japan: {
-    month: 7,
-    day: 15,
-  },
-
-  southkorea: {
-    month: 7,
-    day: 15,
-  },
+  japan: { month: 7, day: 15 },
+  southkorea: { month: 7, day: 15 },
 
   international: {
     month: 7,
@@ -503,20 +470,13 @@ function getEasterSunday(year) {
   const c = year % 100;
   const d = Math.floor(b / 4);
   const e = b % 4;
-  const f = Math.floor(
-    (b + 8) / 25
-  );
+  const f = Math.floor((b + 8) / 25);
   const g = Math.floor(
     (b - f + 1) / 3
   );
 
   const h =
-    (19 * a +
-      b -
-      d -
-      g +
-      15) %
-    30;
+    (19 * a + b - d - g + 15) % 30;
 
   const i = Math.floor(c / 4);
   const k = c % 4;
@@ -530,27 +490,15 @@ function getEasterSunday(year) {
     7;
 
   const m = Math.floor(
-    (a +
-      11 * h +
-      22 * l) /
-      451
+    (a + 11 * h + 22 * l) / 451
   );
 
   const month = Math.floor(
-    (h +
-      l -
-      7 * m +
-      114) /
-      31
+    (h + l - 7 * m + 114) / 31
   );
 
   const day =
-    ((h +
-      l -
-      7 * m +
-      114) %
-      31) +
-    1;
+    ((h + l - 7 * m + 114) % 31) + 1;
 
   return new Date(
     year,
@@ -811,27 +759,16 @@ async function getFirestoreHolidays(
   const dates = new Set();
 
   try {
-    const holidayQuery =
-      query(
-        collection(
-          db,
-          "holidays"
-        ),
-        where(
-          "year",
-          "==",
-          year
-        )
-      );
+    const holidayQuery = query(
+      collection(db, "holidays"),
+      where("year", "==", year)
+    );
 
     const snapshot =
-      await getDocs(
-        holidayQuery
-      );
+      await getDocs(holidayQuery);
 
     snapshot.forEach((item) => {
-      const data =
-        item.data();
+      const data = item.data();
 
       const holidayCountry =
         normalizeCountry(
@@ -855,10 +792,6 @@ async function getFirestoreHolidays(
       ) {
         return;
       }
-
-      /*
-       * Prefer date field.
-       */
 
       const date =
         safeDate(data?.date);
@@ -929,13 +862,14 @@ async function buildHolidaySet(
    MATCH DAY FINDER
 ========================================================= */
 
-/*
- * Find the next date on or after startDate
- * that falls on one of the allowedDays (0=Sunday, 1=Monday, ..., 6=Saturday)
- * and is not a holiday.
- *
- * Returns a Date object at DEFAULT_KICKOFF_HOUR.
- */
+function isHoliday(
+  date,
+  holidaySet
+) {
+  return holidaySet.has(
+    isoDate(date)
+  );
+}
 
 function findNextMatchDay(
   startDate,
@@ -945,47 +879,44 @@ function findNextMatchDay(
   let date =
     startOfDay(startDate);
 
-  // Ensure allowedDays is an array
-  const days = Array.isArray(allowedDays)
-    ? allowedDays
-    : [allowedDays];
+  const days =
+    Array.isArray(allowedDays)
+      ? allowedDays
+      : [allowedDays];
 
-  // If the current day is allowed and not a holiday, use it
   if (
-    days.includes(date.getDay()) &&
-    !isHoliday(date, holidaySet)
+    days.includes(
+      date.getDay()
+    ) &&
+    !isHoliday(
+      date,
+      holidaySet
+    )
   ) {
     return makeKickoff(date);
   }
 
-  // Otherwise, move forward day by day
   for (
     let attempt = 0;
     attempt < 365;
     attempt += 1
   ) {
-    date =
-      addDays(date, 1);
+    date = addDays(date, 1);
 
     if (
-      days.includes(date.getDay()) &&
-      !isHoliday(date, holidaySet)
+      days.includes(
+        date.getDay()
+      ) &&
+      !isHoliday(
+        date,
+        holidaySet
+      )
     ) {
       return makeKickoff(date);
     }
   }
 
-  // Fallback: return startDate as kickoff
   return makeKickoff(startDate);
-}
-
-function isHoliday(
-  date,
-  holidaySet
-) {
-  return holidaySet.has(
-    isoDate(date)
-  );
 }
 
 /* =========================================================
@@ -1018,7 +949,9 @@ function getPreferredLeagueStart(
     getLeagueCountry(league);
 
   const rule =
-    getCountryStartRule(country);
+    getCountryStartRule(
+      country
+    );
 
   return makeDate(
     seasonYear,
@@ -1037,23 +970,21 @@ function clampStartIntoSeasonWindow(
   date,
   seasonYear
 ) {
-  const earliest =
-    makeDate(
-      seasonYear,
-      EARLIEST_LEAGUE_START_MONTH,
-      EARLIEST_LEAGUE_START_DAY,
-      DEFAULT_KICKOFF_HOUR,
-      DEFAULT_KICKOFF_MINUTE
-    );
+  const earliest = makeDate(
+    seasonYear,
+    EARLIEST_LEAGUE_START_MONTH,
+    EARLIEST_LEAGUE_START_DAY,
+    DEFAULT_KICKOFF_HOUR,
+    DEFAULT_KICKOFF_MINUTE
+  );
 
-  const latest =
-    makeDate(
-      seasonYear,
-      LATEST_LEAGUE_START_MONTH,
-      LATEST_LEAGUE_START_DAY,
-      DEFAULT_KICKOFF_HOUR,
-      DEFAULT_KICKOFF_MINUTE
-    );
+  const latest = makeDate(
+    seasonYear,
+    LATEST_LEAGUE_START_MONTH,
+    LATEST_LEAGUE_START_DAY,
+    DEFAULT_KICKOFF_HOUR,
+    DEFAULT_KICKOFF_MINUTE
+  );
 
   if (date < earliest) {
     return earliest;
@@ -1067,7 +998,7 @@ function clampStartIntoSeasonWindow(
 }
 
 /* =========================================================
-   ROUND ROBIN (for leagues)
+   ROUND ROBIN
 ========================================================= */
 
 function buildRounds(clubs) {
@@ -1121,18 +1052,15 @@ function buildRounds(clubs) {
 
       const teamB =
         rotation[
-          totalTeams -
-            1 -
-            i
+          totalTeams - 1 - i
         ];
 
-      if (!teamA || !teamB) {
+      if (
+        !teamA ||
+        !teamB
+      ) {
         continue;
       }
-
-      /*
-       * Home / Away balance.
-       */
 
       if (
         roundIndex % 2 === 0
@@ -1149,7 +1077,9 @@ function buildRounds(clubs) {
       }
     }
 
-    firstLeg.push(matches);
+    firstLeg.push(
+      matches
+    );
 
     /*
      * Circle rotation.
@@ -1174,7 +1104,6 @@ function buildRounds(clubs) {
 
   /*
    * SECOND LEG
-   *
    * Reverse home / away.
    */
 
@@ -1183,10 +1112,8 @@ function buildRounds(clubs) {
       (round) =>
         round.map(
           (match) => ({
-            home:
-              match.away,
-            away:
-              match.home,
+            home: match.away,
+            away: match.home,
           })
         )
     );
@@ -1195,337 +1122,6 @@ function buildRounds(clubs) {
     ...firstLeg,
     ...secondLeg,
   ];
-}
-
-/* =========================================================
-   KNOCKOUT HELPER
-========================================================= */
-
-function nextPowerOfTwo(n) {
-  if (n <= 1) return 1;
-  let p = 1;
-  while (p < n) p *= 2;
-  return p;
-}
-
-function shuffleArray(array) {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-/*
- * Generate cup rounds with byes.
- * Returns array of rounds, each round is an object { roundNumber, roundLabel, matches: [{home, away}] }
- */
-
-function generateCupBracket(clubs) {
-  const n = clubs.length;
-  if (n < 2) return [];
-
-  // Shuffle clubs for randomness (or we could sort by overall)
-  const shuffled = shuffleArray(clubs);
-
-  // Determine number of byes needed to reach power of two
-  const p2 = nextPowerOfTwo(n);
-  const byes = p2 - n;
-
-  // The teams that get byes are the top 'byes' teams (we'll just take first 'byes' from shuffled)
-  const teamsWithByes = shuffled.slice(0, byes);
-  const teamsPlayingFirstRound = shuffled.slice(byes);
-
-  // The first round will have (teamsPlayingFirstRound.length / 2) matches
-  // The winners join the byes for subsequent rounds.
-
-  // We'll create rounds progressively.
-  // First round: if teamsPlayingFirstRound.length > 0
-  const rounds = [];
-
-  // Build initial list of 'active teams' for the next round.
-  // At start, we have teams with byes and teams that will play.
-  // We'll process round by round.
-
-  // We'll create a recursive function to generate matches for a round.
-  // But simpler: we can build a list of all teams that are in the bracket, with byes already advanced.
-
-  // Approach: We'll create a list of 'teams in round' for round 1.
-  // Round 1 teams: the ones that play.
-  // We'll produce matches for round 1, then winners advance to round 2, joined by byes.
-
-  // We'll use a queue of teams that will play in the current round.
-  // Initially, for round 1, the queue is teamsPlayingFirstRound (they are already paired).
-  // After round 1, the winners go to queue, then we add the byes to the queue for next round.
-  // Then we pair them for round 2, etc.
-
-  // Implementation: we'll store the bracket as a tree, but easier: we'll generate rounds sequentially.
-
-  let currentRoundTeams = [...teamsPlayingFirstRound];
-  let roundNumber = 1;
-  let roundLabel = getRoundLabel(roundNumber, p2);
-
-  // We'll also need to handle the case where there are no first round matches (e.g., n is power of 2)
-  if (currentRoundTeams.length > 0) {
-    // Pair them
-    const matches = [];
-    for (let i = 0; i < currentRoundTeams.length; i += 2) {
-      matches.push({
-        home: currentRoundTeams[i],
-        away: currentRoundTeams[i + 1],
-      });
-    }
-    rounds.push({
-      roundNumber,
-      roundLabel,
-      matches,
-    });
-    // The winners of these matches will be the teams for next round.
-    // We'll store them as a list of objects with a property 'winner' that we can later fill? But we don't know winners yet.
-    // For fixture generation, we just need to create fixtures, we don't need to know winners.
-    // So for next round, we need to know which teams are playing. The winners are unknown, but we can just say that the winning teams (unknown) will advance.
-    // Actually, for generating fixtures, we don't need to know winners; we just need to know that the next round will have a certain number of teams.
-    // So we can just compute the number of teams in next round: currentRoundTeams.length / 2 + byes (if not already added)
-    // We'll simply build the rounds with correct number of teams, but we don't need to assign specific teams because we don't know who wins.
-    // However, to generate fixtures, we need to assign specific clubs to the matches, because the fixture must have home and away clubs.
-    // For cup, we need to know the pairings. The pairings are determined by the bracket.
-    // Typically, the bracket is fixed: e.g., team1 vs team2, winner vs team3, etc. But since we don't know winners, we can't assign clubs to later rounds.
-    // So for fixture generation, we must assign clubs to later rounds based on potential winners. But we can't know winners.
-    // In real life, fixtures are drawn after each round. So we could generate fixtures only for the first round, and later generate subsequent rounds after results are known.
-    // However, the user might want all fixtures generated in advance (like a tournament schedule). In many tournaments, the bracket is set with positions, and the teams that advance fill the positions.
-    // We can create placeholders for later rounds, but we need to know which clubs are in which position.
-    // For simplicity, we will generate all rounds with placeholder clubs? That would be incomplete.
-    // Better approach: Since we are generating a full schedule, we can assign the clubs to fixed bracket positions. For example, using a standard bracket where the winner of match A plays winner of match B, etc.
-    // We can create the bracket tree and assign the original clubs to the first round positions. Then we can generate fixtures for all rounds with the assumption that the clubs that would potentially play are known? Not really.
-    // Actually, many tournament generators produce a full bracket with placeholders for winners. For fixture generation, we need actual clubs for each match. So we must assign clubs to each match. One way: we can generate the bracket and assign the original clubs to the first round, and for later rounds, we can assign the clubs that are in that position based on the bracket tree. But since we don't know who wins, we can't assign.
-    // However, we could generate the fixtures for later rounds with the club IDs being the ones that are in that position (e.g., winner of match 1 vs winner of match 2). But we need to put a club ID. We could use a placeholder ID, but that would break references.
-    // Common approach: We generate the entire bracket with placeholders for clubs that advance, and later when results are known, we update the fixtures.
-    // For the purpose of this generator, we can generate fixtures for all rounds with the clubs that are in the bracket positions, using the original club IDs for the first round, and for subsequent rounds, we can assign the clubs that are in that position if we know the bracket tree. But we don't know winners, so we can't assign.
-    // We have two options:
-    // 1. Generate only the first round fixtures, and generate later rounds after results are updated (dynamic scheduling).
-    // 2. Generate all rounds with dummy club IDs and later replace with actual clubs.
-    // Given the user wants to generate all fixtures at once, we can generate all rounds with the clubs that are in the bracket positions based on a fixed bracket. For example, we can assign clubs to specific slots (1-16) and then generate matches based on a standard bracket tree. This is doable if we know the seeding.
-    // We'll implement a bracket where we assign clubs to positions (1..n) and then generate matches accordingly. For byes, we assign them to the top seeds (position 1..byes).
-    // Then we can generate all rounds by pairing positions: e.g., round of 32: (1 vs 32), (16 vs 17), etc. This requires an ordered list.
-    // We'll order clubs by overall rating (or random) and assign to positions. Then we can generate the full bracket.
-    // This is a common tournament generation method.
-
-    // Let's implement a more robust approach: we will generate a fixed bracket with positions.
-    // Steps:
-    // 1. Sort clubs by overall rating (descending) to seed.
-    // 2. Assign them to positions 1..n.
-    // 3. Generate rounds using a standard knockout bracket algorithm.
-    // We'll use a function that given number of teams, returns the match pairings for each round.
-
-    // We'll create a helper function that generates pairings for each round given an ordered list of teams (with byes already integrated as placeholders? Actually, we need to handle byes: teams with byes are placed in the bracket such that they get a bye in first round, meaning they are automatically advanced to second round.
-    // We can create a list of teams for round 1: those without byes, and for round 2, we have the byes plus winners of round 1.
-    // But to generate all rounds at once, we can create the full bracket tree where byes are handled as 'auto-advance'.
-    // We'll implement a recursive function that generates matches for each round given a list of teams.
-
-    // I'll implement a simpler method: we'll treat byes as teams that automatically win their first round match (i.e., they don't play). So we can create a list of teams for the first round: those without byes, and then we create a list of teams for the next round: the winners of first round + byes.
-    // But we don't know winners, so we can't create fixtures for later rounds. Therefore, we must generate fixtures only for the first round, and later rounds will be generated on demand when results are known.
-    // The user specifically asked to generate all fixtures at once, so we need a way to assign clubs to later rounds.
-    // One way: we can create fixtures for later rounds with the club IDs being the ones that are in that bracket slot, but we don't know which club is in which slot until we know the winner.
-    // However, we can assign the clubs to specific slots based on seeding, and then generate matches using those slots. For example, slot 1 plays slot 16, slot 8 plays slot 9, etc. Then the winner of that match goes to slot 1 in the next round, etc. This is a fixed bracket. So if we assign clubs to slots based on seeding, we can generate all rounds with the understanding that the clubs in later rounds are placeholders (they represent the winner of the previous match). But we need a club ID for each fixture. We could use the slot ID instead of club ID, but then it's not linked to the actual club.
-    // To avoid complexity, we can generate only the first round fixtures, and store the bracket structure. Then later, when results are known, we can generate the next round fixtures. This is more realistic.
-    // The user might be okay with generating only the first round, but they said "matchs zayo zijye zigira 1/32, 1/16, 1/8, 1/2, na finally numwanya wa gatatu" meaning they want all those rounds. So they expect all rounds to be created.
-
-    // Given the time, I'll implement a simplified version: we'll generate all rounds by assuming the higher seed always wins, and assign clubs accordingly. That would not be accurate but at least fixtures are generated. But that's not ideal.
-
-    // Instead, we'll generate fixtures for all rounds but with the actual club IDs for the first round, and for subsequent rounds, we'll use a dummy placeholder club ID (like "winner_of_xxx") but that would break the FK constraints. So we need a different approach.
-
-    // I'll implement a bracket that uses the actual club IDs for all matches, by creating a bracket tree where each node is a match, and the participants are the clubs that are in that path. For example, for a round of 16, we have 8 matches, each between two clubs that are predetermined (e.g., 1 vs 16, 8 vs 9, etc.). That means we need to assign the clubs to those positions. So we can seed the clubs into positions 1..n, then generate matches for each round using those positions. This way, each match has actual club IDs. This is valid because the bracket is fixed: winner of match 1 (between pos1 and pos16) will play winner of match 8 (between pos8 and pos9) in the quarter-finals, etc. But we don't know who wins, but we can still assign the participants for the quarter-final as the clubs from the two matches? That would be incorrect because it would be a mixture of clubs. Actually, in a fixed bracket, the quarter-final match is between the winner of match1 and winner of match8. So we cannot assign clubs to that match until we know the winners. Therefore, we cannot generate the quarter-final fixture with actual clubs.
-
-    // So the only correct way is to generate fixtures only for the first round, and then generate subsequent rounds after each round is played. I'll go with that approach: we generate only the first round fixtures for cups. The user can then generate next rounds later.
-
-    // But the user asked to generate all rounds. I'll compromise: we'll generate all rounds but use placeholder club IDs for later rounds (like "TBD" or a special ID). When the match is played, we update the fixture with the actual clubs. That's common in tournament scheduling.
-
-    // We'll implement: generate all rounds with a placeholder club (null or a special object). Later, when results are known, we can update the fixture. For the fixture generation, we'll store the bracket position.
-
-    // Given the complexity, I'll generate only the first round fixtures for cups, and the user can generate subsequent rounds after results. That is simpler and more realistic.
-
-    // I'll implement generateCupFixtures to generate only the first round, and store the bracket structure in the fixture metadata (e.g., bracketPosition). Then a separate function can generate later rounds.
-
-    // Since the user wants all rounds, I'll generate all rounds by using the clubs that are in the bracket slots for the first round, and for later rounds, I'll use the clubs that would be in those slots if we assume the higher seed wins (but we don't want to assume). Instead, I'll generate fixtures for all rounds with the actual clubs that are in the bracket positions, but for later rounds, the participants are the clubs that are in the positions that would meet. For example, if we have 16 teams, we have 8 matches in round of 16. The quarter-finals have 4 matches: the winners of (1 vs 16) vs (8 vs 9), etc. We don't know which clubs will win, so we cannot assign clubs. So the only way is to have placeholders.
-
-    // I'll choose to generate all rounds with placeholders. For the first round, we use actual clubs. For subsequent rounds, we use a special object { type: 'winner_of', matchId: '...' } but that can't be stored as clubId. We could store the match ID that feeds into it. This is complex.
-
-    // Given the time constraints, I'll implement a simplified version: generate all rounds by assuming the bracket is fixed and the clubs are assigned to positions, and for each match, we assign the clubs based on the position. For example, position 1 vs position 16, position 8 vs position 9, etc. Then for quarter-finals, we have position 1 vs position 8? Actually, standard bracket: (1 vs 16) winner plays (8 vs 9) winner, (4 vs 13) winner plays (5 vs 12) winner, etc. That means the quarter-final match is between the winners of two specific matches. Since we don't know winners, we cannot assign actual clubs. So we could assign the clubs from the lower positions? That would be wrong. So we cannot.
-
-    // I'll decide to generate only the first round for cups, and add a button to generate next round based on results. That is a reasonable feature. I'll implement that in a later iteration.
-
-    // For now, I'll implement generateCupFixtures to create only the first round (if any). If the number of teams is a power of two, then the first round is the round of 16, etc. If there are byes, then the first round is the round with the fewest teams.
-
-    // We'll also add a field in the fixture indicating the round number and round label, and a flag that more rounds are available.
-
-    // We'll also create a function to generate subsequent rounds (but not in this code).
-
-    // Given the user's request, I'll implement a full bracket generation with placeholders using null for clubId in later rounds, and then the fixture will have a special status "pending" and we can update later. But that would break foreign keys. For now, we can allow null clubId.
-
-    // Let's implement a simplified version: generate all rounds, but for later rounds, we set homeClubId and awayClubId to null, and store the bracket position. Later, we can populate them.
-
-    // I'll proceed with that.
-
-    // Let's write the bracket generation.
-
-    // Actually, I'll take a different approach: I'll generate all rounds using the actual clubs that are in the bracket slots, but we assign them based on a deterministic bracket. For example, we order clubs by overall rating, then we generate a bracket where the highest rated plays the lowest, etc. Then for each round, we can assign the clubs that are in those positions. But since we don't know winners, we can't assign the clubs to the next round's positions. However, we can assign the clubs that are *potentially* in that position based on the seeding. For example, in a 16-team tournament, the quarter-final match between (1 vs 16) winner and (8 vs 9) winner will have either (1 or 16) and (8 or 9). We could assign the clubs 1 and 8 as the participants, but that would be incorrect if 16 wins. So it's not accurate.
-
-    // This is getting too complex. I'll generate only the first round for cups. The user can generate later rounds manually after results. I'll note this in the UI.
-
-    // I'll implement generateCupFixtures to produce only the first round fixtures. The round label will be based on the number of teams: if n <= 2, final; if n <=4, semi-finals; if n <=8, quarter-finals; if n <=16, round of 16; if n <=32, round of 32; etc. We'll compute the highest power of two that is <= n? Actually, the first round of a cup with 10 teams would be a preliminary round of 4 teams (2 matches), then 8 teams in round of 16? Wait, with 10 teams, we have 6 byes, so 4 teams play in a preliminary round, winners join the 6 byes to make 8 teams for the round of 16. So the first round is the preliminary round. Then the next round is the round of 16, etc. So we generate the preliminary round (if any), and then we stop. The rest will be generated later.
-
-    // I think this is acceptable.
-
-    // I'll implement that now.
-    // We'll create a function that returns an array of fixtures for the first round only.
-    // We'll compute the number of matches in the first round: if n is power of two, first round has n/2 matches (e.g., 8 teams -> 4 matches = quarter-finals? Actually, with 8 teams, first round is quarter-finals). If n=10, first round has (n - byes)/2 matches = (10-6)/2 = 2 matches (preliminary). So we need to produce those matches.
-    // The round label for the first round is determined by the total number of teams after byes are included? Actually, the first round is the round before the round of 16. So if n=10, after preliminary, we have 8 teams for round of 16. So the first round is the preliminary round, we can call it "Preliminary Round" or "1/32" if we consider that the tournament has 32 slots. But with 10 teams, it's not exactly 1/32. We can use "Qualifying Round".
-    // To simplify, we'll label the first round as "Round 1", and subsequent rounds as "Round 2", etc., but we can also compute the traditional names based on the number of teams in that round. For n=10, first round has 4 teams, so it's a preliminary round. The next round would have 8 teams (round of 16). We'll generate only the first round, so we label it "Preliminary Round". For n=16, first round has 16 teams, so it's "Round of 16". For n=8, first round has 8 teams, so it's "Quarter-finals". For n=4, first round is "Semi-finals". For n=2, first round is "Final". For n=32, first round is "Round of 32". So we can compute the label based on the number of teams in the first round.
-    // We'll compute that.
-
-    // We'll implement generateCupFixtures to generate only the first round.
-
-    // I'll write the code now.
-    // But we also need to handle the third-place match. That is after the semi-finals, so we can't generate it now. We'll generate it when we generate the semi-finals.
-
-    // For now, generate only the first round.
-
-    // I'll update the code accordingly.
-    // The generateCupFixtures function will return an array of fixtures for the first round.
-
-    // We'll use the same structure as league fixtures but with type 'cup' and round label.
-
-    // Let's code this.
-}
-
-/* =========================================================
-   GENERATE CUP FIXTURES (First round only)
-========================================================= */
-
-async function generateCupFixtures({
-  league,
-  clubs,
-  seasonYear,
-}) {
-  const leagueClubs =
-    getLeagueClubs(
-      league,
-      clubs
-    );
-
-  if (
-    leagueClubs.length < 2
-  ) {
-    return [];
-  }
-
-  const n = leagueClubs.length;
-  const p2 = nextPowerOfTwo(n);
-  const byes = p2 - n;
-
-  // Determine first round participants: teams without byes
-  // We'll seed teams by overall rating descending (or random)
-  const sorted = [...leagueClubs].sort(
-    (a, b) => (b.overall || 0) - (a.overall || 0)
-  );
-
-  // Teams with byes are the top 'byes' teams
-  const teamsWithByes = sorted.slice(0, byes);
-  const teamsPlayingFirstRound = sorted.slice(byes);
-
-  // Number of matches in first round
-  const numMatches = teamsPlayingFirstRound.length / 2;
-  if (numMatches === 0) {
-    // No first round matches (n is power of two), so we skip generation? Actually, the first round would be the round of 16 etc., but since all teams play, we need to generate matches for the round of 16. So we need to generate matches for the round that has n teams. So if n is power of two, the first round has n/2 matches. So we should pair all teams.
-    // So we generate matches for the round that has n teams.
-    // We'll pair all teams randomly.
-    // We'll create matches pairing first half with second half (1 vs 16, 2 vs 15, etc.)
-    const half = n / 2;
-    const matches = [];
-    for (let i = 0; i < half; i++) {
-      matches.push({
-        home: sorted[i],
-        away: sorted[n - 1 - i],
-      });
-    }
-    // The round label
-    const roundLabel = getRoundLabel(n);
-    const roundNumber = 1;
-    // Create fixtures for these matches
-    const fixtures = [];
-    // We need to determine match date. We'll use start date from league.
-    const country = getLeagueCountry(league);
-    const startDate = getPreferredLeagueStart(league, seasonYear);
-    const holidaySet = await buildHolidaySet(startDate.getFullYear(), country);
-    let currentMatchDay = findNextMatchDay(
-      startDate,
-      holidaySet,
-      CUP_ALLOWED_DAYS
-    );
-
-    matches.forEach((match, idx) => {
-      const fixture = createFixture({
-        league,
-        home: match.home,
-        away: match.away,
-        seasonYear,
-        round: roundNumber,
-        date: currentMatchDay,
-        roundLabel: roundLabel,
-      });
-      fixtures.push(fixture);
-      // If we have multiple matches on same day, they can share the date.
-    });
-
-    return fixtures;
-  } else {
-    // There is a preliminary round
-    const matches = [];
-    for (let i = 0; i < teamsPlayingFirstRound.length; i += 2) {
-      matches.push({
-        home: teamsPlayingFirstRound[i],
-        away: teamsPlayingFirstRound[i + 1],
-      });
-    }
-    // Round label for preliminary round
-    const roundLabel = "Preliminary Round";
-    const roundNumber = 1;
-    const fixtures = [];
-    const country = getLeagueCountry(league);
-    const startDate = getPreferredLeagueStart(league, seasonYear);
-    const holidaySet = await buildHolidaySet(startDate.getFullYear(), country);
-    let currentMatchDay = findNextMatchDay(
-      startDate,
-      holidaySet,
-      CUP_ALLOWED_DAYS
-    );
-
-    matches.forEach((match) => {
-      const fixture = createFixture({
-        league,
-        home: match.home,
-        away: match.away,
-        seasonYear,
-        round: roundNumber,
-        date: currentMatchDay,
-        roundLabel: roundLabel,
-      });
-      fixtures.push(fixture);
-    });
-
-    return fixtures;
-  }
-}
-
-function getRoundLabel(numTeamsInRound) {
-  if (numTeamsInRound >= 64) return "Round of 64";
-  if (numTeamsInRound >= 32) return "Round of 32";
-  if (numTeamsInRound >= 16) return "Round of 16";
-  if (numTeamsInRound >= 8) return "Quarter-finals";
-  if (numTeamsInRound >= 4) return "Semi-finals";
-  if (numTeamsInRound >= 2) return "Final";
-  return "Round 1";
 }
 
 /* =========================================================
@@ -1552,41 +1148,47 @@ function makeFixtureId({
   return [
     "fixture",
     seasonYear,
-    cleanIdPart(leagueId),
+    cleanIdPart(
+      leagueId
+    ),
     round,
-    cleanIdPart(homeClubId),
-    cleanIdPart(awayClubId),
+    cleanIdPart(
+      homeClubId
+    ),
+    cleanIdPart(
+      awayClubId
+    ),
   ].join("_");
 }
 
 /* =========================================================
-   CREATE FIXTURE
+   CREATE LEAGUE FIXTURE
 ========================================================= */
 
-function createFixture({
+function createLeagueFixture({
   league,
   home,
   away,
   seasonYear,
   round,
   date,
-  roundLabel = null,
 }) {
   const id =
     makeFixtureId({
       seasonYear,
-      leagueId: league.id,
+      leagueId:
+        league.id,
       round,
-      homeClubId: home.id,
-      awayClubId: away.id,
+      homeClubId:
+        home.id,
+      awayClubId:
+        away.id,
     });
-
-  const isCup = league.type === "cup";
 
   return {
     id,
 
-    type: isCup ? "cup" : "league",
+    type: "league",
 
     generated: true,
 
@@ -1614,7 +1216,11 @@ function createFixture({
       ),
 
     round,
-    roundLabel: roundLabel || (isCup ? getRoundLabel(2) : `Round ${round}`),
+
+    stage: "league",
+
+    roundName:
+      `Round ${round}`,
 
     homeClubId:
       home.id,
@@ -1642,8 +1248,7 @@ function createFixture({
     date:
       date.toISOString(),
 
-    status:
-      "scheduled",
+    status: "scheduled",
 
     result: null,
 
@@ -1672,35 +1277,186 @@ function createFixture({
 }
 
 /* =========================================================
-   GENERATE LEAGUE FIXTURES (dispatcher)
+   CREATE CUP FIXTURE
 ========================================================= */
 
-async function generateLeagueFixtures({
+function createCupFixture({
   league,
-  clubs,
   seasonYear,
+  round,
+  stage,
+  roundName,
+  bracketPosition,
+  date,
+  home,
+  away,
+  homeSourceFixtureId = null,
+  awaySourceFixtureId = null,
 }) {
-  if (league.type === "cup") {
-    return await generateCupFixtures({
-      league,
-      clubs,
-      seasonYear,
-    });
-  } else {
-    // League
-    return await generateLeagueFixturesRoundRobin({
-      league,
-      clubs,
-      seasonYear,
-    });
-  }
+  const homeId =
+    home?.id ||
+    `TBD_HOME_${bracketPosition}`;
+
+  const awayId =
+    away?.id ||
+    `TBD_AWAY_${bracketPosition}`;
+
+  const id = [
+    "fixture",
+    seasonYear,
+    cleanIdPart(
+      league.id
+    ),
+    "cup",
+    stage,
+    bracketPosition,
+  ].join("_");
+
+  return {
+    id,
+
+    type: "cup",
+
+    generated: true,
+
+    generatedBy:
+      "automatic-cup-fixture-generator",
+
+    seasonYear,
+
+    season:
+      getSeasonName(
+        seasonYear
+      ),
+
+    leagueId:
+      league.id,
+
+    leagueName:
+      getLeagueName(
+        league
+      ),
+
+    country:
+      getLeagueCountry(
+        league
+      ),
+
+    /*
+     * Cup information
+     */
+
+    round,
+
+    stage,
+
+    roundName,
+
+    bracketPosition,
+
+    /*
+     * Home team
+     */
+
+    homeClubId:
+      home?.id || null,
+
+    homeClubName:
+      home
+        ? getClubName(home)
+        : "TBD",
+
+    homeLogo:
+      home
+        ? getClubLogo(home)
+        : "",
+
+    /*
+     * Away team
+     */
+
+    awayClubId:
+      away?.id || null,
+
+    awayClubName:
+      away
+        ? getClubName(away)
+        : "TBD",
+
+    awayLogo:
+      away
+        ? getClubLogo(away)
+        : "",
+
+    /*
+     * Where the team comes from.
+     *
+     * This is important for future automatic
+     * winner advancement.
+     */
+
+    homeSourceFixtureId,
+
+    awaySourceFixtureId,
+
+    homeSlot:
+      home
+        ? "club"
+        : homeSourceFixtureId
+        ? "winner"
+        : "tbd",
+
+    awaySlot:
+      away
+        ? "club"
+        : awaySourceFixtureId
+        ? "winner"
+        : "tbd",
+
+    stadium:
+      home?.stadium ||
+      home?.stadiumName ||
+      "Club Stadium",
+
+    date:
+      date.toISOString(),
+
+    status:
+      home && away
+        ? "scheduled"
+        : "pending",
+
+    result: null,
+
+    homeScore: null,
+
+    awayScore: null,
+
+    homeOverall:
+      Number(home?.overall) ||
+      Number(home?.rating) ||
+      Number(home?.teamOverall) ||
+      null,
+
+    awayOverall:
+      Number(away?.overall) ||
+      Number(away?.rating) ||
+      Number(away?.teamOverall) ||
+      null,
+
+    createdAt:
+      serverTimestamp(),
+
+    updatedAt:
+      serverTimestamp(),
+  };
 }
 
 /* =========================================================
-   GENERATE LEAGUE FIXTURES (Round Robin)
+   GENERATE LEAGUE FIXTURES
 ========================================================= */
 
-async function generateLeagueFixturesRoundRobin({
+async function generateLeagueFixtures({
   league,
   clubs,
   seasonYear,
@@ -1711,10 +1467,6 @@ async function generateLeagueFixturesRoundRobin({
       clubs
     );
 
-  /*
-   * Minimum two clubs.
-   */
-
   if (
     leagueClubs.length < 2
   ) {
@@ -1722,18 +1474,19 @@ async function generateLeagueFixturesRoundRobin({
   }
 
   const country =
-    getLeagueCountry(league);
+    getLeagueCountry(
+      league
+    );
 
-  const allowedDays = LEAGUE_ALLOWED_DAYS;
-
-  /*
-   * Holiday cache.
-   */
+  const allowedDays =
+    LEAGUE_ALLOWED_DAYS;
 
   const holidaySets =
     new Map();
 
-  async function getHolidays(year) {
+  async function getHolidays(
+    year
+  ) {
     if (
       holidaySets.has(year)
     ) {
@@ -1756,10 +1509,6 @@ async function generateLeagueFixturesRoundRobin({
     return set;
   }
 
-  /*
-   * Build round-robin.
-   */
-
   const rounds =
     buildRounds(
       leagueClubs
@@ -1768,10 +1517,6 @@ async function generateLeagueFixturesRoundRobin({
   if (!rounds.length) {
     return [];
   }
-
-  /*
-   * Determine start date.
-   */
 
   let startDate =
     getPreferredLeagueStart(
@@ -1785,18 +1530,10 @@ async function generateLeagueFixturesRoundRobin({
       seasonYear
     );
 
-  /*
-   * Load holidays for start year.
-   */
-
   let holidaySet =
     await getHolidays(
       startDate.getFullYear()
     );
-
-  /*
-   * Find first match day.
-   */
 
   let currentMatchDay =
     findNextMatchDay(
@@ -1807,10 +1544,6 @@ async function generateLeagueFixturesRoundRobin({
 
   const fixtures = [];
 
-  /*
-   * Generate all rounds.
-   */
-
   for (
     let roundIndex = 0;
     roundIndex < rounds.length;
@@ -1819,25 +1552,13 @@ async function generateLeagueFixturesRoundRobin({
     const round =
       roundIndex + 1;
 
-    /*
-     * Current calendar year.
-     */
-
     const currentYear =
       currentMatchDay.getFullYear();
-
-    /*
-     * Load correct year's holidays.
-     */
 
     holidaySet =
       await getHolidays(
         currentYear
       );
-
-    /*
-     * Make sure match day is valid.
-     */
 
     currentMatchDay =
       findNextMatchDay(
@@ -1846,17 +1567,12 @@ async function generateLeagueFixturesRoundRobin({
         allowedDays
       );
 
-    /*
-     * Create matches for this round.
-     */
-
-    rounds[roundIndex].forEach(
-      ({
-        home,
-        away,
-      }) => {
+    rounds[
+      roundIndex
+    ].forEach(
+      ({ home, away }) => {
         fixtures.push(
-          createFixture({
+          createLeagueFixture({
             league,
             home,
             away,
@@ -1868,10 +1584,6 @@ async function generateLeagueFixturesRoundRobin({
         );
       }
     );
-
-    /*
-     * Next round: one week later.
-     */
 
     const nextWeekCandidate =
       addWeeks(
@@ -1896,6 +1608,721 @@ async function generateLeagueFixturesRoundRobin({
   }
 
   return fixtures;
+}
+
+/* =========================================================
+   GENERATE CUP FIXTURES
+========================================================= */
+
+async function generateCupFixtures({
+  league,
+  clubs,
+  seasonYear,
+}) {
+  const cupClubs =
+    getLeagueClubs(
+      league,
+      clubs
+    );
+
+  if (
+    cupClubs.length < 2
+  ) {
+    return [];
+  }
+
+  /*
+   * We need 64 slots for a complete 1/32 bracket.
+   *
+   * If the cup has more than 64 clubs,
+   * only the first 64 are used.
+   *
+   * If fewer than 64 clubs exist,
+   * the remaining slots become TBD.
+   */
+
+  const participants =
+    [...cupClubs].slice(
+      0,
+      CUP_FIRST_ROUND_TEAMS
+    );
+
+  const country =
+    getLeagueCountry(
+      league
+    );
+
+  const holidaySets =
+    new Map();
+
+  async function getHolidays(
+    year
+  ) {
+    if (
+      holidaySets.has(year)
+    ) {
+      return holidaySets.get(
+        year
+      );
+    }
+
+    const set =
+      await buildHolidaySet(
+        year,
+        country
+      );
+
+    holidaySets.set(
+      year,
+      set
+    );
+
+    return set;
+  }
+
+  /*
+   * Start date.
+   *
+   * Cups start from the league's configured
+   * startDate if available.
+   */
+
+  let startDate =
+    getPreferredLeagueStart(
+      league,
+      seasonYear
+    );
+
+  startDate =
+    clampStartIntoSeasonWindow(
+      startDate,
+      seasonYear
+    );
+
+  let holidaySet =
+    await getHolidays(
+      startDate.getFullYear()
+    );
+
+  let currentMatchDay =
+    findNextMatchDay(
+      startDate,
+      holidaySet,
+      CUP_ALLOWED_DAYS
+    );
+
+  const fixtures = [];
+
+  /*
+   * ---------------------------------------------------------
+   * 1/32
+   * 32 matches
+   * ---------------------------------------------------------
+   */
+
+  const roundOf64Fixtures = [];
+
+  for (
+    let i = 0;
+    i < 32;
+    i += 1
+  ) {
+    const home =
+      participants[i * 2] ||
+      null;
+
+    const away =
+      participants[i * 2 + 1] ||
+      null;
+
+    const fixture =
+      createCupFixture({
+        league,
+        seasonYear,
+
+        round: 1,
+
+        stage:
+          CUP_STAGES.ROUND_OF_64.key,
+
+        roundName:
+          CUP_STAGES.ROUND_OF_64.name,
+
+        bracketPosition:
+          i + 1,
+
+        date:
+          currentMatchDay,
+
+        home,
+        away,
+      });
+
+    roundOf64Fixtures.push(
+      fixture
+    );
+
+    fixtures.push(
+      fixture
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 1/16
+   * 16 matches
+   * ---------------------------------------------------------
+   */
+
+  currentMatchDay =
+    await getNextCupMatchDay(
+      currentMatchDay,
+      getHolidays,
+      1
+    );
+
+  const roundOf32Fixtures = [];
+
+  for (
+    let i = 0;
+    i < 16;
+    i += 1
+  ) {
+    const homeSource =
+      roundOf64Fixtures[
+        i * 2
+      ];
+
+    const awaySource =
+      roundOf64Fixtures[
+        i * 2 + 1
+      ];
+
+    const fixture =
+      createCupFixture({
+        league,
+        seasonYear,
+
+        round: 2,
+
+        stage:
+          CUP_STAGES.ROUND_OF_32.key,
+
+        roundName:
+          CUP_STAGES.ROUND_OF_32.name,
+
+        bracketPosition:
+          i + 1,
+
+        date:
+          currentMatchDay,
+
+        home: null,
+        away: null,
+
+        homeSourceFixtureId:
+          homeSource.id,
+
+        awaySourceFixtureId:
+          awaySource.id,
+      });
+
+    roundOf32Fixtures.push(
+      fixture
+    );
+
+    fixtures.push(
+      fixture
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 1/8
+   * 8 matches
+   * ---------------------------------------------------------
+   */
+
+  currentMatchDay =
+    await getNextCupMatchDay(
+      currentMatchDay,
+      getHolidays,
+      1
+    );
+
+  const roundOf16Fixtures = [];
+
+  for (
+    let i = 0;
+    i < 8;
+    i += 1
+  ) {
+    const homeSource =
+      roundOf32Fixtures[
+        i * 2
+      ];
+
+    const awaySource =
+      roundOf32Fixtures[
+        i * 2 + 1
+      ];
+
+    const fixture =
+      createCupFixture({
+        league,
+        seasonYear,
+
+        round: 3,
+
+        stage:
+          CUP_STAGES.ROUND_OF_16.key,
+
+        roundName:
+          CUP_STAGES.ROUND_OF_16.name,
+
+        bracketPosition:
+          i + 1,
+
+        date:
+          currentMatchDay,
+
+        home: null,
+        away: null,
+
+        homeSourceFixtureId:
+          homeSource.id,
+
+        awaySourceFixtureId:
+          awaySource.id,
+      });
+
+    roundOf16Fixtures.push(
+      fixture
+    );
+
+    fixtures.push(
+      fixture
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 1/4
+   * 4 matches
+   * ---------------------------------------------------------
+   */
+
+  currentMatchDay =
+    await getNextCupMatchDay(
+      currentMatchDay,
+      getHolidays,
+      1
+    );
+
+  const quarterFinalFixtures = [];
+
+  for (
+    let i = 0;
+    i < 4;
+    i += 1
+  ) {
+    const homeSource =
+      roundOf16Fixtures[
+        i * 2
+      ];
+
+    const awaySource =
+      roundOf16Fixtures[
+        i * 2 + 1
+      ];
+
+    const fixture =
+      createCupFixture({
+        league,
+        seasonYear,
+
+        round: 4,
+
+        stage:
+          CUP_STAGES.QUARTER_FINAL.key,
+
+        roundName:
+          CUP_STAGES.QUARTER_FINAL.name,
+
+        bracketPosition:
+          i + 1,
+
+        date:
+          currentMatchDay,
+
+        home: null,
+        away: null,
+
+        homeSourceFixtureId:
+          homeSource.id,
+
+        awaySourceFixtureId:
+          awaySource.id,
+      });
+
+    quarterFinalFixtures.push(
+      fixture
+    );
+
+    fixtures.push(
+      fixture
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 1/2
+   * 2 matches
+   * ---------------------------------------------------------
+   */
+
+  currentMatchDay =
+    await getNextCupMatchDay(
+      currentMatchDay,
+      getHolidays,
+      1
+    );
+
+  const semiFinalFixtures = [];
+
+  for (
+    let i = 0;
+    i < 2;
+    i += 1
+  ) {
+    const homeSource =
+      quarterFinalFixtures[
+        i * 2
+      ];
+
+    const awaySource =
+      quarterFinalFixtures[
+        i * 2 + 1
+      ];
+
+    const fixture =
+      createCupFixture({
+        league,
+        seasonYear,
+
+        round: 5,
+
+        stage:
+          CUP_STAGES.SEMI_FINAL.key,
+
+        roundName:
+          CUP_STAGES.SEMI_FINAL.name,
+
+        bracketPosition:
+          i + 1,
+
+        date:
+          currentMatchDay,
+
+        home: null,
+        away: null,
+
+        homeSourceFixtureId:
+          homeSource.id,
+
+        awaySourceFixtureId:
+          awaySource.id,
+      });
+
+    semiFinalFixtures.push(
+      fixture
+    );
+
+    fixtures.push(
+      fixture
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * THIRD PLACE
+   * ---------------------------------------------------------
+   *
+   * Loser of Semi 1
+   * vs
+   * Loser of Semi 2
+   */
+
+  const thirdPlaceDate =
+    await getNextCupMatchDay(
+      currentMatchDay,
+      getHolidays,
+      1
+    );
+
+  const thirdPlace =
+    createCupFixture({
+      league,
+      seasonYear,
+
+      round: 6,
+
+      stage:
+        CUP_STAGES.THIRD_PLACE.key,
+
+      roundName:
+        CUP_STAGES.THIRD_PLACE.name,
+
+      bracketPosition: 1,
+
+      date:
+        thirdPlaceDate,
+
+      home: null,
+      away: null,
+
+      homeSourceFixtureId:
+        semiFinalFixtures[0].id,
+
+      awaySourceFixtureId:
+        semiFinalFixtures[1].id,
+    });
+
+  /*
+   * Tell system that these are LOSERS.
+   */
+
+  thirdPlace.homeSlot =
+    "loser";
+
+  thirdPlace.awaySlot =
+    "loser";
+
+  fixtures.push(
+    thirdPlace
+  );
+
+  /*
+   * ---------------------------------------------------------
+   * FINAL
+   * ---------------------------------------------------------
+   *
+   * Winner of Semi 1
+   * vs
+   * Winner of Semi 2
+   */
+
+  const finalDate =
+    await getNextCupMatchDay(
+      thirdPlaceDate,
+      getHolidays,
+      1
+    );
+
+  const final =
+    createCupFixture({
+      league,
+      seasonYear,
+
+      round: 7,
+
+      stage:
+        CUP_STAGES.FINAL.key,
+
+      roundName:
+        CUP_STAGES.FINAL.name,
+
+      bracketPosition: 1,
+
+      date:
+        finalDate,
+
+      home: null,
+      away: null,
+
+      homeSourceFixtureId:
+        semiFinalFixtures[0].id,
+
+      awaySourceFixtureId:
+        semiFinalFixtures[1].id,
+    });
+
+  /*
+   * Final receives WINNERS.
+   */
+
+  final.homeSlot =
+    "winner";
+
+  final.awaySlot =
+    "winner";
+
+  fixtures.push(
+    final
+  );
+
+  /*
+   * ---------------------------------------------------------
+   * CONNECT BRACKET
+   * ---------------------------------------------------------
+   *
+   * Each previous fixture knows where its winner goes.
+   */
+
+  function setNextFixture(
+    sourceFixture,
+    nextFixture,
+    slot
+  ) {
+    if (!sourceFixture) {
+      return;
+    }
+
+    sourceFixture.nextFixtureId =
+      nextFixture.id;
+
+    sourceFixture.nextFixtureSlot =
+      slot;
+  }
+
+  /*
+   * 1/32 -> 1/16
+   */
+
+  roundOf64Fixtures.forEach(
+    (fixture, index) => {
+      const next =
+        roundOf32Fixtures[
+          Math.floor(index / 2)
+        ];
+
+      const slot =
+        index % 2 === 0
+          ? "home"
+          : "away";
+
+      setNextFixture(
+        fixture,
+        next,
+        slot
+      );
+    }
+  );
+
+  /*
+   * 1/16 -> 1/8
+   */
+
+  roundOf32Fixtures.forEach(
+    (fixture, index) => {
+      const next =
+        roundOf16Fixtures[
+          Math.floor(index / 2)
+        ];
+
+      const slot =
+        index % 2 === 0
+          ? "home"
+          : "away";
+
+      setNextFixture(
+        fixture,
+        next,
+        slot
+      );
+    }
+  );
+
+  /*
+   * 1/8 -> 1/4
+   */
+
+  roundOf16Fixtures.forEach(
+    (fixture, index) => {
+      const next =
+        quarterFinalFixtures[
+          Math.floor(index / 2)
+        ];
+
+      const slot =
+        index % 2 === 0
+          ? "home"
+          : "away";
+
+      setNextFixture(
+        fixture,
+        next,
+        slot
+      );
+    }
+  );
+
+  /*
+   * 1/4 -> 1/2
+   */
+
+  quarterFinalFixtures.forEach(
+    (fixture, index) => {
+      const next =
+        semiFinalFixtures[
+          Math.floor(index / 2)
+        ];
+
+      const slot =
+        index % 2 === 0
+          ? "home"
+          : "away";
+
+      setNextFixture(
+        fixture,
+        next,
+        slot
+      );
+    }
+  );
+
+  /*
+   * Semi -> Final / Third Place
+   */
+
+  semiFinalFixtures.forEach(
+    (fixture) => {
+      fixture.nextFinalFixtureId =
+        final.id;
+
+      fixture.nextThirdPlaceFixtureId =
+        thirdPlace.id;
+    }
+  );
+
+  return fixtures;
+}
+
+/* =========================================================
+   CUP NEXT MATCH DAY
+========================================================= */
+
+async function getNextCupMatchDay(
+  currentDate,
+  getHolidays,
+  weeks
+) {
+  const candidate =
+    addWeeks(
+      currentDate,
+      weeks
+    );
+
+  const holidaySet =
+    await getHolidays(
+      candidate.getFullYear()
+    );
+
+  return findNextMatchDay(
+    candidate,
+    holidaySet,
+    CUP_ALLOWED_DAYS
+  );
 }
 
 /* =========================================================
@@ -1954,7 +2381,9 @@ async function getExistingFixtureIds(
 
   snapshot.forEach(
     (item) => {
-      ids.add(item.id);
+      ids.add(
+        item.id
+      );
     }
   );
 
@@ -1968,7 +2397,9 @@ async function getExistingFixtureIds(
 async function saveFixtures(
   fixtures
 ) {
-  if (!fixtures.length) {
+  if (
+    !fixtures.length
+  ) {
     return 0;
   }
 
@@ -2014,7 +2445,7 @@ async function saveFixtures(
 }
 
 /* =========================================================
-   GENERATE SEASON FOR SELECTED LEAGUES
+   GENERATE SEASON FIXTURES
 ========================================================= */
 
 async function generateSeasonFixtures({
@@ -2024,15 +2455,23 @@ async function generateSeasonFixtures({
   seasonYear,
 }) {
   if (
-    !Array.isArray(leagueIds) ||
+    !Array.isArray(
+      leagueIds
+    ) ||
     leagueIds.length === 0 ||
-    !Array.isArray(leagues) ||
-    !Array.isArray(clubs)
+    !Array.isArray(
+      leagues
+    ) ||
+    !Array.isArray(
+      clubs
+    )
   ) {
     return {
       generated: 0,
       existing: 0,
       leaguesProcessed: 0,
+      cupFixtures: 0,
+      leagueFixtures: 0,
     };
   }
 
@@ -2049,6 +2488,9 @@ async function generateSeasonFixtures({
 
   let leaguesProcessed = 0;
 
+  let cupFixtures = 0;
+  let leagueFixtures = 0;
+
   /*
    * Process each selected league.
    */
@@ -2059,7 +2501,8 @@ async function generateSeasonFixtures({
     const league =
       leagues.find(
         (l) =>
-          l.id === leagueId
+          l.id ===
+          leagueId
       );
 
     if (!league) {
@@ -2080,14 +2523,67 @@ async function generateSeasonFixtures({
 
     leaguesProcessed += 1;
 
-    const generatedFixtures =
+    /*
+     * =====================================================
+     * CUP
+     * =====================================================
+     */
+
+    if (
+      league.type === "cup"
+    ) {
+      const generatedCup =
+        await generateCupFixtures({
+          league,
+          clubs,
+          seasonYear,
+        });
+
+      generatedCup.forEach(
+        (fixture) => {
+          if (
+            existingIds.has(
+              fixture.id
+            )
+          ) {
+            return;
+          }
+
+          if (
+            fixturesToCreate.some(
+              (existing) =>
+                existing.id ===
+                fixture.id
+            )
+          ) {
+            return;
+          }
+
+          fixturesToCreate.push(
+            fixture
+          );
+
+          cupFixtures += 1;
+        }
+      );
+
+      continue;
+    }
+
+    /*
+     * =====================================================
+     * LEAGUE
+     * =====================================================
+     */
+
+    const generatedLeague =
       await generateLeagueFixtures({
         league,
-        clubs: leagueClubs,
+        clubs,
         seasonYear,
       });
 
-    generatedFixtures.forEach(
+    generatedLeague.forEach(
       (fixture) => {
         if (
           existingIds.has(
@@ -2110,6 +2606,8 @@ async function generateSeasonFixtures({
         fixturesToCreate.push(
           fixture
         );
+
+        leagueFixtures += 1;
       }
     );
   }
@@ -2130,6 +2628,10 @@ async function generateSeasonFixtures({
       existingIds.size,
 
     leaguesProcessed,
+
+    cupFixtures,
+
+    leagueFixtures,
   };
 }
 
@@ -2169,11 +2671,6 @@ export default function FixturesPage({
   ] = useState(null);
 
   const [
-    hasGenerated,
-    setHasGenerated,
-  ] = useState(false);
-
-  const [
     selectedLeagueIds,
     setSelectedLeagueIds,
   ] = useState([]);
@@ -2184,142 +2681,153 @@ export default function FixturesPage({
   ] = useState(false);
 
   /* =======================================================
-     GENERATE FUNCTION
+     GENERATE
   ======================================================= */
 
-  const handleGenerate = useCallback(
-    async () => {
-      if (
-        !user ||
-        isGenerating ||
-        selectedLeagueIds.length === 0
-      ) {
-        return;
-      }
-
-      try {
-        setIsGenerating(true);
-        setStatus("generating");
-        setMessage("Generating fixtures...");
-        setHasGenerated(false);
-
-        /*
-         * Determine current season.
-         */
-
-        const currentDate =
-          new Date();
-
-        const currentSeason =
-          getSeasonYear(
-            currentDate
-          );
-
-        setSeasonYear(
-          currentSeason
-        );
-
-        setMessage(
-          `Generating fixtures for ${getSeasonName(
-            currentSeason
-          )}...`
-        );
-
-        const generationResult =
-          await generateSeasonFixtures({
-            leagueIds:
-              selectedLeagueIds,
-            leagues:
-              initialLeagues,
-            clubs:
-              initialClubs,
-            seasonYear:
-              currentSeason,
-          });
-
-        setResult(
-          generationResult
-        );
-
-        setHasGenerated(
-          true
-        );
-
-        setStatus(
-          "complete"
-        );
-
+  const handleGenerate =
+    useCallback(
+      async () => {
         if (
-          generationResult.generated >
-          0
+          !user ||
+          isGenerating ||
+          selectedLeagueIds.length ===
+            0
         ) {
-          setMessage(
-            `${generationResult.generated} fixtures generated successfully.`
+          return;
+        }
+
+        try {
+          setIsGenerating(
+            true
           );
-        } else {
+
+          setStatus(
+            "generating"
+          );
+
           setMessage(
-            `Fixtures for selected leagues already exist or no fixtures were created.`
+            "Generating fixtures..."
+          );
+
+          /*
+           * Determine current season.
+           */
+
+          const currentDate =
+            new Date();
+
+          const currentSeason =
+            getSeasonYear(
+              currentDate
+            );
+
+          setSeasonYear(
+            currentSeason
+          );
+
+          setMessage(
+            `Generating fixtures for ${getSeasonName(
+              currentSeason
+            )}...`
+          );
+
+          const generationResult =
+            await generateSeasonFixtures({
+              leagueIds:
+                selectedLeagueIds,
+
+              leagues:
+                initialLeagues,
+
+              clubs:
+                initialClubs,
+
+              seasonYear:
+                currentSeason,
+            });
+
+          setResult(
+            generationResult
+          );
+
+          setStatus(
+            "complete"
+          );
+
+          if (
+            generationResult.generated >
+            0
+          ) {
+            setMessage(
+              `${generationResult.generated} fixtures generated successfully.`
+            );
+          } else {
+            setMessage(
+              "Fixtures for selected competitions already exist or no fixtures were created."
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[FIXTURE GENERATOR ERROR]",
+            error
+          );
+
+          setStatus(
+            "error"
+          );
+
+          setMessage(
+            error?.message ||
+              "Automatic fixture generation failed."
+          );
+        } finally {
+          setIsGenerating(
+            false
           );
         }
-      } catch (error) {
-        console.error(
-          "[FIXTURE GENERATOR ERROR]",
-          error
-        );
-
-        setStatus(
-          "error"
-        );
-
-        setMessage(
-          error?.message ||
-            "Automatic fixture generation failed."
-        );
-      } finally {
-        setIsGenerating(false);
-      }
-    },
-    [
-      user,
-      isGenerating,
-      selectedLeagueIds,
-      initialLeagues,
-      initialClubs,
-    ]
-  );
+      },
+      [
+        user,
+        isGenerating,
+        selectedLeagueIds,
+        initialLeagues,
+        initialClubs,
+      ]
+    );
 
   /* =======================================================
-     TOGGLE SELECTION
+     TOGGLE
   ======================================================= */
 
-  const toggleLeagueSelection = (
-    leagueId
-  ) => {
-    setSelectedLeagueIds(
-      (prev) => {
-        if (
-          prev.includes(
-            leagueId
-          )
-        ) {
-          return prev.filter(
-            (id) =>
-              id !== leagueId
-          );
-        } else {
+  const toggleLeagueSelection =
+    (leagueId) => {
+      setSelectedLeagueIds(
+        (prev) => {
+          if (
+            prev.includes(
+              leagueId
+            )
+          ) {
+            return prev.filter(
+              (id) =>
+                id !==
+                leagueId
+            );
+          }
+
           return [
             ...prev,
             leagueId,
           ];
         }
-      }
-    );
-  };
+      );
+    };
 
   const selectAll = () => {
     setSelectedLeagueIds(
       initialLeagues.map(
-        (l) => l.id
+        (league) =>
+          league.id
       )
     );
   };
@@ -2348,11 +2856,16 @@ export default function FixturesPage({
         />
 
         <p>
-          Loading fixture generator...
+          Loading fixture
+          generator...
         </p>
       </div>
     );
   }
+
+  /* =======================================================
+     LOGIN
+  ======================================================= */
 
   if (!user) {
     return (
@@ -2361,6 +2874,11 @@ export default function FixturesPage({
           <title>
             Fixture Generator
           </title>
+
+          <meta
+            name="description"
+            content="Automatic football fixture generator"
+          />
         </Head>
 
         <main
@@ -2373,9 +2891,9 @@ export default function FixturesPage({
           </h1>
 
           <p>
-            Login is required for
-            automatic fixture
-            generation.
+            Login is required
+            for automatic
+            fixture generation.
           </p>
         </main>
       </>
@@ -2395,7 +2913,7 @@ export default function FixturesPage({
 
         <meta
           name="description"
-          content="Automatic football league fixture generator"
+          content="Automatic football league and cup fixture generator"
         />
       </Head>
 
@@ -2425,6 +2943,10 @@ export default function FixturesPage({
             </div>
           </div>
 
+          {/* =================================================
+              CONTROLS
+          ================================================= */}
+
           <div
             className={
               styles.controls
@@ -2442,6 +2964,9 @@ export default function FixturesPage({
                 onClick={
                   selectAll
                 }
+                disabled={
+                  isGenerating
+                }
               >
                 Select All
               </button>
@@ -2452,6 +2977,9 @@ export default function FixturesPage({
                 }
                 onClick={
                   clearAll
+                }
+                disabled={
+                  isGenerating
                 }
               >
                 Clear All
@@ -2476,6 +3004,10 @@ export default function FixturesPage({
               </button>
             </div>
 
+            {/* =================================================
+                LEAGUE LIST
+            ================================================= */}
+
             <div
               className={
                 styles.leagueList
@@ -2491,48 +3023,89 @@ export default function FixturesPage({
               )}
 
               {initialLeagues.map(
-                (league) => (
-                  <label
-                    key={
-                      league.id
-                    }
-                    className={
-                      styles.leagueCheckbox
-                    }
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedLeagueIds.includes(
+                (league) => {
+                  const clubCount =
+                    getLeagueClubs(
+                      league,
+                      initialClubs
+                    ).length;
+
+                  const isCup =
+                    league.type ===
+                    "cup";
+
+                  return (
+                    <label
+                      key={
                         league.id
-                      )}
-                      onChange={() =>
-                        toggleLeagueSelection(
-                          league.id
-                        )
                       }
-                    />
+                      className={
+                        styles.leagueCheckbox
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLeagueIds.includes(
+                          league.id
+                        )}
+                        onChange={() =>
+                          toggleLeagueSelection(
+                            league.id
+                          )
+                        }
+                        disabled={
+                          isGenerating
+                        }
+                      />
 
-                    <span>
-                      {league.name}{" "}
-                      <small>
-                        ({league.type ||
-                          "league"})
-                      </small>
+                      <span>
+                        {league.name}
 
-                      <em>
-                        (
-                        {getLeagueClubs(
-                          league,
-                          initialClubs
-                        ).length}{" "}
-                        clubs)
-                      </em>
-                    </span>
-                  </label>
-                )
+                        {" "}
+
+                        <small>
+                          (
+                          {isCup
+                            ? "cup"
+                            : league.type ||
+                              "league"}
+                          )
+                        </small>
+
+                        {" "}
+
+                        <em>
+                          ({clubCount}{" "}
+                          clubs)
+                        </em>
+
+                        {isCup && (
+                          <small
+                            style={{
+                              display:
+                                "block",
+                              marginTop:
+                                "4px",
+                            }}
+                          >
+                            1/32 → 1/16
+                            → 1/8 →
+                            1/4 → 1/2
+                            → 3rd Place
+                            → Final
+                          </small>
+                        )}
+                      </span>
+                    </label>
+                  );
+                }
               )}
             </div>
           </div>
+
+          {/* =================================================
+              STATUS
+          ================================================= */}
 
           <div
             className={
@@ -2603,20 +3176,53 @@ export default function FixturesPage({
 
                     <br />
 
-                    Leagues processed:{" "}
+                    Competitions processed:{" "}
                     <strong>
                       {
                         result.leaguesProcessed
+                      }
+                    </strong>
+
+                    <br />
+
+                    League fixtures:{" "}
+                    <strong>
+                      {
+                        result.leagueFixtures
+                      }
+                    </strong>
+
+                    <br />
+
+                    Cup fixtures:{" "}
+                    <strong>
+                      {
+                        result.cupFixtures
                       }
                     </strong>
                   </p>
                 )}
 
                 <p>
-                  Fixtures are stored
-                  automatically in
-                  Firestore.
+                  Fixtures are
+                  stored
+                  automatically
+                  in Firestore.
                 </p>
+
+                {result?.cupFixtures >
+                  0 && (
+                  <p>
+                    Cup bracket:
+                    <br />
+                    <strong>
+                      1/32 → 1/16 →
+                      1/8 → 1/4 →
+                      1/2 → Third
+                      Place → Final
+                    </strong>
+                  </p>
+                )}
               </>
             )}
 
@@ -2694,8 +3300,7 @@ export async function getServerSideProps() {
         )
         .map(
           (item) => ({
-            id:
-              item.id,
+            id: item.id,
             ...item.data(),
           })
         );
@@ -2712,8 +3317,7 @@ export async function getServerSideProps() {
         )
         .map(
           (item) => ({
-            id:
-              item.id,
+            id: item.id,
             ...item.data(),
           })
         );
