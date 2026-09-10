@@ -5,7 +5,6 @@ import {
 
 import {
   PITCH,
-  COLORS,
 } from "../../lib/match-engine/constants";
 
 export default function MatchCanvas({
@@ -17,569 +16,662 @@ export default function MatchCanvas({
   const animationRef =
     useRef(null);
 
-  const lastTimeRef =
+  const previousTimeRef =
     useRef(null);
 
   useEffect(() => {
     const canvas =
       canvasRef.current;
 
-    if (!canvas || !engine) {
+    if (
+      !canvas ||
+      !engine
+    ) {
       return;
     }
 
-    const ctx =
-      canvas.getContext("2d");
-
-    let width =
-      PITCH.width;
-
-    let height =
-      PITCH.height;
-
-    const resizeCanvas = () => {
-      const parent =
-        canvas.parentElement;
-
-      if (!parent) {
-        return;
-      }
-
-      const rect =
-        parent.getBoundingClientRect();
-
-      const scale =
-        Math.min(
-          rect.width /
-            PITCH.width,
-
-          rect.height /
-            PITCH.height
-        );
-
-      const displayWidth =
-        PITCH.width * scale;
-
-      const displayHeight =
-        PITCH.height * scale;
-
-      canvas.style.width =
-        `${displayWidth}px`;
-
-      canvas.style.height =
-        `${displayHeight}px`;
-
-      const dpr =
-        window.devicePixelRatio ||
-        1;
-
-      canvas.width =
-        PITCH.width * dpr;
-
-      canvas.height =
-        PITCH.height * dpr;
-
-      ctx.setTransform(
-        dpr,
-        0,
-        0,
-        dpr,
-        0,
-        0
+    const context =
+      canvas.getContext(
+        "2d"
       );
 
-      width =
-        PITCH.width;
+    const resize =
+      () => {
+        const parent =
+          canvas.parentElement;
 
-      height =
-        PITCH.height;
-    };
-
-    const drawPitch = () => {
-      ctx.clearRect(
-        0,
-        0,
-        width,
-        height
-      );
-
-      ctx.fillStyle =
-        COLORS.pitch;
-
-      ctx.fillRect(
-        0,
-        0,
-        width,
-        height
-      );
-
-      drawGrass(ctx);
-
-      drawLines(ctx);
-
-      drawGoals(ctx);
-
-      drawPlayers(ctx);
-
-      drawBall(ctx);
-    };
-
-    const drawGrass = ctx => {
-      const stripeWidth =
-        width / 14;
-
-      for (
-        let i = 0;
-        i < 14;
-        i++
-      ) {
-        if (i % 2 === 0) {
-          ctx.fillStyle =
-            COLORS.pitchDark;
-
-          ctx.fillRect(
-            i * stripeWidth,
-            0,
-            stripeWidth,
-            height
-          );
+        if (!parent) {
+          return;
         }
-      }
-    };
 
-    const drawLines = ctx => {
-      ctx.strokeStyle =
-        COLORS.line;
+        const rect =
+          parent.getBoundingClientRect();
 
-      ctx.lineWidth = 3;
+        const scale =
+          Math.min(
+            rect.width /
+              PITCH.width,
 
-      ctx.strokeRect(
-        2,
-        2,
-        width - 4,
-        height - 4
-      );
+            rect.height /
+              PITCH.height
+          );
 
-      ctx.beginPath();
+        const width =
+          PITCH.width *
+          scale;
 
-      ctx.moveTo(
-        width / 2,
-        0
-      );
+        const height =
+          PITCH.height *
+          scale;
 
-      ctx.lineTo(
-        width / 2,
-        height
-      );
+        const dpr =
+          window.devicePixelRatio ||
+          1;
 
-      ctx.stroke();
+        canvas.width =
+          PITCH.width *
+          dpr;
 
-      ctx.beginPath();
+        canvas.height =
+          PITCH.height *
+          dpr;
 
-      ctx.arc(
-        width / 2,
-        height / 2,
-        PITCH.centerCircleRadius,
-        0,
-        Math.PI * 2
-      );
+        canvas.style.width =
+          `${width}px`;
 
-      ctx.stroke();
+        canvas.style.height =
+          `${height}px`;
 
-      ctx.beginPath();
-
-      ctx.arc(
-        width / 2,
-        height / 2,
-        5,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fillStyle =
-        COLORS.line;
-
-      ctx.fill();
-
-      /*
-       * Home penalty area
-       */
-      ctx.strokeRect(
-        0,
-        (height -
-          PITCH.penaltyBoxWidth) /
-          2,
-
-        PITCH.penaltyBoxDepth,
-
-        PITCH.penaltyBoxWidth
-      );
-
-      /*
-       * Away penalty area
-       */
-      ctx.strokeRect(
-        width -
-          PITCH.penaltyBoxDepth,
-
-        (height -
-          PITCH.penaltyBoxWidth) /
-          2,
-
-        PITCH.penaltyBoxDepth,
-
-        PITCH.penaltyBoxWidth
-      );
-
-      /*
-       * Goal boxes
-       */
-      ctx.strokeRect(
-        0,
-        (height -
-          PITCH.goalBoxWidth) /
-          2,
-
-        PITCH.goalBoxDepth,
-
-        PITCH.goalBoxWidth
-      );
-
-      ctx.strokeRect(
-        width -
-          PITCH.goalBoxDepth,
-
-        (height -
-          PITCH.goalBoxWidth) /
-          2,
-
-        PITCH.goalBoxDepth,
-
-        PITCH.goalBoxWidth
-      );
-
-      /*
-       * Penalty spots
-       */
-      ctx.fillStyle =
-        COLORS.line;
-
-      ctx.beginPath();
-
-      ctx.arc(
-        105,
-        height / 2,
-        4,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-
-      ctx.beginPath();
-
-      ctx.arc(
-        width - 105,
-        height / 2,
-        4,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-    };
-
-    const drawGoals = ctx => {
-      const goalTop =
-        (height -
-          PITCH.goalWidth) /
-          2;
-
-      const goalBottom =
-        goalTop +
-        PITCH.goalWidth;
-
-      ctx.strokeStyle =
-        "#ffffff";
-
-      ctx.lineWidth = 4;
-
-      /*
-       * Left goal
-       */
-      ctx.strokeRect(
-        -PITCH.goalDepth,
-        goalTop,
-        PITCH.goalDepth,
-        PITCH.goalWidth
-      );
-
-      /*
-       * Right goal
-       */
-      ctx.strokeRect(
-        width,
-        goalTop,
-        PITCH.goalDepth,
-        PITCH.goalWidth
-      );
-
-      ctx.lineWidth = 3;
-
-      /*
-       * Net lines
-       */
-      ctx.globalAlpha = 0.35;
-
-      for (
-        let y = goalTop;
-        y <= goalBottom;
-        y += 12
-      ) {
-        ctx.beginPath();
-
-        ctx.moveTo(
+        context.setTransform(
+          dpr,
           0,
-          y
+          0,
+          dpr,
+          0,
+          0
+        );
+      };
+
+    const drawPitch =
+      () => {
+        context.clearRect(
+          0,
+          0,
+          PITCH.width,
+          PITCH.height
         );
 
-        ctx.lineTo(
-          -PITCH.goalDepth,
-          y
+        drawGrass(
+          context
         );
 
-        ctx.stroke();
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-          width,
-          y
+        drawFieldLines(
+          context
         );
 
-        ctx.lineTo(
-          width +
-            PITCH.goalDepth,
-          y
+        drawGoals(
+          context
         );
 
-        ctx.stroke();
-      }
+        drawPlayers(
+          context
+        );
 
-      ctx.globalAlpha = 1;
-    };
+        drawBall(
+          context
+        );
+      };
 
-    const drawPlayers = ctx => {
-      const snapshot =
-        engine.getSnapshot();
+    const drawGrass =
+      ctx => {
+        ctx.fillStyle =
+          "#168447";
 
-      snapshot.players.forEach(
-        player => {
-          const isHome =
-            player.teamSide ===
-            "home";
+        ctx.fillRect(
+          0,
+          0,
+          PITCH.width,
+          PITCH.height
+        );
 
-          const baseColor =
-            isHome
-              ? COLORS.home
-              : COLORS.away;
+        const stripe =
+          PITCH.width /
+          14;
 
-          const darkColor =
-            isHome
-              ? COLORS.homeDark
-              : COLORS.awayDark;
-
-          const radius =
-            player.position === "GK"
-              ? 20
-              : PITCH.playerRadius;
-
-          /*
-           * Player shadow
-           */
-          ctx.beginPath();
-
-          ctx.arc(
-            player.x + 2,
-            player.y + 3,
-            radius,
-            0,
-            Math.PI * 2
-          );
-
-          ctx.fillStyle =
-            "rgba(0,0,0,0.28)";
-
-          ctx.fill();
-
-          /*
-           * Player circle
-           */
-          ctx.beginPath();
-
-          ctx.arc(
-            player.x,
-            player.y,
-            radius,
-            0,
-            Math.PI * 2
-          );
-
-          ctx.fillStyle =
-            baseColor;
-
-          ctx.fill();
-
-          ctx.strokeStyle =
-            player.hasBall
-              ? "#facc15"
-              : darkColor;
-
-          ctx.lineWidth =
-            player.hasBall
-              ? 4
-              : 2;
-
-          ctx.stroke();
-
-          /*
-           * Shirt number
-           */
-          ctx.fillStyle =
-            "#ffffff";
-
-          ctx.font =
-            "bold 12px Arial";
-
-          ctx.textAlign =
-            "center";
-
-          ctx.textBaseline =
-            "middle";
-
-          ctx.fillText(
-            player.number,
-            player.x,
-            player.y
-          );
-
-          /*
-           * GK label
-           */
+        for (
+          let i = 0;
+          i < 14;
+          i++
+        ) {
           if (
-            player.position ===
-            "GK"
+            i % 2 ===
+            0
           ) {
-            ctx.font =
-              "bold 9px Arial";
+            ctx.fillStyle =
+              "rgba(0,0,0,0.07)";
 
-            ctx.fillText(
-              "GK",
-              player.x,
-              player.y -
-                radius -
-                8
+            ctx.fillRect(
+              i * stripe,
+              0,
+              stripe,
+              PITCH.height
             );
           }
         }
-      );
-    };
+      };
 
-    const drawBall = ctx => {
-      const ball =
-        engine.getSnapshot()
-          .ball;
+    const drawFieldLines =
+      ctx => {
+        ctx.strokeStyle =
+          "rgba(255,255,255,0.95)";
 
-      ctx.beginPath();
+        ctx.lineWidth =
+          3;
 
-      ctx.arc(
-        ball.x + 1,
-        ball.y + 2,
-        PITCH.ballRadius + 2,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fillStyle =
-        "rgba(0,0,0,0.25)";
-
-      ctx.fill();
-
-      ctx.beginPath();
-
-      ctx.arc(
-        ball.x,
-        ball.y,
-        PITCH.ballRadius,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fillStyle =
-        COLORS.ball;
-
-      ctx.fill();
-
-      ctx.strokeStyle =
-        "#111827";
-
-      ctx.lineWidth = 1.5;
-
-      ctx.stroke();
-    };
-
-    const loop = timestamp => {
-      if (
-        lastTimeRef.current ===
-        null
-      ) {
-        lastTimeRef.current =
-          timestamp;
-      }
-
-      let delta =
-        (timestamp -
-          lastTimeRef.current) /
-        1000;
-
-      lastTimeRef.current =
-        timestamp;
-
-      /*
-       * Prevent giant jumps if the
-       * browser tab sleeps.
-       */
-      delta =
-        Math.min(delta, 0.1);
-
-      engine.update(delta);
-
-      drawPitch();
-
-      animationRef.current =
-        requestAnimationFrame(
-          loop
+        ctx.strokeRect(
+          2,
+          2,
+          PITCH.width -
+            4,
+          PITCH.height -
+            4
         );
-    };
 
-    resizeCanvas();
+        ctx.beginPath();
 
-    const resizeObserver =
-      new ResizeObserver(
-        resizeCanvas
-      );
+        ctx.moveTo(
+          PITCH.width / 2,
+          0
+        );
 
-    if (
-      canvas.parentElement
-    ) {
-      resizeObserver.observe(
-        canvas.parentElement
-      );
-    }
+        ctx.lineTo(
+          PITCH.width / 2,
+          PITCH.height
+        );
+
+        ctx.stroke();
+
+        ctx.beginPath();
+
+        ctx.arc(
+          PITCH.width / 2,
+          PITCH.height / 2,
+          PITCH.centerCircleRadius,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.stroke();
+
+        ctx.beginPath();
+
+        ctx.arc(
+          PITCH.width / 2,
+          PITCH.height / 2,
+          4,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.fillStyle =
+          "#ffffff";
+
+        ctx.fill();
+
+        const penaltyTop =
+          (PITCH.height -
+            PITCH.penaltyBoxWidth) /
+          2;
+
+        ctx.strokeRect(
+          0,
+          penaltyTop,
+          PITCH.penaltyBoxDepth,
+          PITCH.penaltyBoxWidth
+        );
+
+        ctx.strokeRect(
+          PITCH.width -
+            PITCH.penaltyBoxDepth,
+
+          penaltyTop,
+
+          PITCH.penaltyBoxDepth,
+
+          PITCH.penaltyBoxWidth
+        );
+
+        const goalBoxTop =
+          (PITCH.height -
+            PITCH.goalBoxWidth) /
+          2;
+
+        ctx.strokeRect(
+          0,
+          goalBoxTop,
+          PITCH.goalBoxDepth,
+          PITCH.goalBoxWidth
+        );
+
+        ctx.strokeRect(
+          PITCH.width -
+            PITCH.goalBoxDepth,
+
+          goalBoxTop,
+
+          PITCH.goalBoxDepth,
+
+          PITCH.goalBoxWidth
+        );
+
+        ctx.beginPath();
+
+        ctx.arc(
+          105,
+          PITCH.height / 2,
+          4,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.fill();
+
+        ctx.beginPath();
+
+        ctx.arc(
+          PITCH.width -
+            105,
+
+          PITCH.height / 2,
+
+          4,
+
+          0,
+
+          Math.PI * 2
+        );
+
+        ctx.fill();
+
+        drawCornerArc(
+          ctx,
+          0,
+          0
+        );
+
+        drawCornerArc(
+          ctx,
+          PITCH.width,
+          0
+        );
+
+        drawCornerArc(
+          ctx,
+          0,
+          PITCH.height
+        );
+
+        drawCornerArc(
+          ctx,
+          PITCH.width,
+          PITCH.height
+        );
+      };
+
+    const drawCornerArc =
+      (
+        ctx,
+        x,
+        y
+      ) => {
+        ctx.beginPath();
+
+        const radius =
+          12;
+
+        let start = 0;
+        let end =
+          Math.PI / 2;
+
+        if (
+          x ===
+            PITCH.width &&
+          y === 0
+        ) {
+          start =
+            Math.PI / 2;
+
+          end =
+            Math.PI;
+        }
+
+        if (
+          x === 0 &&
+          y ===
+            PITCH.height
+        ) {
+          start =
+            -Math.PI / 2;
+
+          end = 0;
+        }
+
+        if (
+          x ===
+            PITCH.width &&
+          y ===
+            PITCH.height
+        ) {
+          start =
+            Math.PI;
+
+          end =
+            Math.PI * 1.5;
+        }
+
+        ctx.arc(
+          x,
+          y,
+          radius,
+          start,
+          end
+        );
+
+        ctx.stroke();
+      };
+
+    const drawGoals =
+      ctx => {
+        const top =
+          (PITCH.height -
+            PITCH.goalWidth) /
+          2;
+
+        ctx.strokeStyle =
+          "#ffffff";
+
+        ctx.lineWidth =
+          4;
+
+        ctx.strokeRect(
+          -PITCH.goalDepth,
+          top,
+          PITCH.goalDepth,
+          PITCH.goalWidth
+        );
+
+        ctx.strokeRect(
+          PITCH.width,
+          top,
+          PITCH.goalDepth,
+          PITCH.goalWidth
+        );
+
+        ctx.globalAlpha =
+          0.30;
+
+        ctx.lineWidth =
+          1;
+
+        for (
+          let y = top;
+          y <=
+          top +
+            PITCH.goalWidth;
+          y += 10
+        ) {
+          ctx.beginPath();
+
+          ctx.moveTo(
+            0,
+            y
+          );
+
+          ctx.lineTo(
+            -PITCH.goalDepth,
+            y
+          );
+
+          ctx.stroke();
+
+          ctx.beginPath();
+
+          ctx.moveTo(
+            PITCH.width,
+            y
+          );
+
+          ctx.lineTo(
+            PITCH.width +
+              PITCH.goalDepth,
+            y
+          );
+
+          ctx.stroke();
+        }
+
+        ctx.globalAlpha =
+          1;
+      };
+
+    const drawPlayers =
+      ctx => {
+        const snapshot =
+          engine.getSnapshot();
+
+        snapshot.players.forEach(
+          player => {
+            const home =
+              player.teamSide ===
+              "home";
+
+            const radius =
+              player.position ===
+              "GK"
+                ? 20
+                : 16;
+
+            const baseColor =
+              home
+                ? "#1683ff"
+                : "#ef4444";
+
+            const borderColor =
+              player.redCard
+                ? "#111827"
+                : player.hasBall
+                ? "#facc15"
+                : home
+                ? "#0b4ea2"
+                : "#991b1b";
+
+            ctx.beginPath();
+
+            ctx.arc(
+              player.x + 2,
+              player.y + 3,
+              radius,
+              0,
+              Math.PI * 2
+            );
+
+            ctx.fillStyle =
+              "rgba(0,0,0,0.28)";
+
+            ctx.fill();
+
+            ctx.beginPath();
+
+            ctx.arc(
+              player.x,
+              player.y,
+              radius,
+              0,
+              Math.PI * 2
+            );
+
+            ctx.fillStyle =
+              player.redCard
+                ? "#64748b"
+                : baseColor;
+
+            ctx.fill();
+
+            ctx.strokeStyle =
+              borderColor;
+
+            ctx.lineWidth =
+              player.hasBall
+                ? 4
+                : 2;
+
+            ctx.stroke();
+
+            ctx.fillStyle =
+              "#ffffff";
+
+            ctx.font =
+              "bold 11px Arial";
+
+            ctx.textAlign =
+              "center";
+
+            ctx.textBaseline =
+              "middle";
+
+            ctx.fillText(
+              player.number,
+              player.x,
+              player.y
+            );
+
+            if (
+              player.position ===
+              "GK"
+            ) {
+              ctx.font =
+                "bold 8px Arial";
+
+              ctx.fillText(
+                "GK",
+                player.x,
+                player.y -
+                  radius -
+                  7
+              );
+            }
+
+            if (
+              player.hasBall
+            ) {
+              ctx.beginPath();
+
+              ctx.arc(
+                player.x,
+                player.y -
+                  radius -
+                  9,
+                3,
+                0,
+                Math.PI * 2
+              );
+
+              ctx.fillStyle =
+                "#facc15";
+
+              ctx.fill();
+            }
+          }
+        );
+      };
+
+    const drawBall =
+      ctx => {
+        const snapshot =
+          engine.getSnapshot();
+
+        const ball =
+          snapshot.ball;
+
+        ctx.beginPath();
+
+        ctx.arc(
+          ball.x + 2,
+          ball.y + 2,
+          8,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.fillStyle =
+          "rgba(0,0,0,0.25)";
+
+        ctx.fill();
+
+        ctx.beginPath();
+
+        ctx.arc(
+          ball.x,
+          ball.y,
+          PITCH.ballRadius,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.fillStyle =
+          "#ffffff";
+
+        ctx.fill();
+
+        ctx.strokeStyle =
+          "#111827";
+
+        ctx.lineWidth =
+          1.5;
+
+        ctx.stroke();
+      };
+
+    const loop =
+      timestamp => {
+        if (
+          previousTimeRef.current ===
+          null
+        ) {
+          previousTimeRef.current =
+            timestamp;
+        }
+
+        const delta =
+          Math.min(
+            (
+              timestamp -
+              previousTimeRef.current
+            ) /
+              1000,
+            0.1
+          );
+
+        previousTimeRef.current =
+          timestamp;
+
+        engine.update(
+          delta
+        );
+
+        drawPitch();
+
+        animationRef.current =
+          requestAnimationFrame(
+            loop
+          );
+      };
+
+    resize();
 
     window.addEventListener(
       "resize",
-      resizeCanvas
+      resize
     );
 
     animationRef.current =
@@ -592,20 +684,18 @@ export default function MatchCanvas({
         animationRef.current
       );
 
-      resizeObserver.disconnect();
-
       window.removeEventListener(
         "resize",
-        resizeCanvas
+        resize
       );
     };
   }, [engine]);
 
   return (
-    <div className="matchCanvas">
+    <div className="canvasContainer">
       <canvas
         ref={canvasRef}
-        className="canvas"
+        className="matchCanvas"
       />
     </div>
   );
