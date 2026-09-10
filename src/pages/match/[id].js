@@ -1,1272 +1,373 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-
-import Head from "next/head";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
-  serverTimestamp,
-} from "firebase/firestore";
-
-import { db } from "../../components/firebase";
-import { useAuth } from "../../context/AuthContext";
-
-import MatchEngine from "../../lib/match-engine/MatchEngine";
-import MatchCanvas from "../../components/match/MatchCanvas";
-
-import {
-  MATCH_STATUS,
-} from "../../lib/match-engine/constants";
-
+import MatchEngine from "./MatchEngine";
+import MatchCanvas from "./MatchCanvas";
+import { MATCH_STATUS, TACTICAL_VALUES } from "./constants";
 import styles from "./Mach.module.css";
 
+const USER_TEAM = "home";
+
 export default function MatchPage() {
-  const router =
-    useRouter();
+  const router = useRouter();
+  const { id } = router.query;
 
-  const { id } =
-    router.query;
+  const engineRef = useRef(null);
+  const rafRef = useRef(null);
+  const lastTimeRef = useRef(0);
+  const lastSyncRef = useRef(0);
 
-  const {
-    user,
-    loading:
-      authLoading,
-  } = useAuth();
+  const [snapshot, setSnapshot] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tactics, setTactics] = useState(null);
+  const [subOut, setSubOut] = useState("");
+  const [subIn, setSubIn] = useState("");
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    error,
-    setError,
-  ] = useState("");
-
-  const [
-    match,
-    setMatch,
-  ] = useState(null);
-
-  const [
-    homeClub,
-    setHomeClub,
-  ] = useState(null);
-
-  const [
-    awayClub,
-    setAwayClub,
-  ] = useState(null);
-
-  const [
-    engine,
-    setEngine,
-  ] = useState(null);
-
-  const [
-    snapshot,
-    setSnapshot,
-  ] = useState(null);
-
-  const [
-    saving,
-    setSaving,
-  ] = useState(false);
-
-  const engineRef =
-    useRef(null);
-
-  const lastSaveRef =
-    useRef(0);
-
-  const loadPlayers =
-    useCallback(
-      async clubId => {
-        if (!clubId) {
-          return [];
-        }
-
-        const playersRef =
-          collection(
-            db,
-            "players"
-          );
-
-        const queries = [
-          query(
-            playersRef,
-            where(
-              "clubId",
-              "==",
-              clubId
-            )
-          ),
-
-          query(
-            playersRef,
-            where(
-              "currentClub",
-              "==",
-              clubId
-            )
-          ),
-
-          query(
-            playersRef,
-            where(
-              "teamId",
-              "==",
-              clubId
-            )
-          ),
-        ];
-
-        const snapshots =
-          await Promise.all(
-            queries.map(
-              async q => {
-                try {
-                  return await getDocs(
-                    q
-                  );
-                } catch {
-                  return null;
-                }
-              }
-            )
-          );
-
-        const unique =
-          new Map();
-
-        snapshots.forEach(
-          snap => {
-            if (!snap) {
-              return;
-            }
-
-            snap.docs.forEach(
-              playerDoc => {
-                unique.set(
-                  playerDoc.id,
-                  {
-                    id:
-                      playerDoc.id,
-                    ...playerDoc.data(),
-                  }
-                );
-              }
-            );
-          }
-        );
-
-        return Array.from(
-          unique.values()
-        );
-      },
-      []
-    );
-
-  const loadMatch =
-    useCallback(
-      async () => {
-        if (
-          authLoading ||
-          !id
-        ) {
-          return;
-        }
-
-        try {
-          setLoading(
-            true
-          );
-
-          setError("");
-
-          const matchRef =
-            doc(
-              db,
-              "matches",
-              String(id)
-            );
-
-          const matchSnap =
-            await getDoc(
-              matchRef
-            );
-
-          if (
-            !matchSnap.exists()
-          ) {
-            throw new Error(
-              "Match not found."
-            );
-          }
-
-          const matchData = {
-            id:
-              matchSnap.id,
-            ...matchSnap.data(),
-          };
-
-          const [
-            homeSnap,
-            awaySnap,
-          ] =
-            await Promise.all(
-              [
-                matchData.homeClubId
-                  ? getDoc(
-                      doc(
-                        db,
-                        "clubs",
-                        matchData.homeClubId
-                      )
-                    )
-                  : null,
-
-                matchData.awayClubId
-                  ? getDoc(
-                      doc(
-                        db,
-                        "clubs",
-                        matchData.awayClubId
-                      )
-                    )
-                  : null,
-              ]
-            );
-
-          const home =
-            homeSnap?.exists()
-              ? {
-                  id:
-                    homeSnap.id,
-                  ...homeSnap.data(),
-                }
-              : {
-                  id:
-                    matchData.homeClubId,
-                  name:
-                    matchData.homeClubName ||
-                    "Home",
-                };
-
-          const away =
-            awaySnap?.exists()
-              ? {
-                  id:
-                    awaySnap.id,
-                  ...awaySnap.data(),
-                }
-              : {
-                  id:
-                    matchData.awayClubId,
-                  name:
-                    matchData.awayClubName ||
-                    "Away",
-                };
-
-          const [
-            homePlayers,
-            awayPlayers,
-          ] =
-            await Promise.all(
-              [
-                loadPlayers(
-                  home.id
-                ),
-
-                loadPlayers(
-                  away.id
-                ),
-              ]
-            );
-
-          if (
-            homePlayers.length <
-            11
-          ) {
-            throw new Error(
-              `${home.name} does not have enough players.`
-            );
-          }
-
-          if (
-            awayPlayers.length <
-            11
-          ) {
-            throw new Error(
-              `${away.name} does not have enough players.`
-            );
-          }
-
-          const newEngine =
-            new MatchEngine({
-              match:
-                matchData,
-
-              homeClub:
-                home,
-
-              awayClub:
-                away,
-
-              homePlayers,
-
-              awayPlayers,
-            });
-
-          engineRef.current =
-            newEngine;
-
-          setEngine(
-            newEngine
-          );
-
-          setMatch(
-            matchData
-          );
-
-          setHomeClub(
-            home
-          );
-
-          setAwayClub(
-            away
-          );
-
-          setSnapshot(
-            newEngine.getSnapshot()
-          );
-        } catch (
-          loadError
-        ) {
-          console.error(
-            "MATCH LOAD ERROR:",
-            loadError
-          );
-
-          setError(
-            loadError?.message ||
-              "Failed to load match."
-          );
-        } finally {
-          setLoading(
-            false
-          );
-        }
-      },
-      [
-        id,
-        authLoading,
-        loadPlayers,
-      ]
-    );
-
+  // load / build engine
   useEffect(() => {
-    loadMatch();
+    if (!id) return;
+    let cancelled = false;
 
-    return () => {
-      engineRef.current?.stop();
-      engineRef.current =
-        null;
+    const load = async () => {
+      try {
+        setLoading(true);
+        let data = null;
+        try {
+          const res = await fetch(`/api/matches/${id}`);
+          if (res.ok) data = await res.json();
+        } catch (_) { /* ignore */ }
+
+        if (!data) data = createMockMatch();
+
+        const engine = new MatchEngine(data);
+        engine.setUserControlled(USER_TEAM);
+        engineRef.current = engine;
+        setTactics({ ...engine.homeTactics });
+        setSnapshot(engine.getSnapshot());
+        setLoading(false);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setError("Ntibyashobotse gutangiza umukino.");
+      }
     };
-  }, [
-    loadMatch,
-  ]);
 
-  const saveMatch =
-    useCallback(
-      async (
-        force = false
-      ) => {
-        const current =
-          engineRef.current;
+    load();
+    return () => { cancelled = true; };
+  }, [id]);
 
-        if (
-          !current ||
-          !match?.id
-        ) {
-          return;
-        }
-
-        const now =
-          Date.now();
-
-        if (
-          !force &&
-          now -
-            lastSaveRef.current <
-            10000
-        ) {
-          return;
-        }
-
-        lastSaveRef.current =
-          now;
-
-        try {
-          setSaving(
-            true
-          );
-
-          const data =
-            current.getSnapshot();
-
-          await updateDoc(
-            doc(
-              db,
-              "matches",
-              match.id
-            ),
-            {
-              status:
-                data.status,
-
-              minute:
-                data.minute,
-
-              homeScore:
-                data.homeScore,
-
-              awayScore:
-                data.awayScore,
-
-              result: {
-                homeScore:
-                  data.homeScore,
-
-                awayScore:
-                  data.awayScore,
-              },
-
-              events:
-                data.events,
-
-              homeStats:
-                data.homeStats,
-
-              awayStats:
-                data.awayStats,
-
-              homeFormation:
-                data.homeFormation,
-
-              awayFormation:
-                data.awayFormation,
-
-              homeTactics:
-                data.homeTactics,
-
-              awayTactics:
-                data.awayTactics,
-
-              homeLineupIds:
-                current.homeXI.map(
-                  player =>
-                    player.id
-                ),
-
-              awayLineupIds:
-                current.awayXI.map(
-                  player =>
-                    player.id
-                ),
-
-              homeSubsUsed:
-                data.substitutions
-                  .home,
-
-              awaySubsUsed:
-                data.substitutions
-                  .away,
-
-              updatedAt:
-                serverTimestamp(),
-            }
-          );
-        } catch (
-          saveError
-        ) {
-          console.error(
-            "MATCH SAVE ERROR:",
-            saveError
-          );
-        } finally {
-          setSaving(
-            false
-          );
-        }
-      },
-      [match]
-    );
-
+  // main RAF loop
   useEffect(() => {
-    if (
-      !engine
-    ) {
-      return;
+    lastTimeRef.current = performance.now();
+    lastSyncRef.current = 0;
+
+    const tick = () => {
+      const engine = engineRef.current;
+      const now = performance.now();
+      const dt = Math.min((now - lastTimeRef.current) / 1000, 0.1);
+      lastTimeRef.current = now;
+
+      if (engine) {
+        engine.update(dt);
+        if (now - lastSyncRef.current > 150) {
+          lastSyncRef.current = now;
+          setSnapshot(engine.getSnapshot());
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const start = useCallback(() => { engineRef.current?.start(); }, []);
+  const pause = useCallback(() => { engineRef.current?.pause(); }, []);
+  const resume = useCallback(() => { engineRef.current?.resume(); }, []);
+  const stop = useCallback(() => { engineRef.current?.stop(); }, []);
+
+  const updateTactic = useCallback((key, value) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.homeTactics[key] = value;
+    setTactics({ ...engine.homeTactics });
+  }, []);
+
+  const doSub = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine || !subOut || !subIn) return;
+    const ok = engine.performSubstitution(USER_TEAM, subOut, subIn);
+    if (ok) {
+      setSubOut("");
+      setSubIn("");
+      setSnapshot(engine.getSnapshot());
     }
+  }, [subOut, subIn]);
 
-    const timer =
-      setInterval(() => {
-        const data =
-          engine.getSnapshot();
-
-        setSnapshot(
-          data
-        );
-
-        if (
-          data.status ===
-          MATCH_STATUS.FINISHED
-        ) {
-          saveMatch(
-            true
-          );
-        } else {
-          saveMatch(
-            false
-          );
-        }
-      }, 250);
-
-    return () => {
-      clearInterval(
-        timer
-      );
-    };
-  }, [
-    engine,
-    saveMatch,
-  ]);
-
-  const startMatch =
-    () => {
-      if (
-        !engine
-      ) {
-        return;
-      }
-
-      engine.start();
-
-      saveMatch(
-        true
-      );
-    };
-
-  const pauseMatch =
-    () => {
-      engine?.pause();
-
-      saveMatch(
-        true
-      );
-    };
-
-  const resumeMatch =
-    () => {
-      engine?.resume();
-
-      saveMatch(
-        true
-      );
-    };
-
-  const stopMatch =
-    () => {
-      engine?.stop();
-
-      saveMatch(
-        true
-      );
-    };
-
-  const score =
-    snapshot
-      ? `${snapshot.homeScore} - ${snapshot.awayScore}`
-      : "0 - 0";
-
-  const minute =
-    snapshot?.minute ??
-    0;
-
-  const status =
-    snapshot?.status ||
-    "loading";
-
-  const ballOwner =
-    useMemo(() => {
-      if (
-        !snapshot
-      ) {
-        return null;
-      }
-
-      return (
-        snapshot.players.find(
-          player =>
-            player.hasBall
-        ) || null
-      );
-    }, [
-      snapshot,
-    ]);
-
-  const recentEvents =
-    useMemo(
-      () =>
-        snapshot?.events?.slice(
-          0,
-          8
-        ) || [],
-      [snapshot]
-    );
-
-  if (
-    authLoading ||
-    loading
-  ) {
+  if (loading) {
     return (
-      <main
-        className={
-          styles.loadingPage
-        }
-      >
-        <div
-          className={
-            styles.spinner
-          }
-        />
-
-        <h2>
-          Loading Match Engine
-        </h2>
-
-        <p>
-          Loading clubs,
-          players and
-          match intelligence...
-        </p>
-      </main>
+      <div className={styles.loadingPage}>
+        <div className={styles.spinner} />
+        <h2>Gutegura umukino...</h2>
+        <p>Abakinnyi barimo kwitegura.</p>
+      </div>
     );
   }
 
-  if (
-    error
-  ) {
+  if (error || !snapshot) {
     return (
-      <main
-        className={
-          styles.errorPage
-        }
-      >
-        <div
-          className={
-            styles.errorIcon
-          }
-        >
-          ⚠️
-        </div>
-
-        <h1>
-          Match Error
-        </h1>
-
-        <p>
-          {error}
-        </p>
-
-        <button
-          onClick={() =>
-            router.push(
-              "/fixtures"
-            )
-          }
-          className={
-            styles.primaryButton
-          }
-        >
-          ← Back to Fixtures
-        </button>
-      </main>
+      <div className={styles.errorPage}>
+        <div className={styles.errorIcon}>⚠️</div>
+        <h1>Habaye ikibazo</h1>
+        <p>{error}</p>
+        <button className={styles.primaryButton} onClick={() => router.back()}>← Subira inyuma</button>
+      </div>
     );
   }
 
-  if (
-    !engine ||
-    !snapshot ||
-    !homeClub ||
-    !awayClub
-  ) {
-    return null;
-  }
+  const statusLabel = {
+    [MATCH_STATUS.READY]: "READY",
+    [MATCH_STATUS.LIVE]: "LIVE",
+    [MATCH_STATUS.HALF_TIME]: "HALF TIME",
+    [MATCH_STATUS.FINISHED]: "FULL TIME",
+  }[snapshot.status] || snapshot.status;
+
+  const engine = engineRef.current;
+  const homeName = engine?.homeClub?.name || "Home";
+  const awayName = engine?.awayClub?.name || "Away";
 
   return (
-    <>
-      <Head>
-        <title>
-          {homeClub.name} vs{" "}
-          {awayClub.name} |
-          Match Centre
-        </title>
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <button className={styles.backButton} onClick={() => router.back()}>← Subira</button>
+        <div className={styles.headerTitle}>
+          <span>Umukino Live</span>
+          <h1>{homeName} vs {awayName}</h1>
+        </div>
+        <div className={styles.statusBadge}>{statusLabel}</div>
+      </header>
 
-        <meta
-          name="theme-color"
-          content="#050816"
-        />
+      <div className={styles.scoreboard}>
+        <TeamBadge club={engine?.homeClub} score={snapshot.homeScore} />
+        <div className={styles.scoreCenter}>
+          <small>{snapshot.minute}'</small>
+          <strong>{snapshot.homeScore} - {snapshot.awayScore}</strong>
+          <span>{statusLabel}</span>
+        </div>
+        <TeamBadge club={engine?.awayClub} score={snapshot.awayScore} flip />
+      </div>
 
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1"
-        />
-      </Head>
-
-      <main
-        className={
-          styles.page
-        }
-      >
-        <header
-          className={
-            styles.header
-          }
-        >
-          <button
-            className={
-              styles.backButton
-            }
-            onClick={() =>
-              router.push(
-                "/fixtures"
-              )
-            }
-          >
-            ← Fixtures
-          </button>
-
-          <div
-            className={
-              styles.headerTitle
-            }
-          >
-            <span>
-              {match?.leagueName ||
-                match?.competition ||
-                "Football Match"}
-            </span>
-
-            <h1>
-              Match Centre
-            </h1>
+      <div className={styles.mainGrid}>
+        <div className={styles.pitchCard}>
+          <div className={styles.canvasContainer}>
+            <MatchCanvas engineRef={engineRef} />
           </div>
+        </div>
 
-          <div
-            className={
-              styles.statusBadge
-            }
-          >
-            {saving
-              ? "SAVING"
-              : status.toUpperCase()}
-          </div>
-        </header>
-
-        <section
-          className={
-            styles.scoreboard
-          }
-        >
-          <div
-            className={
-              styles.teamScore
-            }
-          >
-            <div
-              className={
-                styles.logo
-              }
-            >
-              {homeClub.logo ? (
-                <img
-                  src={
-                    homeClub.logo
-                  }
-                  alt=""
-                />
-              ) : (
-                "⚽"
-              )}
-            </div>
-
-            <strong>
-              {homeClub.name}
-            </strong>
-
-            <span>
-              HOME
-            </span>
-          </div>
-
-          <div
-            className={
-              styles.scoreCenter
-            }
-          >
-            <small>
-              {minute}'
-            </small>
-
-            <strong>
-              {score}
-            </strong>
-
-            <span>
-              {status}
-            </span>
-          </div>
-
-          <div
-            className={
-              styles.teamScore
-            }
-          >
-            <div
-              className={
-                styles.logo
-              }
-            >
-              {awayClub.logo ? (
-                <img
-                  src={
-                    awayClub.logo
-                  }
-                  alt=""
-                />
-              ) : (
-                "⚽"
-              )}
-            </div>
-
-            <strong>
-              {awayClub.name}
-            </strong>
-
-            <span>
-              AWAY
-            </span>
-          </div>
-        </section>
-
-        <section
-          className={
-            styles.mainGrid
-          }
-        >
-          <div
-            className={
-              styles.pitchCard
-            }
-          >
-            <MatchCanvas
-              engine={
-                engine
-              }
-            />
-          </div>
-
-          <aside
-            className={
-              styles.sidebar
-            }
-          >
-            <section
-              className={
-                styles.controlCard
-              }
-            >
-              <h2>
-                Match Controls
-              </h2>
-
-              <div
-                className={
-                  styles.buttonGrid
-                }
-              >
-                {status ===
-                  MATCH_STATUS.READY && (
-                  <button
-                    className={
-                      styles.primaryButton
-                    }
-                    onClick={
-                      startMatch
-                    }
-                  >
-                    ▶ Start
-                  </button>
+        <aside className={styles.sidebar}>
+          {/* Control */}
+          <div className={styles.controlCard}>
+            <h2>Igenzura</h2>
+            {snapshot.status === MATCH_STATUS.FINISHED ? (
+              <div className={styles.finishedMessage}>Umukino warangiye</div>
+            ) : (
+              <div className={styles.buttonGrid}>
+                {!engine?.running && !engine?.paused && (
+                  <button className={styles.primaryButton} onClick={start}>▶ Tangira</button>
                 )}
-
-                {status ===
-                  MATCH_STATUS.LIVE && (
-                  <button
-                    className={
-                      styles.secondaryButton
-                    }
-                    onClick={
-                      pauseMatch
-                    }
-                  >
-                    ⏸ Pause
-                  </button>
+                {engine?.running && !engine?.paused && (
+                  <button className={styles.secondaryButton} onClick={pause}>⏸ Hagarika</button>
                 )}
-
-                {status ===
-                  MATCH_STATUS.HALF_TIME && (
-                  <button
-                    className={
-                      styles.primaryButton
-                    }
-                    onClick={
-                      resumeMatch
-                    }
-                  >
-                    ▶ Resume
-                  </button>
+                {engine?.paused && (
+                  <button className={styles.primaryButton} onClick={resume}>▶ Komeza</button>
                 )}
+                <button className={styles.dangerButton} onClick={stop}>■ Rangiza</button>
+              </div>
+            )}
+          </div>
 
-                {status ===
-                  MATCH_STATUS.LIVE &&
-                  snapshot.minute <
-                    90 && (
-                    <button
-                      className={
-                        styles.dangerButton
-                      }
-                      onClick={
-                        stopMatch
-                      }
-                    >
-                      ■ Finish
-                    </button>
-                  )}
-
-                {status ===
-                  MATCH_STATUS.FINISHED && (
-                  <div
-                    className={
-                      styles.finishedMessage
-                    }
-                  >
-                    Full Time
+          {/* Tactics (user home) */}
+          <div className={styles.tacticsCard}>
+            <h2>Tactics zawe (Home)</h2>
+            {tactics && (
+              <div className={styles.tacticsGrid}>
+                {[
+                  ["mentality", "Mentality"],
+                  ["tempo", "Tempo"],
+                  ["pressing", "Pressing"],
+                  ["defensiveLine", "Line Defense"],
+                  ["width", "Ubugari"],
+                  ["passingStyle", "Passing"],
+                ].map(([k, label]) => (
+                  <div key={k} className={styles.tacticRow}>
+                    <label>{label}</label>
+                    <select value={tactics[k]} onChange={(e) => updateTactic(k, e.target.value)}>
+                      {TACTICAL_VALUES[k].map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
                   </div>
-                )}
+                ))}
               </div>
-            </section>
+            )}
+          </div>
 
-            <section
-              className={
-                styles.infoCard
-              }
-            >
-              <span>
-                BALL
-              </span>
+          {/* Info */}
+          <div className={styles.infoCard}>
+            <span>FORMATION (HOME)</span>
+            <strong>{snapshot.homeFormation} · {snapshot.homeTactics?.mentality}</strong>
+            <span style={{ marginTop: 8 }}>FORMATION (AWAY · AI)</span>
+            <strong>{snapshot.awayFormation} · {snapshot.awayTactics?.mentality}</strong>
+          </div>
 
-              <strong>
-                {ballOwner
-                  ? `${ballOwner.name} #${ballOwner.number}`
-                  : "Free Ball"}
-              </strong>
-            </section>
+          {/* Stats */}
+          <div className={styles.statsCard}>
+            <h2>Imibare</h2>
+            <StatRow home={snapshot.homeStats.possession} away={snapshot.awayStats.possession} label="Possession %" />
+            <StatRow home={snapshot.homeStats.shots} away={snapshot.awayStats.shots} label="Shots" />
+            <StatRow home={snapshot.homeStats.shotsOnTarget} away={snapshot.awayStats.shotsOnTarget} label="On Target" />
+            <StatRow home={snapshot.homeStats.passesCompleted} away={snapshot.awayStats.passesCompleted} label="Passes" />
+            <StatRow home={snapshot.homeStats.tackles} away={snapshot.awayStats.tackles} label="Tackles" />
+            <StatRow home={snapshot.homeStats.corners} away={snapshot.awayStats.corners} label="Corners" />
+            <StatRow home={snapshot.homeStats.fouls} away={snapshot.awayStats.fouls} label="Fouls" />
+            <StatRow home={snapshot.homeStats.yellow} away={snapshot.awayStats.yellow} label="Yellow" />
+            <StatRow home={snapshot.homeStats.red} away={snapshot.awayStats.red} label="Red" />
+          </div>
 
-            <section
-              className={
-                styles.statsCard
-              }
-            >
-              <h2>
-                Match Statistics
-              </h2>
+          {/* Events */}
+          <div className={styles.eventsCard}>
+            <h2>Ibibera</h2>
+            {snapshot.events.length === 0 ? (
+              <p className={styles.empty}>Nta kintu kirabaho.</p>
+            ) : (
+              snapshot.events.slice(0, 12).map(ev => (
+                <div key={ev.id} className={styles.event}>
+                  <span>{ev.minute}'</span>
+                  <div>
+                    <strong>{ev.type.replace(/_/g, " ")}</strong>
+                    <p>{ev.detail}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
 
-              <StatRow
-                label="Possession"
-                home={
-                  snapshot.homeStats
-                    .possession
-                }
-                away={
-                  snapshot.awayStats
-                    .possession
-                }
-                suffix="%"
-              />
-
-              <StatRow
-                label="Shots"
-                home={
-                  snapshot.homeStats
-                    .shots
-                }
-                away={
-                  snapshot.awayStats
-                    .shots
-                }
-              />
-
-              <StatRow
-                label="On Target"
-                home={
-                  snapshot.homeStats
-                    .shotsOnTarget
-                }
-                away={
-                  snapshot.awayStats
-                    .shotsOnTarget
-                }
-              />
-
-              <StatRow
-                label="Passes"
-                home={
-                  snapshot.homeStats
-                    .passesCompleted
-                }
-                away={
-                  snapshot.awayStats
-                    .passesCompleted
-                }
-              />
-
-              <StatRow
-                label="Tackles"
-                home={
-                  snapshot.homeStats
-                    .tackles
-                }
-                away={
-                  snapshot.awayStats
-                    .tackles
-                }
-              />
-
-              <StatRow
-                label="Corners"
-                home={
-                  snapshot.homeStats
-                    .corners
-                }
-                away={
-                  snapshot.awayStats
-                    .corners
-                }
-              />
-
-              <StatRow
-                label="Fouls"
-                home={
-                  snapshot.homeStats
-                    .fouls
-                }
-                away={
-                  snapshot.awayStats
-                    .fouls
-                }
-              />
-
-              <StatRow
-                label="Saves"
-                home={
-                  snapshot.homeStats
-                    .saves
-                }
-                away={
-                  snapshot.awayStats
-                    .saves
-                }
-              />
-            </section>
-
-            <section
-              className={
-                styles.eventsCard
-              }
-            >
-              <h2>
-                Match Events
-              </h2>
-
-              {recentEvents.length ===
-              0 ? (
-                <p
-                  className={
-                    styles.empty
-                  }
-                >
-                  No events yet.
-                </p>
-              ) : (
-                recentEvents.map(
-                  event => (
-                    <div
-                      key={
-                        event.id
-                      }
-                      className={
-                        styles.event
-                      }
-                    >
-                      <span>
-                        {event.minute}'
-                      </span>
-
-                      <div>
-                        <strong>
-                          {event.type.replace(
-                            "_",
-                            " "
-                          )}
-                        </strong>
-
-                        <p>
-                          {
-                            event.detail
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  )
-                )
-              )}
-            </section>
-
-            <section
-              className={
-                styles.benchCard
-              }
-            >
-              <h2>
-                Substitutes
-              </h2>
-
-              <div
-                className={
-                  styles.benchColumns
-                }
+          {/* Bench & subs */}
+          <div className={styles.benchCard}>
+            <h2>Substitutions & Bench</h2>
+            <div className={styles.lineupGrid}>
+              <LineupCol title="Home (we)" lineup={snapshot.homeLineup} />
+              <LineupCol title="Away (AI)" lineup={snapshot.awayLineup} />
+            </div>
+            <div className={styles.subRow}>
+              <select value={subOut} onChange={(e) => setSubOut(e.target.value)}>
+                <option value="">— Out —</option>
+                {snapshot.homeLineup
+                  .filter(p => !p.redCard)
+                  .map(p => (
+                    <option key={p.id} value={p.id}>
+                      #{p.number} {p.name} ({p.position})
+                    </option>
+                  ))}
+              </select>
+              <select value={subIn} onChange={(e) => setSubIn(e.target.value)}>
+                <option value="">— In —</option>
+                {snapshot.homeBench.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.position})
+                  </option>
+                ))}
+              </select>
+              <button
+                className={styles.subButton}
+                onClick={doSub}
+                disabled={!subOut || !subIn || snapshot.substitutions.home >= 5}
               >
-                <div>
-                  <h3>
-                    {homeClub.name}
-                  </h3>
-
-                  {engine.homeBench.map(
-                    player => (
-                      <div
-                        key={
-                          player.id ||
-                          player.playerId
-                        }
-                        className={
-                          styles.benchPlayer
-                        }
-                      >
-                        <span>
-                          {player.shirtNumber ||
-                            player.number ||
-                            "-"}
-                        </span>
-
-                        <label>
-                          {player.name ||
-                            player.fullName ||
-                            "Player"}
-                        </label>
-                      </div>
-                    )
-                  )}
-                </div>
-
-                <div>
-                  <h3>
-                    {awayClub.name}
-                  </h3>
-
-                  {engine.awayBench.map(
-                    player => (
-                      <div
-                        key={
-                          player.id ||
-                          player.playerId
-                        }
-                        className={
-                          styles.benchPlayer
-                        }
-                      >
-                        <span>
-                          {player.shirtNumber ||
-                            player.number ||
-                            "-"}
-                        </span>
-
-                        <label>
-                          {player.name ||
-                            player.fullName ||
-                            "Player"}
-                        </label>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </section>
-          </aside>
-        </section>
-      </main>
-    </>
+                Sub
+              </button>
+            </div>
+            <p className={styles.empty} style={{ marginTop: 6 }}>
+              Subs: {snapshot.substitutions.home}/5 · Injured: {snapshot.injuries.home}
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }
 
-function StatRow({
-  label,
-  home,
-  away,
-  suffix = "",
-}) {
+function TeamBadge({ club, score, flip }) {
   return (
-    <div
-      className={
-        styles.statRow
-      }
-    >
-      <strong>
-        {home}
-        {suffix}
-      </strong>
-
-      <span>
-        {label}
-      </span>
-
-      <strong>
-        {away}
-        {suffix}
-      </strong>
+    <div className={styles.teamScore} style={flip ? { flexDirection: "row-reverse" } : {}}>
+      <div className={styles.logo}>
+        {club?.logo ? <img src={club.logo} alt="" /> : <span>{club?.short || "?"}</span>}
+      </div>
+      <div style={{ textAlign: flip ? "right" : "left" }}>
+        <strong>{club?.name || "—"}</strong>
+        <br />
+        <span>{score} GOALS</span>
+      </div>
     </div>
   );
+}
+
+function StatRow({ home, away, label }) {
+  return (
+    <div className={styles.statRow}>
+      <strong>{home}</strong>
+      <span>{label}</span>
+      <strong>{away}</strong>
+    </div>
+  );
+}
+
+function LineupCol({ title, lineup }) {
+  return (
+    <div className={styles.lineupCol}>
+      <h3>{title}</h3>
+      {lineup.map(p => (
+        <div key={p.id} className={styles.lineupPlayer}>
+          <span className="num">{p.number}</span>
+          <label>{p.name}</label>
+          {p.injury && <span className={styles.injuredBadge}>+</span>}
+          {p.redCard && <span className={styles.injuredBadge}>RC</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Mock data: kubyo nta API */
+function createMockMatch() {
+  const clubs = [
+    { id: "c1", name: "Kigali FC", short: "KGL", logo: "" },
+    { id: "c2", name: "Rayon Sports", short: "RAY", logo: "" },
+  ];
+  const names = [
+    "Mugisha", "Habimana", "Niyonzima", "Uwimana", "Kagabo", "Rwema",
+    "Bizimana", "Ndayisaba", "Iradukunda", "Nsengiyumva", "Hakizimana",
+    "Mukamana", "Kayitesi", "Uwase", "Ingabire", "Gasana", "Twagirayezu",
+  ];
+  const mk = (side, count) =>
+    Array.from({ length: count }).map((_, i) => ({
+      id: `${side}-${i}`,
+      name: names[(i + (side === "away" ? 5 : 0)) % names.length] + ` ${i + 1}`,
+      shirtNumber: i + 1,
+      position: ["GK", "LB", "CB", "CB", "RB", "LM", "CM", "CM", "RM", "ST", "ST"][i % 11],
+      overall: 60 + Math.floor(Math.random() * 25),
+      speed: 60 + Math.floor(Math.random() * 30),
+      passing: 60 + Math.floor(Math.random() * 30),
+      shooting: 55 + Math.floor(Math.random() * 35),
+      dribbling: 60 + Math.floor(Math.random() * 30),
+      tackling: 55 + Math.floor(Math.random() * 35),
+    }));
+
+  return {
+    match: {
+      id: "m1", minute: 0, homeScore: 0, awayScore: 0, status: "ready",
+      homeFormation: "4-3-3", awayFormation: "4-4-2",
+      homeTactics: { mentality: "balanced", tempo: "normal", pressing: "medium", defensiveLine: "normal", width: "normal", passingStyle: "mixed" },
+      awayTactics: { mentality: "balanced", tempo: "normal", pressing: "medium", defensiveLine: "normal", width: "normal", passingStyle: "mixed" },
+    },
+    homeClub: clubs[0],
+    awayClub: clubs[1],
+    homePlayers: mk("home", 18),
+    awayPlayers: mk("away", 18),
+  };
 }
