@@ -1,0 +1,373 @@
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at top,
+      #172554 0%,
+      #070b1a 45%,
+      #030712 100%
+    );
+  color: #ffffff;
+  padding: 24px;
+}
+
+.header {
+  max-width: 1500px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.eyebrow {
+  display: inline-block;
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin-bottom: 7px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.header p {
+  margin: 5px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.scoreBox {
+  min-width: 160px;
+  padding: 14px 20px;
+  border: 1px solid
+    rgba(96, 165, 250, 0.2);
+  background:
+    rgba(15, 23, 42, 0.75);
+  border-radius: 18px;
+  text-align: center;
+  box-shadow:
+    0 20px 60px
+    rgba(0, 0, 0, 0.25);
+}
+
+.scoreBox span {
+  display: block;
+  color: #60a5fa;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.scoreBox strong {
+  display: block;
+  margin: 2px 0;
+  font-size: 27px;
+}
+
+.scoreBox small {
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.matchArea {
+  max-width: 1500px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    330px;
+  gap: 20px;
+  align-items: start;
+}
+
+.pitchWrapper {
+  min-width: 0;
+  min-height: 500px;
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    rgba(15, 23, 42, 0.72);
+  border: 1px solid
+    rgba(148, 163, 184, 0.15);
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 80px
+    rgba(0, 0, 0, 0.35);
+}
+
+.matchCanvas {
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+}
+
+.loading {
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.teamCard,
+.controlCard,
+.possessionCard {
+  padding: 16px;
+  background:
+    rgba(15, 23, 42, 0.8);
+  border: 1px solid
+    rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 50px
+    rgba(0, 0, 0, 0.22);
+}
+
+.teamHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.homeDot,
+.awayDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: block;
+}
+
+.homeDot {
+  background: #1683ff;
+  box-shadow:
+    0 0 14px
+    rgba(22, 131, 255, 0.65);
+}
+
+.awayDot {
+  background: #ef4444;
+  box-shadow:
+    0 0 14px
+    rgba(239, 68, 68, 0.65);
+}
+
+.teamMeta {
+  margin-top: 7px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.bench {
+  margin-top: 15px;
+}
+
+.bench h3,
+.controlCard h3 {
+  margin: 0 0 9px;
+  color: #cbd5e1;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.benchPlayer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 0;
+  border-bottom: 1px solid
+    rgba(148, 163, 184, 0.08);
+}
+
+.benchPlayer:last-child {
+  border-bottom: 0;
+}
+
+.benchPlayer span {
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.benchPlayer label {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.coach {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid
+    rgba(148, 163, 184, 0.1);
+}
+
+.coach span {
+  display: block;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.coach strong {
+  display: block;
+  margin-top: 3px;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.controls {
+  display: grid;
+  gap: 8px;
+}
+
+.controls button {
+  width: 100%;
+  border: 0;
+  border-radius: 11px;
+  padding: 11px 13px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.controls button:hover {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
+.primaryButton {
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #38bdf8
+    );
+}
+
+.secondaryButton {
+  background: #334155;
+}
+
+.dangerButton {
+  background: #991b1b;
+}
+
+.possessionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.possessionCard span {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.possessionCard strong {
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .matchArea {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: grid;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .controlCard,
+  .possessionCard {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding: 10px;
+  }
+
+  .header {
+    align-items: flex-start;
+  }
+
+  .header h1 {
+    font-size: 23px;
+  }
+
+  .scoreBox {
+    min-width: 105px;
+    padding: 10px;
+  }
+
+  .scoreBox strong {
+    font-size: 21px;
+  }
+
+  .pitchWrapper {
+    min-height: 300px;
+    padding: 6px;
+    border-radius: 14px;
+  }
+
+  .matchCanvas {
+    min-height: 300px;
+  }
+
+  .loading {
+    min-height: 300px;
+  }
+
+  .sidebar {
+    display: flex;
+  }
+
+  .controlCard,
+  .possessionCard {
+    grid-column: auto;
+  }
+}
