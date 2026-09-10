@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import MatchEngine from "./MatchEngine";
-import MatchCanvas from "./MatchCanvas";
-import { MATCH_STATUS, TACTICAL_VALUES } from "./constants";
+import MatchEngine from "../../lib/match-engine/MatchEngine";
+import MatchCanvas from "../../components/match/MatchCanvas";
+import { MATCH_STATUS, TACTICAL_VALUES } from "../../lib/match-engine/constants";
 import styles from "./Mach.module.css";
 
 const USER_TEAM = "home";
