@@ -1,57 +1,189 @@
 import Vector2 from "./Vector2";
-import { BALL_STATE, PITCH, MATCH } from "./constants";
+
+import {
+  BALL_STATE,
+  PITCH,
+} from "./constants";
 
 export default class Ball {
   constructor() {
-    this.position = new Vector2(PITCH.width / 2, PITCH.height / 2);
-    this.velocity = new Vector2();
-    this.state = BALL_STATE.FREE;
+    this.position =
+      new Vector2(
+        PITCH.width / 2,
+        PITCH.height / 2
+      );
+
+    this.velocity =
+      new Vector2();
+
     this.ownerId = null;
+
     this.targetId = null;
-    this.radius = PITCH.ballRadius;
+
     this.lastTouchTeam = null;
+
     this.lastTouchPlayer = null;
-    this.actionStartedAt = 0;
+
+    this.state =
+      BALL_STATE.IDLE;
+
+    this.flightTime = 0;
+
+    this.maxFlightTime = 0;
   }
 
   attach(player) {
+    if (!player) return;
+
     this.ownerId = player.id;
+
     this.targetId = null;
-    this.position.set(player.x, player.y);
-    this.velocity.multiply(0);
-    this.state = BALL_STATE.POSSESSED;
-    this.lastTouchTeam = player.teamSide;
-    this.lastTouchPlayer = player.id;
+
+    this.position.set(
+      player.x,
+      player.y
+    );
+
+    this.velocity.set(0, 0);
+
+    this.state =
+      BALL_STATE.IDLE;
+
+    player.hasBall = true;
   }
 
-  kick(from, target, speed, state, targetId = null) {
-    const dir = new Vector2(target.x - from.x, target.y - from.y);
-    const d = dir.length();
-    if (d === 0) return;
-    dir.normalize();
-    this.position.set(from.x, from.y);
-    this.velocity.set(dir.x * speed, dir.y * speed);
+  kick(
+    from,
+    target,
+    speed = 300,
+    state = BALL_STATE.PASSING,
+    targetId = null
+  ) {
+    if (!from || !target) {
+      return;
+    }
+
+    const targetX =
+      target.x ??
+      target.position?.x ??
+      this.position.x;
+
+    const targetY =
+      target.y ??
+      target.position?.y ??
+      this.position.y;
+
+    const direction =
+      new Vector2(
+        targetX - from.x,
+        targetY - from.y
+      );
+
+    const distance =
+      Math.max(
+        1,
+        direction.length()
+      );
+
+    direction.normalize();
+
+    this.position.set(
+      from.x,
+      from.y
+    );
+
+    this.velocity
+      .copy(direction)
+      .multiply(speed);
+
     this.ownerId = null;
+
     this.targetId = targetId;
+
+    this.lastTouchTeam =
+      from.team;
+
+    this.lastTouchPlayer =
+      from.id;
+
     this.state = state;
-    this.actionStartedAt = Date.now();
+
+    this.flightTime = 0;
+
+    this.maxFlightTime =
+      Math.min(
+        2.1,
+        Math.max(
+          0.25,
+          distance / speed
+        )
+      );
+
+    from.hasBall = false;
   }
 
   update(dt) {
-    if (this.ownerId) return;
-    this.position.x += this.velocity.x * dt;
-    this.position.y += this.velocity.y * dt;
-    const friction = Math.pow(MATCH.BALL_FRICTION, dt);
-    this.velocity.x *= friction;
-    this.velocity.y *= friction;
-    if (this.velocity.length() < 3) this.velocity.multiply(0);
+    if (this.ownerId) {
+      return;
+    }
+
+    this.position.x +=
+      this.velocity.x * dt;
+
+    this.position.y +=
+      this.velocity.y * dt;
+
+    this.flightTime += dt;
+
+    const damping =
+      Math.pow(
+        0.985,
+        dt * 60
+      );
+
+    this.velocity
+      .multiply(damping);
+
+    if (
+      this.flightTime >
+        this.maxFlightTime &&
+      this.velocity.length() < 30
+    ) {
+      this.velocity.set(0, 0);
+
+      this.state =
+        BALL_STATE.IDLE;
+
+      this.targetId = null;
+    }
   }
 
   stop() {
-    this.velocity.multiply(0);
-    this.ownerId = null;
-    this.state = BALL_STATE.FREE;
+    this.velocity.set(0, 0);
+
+    this.targetId = null;
+
+    this.state =
+      BALL_STATE.IDLE;
   }
 
-  isMoving() { return this.velocity.length() > 8; }
+  toSnapshot() {
+    return {
+      x: this.position.x,
+
+      y: this.position.y,
+
+      ownerId: this.ownerId,
+
+      targetId: this.targetId,
+
+      lastTouchTeam:
+        this.lastTouchTeam,
+
+      lastTouchPlayer:
+        this.lastTouchPlayer,
+
+      state: this.state,
+    };
+  }
 }
