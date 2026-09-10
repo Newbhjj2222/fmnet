@@ -26,7 +26,7 @@ import { db } from "../../components/firebase";
 
 import { useAuth } from "../../context/AuthContext";
 
-import MatchEngine from "../../lib/match/MatchEngine";
+import MatchEngine from "../../lib/match-engine/MatchEngine";
 
 import styles from "./Mach.module.css";
 
