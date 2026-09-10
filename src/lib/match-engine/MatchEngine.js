@@ -21,6 +21,7 @@ export default class MatchEngine {
     this.running = false;
     this.paused = false;
     this.finished = false;
+    this.userControlled = "home";
 
     this.simulationTime = clamp(Number(match?.minute) || 0, 0, 90);
     this.homeScore = Number(match?.homeScore) || 0;
@@ -30,6 +31,8 @@ export default class MatchEngine {
     this.accumulator = 0;
     this.decisionTimer = 0;
     this.aiTimer = 0;
+    this.aiTacticsTimer = 0;
+    this.subsTimer = 0;
     this.eventCounter = 0;
     this.lastEvent = null;
     this.halfTimeEmitted = this.simulationTime >= 45;
@@ -41,7 +44,7 @@ export default class MatchEngine {
     this.substitutions = { home: 0, away: 0 };
     this.injuries = { home: 0, away: 0 };
 
-    this.homeFormation = normalizeFormation(match?.homeFormation || match?.formation || "4-4-2");
+    this.homeFormation = normalizeFormation(match?.homeFormation || "4-4-2");
     this.awayFormation = normalizeFormation(match?.awayFormation || "4-4-2");
 
     this.homeTactics = normalizeTactics(match?.homeTactics);
@@ -57,6 +60,7 @@ export default class MatchEngine {
     if (this.status === MATCH_STATUS.FINISHED) this.finished = true;
   }
 
+  /* ====================== SETUP ====================== */
   buildTeams(rawHome, rawAway) {
     const homeXI = this.selectStartingXI(rawHome, "home", this.homeFormation, this.match?.homeLineupIds);
     const awayXI = this.selectStartingXI(rawAway, "away", this.awayFormation, this.match?.awayLineupIds);
@@ -112,6 +116,7 @@ export default class MatchEngine {
     if (striker) striker.setTarget(PITCH.width / 2, PITCH.height / 2);
   }
 
+  /* ====================== CONTROL ====================== */
   start() {
     if (this.finished) return;
     this.running = true;
@@ -121,14 +126,12 @@ export default class MatchEngine {
   }
 
   pause() { this.paused = true; }
-
   resume() {
     if (this.finished) return;
     this.paused = false;
     this.running = true;
     this.status = MATCH_STATUS.LIVE;
   }
-
   stop() {
     if (this.finished) return;
     this.running = false;
@@ -137,6 +140,15 @@ export default class MatchEngine {
     this.addEvent({ type: EVENT_TYPES.FULL_TIME, team: "neutral", detail: "Full time." });
   }
 
+  setUserControlled(side) { this.userControlled = side; }
+  isUserControlled(team) { return this.userControlled === team; }
+
+  setTactics(team, tactics) {
+    const current = this.getTactics(team);
+    Object.assign(current, tactics);
+  }
+
+  /* ====================== MAIN LOOP ====================== */
   update(realDelta) {
     if (!this.running || this.paused || this.finished) return;
     const dt = Math.min(Number(realDelta) || 0, 0.1);
@@ -149,8 +161,8 @@ export default class MatchEngine {
   }
 
   fixedUpdate(dt) {
-    const minutesPerSecond = MATCH.SIMULATION_MINUTES / MATCH.REAL_DURATION_SECONDS;
-    this.simulationTime += dt * minutesPerSecond;
+    const minPerSec = MATCH.SIMULATION_MINUTES / MATCH.REAL_DURATION_SECONDS;
+    this.simulationTime += dt * minPerSec;
 
     if (this.simulationTime >= 45 && !this.halfTimeEmitted) {
       this.halfTimeEmitted = true;
@@ -165,6 +177,8 @@ export default class MatchEngine {
 
     this.aiTimer += dt;
     this.decisionTimer += dt;
+    this.aiTacticsTimer += dt;
+    this.subsTimer += dt;
 
     this.updateBall(dt);
     this.updatePlayers(dt);
@@ -182,29 +196,43 @@ export default class MatchEngine {
       this.decisionTimer = 0;
       this.makeDecisions();
     }
-
-    // Auto substitutions every second or so
-    if (Math.floor(this.simulationTime * 60) % 60 === 0) {
+    if (this.aiTacticsTimer >= MATCH.AI_TACTICS_INTERVAL) {
+      this.aiTacticsTimer = 0;
+      this.adaptAITactics();
+    }
+    if (this.subsTimer >= 1) {
+      this.subsTimer = 0;
       this.runAutomaticSubstitutions();
     }
 
     this.updatePossessionStats();
   }
 
-  updateBall(dt) {
-    const owner = this.findPlayer(this.ball.ownerId);
-    if (owner) { this.ball.position.set(owner.x, owner.y); return; }
-    this.ball.update(dt);
-    this.checkPassReception();
-  }
+  /* ====================== AI ====================== */
+  adaptAITactics() {
+    const aiSide = this.userControlled === "home" ? "away" : "home";
+    const aiScore = aiSide === "home" ? this.homeScore : this.awayScore;
+    const oppScore = aiSide === "home" ? this.awayScore : this.homeScore;
+    const diff = aiScore - oppScore;
+    const minute = this.getMinute();
+    const t = this.getTactics(aiSide);
 
-  updatePlayers(dt) {
-    this.players.forEach(p => {
-      if (p.redCard) return;
-      p.update(dt);
-      if (p.hasBall) this.keepPlayerBall(p);
-    });
-    this.preventPlayerOverlap();
+    if (diff < 0 && minute > 55) {
+      t.mentality = "attacking";
+      t.tempo = "fast";
+      t.pressing = "high";
+      t.defensiveLine = "high";
+    } else if (diff > 1 && minute > 65) {
+      t.mentality = "defensive";
+      t.tempo = "slow";
+      t.pressing = "low";
+      t.defensiveLine = "deep";
+    } else {
+      t.mentality = "balanced";
+      t.tempo = "normal";
+      t.pressing = "medium";
+      t.defensiveLine = "normal";
+    }
   }
 
   updateAI() {
@@ -213,7 +241,6 @@ export default class MatchEngine {
 
     this.players.forEach(player => {
       if (player.redCard || player.isInjured()) return;
-
       if (player.position === "GK") { this.updateGoalkeeper(player); return; }
       if (owner && owner.teamSide !== player.teamSide) { this.defensiveMovement(player, owner); return; }
       if (owner && owner.teamSide === player.teamSide) { this.attackingMovement(player, owner); return; }
@@ -223,8 +250,8 @@ export default class MatchEngine {
 
   defensiveMovement(player, attacker) {
     const dToBall = player.distanceToPoint(this.ball.position.x, this.ball.position.y);
-    const tactics = this.getTactics(player.teamSide);
-    const pressDist = tactics.pressing === "high" ? 280 : tactics.pressing === "low" ? 130 : 200;
+    const t = this.getTactics(player.teamSide);
+    const pressDist = t.pressing === "high" ? 280 : t.pressing === "low" ? 130 : 200;
 
     if (dToBall < pressDist) {
       const nearest = this.getNearestDefender(player.teamSide);
@@ -261,19 +288,22 @@ export default class MatchEngine {
     const ownGoalX = gk.teamSide === "home" ? 25 : PITCH.width - 25;
     const danger = this.distanceToOwnGoal(ball, gk.teamSide);
 
-    if ((this.ball.state === BALL_STATE.SHOOTING || this.ball.state === BALL_STATE.CROSSING) && danger < 320) {
+    if (
+      (this.ball.state === BALL_STATE.SHOOTING || this.ball.state === BALL_STATE.CROSSING) &&
+      danger < 320
+    ) {
       gk.setTarget(ownGoalX, clamp(ball.y, 230, 450));
       return;
     }
-    // slight sweep for high line
-    const tactics = this.getTactics(gk.teamSide);
-    const sweep = tactics.defensiveLine === "high" ? 25 : 0;
+    const t = this.getTactics(gk.teamSide);
+    const sweep = t.defensiveLine === "high" ? 25 : 0;
     gk.setTarget(
       ownGoalX + (gk.teamSide === "home" ? sweep : -sweep),
       PITCH.height / 2 + clamp(ball.y - PITCH.height / 2, -100, 100) * 0.25
     );
   }
 
+  /* ====================== DECISIONS ====================== */
   makeDecisions() {
     const owner = this.findPlayer(this.ball.ownerId);
     if (!owner || owner.redCard || owner.isInjured()) return;
@@ -307,7 +337,6 @@ export default class MatchEngine {
     return clamp(p1 * 0.72 + p2 * 0.28, 0, 1);
   }
 
-  // Tactical modifiers
   mentalityMod(team) {
     const m = this.getTactics(team).mentality;
     return m === "attacking" ? 1.08 : m === "defensive" ? 0.92 : 1.0;
@@ -315,7 +344,8 @@ export default class MatchEngine {
 
   shouldShoot(player, dGoal, pressure) {
     if (player.position === "GK") return false;
-    const range = player.position === "ATT" ? 320 : player.position === "MID" ? 240 : 190;
+    const range = player.position === "ATT" ? 320
+      : player.position === "MID" ? 240 : 190;
     if (dGoal > range) return false;
 
     const shooting = player.shooting / 100;
@@ -354,11 +384,13 @@ export default class MatchEngine {
   }
 
   choosePassTarget(passer, opponents, safeOnly = false) {
-    const teammates = this.getTeamPlayers(passer.teamSide).filter(p => p.id !== passer.id && !p.redCard && !p.isInjured());
+    const teammates = this.getTeamPlayers(passer.teamSide)
+      .filter(p => p.id !== passer.id && !p.redCard && !p.isInjured());
     if (!teammates.length) return null;
 
     const t = this.getTactics(passer.teamSide);
-    const styleBias = t.passingStyle === "direct" ? 1.35 : t.passingStyle === "short" ? 0.7 : 1.0;
+    const styleBias = t.passingStyle === "direct" ? 1.35
+      : t.passingStyle === "short" ? 0.7 : 1.0;
 
     const candidates = teammates.map(tm => {
       const pd = dist(passer, tm);
@@ -366,7 +398,8 @@ export default class MatchEngine {
       const forward = this.forwardProgress(passer, tm);
       const spaceScore = clamp(nearestOpp / 200, 0, 1);
       const progressScore = clamp(forward / 240, -1, 1);
-      const positionBonus = tm.position === "ATT" ? 0.16 : tm.position === "MID" ? 0.08 : 0;
+      const positionBonus = tm.position === "ATT" ? 0.16
+        : tm.position === "MID" ? 0.08 : 0;
       const distanceScore = clamp(1 - pd / 520, 0, 1);
 
       let score = spaceScore * 0.42 + progressScore * 0.28 + distanceScore * 0.17 + positionBonus;
@@ -383,18 +416,14 @@ export default class MatchEngine {
     const pd = dist(passer, target);
     const pressure = this.calculatePressure(passer);
 
-    const passingAbility = passer.passing / 100;
-    const vision = passer.vision / 100;
-    const staminaFactor = passer.stamina / 100;
-    const form = passer.form / 100;
-
-    let success = 0.60 + passingAbility * 0.20 + vision * 0.10 + staminaFactor * 0.05 + form * 0.03;
+    let success = 0.60 + (passer.passing / 100) * 0.20 +
+      (passer.vision / 100) * 0.10 + (passer.stamina / 100) * 0.05 +
+      (passer.form / 100) * 0.03;
     success -= pressure * 0.18;
     success -= clamp(pd / 900, 0, 0.16);
 
     const interceptors = opponents.filter(o => this.pointNearLine(passer, target, o, 34));
     if (interceptors.length) success -= interceptors.length * 0.10;
-
     success = clamp(success, 0.32, 0.96);
 
     passer.stats.passes += 1;
@@ -432,9 +461,9 @@ export default class MatchEngine {
       return;
     }
 
-    // misplaced pass
     this.ball.kick(passer, {
-      x: passer.x + rand(-90, 90), y: passer.y + rand(-90, 90),
+      x: passer.x + rand(-90, 90),
+      y: passer.y + rand(-90, 90),
     }, 190, BALL_STATE.PASSING);
     passer.hasBall = false;
     this.addEvent({
@@ -454,7 +483,8 @@ export default class MatchEngine {
     const defenders = this.getOpponents(player.teamSide);
     const nearest = defenders.sort((a, b) => dist(player, a) - dist(player, b))[0];
     const dribbleAbility = player.dribbling / 100;
-    const defenderAbility = nearest ? (nearest.tackling + nearest.positioning) / 200 : 0.5;
+    const defenderAbility = nearest
+      ? (nearest.tackling + nearest.positioning) / 200 : 0.5;
 
     let success = 0.50 + dribbleAbility * 0.26 - defenderAbility * 0.18;
     success -= pressure * 0.12;
@@ -482,16 +512,20 @@ export default class MatchEngine {
       t.id !== player.id && ["ST", "ATT", "AM", "LW", "RW"].includes(t.position)
     );
     if (!attackers.length) return;
-    const target = attackers.sort((a, b) => this.distanceToOpponentGoal(a) - this.distanceToOpponentGoal(b))[0];
+    const target = attackers.sort((a, b) =>
+      this.distanceToOpponentGoal(a) - this.distanceToOpponentGoal(b))[0];
+
     const crossTarget = {
       x: player.teamSide === "home" ? PITCH.width - 95 : 95,
       y: clamp(target.y + rand(-60, 60), 70, PITCH.height - 70),
     };
+
     this.ball.kick(player, crossTarget, 300, BALL_STATE.CROSSING, target.id);
     player.hasBall = false;
     this.addEvent({
       type: EVENT_TYPES.CROSS, team: player.teamSide,
-      playerId: player.id, playerName: player.name, targetPlayerId: target.id,
+      playerId: player.id, playerName: player.name,
+      targetPlayerId: target.id,
       detail: `${player.name} whips in a cross.`,
     });
   }
@@ -502,12 +536,12 @@ export default class MatchEngine {
     if (!gk) return;
 
     player.stats.shots += 1;
-
     const goalX = player.teamSide === "home" ? PITCH.width + 35 : -35;
     const goalY = PITCH.height / 2 + rand(-PITCH.goalWidth / 2 + 12, PITCH.goalWidth / 2 - 12);
 
     const accuracy = clamp(
-      0.35 + (player.shooting / 100) * 0.42 + (player.composure / 100) * 0.15 +
+      0.35 + (player.shooting / 100) * 0.42 +
+      (player.composure / 100) * 0.15 +
       (player.form / 100) * 0.05 - pressure * 0.20,
       0.15, 0.94
     );
@@ -515,7 +549,6 @@ export default class MatchEngine {
     const targetY = chance(accuracy)
       ? goalY
       : clamp(goalY + rand(-130, 130), 35, PITCH.height - 35);
-
     const power = 340 + player.shooting * 1.8;
 
     this.ball.kick(player, { x: goalX, y: targetY }, power, BALL_STATE.SHOOTING);
@@ -532,15 +565,40 @@ export default class MatchEngine {
     });
   }
 
+  /* ====================== BALL & POSSESSION ====================== */
+  updateBall(dt) {
+    const owner = this.findPlayer(this.ball.ownerId);
+    if (owner) { this.ball.position.set(owner.x, owner.y); return; }
+    this.ball.update(dt);
+    this.checkPassReception();
+  }
+
+  updatePlayers(dt) {
+    this.players.forEach(p => {
+      if (p.redCard) return;
+      p.update(dt);
+      if (p.hasBall) this.keepPlayerBall(p);
+    });
+    this.preventPlayerOverlap();
+  }
+
   checkPassReception() {
     if (!this.ball.targetId) { this.checkInterception(); return; }
     const target = this.findPlayer(this.ball.targetId);
-    if (!target || target.redCard || target.isInjured()) { this.ball.targetId = null; return; }
+    if (!target || target.redCard || target.isInjured()) {
+      this.ball.targetId = null;
+      return;
+    }
 
     const d = dist(this.ball.position, target);
     if (d < 30) {
-      const pressure = this.getOpponents(target.teamSide).map(o => dist(target, o)).sort((a, b) => a - b)[0] || 999;
-      const control = clamp(0.60 + (target.overall / 100) * 0.22 - pressure / 500, 0.32, 0.94);
+      const pressure = this.getOpponents(target.teamSide)
+        .map(o => dist(target, o))
+        .sort((a, b) => a - b)[0] || 999;
+      const control = clamp(
+        0.60 + (target.overall / 100) * 0.22 - pressure / 500,
+        0.32, 0.94
+      );
       if (chance(control)) { this.giveBall(target); return; }
     }
     this.checkInterception();
@@ -558,11 +616,16 @@ export default class MatchEngine {
     if (!c) return;
 
     const p = c.player;
-    const canControl = clamp(0.58 + (p.overall / 100) * 0.18 + (p.positioning / 100) * 0.12, 0.35, 0.94);
+    const canControl = clamp(
+      0.58 + (p.overall / 100) * 0.18 + (p.positioning / 100) * 0.12,
+      0.35, 0.94
+    );
+
     if (chance(canControl)) {
       this.giveBall(p);
       if (this.ball.lastTouchTeam && this.ball.lastTouchTeam !== p.teamSide) {
         p.stats.interceptions += 1;
+        this.getStats(p.teamSide).interceptions += 1;
         this.addEvent({
           type: EVENT_TYPES.INTERCEPTION, team: p.teamSide,
           playerId: p.id, playerName: p.name,
@@ -610,16 +673,15 @@ export default class MatchEngine {
     if (defender.redCard) return;
     const tackling = defender.tackling / 100;
     const attackerDribbling = attacker.dribbling / 100;
-
     const success = clamp(0.40 + tackling * 0.36 - attackerDribbling * 0.22, 0.18, 0.88);
+
     defender.stats.tackles += 1;
+    this.getStats(defender.teamSide).tackles += 1;
 
     if (chance(success)) {
       attacker.hasBall = false;
       defender.hasBall = true;
       this.ball.attach(defender);
-
-      // small injury chance on legal tackles
       this.tryInjure(attacker, "tackle");
 
       this.addEvent({
@@ -635,8 +697,6 @@ export default class MatchEngine {
   commitFoul(defender, attacker) {
     defender.stats.fouls += 1;
     this.getStats(defender.teamSide).fouls += 1;
-
-    // Injury chance on fouls much higher
     const injured = this.tryInjure(attacker, "tackle");
 
     const severe = chance(0.025 + (100 - defender.tackling) / 1000);
@@ -670,7 +730,7 @@ export default class MatchEngine {
     this.awardFreeKick(attacker.teamSide);
   }
 
-  // ============ INJURIES ============
+  /* ====================== INJURIES ====================== */
   tryInjure(player, context = "fatigue") {
     if (!player || player.injury || player.redCard) return false;
 
@@ -691,10 +751,8 @@ export default class MatchEngine {
       player.injure(type, severity);
       this.injuries[player.teamSide] += 1;
       this.addEvent({
-        type: EVENT_TYPES.INJURY,
-        team: player.teamSide,
-        playerId: player.id,
-        playerName: player.name,
+        type: EVENT_TYPES.INJURY, team: player.teamSide,
+        playerId: player.id, playerName: player.name,
         detail: `${player.name} is injured (${severity})!`,
       });
       return true;
@@ -705,17 +763,19 @@ export default class MatchEngine {
   updateStamina(dt) {
     this.players.forEach(p => {
       if (p.redCard) return;
-      // fatigue-based injury check
       if (!p.isInjured() && p.stamina < INJURY.STAMINA_THRESHOLD) {
         this.tryInjure(p, "fatigue");
       }
-      // fitness recovery when very low movement
-      if (p.velocity.length() < 5) p.fitness = clamp(p.fitness + dt * 0.2, 0, 100);
-      // form drops if very tired
-      if (p.stamina < 20) p.form = clamp(p.form - dt * 0.3, 60, 100);
+      if (p.velocity.length() < 5) {
+        p.fitness = clamp(p.fitness + dt * 0.2, 0, 100);
+      }
+      if (p.stamina < 20) {
+        p.form = clamp(p.form - dt * 0.3, 60, 100);
+      }
     });
   }
 
+  /* ====================== SET PIECES ====================== */
   awardFreeKick(team) {
     this.ball.stop();
     const players = this.getTeamPlayers(team);
@@ -735,8 +795,12 @@ export default class MatchEngine {
     const goalTop = (PITCH.height - PITCH.goalWidth) / 2;
     const goalBottom = goalTop + PITCH.goalWidth;
 
-    if (x >= PITCH.width && (y < goalTop || y > goalBottom)) { this.handleGoalLineOut("away"); return; }
-    if (x <= 0 && (y < goalTop || y > goalBottom)) { this.handleGoalLineOut("home"); return; }
+    if (x >= PITCH.width && (y < goalTop || y > goalBottom)) {
+      this.handleGoalLineOut("away"); return;
+    }
+    if (x <= 0 && (y < goalTop || y > goalBottom)) {
+      this.handleGoalLineOut("home"); return;
+    }
     if (y <= 0 || y >= PITCH.height) this.handleThrowIn();
   }
 
@@ -755,9 +819,10 @@ export default class MatchEngine {
     const y = this.ball.position.y < PITCH.height / 2 ? 8 : PITCH.height - 8;
     this.ball.position.set(x, y);
 
-    // Position attackers in the box
-    const attackers = this.getTeamPlayers(team).filter(p => !p.redCard && !p.isInjured() && p.position !== "GK");
-    const defenders = this.getOpponents(team).filter(p => !p.redCard && !p.isInjured() && p.position !== "GK");
+    const attackers = this.getTeamPlayers(team)
+      .filter(p => !p.redCard && !p.isInjured() && p.position !== "GK");
+    const defenders = this.getOpponents(team)
+      .filter(p => !p.redCard && !p.isInjured() && p.position !== "GK");
 
     const targetX = team === "home" ? PITCH.width - 105 : 105;
     const targetY = PITCH.height / 2;
@@ -765,16 +830,10 @@ export default class MatchEngine {
     const kicker = attackers.sort((a, b) => b.passing - a.passing)[0];
     attackers.forEach(p => {
       if (p.id === kicker?.id) return;
-      p.setTarget(
-        targetX + rand(-55, 55),
-        targetY + rand(-150, 150)
-      );
+      p.setTarget(targetX + rand(-55, 55), targetY + rand(-150, 150));
     });
     defenders.forEach(p => {
-      p.setTarget(
-        targetX + rand(-35, 35),
-        targetY + rand(-150, 150)
-      );
+      p.setTarget(targetX + rand(-35, 35), targetY + rand(-150, 150));
     });
 
     if (kicker) {
@@ -806,6 +865,7 @@ export default class MatchEngine {
     const team = this.ball.lastTouchTeam === "home" ? "away" : "home";
     this.getStats(team).throwIns += 1;
     this.ball.stop();
+
     const thrower = this.getTeamPlayers(team)
       .filter(p => !p.redCard && !p.isInjured())
       .sort((a, b) => b.overall - a.overall)[0];
@@ -819,8 +879,11 @@ export default class MatchEngine {
     });
   }
 
+  /* ====================== GOALS ====================== */
   checkGoal() {
-    if (![BALL_STATE.SHOOTING, BALL_STATE.CROSSING, BALL_STATE.PASSING].includes(this.ball.state)) return;
+    if (![BALL_STATE.SHOOTING, BALL_STATE.CROSSING, BALL_STATE.PASSING]
+      .includes(this.ball.state)) return;
+
     const x = this.ball.position.x;
     const y = this.ball.position.y;
     const goalTop = (PITCH.height - PITCH.goalWidth) / 2;
@@ -833,7 +896,8 @@ export default class MatchEngine {
     if (!scoringSide) return;
 
     const shooter = this.findLastShooter();
-    const gk = this.getTeamPlayers(scoringSide === "home" ? "away" : "home").find(p => p.position === "GK");
+    const gk = this.getTeamPlayers(scoringSide === "home" ? "away" : "home")
+      .find(p => p.position === "GK");
 
     if (gk && this.shouldGoalkeeperSave(gk, shooter)) {
       this.handleSave(gk, scoringSide);
@@ -848,10 +912,14 @@ export default class MatchEngine {
     const distance = shooter ? this.distanceToOpponentGoal(shooter) : 260;
 
     const difficulty = clamp(
-      0.20 + shooterSkill * 0.32 + clamp(1 - distance / 500, 0, 1) * 0.22,
+      0.20 + shooterSkill * 0.32 +
+      clamp(1 - distance / 500, 0, 1) * 0.22,
       0.15, 0.85
     );
-    const saveP = clamp(skill * 0.72 - difficulty * 0.42 + gk.reaction / 100 * 0.20, 0.04, 0.72);
+    const saveP = clamp(
+      skill * 0.72 - difficulty * 0.42 + gk.reaction / 100 * 0.20,
+      0.04, 0.72
+    );
     return chance(saveP);
   }
 
@@ -905,7 +973,7 @@ export default class MatchEngine {
     this.getStats(owner.teamSide).possessionSeconds += 1 / MATCH.FPS;
   }
 
-  // ============ SUBSTITUTIONS ============
+  /* ====================== SUBSTITUTIONS ====================== */
   performSubstitution(team, playerOutId, playerInId) {
     if (this.substitutions[team] >= MATCH.MAX_SUBSTITUTIONS) return false;
 
@@ -913,7 +981,8 @@ export default class MatchEngine {
     const bench = team === "home" ? this.homeBench : this.awayBench;
 
     const outIndex = lineup.findIndex(p => p.id === String(playerOutId));
-    const inIndex = bench.findIndex(p => String(p.id ?? p.playerId) === String(playerInId));
+    const inIndex = bench.findIndex(p =>
+      String(p.id ?? p.playerId) === String(playerInId));
     if (outIndex < 0 || inIndex < 0) return false;
 
     const oldPlayer = lineup[outIndex];
@@ -945,15 +1014,10 @@ export default class MatchEngine {
 
   runAutomaticSubstitutions() {
     ["home", "away"].forEach(team => {
-      // AI only for away team - user controls home manually
-      if (team === "home" && this.userControlled === "home") {
-        // still auto-sub injured players
-        this.autoSubInjured(team);
-        return;
-      }
-
+      this.autoSubInjured(team);
+      if (this.isUserControlled(team)) return;
       if (this.substitutions[team] >= MATCH.MAX_SUBSTITUTIONS) return;
-      if (this.getMinute() < 50) { this.autoSubInjured(team); return; }
+      if (this.getMinute() < 50) return;
 
       const lineup = team === "home" ? this.homeXI : this.awayXI;
       const bench = team === "home" ? this.homeBench : this.awayBench;
@@ -962,13 +1026,10 @@ export default class MatchEngine {
       const tired = lineup
         .filter(p => p.position !== "GK" && !p.redCard && !p.isInjured())
         .sort((a, b) => a.stamina - b.stamina)[0];
-
       if (!tired || tired.stamina > 45) return;
 
-      const replacement = bench
-        .slice()
+      const replacement = bench.slice()
         .sort((a, b) => Number(b.overall ?? 60) - Number(a.overall ?? 60))[0];
-
       if (replacement) {
         this.performSubstitution(team, tired.id, replacement.id ?? replacement.playerId);
       }
@@ -983,25 +1044,21 @@ export default class MatchEngine {
     const injured = lineup.find(p => p.isInjured() && !p.redCard);
     if (!injured || !bench.length) return;
 
-    // pick best available replacement with matching position
-    const candidates = bench
-      .slice()
-      .sort((a, b) => Number(b.overall ?? 60) - Number(a.overall ?? 60));
-    const replacement = candidates[0];
+    const replacement = bench.slice()
+      .sort((a, b) => Number(b.overall ?? 60) - Number(a.overall ?? 60))[0];
     if (replacement) {
       this.performSubstitution(team, injured.id, replacement.id ?? replacement.playerId);
     }
   }
 
-  // ============ MOVEMENT TARGETS ============
+  /* ====================== HELPERS ====================== */
   getTacticalTarget(player) {
     const t = this.getTactics(player.teamSide);
     const dir = player.teamSide === "home" ? 1 : -1;
-    let x = player.homeX;
-    let y = player.homeY;
-
+    let x = player.homeX, y = player.homeY;
     const ball = this.ball.position;
-    const influence = t.mentality === "attacking" ? 0.19 : t.mentality === "defensive" ? 0.08 : 0.13;
+    const influence = t.mentality === "attacking" ? 0.19
+      : t.mentality === "defensive" ? 0.08 : 0.13;
 
     x += (ball.x - PITCH.width / 2) * influence * dir;
     y += (ball.y - PITCH.height / 2) * 0.10;
@@ -1009,7 +1066,8 @@ export default class MatchEngine {
     if (t.width === "wide") y += player.homeY < PITCH.height / 2 ? -18 : 18;
     if (t.width === "narrow") y += player.homeY < PITCH.height / 2 ? 15 : -15;
 
-    const lineMod = t.defensiveLine === "high" ? 45 : t.defensiveLine === "deep" ? -35 : 0;
+    const lineMod = t.defensiveLine === "high" ? 45
+      : t.defensiveLine === "deep" ? -35 : 0;
     if (player.position !== "GK") x += dir * lineMod;
 
     return {
@@ -1020,15 +1078,14 @@ export default class MatchEngine {
 
   getAttackingTarget(player, owner) {
     const dir = player.teamSide === "home" ? 1 : -1;
-    let x = player.homeX;
-    let y = player.homeY;
-
+    let x = player.homeX, y = player.homeY;
     const t = this.getTactics(player.teamSide);
-    const push = t.mentality === "attacking" ? 1.25 : t.mentality === "defensive" ? 0.7 : 1.0;
+    const push = t.mentality === "attacking" ? 1.25
+      : t.mentality === "defensive" ? 0.7 : 1.0;
 
     if (player.position === "ST") x += dir * 70 * push;
     if (["LW", "RW", "LM", "RM", "LWB", "RWB"].includes(player.position)) x += dir * 40 * push;
-    if (player.position === "MID" || player.position === "CM" || player.position === "AM") x += dir * 25 * push;
+    if (["MID", "CM", "AM"].includes(player.position)) x += dir * 25 * push;
 
     const ownerDist = dist(player, owner);
     if (ownerDist < 120) y += player.y < PITCH.height / 2 ? -45 : 45;
@@ -1047,19 +1104,16 @@ export default class MatchEngine {
     const goalX = player.teamSide === "home" ? PITCH.width : 0;
     const pressure = this.calculatePressure(player);
     const t = this.getTactics(player.teamSide);
-    const tempoPush = t.tempo === "fast" ? 85 : t.tempo === "slow" ? 55 : 70;
+    const tempoPush = t.tempo === "fast" ? 85
+      : t.tempo === "slow" ? 55 : 70;
 
-    let x = player.x;
-    let y = player.y;
-
+    let x = player.x, y = player.y;
     if (pressure < 0.35) x += dir * tempoPush;
     else y += player.y < PITCH.height / 2 ? 35 : -35;
 
     x = clamp(x, 20, PITCH.width - 20);
     y = clamp(y, 20, PITCH.height - 20);
-
     if (this.distanceToOpponentGoal(player) < 150) x = goalX;
-
     player.setTarget(x, y);
   }
 
@@ -1092,8 +1146,7 @@ export default class MatchEngine {
     const len = Math.sqrt(lx * lx + ly * ly);
     if (len === 0) return false;
     const t = clamp(((point.x - start.x) * lx + (point.y - start.y) * ly) / (len * len), 0, 1);
-    const cx = start.x + lx * t;
-    const cy = start.y + ly * t;
+    const cx = start.x + lx * t, cy = start.y + ly * t;
     const d = Math.sqrt((point.x - cx) ** 2 + (point.y - cy) ** 2);
     return d <= tolerance;
   }
@@ -1147,16 +1200,11 @@ export default class MatchEngine {
   getStats(team) { return team === "home" ? this.homeStats : this.awayStats; }
   getTactics(team) { return team === "home" ? this.homeTactics : this.awayTactics; }
   getTeamName(team) {
-    return team === "home" ? (this.homeClub?.name || "Home") : (this.awayClub?.name || "Away");
+    return team === "home"
+      ? (this.homeClub?.name || "Home")
+      : (this.awayClub?.name || "Away");
   }
   getMinute() { return clamp(Math.floor(this.simulationTime), 0, 90); }
-
-  setUserControlled(side) { this.userControlled = side; }
-
-  setTactics(team, tactics) {
-    const current = this.getTactics(team);
-    Object.assign(current, tactics);
-  }
 
   addEvent(event) {
     const complete = {
@@ -1170,9 +1218,11 @@ export default class MatchEngine {
     if (this.events.length > 200) this.events = this.events.slice(0, 200);
   }
 
+  /* ====================== SNAPSHOT ====================== */
   getSnapshot() {
     const total = this.homeStats.possessionSeconds + this.awayStats.possessionSeconds;
-    const homePoss = total > 0 ? (this.homeStats.possessionSeconds / total) * 100 : 50;
+    const homePoss = total > 0
+      ? (this.homeStats.possessionSeconds / total) * 100 : 50;
 
     const players = this.players.map(p => ({
       id: p.id, name: p.name, number: p.number,
@@ -1206,39 +1256,44 @@ export default class MatchEngine {
       homeBench: this.homeBench.map(b => ({
         id: String(b.id ?? b.playerId),
         name: b.name || b.fullName || "Unknown",
-        position: b.position, overall: b.overall ?? b.rating,
-        number: b.shirtNumber ?? b.number,
+        position: b.position || b.primaryPosition || "MID",
+        overall: b.overall ?? b.rating ?? 60,
+        number: b.shirtNumber ?? b.number ?? "-",
       })),
       awayBench: this.awayBench.map(b => ({
         id: String(b.id ?? b.playerId),
         name: b.name || b.fullName || "Unknown",
-        position: b.position, overall: b.overall ?? b.rating,
-        number: b.shirtNumber ?? b.number,
+        position: b.position || b.primaryPosition || "MID",
+        overall: b.overall ?? b.rating ?? 60,
+        number: b.shirtNumber ?? b.number ?? "-",
       })),
       homeLineup: this.homeXI.map(p => ({
         id: p.id, name: p.name, number: p.number, position: p.position,
-        overall: p.overall, stamina: p.stamina, injury: p.injury,
+        overall: p.overall, stamina: Math.round(p.stamina),
+        fitness: Math.round(p.fitness), injury: p.injury,
         goals: p.stats.goals, yellowCards: p.yellowCards, redCard: p.redCard,
+        hasBall: p.hasBall,
       })),
       awayLineup: this.awayXI.map(p => ({
         id: p.id, name: p.name, number: p.number, position: p.position,
-        overall: p.overall, stamina: p.stamina, injury: p.injury,
+        overall: p.overall, stamina: Math.round(p.stamina),
+        fitness: Math.round(p.fitness), injury: p.injury,
         goals: p.stats.goals, yellowCards: p.yellowCards, redCard: p.redCard,
+        hasBall: p.hasBall,
       })),
     };
   }
 }
 
-/* ==================== HELPERS ==================== */
-
+/* ====================== STATIC HELPERS ====================== */
 function chooseBestXI(players, formation) {
-  const required = getFormationRequirements(formation);
+  const req = getFormationRequirements(formation);
   const remaining = [...players];
   const result = [];
 
-  const take = (category, count) => {
+  const take = (cat, count) => {
     const candidates = remaining
-      .filter(p => normalizePosition(p.position) === category)
+      .filter(p => normalizePosition(p.position) === cat)
       .sort((a, b) => getOverall(b) - getOverall(a))
       .slice(0, count);
     candidates.forEach(p => {
@@ -1247,11 +1302,10 @@ function chooseBestXI(players, formation) {
       result.push(p);
     });
   };
-
-  take("GK", required.GK);
-  take("DEF", required.DEF);
-  take("MID", required.MID);
-  take("ATT", required.ATT);
+  take("GK", req.GK);
+  take("DEF", req.DEF);
+  take("MID", req.MID);
+  take("ATT", req.ATT);
 
   remaining.sort((a, b) => getOverall(b) - getOverall(a));
   while (result.length < 11 && remaining.length) result.push(remaining.shift());
@@ -1272,8 +1326,10 @@ function getFormationRequirements(formation) {
 function normalizePosition(value) {
   const p = String(value || "").toLowerCase();
   if (p === "gk" || p.includes("goalkeeper") || p.includes("keeper")) return "GK";
-  if (p.includes("def") || p.includes("back") || ["cb", "lb", "rb", "lwb", "rwb"].includes(p)) return "DEF";
-  if (p.includes("attack") || p.includes("forward") || p.includes("striker") || ["st", "cf", "lw", "rw"].includes(p)) return "ATT";
+  if (p.includes("def") || p.includes("back") ||
+    ["cb", "lb", "rb", "lwb", "rwb"].includes(p)) return "DEF";
+  if (p.includes("attack") || p.includes("forward") || p.includes("striker") ||
+    ["st", "cf", "lw", "rw"].includes(p)) return "ATT";
   return "MID";
 }
 
@@ -1283,9 +1339,12 @@ function getOverall(p) {
 
 function normalizeStatus(status) {
   const v = String(status || "").toLowerCase();
-  if (["finished", "completed", "full-time", "full_time", "ended"].includes(v)) return MATCH_STATUS.FINISHED;
-  if (["live", "playing", "started", "in-progress", "in_progress"].includes(v)) return MATCH_STATUS.LIVE;
-  if (["half-time", "halftime", "half_time"].includes(v)) return MATCH_STATUS.HALF_TIME;
+  if (["finished", "completed", "full-time", "full_time", "ended"].includes(v))
+    return MATCH_STATUS.FINISHED;
+  if (["live", "playing", "started", "in-progress", "in_progress"].includes(v))
+    return MATCH_STATUS.LIVE;
+  if (["half-time", "halftime", "half_time"].includes(v))
+    return MATCH_STATUS.HALF_TIME;
   return MATCH_STATUS.READY;
 }
 
