@@ -1,242 +1,459 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback, useEffect, useMemo, useRef, useState,
+} from "react";
+import Head from "next/head";
 import { useRouter } from "next/router";
+import {
+  collection, doc, getDoc, getDocs, query,
+  updateDoc, where, serverTimestamp,
+} from "firebase/firestore";
+
+import { db } from "../../components/firebase";
+import { useAuth } from "../../context/AuthContext";
 import MatchEngine from "../../lib/match-engine/MatchEngine";
 import MatchCanvas from "../../components/match/MatchCanvas";
-import { MATCH_STATUS, TACTICAL_VALUES } from "../../lib/match-engine/constants";
-import styles from "./Mach.module.css";
-
-const USER_TEAM = "home";
+import {
+  MATCH_STATUS, TACTICAL_VALUES,
+} from "../../lib/match-engine/constants";
+import styles from "./Match.module.css";
 
 export default function MatchPage() {
   const router = useRouter();
   const { id } = router.query;
+  const { user, loading: authLoading } = useAuth();
 
-  const engineRef = useRef(null);
-  const rafRef = useRef(null);
-  const lastTimeRef = useRef(0);
-  const lastSyncRef = useRef(0);
-
-  const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
+  const [match, setMatch] = useState(null);
+  const [homeClub, setHomeClub] = useState(null);
+  const [awayClub, setAwayClub] = useState(null);
+  const [engine, setEngine] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const [userSide, setUserSide] = useState("home");
   const [tactics, setTactics] = useState(null);
   const [subOut, setSubOut] = useState("");
   const [subIn, setSubIn] = useState("");
+  const [subMessage, setSubMessage] = useState("");
 
-  // load / build engine
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
+  const engineRef = useRef(null);
+  const lastSaveRef = useRef(0);
 
-    const load = async () => {
-      try {
-        setLoading(true);
-        let data = null;
-        try {
-          const res = await fetch(`/api/matches/${id}`);
-          if (res.ok) data = await res.json();
-        } catch (_) { /* ignore */ }
-
-        if (!data) data = createMockMatch();
-
-        const engine = new MatchEngine(data);
-        engine.setUserControlled(USER_TEAM);
-        engineRef.current = engine;
-        setTactics({ ...engine.homeTactics });
-        setSnapshot(engine.getSnapshot());
-        setLoading(false);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setError("Ntibyashobotse gutangiza umukino.");
-      }
-    };
-
-    load();
-    return () => { cancelled = true; };
-  }, [id]);
-
-  // main RAF loop
-  useEffect(() => {
-    lastTimeRef.current = performance.now();
-    lastSyncRef.current = 0;
-
-    const tick = () => {
-      const engine = engineRef.current;
-      const now = performance.now();
-      const dt = Math.min((now - lastTimeRef.current) / 1000, 0.1);
-      lastTimeRef.current = now;
-
-      if (engine) {
-        engine.update(dt);
-        if (now - lastSyncRef.current > 150) {
-          lastSyncRef.current = now;
-          setSnapshot(engine.getSnapshot());
-        }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+  /* ====== LOAD PLAYERS ====== */
+  const loadPlayers = useCallback(async clubId => {
+    if (!clubId) return [];
+    const playersRef = collection(db, "players");
+    const queries = [
+      query(playersRef, where("clubId", "==", clubId)),
+      query(playersRef, where("currentClub", "==", clubId)),
+      query(playersRef, where("teamId", "==", clubId)),
+    ];
+    const snaps = await Promise.all(
+      queries.map(async q => {
+        try { return await getDocs(q); } catch { return null; }
+      })
+    );
+    const unique = new Map();
+    snaps.forEach(s => {
+      if (!s) return;
+      s.docs.forEach(d => unique.set(d.id, { id: d.id, ...d.data() }));
+    });
+    return Array.from(unique.values());
   }, []);
 
-  const start = useCallback(() => { engineRef.current?.start(); }, []);
-  const pause = useCallback(() => { engineRef.current?.pause(); }, []);
-  const resume = useCallback(() => { engineRef.current?.resume(); }, []);
-  const stop = useCallback(() => { engineRef.current?.stop(); }, []);
+  /* ====== LOAD MATCH ====== */
+  const loadMatch = useCallback(async () => {
+    if (authLoading || !id) return;
+    try {
+      setLoading(true);
+      setError("");
 
-  const updateTactic = useCallback((key, value) => {
-    const engine = engineRef.current;
+      const matchSnap = await getDoc(doc(db, "matches", String(id)));
+      if (!matchSnap.exists()) throw new Error("Match not found.");
+      const matchData = { id: matchSnap.id, ...matchSnap.data() };
+
+      const [homeSnap, awaySnap] = await Promise.all([
+        matchData.homeClubId
+          ? getDoc(doc(db, "clubs", matchData.homeClubId)) : null,
+        matchData.awayClubId
+          ? getDoc(doc(db, "clubs", matchData.awayClubId)) : null,
+      ]);
+
+      const home = homeSnap?.exists()
+        ? { id: homeSnap.id, ...homeSnap.data() }
+        : { id: matchData.homeClubId, name: matchData.homeClubName || "Home" };
+      const away = awaySnap?.exists()
+        ? { id: awaySnap.id, ...awaySnap.data() }
+        : { id: matchData.awayClubId, name: matchData.awayClubName || "Away" };
+
+      const [homePlayers, awayPlayers] = await Promise.all([
+        loadPlayers(home.id),
+        loadPlayers(away.id),
+      ]);
+
+      if (homePlayers.length < 11)
+        throw new Error(`${home.name} does not have enough players.`);
+      if (awayPlayers.length < 11)
+        throw new Error(`${away.name} does not have enough players.`);
+
+      const newEngine = new MatchEngine({
+        match: matchData,
+        homeClub: home,
+        awayClub: away,
+        homePlayers,
+        awayPlayers,
+      });
+
+      // ===== USER SIDE detection =====
+      const userClubId =
+        user?.clubId || user?.teamId || user?.managedClubId || null;
+
+      let side = "home";
+      if (userClubId) {
+        if (String(home.id) === String(userClubId)) side = "home";
+        else if (String(away.id) === String(userClubId)) side = "away";
+      } else {
+        // Niba nta club id ifitwe, home ihabwa user
+        side = "home";
+      }
+
+      newEngine.setUserControlled(side);
+      engineRef.current = newEngine;
+
+      setEngine(newEngine);
+      setMatch(matchData);
+      setHomeClub(home);
+      setAwayClub(away);
+      setUserSide(side);
+      setSnapshot(newEngine.getSnapshot());
+
+      const userTactics = side === "home"
+        ? newEngine.homeTactics : newEngine.awayTactics;
+      setTactics({ ...userTactics });
+    } catch (err) {
+      console.error("MATCH LOAD ERROR:", err);
+      setError(err?.message || "Failed to load match.");
+    } finally {
+      setLoading(false);
+    }
+  }, [id, authLoading, loadPlayers, user]);
+
+  useEffect(() => {
+    loadMatch();
+    return () => {
+      engineRef.current?.stop();
+      engineRef.current = null;
+    };
+  }, [loadMatch]);
+
+  /* ====== SAVE TO FIRESTORE ====== */
+  const saveMatch = useCallback(async (force = false) => {
+    const current = engineRef.current;
+    if (!current || !match?.id) return;
+
+    const now = Date.now();
+    if (!force && now - lastSaveRef.current < 10000) return;
+    lastSaveRef.current = now;
+
+    try {
+      setSaving(true);
+      const data = current.getSnapshot();
+      await updateDoc(doc(db, "matches", match.id), {
+        status: data.status,
+        minute: data.minute,
+        homeScore: data.homeScore,
+        awayScore: data.awayScore,
+        result: { homeScore: data.homeScore, awayScore: data.awayScore },
+        events: data.events,
+        homeStats: data.homeStats,
+        awayStats: data.awayStats,
+        homeFormation: data.homeFormation,
+        awayFormation: data.awayFormation,
+        homeTactics: data.homeTactics,
+        awayTactics: data.awayTactics,
+        homeLineupIds: current.homeXI.map(p => p.id),
+        awayLineupIds: current.awayXI.map(p => p.id),
+        homeSubsUsed: data.substitutions.home,
+        awaySubsUsed: data.substitutions.away,
+        homeInjuries: data.injuries.home,
+        awayInjuries: data.injuries.away,
+        userControlledSide: current.userControlled || "home",
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("MATCH SAVE ERROR:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [match]);
+
+  /* ====== SNAPSHOT TICK ====== */
+  useEffect(() => {
     if (!engine) return;
-    engine.homeTactics[key] = value;
-    setTactics({ ...engine.homeTactics });
-  }, []);
+    const timer = setInterval(() => {
+      const data = engine.getSnapshot();
+      setSnapshot(data);
+      const liveUser = userSide === "home"
+        ? engine.homeTactics : engine.awayTactics;
+      setTactics(prev => prev ? { ...prev, ...liveUser } : { ...liveUser });
 
-  const doSub = useCallback(() => {
-    const engine = engineRef.current;
+      if (data.status === MATCH_STATUS.FINISHED) saveMatch(true);
+      else saveMatch(false);
+    }, 250);
+    return () => clearInterval(timer);
+  }, [engine, saveMatch, userSide]);
+
+  /* ====== CONTROLS ====== */
+  const startMatch = () => { engine?.start(); saveMatch(true); };
+  const pauseMatch = () => { engine?.pause(); saveMatch(true); };
+  const resumeMatch = () => { engine?.resume(); saveMatch(true); };
+  const stopMatch = () => { engine?.stop(); saveMatch(true); };
+
+  const updateTactic = (key, value) => {
+    if (!engine) return;
+    engine.setTactics(userSide, { [key]: value });
+    setTactics(prev => ({ ...prev, [key]: value }));
+    setTimeout(() => saveMatch(true), 100);
+  };
+
+  const doSub = () => {
     if (!engine || !subOut || !subIn) return;
-    const ok = engine.performSubstitution(USER_TEAM, subOut, subIn);
+    const ok = engine.performSubstitution(userSide, subOut, subIn);
     if (ok) {
       setSubOut("");
       setSubIn("");
+      setSubMessage("Substitution yagenze neza ✅");
+      setTimeout(() => setSubMessage(""), 2500);
       setSnapshot(engine.getSnapshot());
+      saveMatch(true);
+    } else {
+      setSubMessage("Ntibishoboka (max 5?)");
+      setTimeout(() => setSubMessage(""), 2500);
     }
-  }, [subOut, subIn]);
+  };
 
-  if (loading) {
+  /* ====== MEMOS ====== */
+  const ballOwner = useMemo(() => {
+    if (!snapshot) return null;
+    return snapshot.players.find(p => p.hasBall) || null;
+  }, [snapshot]);
+
+  const recentEvents = useMemo(
+    () => snapshot?.events?.slice(0, 10) || [], [snapshot]
+  );
+
+  const myLineup = useMemo(() => {
+    if (!snapshot) return [];
+    return userSide === "home"
+      ? snapshot.homeLineup || [] : snapshot.awayLineup || [];
+  }, [snapshot, userSide]);
+
+  const myBench = useMemo(() => {
+    if (!snapshot) return [];
+    return userSide === "home"
+      ? snapshot.homeBench || [] : snapshot.awayBench || [];
+  }, [snapshot, userSide]);
+
+  const oppBench = useMemo(() => {
+    if (!snapshot) return [];
+    return userSide === "home"
+      ? snapshot.awayBench || [] : snapshot.homeBench || [];
+  }, [snapshot, userSide]);
+
+  const mySubsUsed = useMemo(() => {
+    if (!snapshot) return 0;
+    return userSide === "home"
+      ? snapshot.substitutions?.home ?? 0
+      : snapshot.substitutions?.away ?? 0;
+  }, [snapshot, userSide]);
+
+  /* ====== LOADING / ERROR ====== */
+  if (authLoading || loading) {
     return (
-      <div className={styles.loadingPage}>
+      <main className={styles.loadingPage}>
         <div className={styles.spinner} />
-        <h2>Gutegura umukino...</h2>
-        <p>Abakinnyi barimo kwitegura.</p>
-      </div>
+        <h2>Loading Match Engine</h2>
+        <p>Loading clubs, players and match intelligence...</p>
+      </main>
     );
   }
 
-  if (error || !snapshot) {
+  if (error) {
     return (
-      <div className={styles.errorPage}>
+      <main className={styles.errorPage}>
         <div className={styles.errorIcon}>⚠️</div>
-        <h1>Habaye ikibazo</h1>
+        <h1>Match Error</h1>
         <p>{error}</p>
-        <button className={styles.primaryButton} onClick={() => router.back()}>← Subira inyuma</button>
-      </div>
+        <button
+          onClick={() => router.push("/fixtures")}
+          className={styles.primaryButton}
+        >
+          ← Back to Fixtures
+        </button>
+      </main>
     );
   }
 
-  const statusLabel = {
-    [MATCH_STATUS.READY]: "READY",
-    [MATCH_STATUS.LIVE]: "LIVE",
-    [MATCH_STATUS.HALF_TIME]: "HALF TIME",
-    [MATCH_STATUS.FINISHED]: "FULL TIME",
-  }[snapshot.status] || snapshot.status;
+  if (!engine || !snapshot || !homeClub || !awayClub) return null;
 
-  const engine = engineRef.current;
-  const homeName = engine?.homeClub?.name || "Home";
-  const awayName = engine?.awayClub?.name || "Away";
+  const score = `${snapshot.homeScore} - ${snapshot.awayScore}`;
+  const minute = snapshot.minute ?? 0;
+  const status = snapshot.status || "loading";
+  const myClub = userSide === "home" ? homeClub : awayClub;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <button className={styles.backButton} onClick={() => router.back()}>← Subira</button>
-        <div className={styles.headerTitle}>
-          <span>Umukino Live</span>
-          <h1>{homeName} vs {awayName}</h1>
-        </div>
-        <div className={styles.statusBadge}>{statusLabel}</div>
-      </header>
+    <>
+      <Head>
+        <title>{homeClub.name} vs {awayClub.name} | Match Centre</title>
+        <meta name="theme-color" content="#050816" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      <div className={styles.scoreboard}>
-        <TeamBadge club={engine?.homeClub} score={snapshot.homeScore} />
-        <div className={styles.scoreCenter}>
-          <small>{snapshot.minute}'</small>
-          <strong>{snapshot.homeScore} - {snapshot.awayScore}</strong>
-          <span>{statusLabel}</span>
-        </div>
-        <TeamBadge club={engine?.awayClub} score={snapshot.awayScore} flip />
-      </div>
-
-      <div className={styles.mainGrid}>
-        <div className={styles.pitchCard}>
-          <div className={styles.canvasContainer}>
-            <MatchCanvas engineRef={engineRef} />
+      <main className={styles.page}>
+        <header className={styles.header}>
+          <button
+            className={styles.backButton}
+            onClick={() => router.push("/fixtures")}
+          >
+            ← Fixtures
+          </button>
+          <div className={styles.headerTitle}>
+            <span>{match?.leagueName || match?.competition || "Football Match"}</span>
+            <h1>Match Centre</h1>
           </div>
-        </div>
+          <div className={styles.statusBadge}>
+            {saving ? "SAVING" : status.toUpperCase()}
+          </div>
+        </header>
 
-        <aside className={styles.sidebar}>
-          {/* Control */}
-          <div className={styles.controlCard}>
-            <h2>Igenzura</h2>
-            {snapshot.status === MATCH_STATUS.FINISHED ? (
-              <div className={styles.finishedMessage}>Umukino warangiye</div>
-            ) : (
+        <section className={styles.scoreboard}>
+          <div className={styles.teamScore}>
+            <div className={styles.logo}>
+              {homeClub.logo ? <img src={homeClub.logo} alt="" /> : "⚽"}
+            </div>
+            <strong>
+              {homeClub.name}{userSide === "home" ? " ⭐" : ""}
+            </strong>
+            <span>HOME</span>
+          </div>
+
+          <div className={styles.scoreCenter}>
+            <small>{minute}'</small>
+            <strong>{score}</strong>
+            <span>{status}</span>
+          </div>
+
+          <div className={styles.teamScore}>
+            <div className={styles.logo}>
+              {awayClub.logo ? <img src={awayClub.logo} alt="" /> : "⚽"}
+            </div>
+            <strong>
+              {awayClub.name}{userSide === "away" ? " ⭐" : ""}
+            </strong>
+            <span>AWAY</span>
+          </div>
+        </section>
+
+        <section className={styles.mainGrid}>
+          <div className={styles.pitchCard}>
+            <MatchCanvas engine={engine} />
+          </div>
+
+          <aside className={styles.sidebar}>
+            {/* CONTROLS */}
+            <section className={styles.controlCard}>
+              <h2>Match Controls</h2>
               <div className={styles.buttonGrid}>
-                {!engine?.running && !engine?.paused && (
-                  <button className={styles.primaryButton} onClick={start}>▶ Tangira</button>
+                {status === MATCH_STATUS.READY && (
+                  <button className={styles.primaryButton} onClick={startMatch}>
+                    ▶ Start
+                  </button>
                 )}
-                {engine?.running && !engine?.paused && (
-                  <button className={styles.secondaryButton} onClick={pause}>⏸ Hagarika</button>
+                {status === MATCH_STATUS.LIVE && (
+                  <button className={styles.secondaryButton} onClick={pauseMatch}>
+                    ⏸ Pause
+                  </button>
                 )}
-                {engine?.paused && (
-                  <button className={styles.primaryButton} onClick={resume}>▶ Komeza</button>
+                {status === MATCH_STATUS.HALF_TIME && (
+                  <button className={styles.primaryButton} onClick={resumeMatch}>
+                    ▶ Resume
+                  </button>
                 )}
-                <button className={styles.dangerButton} onClick={stop}>■ Rangiza</button>
+                {status === MATCH_STATUS.LIVE && snapshot.minute < 90 && (
+                  <button className={styles.dangerButton} onClick={stopMatch}>
+                    ■ Finish
+                  </button>
+                )}
+                {status === MATCH_STATUS.FINISHED && (
+                  <div className={styles.finishedMessage}>Full Time</div>
+                )}
               </div>
-            )}
-          </div>
+            </section>
 
-          {/* Tactics (user home) */}
-          <div className={styles.tacticsCard}>
-            <h2>Tactics zawe (Home)</h2>
-            {tactics && (
+            {/* TACTICS */}
+            <section className={styles.tacticsCard}>
+              <h2>Tactics — {myClub?.name} ({userSide})</h2>
               <div className={styles.tacticsGrid}>
                 {[
                   ["mentality", "Mentality"],
                   ["tempo", "Tempo"],
                   ["pressing", "Pressing"],
-                  ["defensiveLine", "Line Defense"],
-                  ["width", "Ubugari"],
-                  ["passingStyle", "Passing"],
-                ].map(([k, label]) => (
-                  <div key={k} className={styles.tacticRow}>
+                  ["defensiveLine", "Defensive Line"],
+                  ["width", "Width"],
+                  ["passingStyle", "Passing Style"],
+                ].map(([key, label]) => (
+                  <div key={key} className={styles.tacticRow}>
                     <label>{label}</label>
-                    <select value={tactics[k]} onChange={(e) => updateTactic(k, e.target.value)}>
-                      {TACTICAL_VALUES[k].map(v => <option key={v} value={v}>{v}</option>)}
+                    <select
+                      value={tactics?.[key] || ""}
+                      onChange={e => updateTactic(key, e.target.value)}
+                      disabled={status === MATCH_STATUS.FINISHED}
+                    >
+                      {TACTICAL_VALUES[key].map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
                     </select>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+              <p className={styles.hint}>
+                🎯 Ibihinduka bijya kuri simulation — AI yo mu rundi
+                ruhande na we ihindura tactics zayo.
+              </p>
+            </section>
 
-          {/* Info */}
-          <div className={styles.infoCard}>
-            <span>FORMATION (HOME)</span>
-            <strong>{snapshot.homeFormation} · {snapshot.homeTactics?.mentality}</strong>
-            <span style={{ marginTop: 8 }}>FORMATION (AWAY · AI)</span>
-            <strong>{snapshot.awayFormation} · {snapshot.awayTactics?.mentality}</strong>
-          </div>
+            {/* BALL */}
+            <section className={styles.infoCard}>
+              <span>BALL</span>
+              <strong>
+                {ballOwner
+                  ? `${ballOwner.name} #${ballOwner.number}`
+                  : "Free Ball"}
+              </strong>
+            </section>
 
-          {/* Stats */}
-          <div className={styles.statsCard}>
-            <h2>Imibare</h2>
-            <StatRow home={snapshot.homeStats.possession} away={snapshot.awayStats.possession} label="Possession %" />
-            <StatRow home={snapshot.homeStats.shots} away={snapshot.awayStats.shots} label="Shots" />
-            <StatRow home={snapshot.homeStats.shotsOnTarget} away={snapshot.awayStats.shotsOnTarget} label="On Target" />
-            <StatRow home={snapshot.homeStats.passesCompleted} away={snapshot.awayStats.passesCompleted} label="Passes" />
-            <StatRow home={snapshot.homeStats.tackles} away={snapshot.awayStats.tackles} label="Tackles" />
-            <StatRow home={snapshot.homeStats.corners} away={snapshot.awayStats.corners} label="Corners" />
-            <StatRow home={snapshot.homeStats.fouls} away={snapshot.awayStats.fouls} label="Fouls" />
-            <StatRow home={snapshot.homeStats.yellow} away={snapshot.awayStats.yellow} label="Yellow" />
-            <StatRow home={snapshot.homeStats.red} away={snapshot.awayStats.red} label="Red" />
-          </div>
+            {/* STATS */}
+            <section className={styles.statsCard}>
+              <h2>Match Statistics</h2>
+              <StatRow label="Possession" home={snapshot.homeStats.possession} away={snapshot.awayStats.possession} suffix="%" />
+              <StatRow label="Shots" home={snapshot.homeStats.shots} away={snapshot.awayStats.shots} />
+              <StatRow label="On Target" home={snapshot.homeStats.shotsOnTarget} away={snapshot.awayStats.shotsOnTarget} />
+              <StatRow label="Passes" home={snapshot.homeStats.passesCompleted} away={snapshot.awayStats.passesCompleted} />
+              <StatRow label="Tackles" home={snapshot.homeStats.tackles} away={snapshot.awayStats.tackles} />
+              <StatRow label="Corners" home={snapshot.homeStats.corners} away={snapshot.awayStats.corners} />
+              <StatRow label="Fouls" home={snapshot.homeStats.fouls} away={snapshot.awayStats.fouls} />
+              <StatRow label="Saves" home={snapshot.homeStats.saves} away={snapshot.awayStats.saves} />
+              <StatRow label="Yellow" home={snapshot.homeStats.yellow} away={snapshot.awayStats.yellow} />
+              <StatRow label="Red" home={snapshot.homeStats.red} away={snapshot.awayStats.red} />
+            </section>
 
-          {/* Events */}
-          <div className={styles.eventsCard}>
-            <h2>Ibibera</h2>
-            {snapshot.events.length === 0 ? (
-              <p className={styles.empty}>Nta kintu kirabaho.</p>
-            ) : (
-              snapshot.events.slice(0, 12).map(ev => (
+            {/* EVENTS */}
+            <section className={styles.eventsCard}>
+              <h2>Match Events</h2>
+              {recentEvents.length === 0 ? (
+                <p className={styles.empty}>No events yet.</p>
+              ) : recentEvents.map(ev => (
                 <div key={ev.id} className={styles.event}>
                   <span>{ev.minute}'</span>
                   <div>
@@ -244,130 +461,119 @@ export default function MatchPage() {
                     <p>{ev.detail}</p>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </section>
 
-          {/* Bench & subs */}
-          <div className={styles.benchCard}>
-            <h2>Substitutions & Bench</h2>
-            <div className={styles.lineupGrid}>
-              <LineupCol title="Home (we)" lineup={snapshot.homeLineup} />
-              <LineupCol title="Away (AI)" lineup={snapshot.awayLineup} />
-            </div>
-            <div className={styles.subRow}>
-              <select value={subOut} onChange={(e) => setSubOut(e.target.value)}>
-                <option value="">— Out —</option>
-                {snapshot.homeLineup
-                  .filter(p => !p.redCard)
-                  .map(p => (
+            {/* LINEUPS */}
+            <section className={styles.benchCard}>
+              <h2>Lineups</h2>
+              <div className={styles.lineupGrid}>
+                <LineupCol
+                  title={homeClub.name}
+                  lineup={snapshot.homeLineup}
+                  highlight={userSide === "home"}
+                />
+                <LineupCol
+                  title={awayClub.name}
+                  lineup={snapshot.awayLineup}
+                  highlight={userSide === "away"}
+                />
+              </div>
+            </section>
+
+            {/* SUBS */}
+            <section className={styles.benchCard}>
+              <h2>Substitutions — {myClub?.name} ({mySubsUsed}/5)</h2>
+              <div className={styles.subRow}>
+                <select value={subOut} onChange={e => setSubOut(e.target.value)}>
+                  <option value="">— Out —</option>
+                  {myLineup.filter(p => !p.redCard).map(p => (
+                    <option key={p.id} value={p.id}>
+                      #{p.number} {p.name} ({p.position})
+                      {p.injury ? " 🚑" : ""}
+                      {p.stamina < 40 ? " 😓" : ""}
+                    </option>
+                  ))}
+                </select>
+                <select value={subIn} onChange={e => setSubIn(e.target.value)}>
+                  <option value="">— In —</option>
+                  {myBench.map(p => (
                     <option key={p.id} value={p.id}>
                       #{p.number} {p.name} ({p.position})
                     </option>
                   ))}
-              </select>
-              <select value={subIn} onChange={(e) => setSubIn(e.target.value)}>
-                <option value="">— In —</option>
-                {snapshot.homeBench.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.position})
-                  </option>
-                ))}
-              </select>
-              <button
-                className={styles.subButton}
-                onClick={doSub}
-                disabled={!subOut || !subIn || snapshot.substitutions.home >= 5}
-              >
-                Sub
-              </button>
-            </div>
-            <p className={styles.empty} style={{ marginTop: 6 }}>
-              Subs: {snapshot.substitutions.home}/5 · Injured: {snapshot.injuries.home}
-            </p>
-          </div>
-        </aside>
-      </div>
-    </div>
+                </select>
+                <button
+                  className={styles.subButton}
+                  onClick={doSub}
+                  disabled={!subOut || !subIn || mySubsUsed >= 5}
+                >
+                  Sub
+                </button>
+              </div>
+              {subMessage && <p className={styles.hint}>{subMessage}</p>}
+
+              <div className={styles.benchColumns} style={{ marginTop: 10 }}>
+                <div>
+                  <h3>Bench (my team)</h3>
+                  {myBench.length === 0 ? (
+                    <p className={styles.empty}>No bench.</p>
+                  ) : myBench.map(p => (
+                    <div key={p.id} className={styles.benchPlayer}>
+                      <span>{p.number || "-"}</span>
+                      <label>{p.name}</label>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <h3>Bench (AI)</h3>
+                  {oppBench.map(p => (
+                    <div key={p.id} className={styles.benchPlayer}>
+                      <span>{p.number || "-"}</span>
+                      <label>{p.name}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </>
   );
 }
 
-function TeamBadge({ club, score, flip }) {
-  return (
-    <div className={styles.teamScore} style={flip ? { flexDirection: "row-reverse" } : {}}>
-      <div className={styles.logo}>
-        {club?.logo ? <img src={club.logo} alt="" /> : <span>{club?.short || "?"}</span>}
-      </div>
-      <div style={{ textAlign: flip ? "right" : "left" }}>
-        <strong>{club?.name || "—"}</strong>
-        <br />
-        <span>{score} GOALS</span>
-      </div>
-    </div>
-  );
-}
-
-function StatRow({ home, away, label }) {
+/* ====== HELPERS ====== */
+function StatRow({ label, home, away, suffix = "" }) {
   return (
     <div className={styles.statRow}>
-      <strong>{home}</strong>
+      <strong>{home}{suffix}</strong>
       <span>{label}</span>
-      <strong>{away}</strong>
+      <strong>{away}{suffix}</strong>
     </div>
   );
 }
 
-function LineupCol({ title, lineup }) {
+function LineupCol({ title, lineup = [], highlight }) {
   return (
     <div className={styles.lineupCol}>
-      <h3>{title}</h3>
+      <h3 style={highlight ? { color: "#fbbf24" } : {}}>
+        {title} {highlight ? "⭐" : ""}
+      </h3>
       {lineup.map(p => (
         <div key={p.id} className={styles.lineupPlayer}>
           <span className="num">{p.number}</span>
           <label>{p.name}</label>
           {p.injury && <span className={styles.injuredBadge}>+</span>}
-          {p.redCard && <span className={styles.injuredBadge}>RC</span>}
+          {p.redCard && <span className={styles.redBadge}>RC</span>}
+          {p.yellowCards > 0 && !p.redCard && (
+            <span className={styles.yellowBadge}>Y{p.yellowCards}</span>
+          )}
+          {p.goals > 0 && (
+            <span className={styles.goalBadge}>⚽{p.goals}</span>
+          )}
         </div>
       ))}
     </div>
   );
-}
-
-/* Mock data: kubyo nta API */
-function createMockMatch() {
-  const clubs = [
-    { id: "c1", name: "Kigali FC", short: "KGL", logo: "" },
-    { id: "c2", name: "Rayon Sports", short: "RAY", logo: "" },
-  ];
-  const names = [
-    "Mugisha", "Habimana", "Niyonzima", "Uwimana", "Kagabo", "Rwema",
-    "Bizimana", "Ndayisaba", "Iradukunda", "Nsengiyumva", "Hakizimana",
-    "Mukamana", "Kayitesi", "Uwase", "Ingabire", "Gasana", "Twagirayezu",
-  ];
-  const mk = (side, count) =>
-    Array.from({ length: count }).map((_, i) => ({
-      id: `${side}-${i}`,
-      name: names[(i + (side === "away" ? 5 : 0)) % names.length] + ` ${i + 1}`,
-      shirtNumber: i + 1,
-      position: ["GK", "LB", "CB", "CB", "RB", "LM", "CM", "CM", "RM", "ST", "ST"][i % 11],
-      overall: 60 + Math.floor(Math.random() * 25),
-      speed: 60 + Math.floor(Math.random() * 30),
-      passing: 60 + Math.floor(Math.random() * 30),
-      shooting: 55 + Math.floor(Math.random() * 35),
-      dribbling: 60 + Math.floor(Math.random() * 30),
-      tackling: 55 + Math.floor(Math.random() * 35),
-    }));
-
-  return {
-    match: {
-      id: "m1", minute: 0, homeScore: 0, awayScore: 0, status: "ready",
-      homeFormation: "4-3-3", awayFormation: "4-4-2",
-      homeTactics: { mentality: "balanced", tempo: "normal", pressing: "medium", defensiveLine: "normal", width: "normal", passingStyle: "mixed" },
-      awayTactics: { mentality: "balanced", tempo: "normal", pressing: "medium", defensiveLine: "normal", width: "normal", passingStyle: "mixed" },
-    },
-    homeClub: clubs[0],
-    awayClub: clubs[1],
-    homePlayers: mk("home", 18),
-    awayPlayers: mk("away", 18),
-  };
 }
