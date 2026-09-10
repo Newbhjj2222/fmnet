@@ -15,7 +15,7 @@ import MatchCanvas from "../../components/match/MatchCanvas";
 import {
   MATCH_STATUS, TACTICAL_VALUES,
 } from "../../lib/match-engine/constants";
-import styles from "./Match.module.css";
+import styles from "./Mach.module.css";
 
 export default function MatchPage() {
   const router = useRouter();
