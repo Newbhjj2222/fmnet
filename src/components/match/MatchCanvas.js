@@ -6,7 +6,7 @@ import {
 import {
   PITCH,
   TEAM_COLORS,
-} from "../../lib/match/constants";
+} from "../../lib/match-engine/constants";
 
 import styles from "./MatchCanvas.module.css";
 
