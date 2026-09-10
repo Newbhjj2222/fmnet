@@ -1,398 +1,734 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import Head from "next/head";
+import { useRouter } from "next/router";
+
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { db } from "../../components/firebase";
+import { useAuth } from "../../context/AuthContext";
 
 import MatchEngine from "../../lib/match-engine/MatchEngine";
 import MatchCanvas from "../../components/match/MatchCanvas";
 
+import {
+  MATCH_STATUS,
+} from "../../lib/match-engine/constants";
+
 import styles from "./Mach.module.css";
 
-function createPlayers(
-  teamSide,
-  teamName
-) {
-  const positions = [
-    "GK",
-    "LB",
-    "CB",
-    "CB",
-    "RB",
-    "CM",
-    "CM",
-    "CM",
-    "LW",
-    "ST",
-    "RW",
-  ];
+export default function MatchPage() {
+  const router =
+    useRouter();
 
-  const names = [
-    "Goalkeeper",
-    "Left Back",
-    "Centre Back",
-    "Centre Back",
-    "Right Back",
-    "Midfielder",
-    "Midfielder",
-    "Midfielder",
-    "Left Wing",
-    "Striker",
-    "Right Wing",
-  ];
+  const { id } =
+    router.query;
 
-  return positions.map(
-    (position, index) => ({
-      id:
-        `${teamSide}-${index + 1}`,
-
-      number:
-        index + 1,
-
-      name:
-        `${teamName} ${names[index]}`,
-
-      position,
-
-      speed:
-        68 +
-        Math.floor(
-          Math.random() * 20
-        ),
-
-      acceleration:
-        65 +
-        Math.floor(
-          Math.random() * 25
-        ),
-
-      stamina:
-        85 +
-        Math.floor(
-          Math.random() * 15
-        ),
-
-      passing:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-
-      shooting:
-        60 +
-        Math.floor(
-          Math.random() * 35
-        ),
-
-      dribbling:
-        60 +
-        Math.floor(
-          Math.random() * 35
-        ),
-
-      tackling:
-        60 +
-        Math.floor(
-          Math.random() * 35
-        ),
-
-      positioning:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-
-      vision:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-
-      decisionMaking:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-
-      composure:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-
-      reaction:
-        70 +
-        Math.floor(
-          Math.random() * 25
-        ),
-
-      handling:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-
-      diving:
-        65 +
-        Math.floor(
-          Math.random() * 30
-        ),
-    })
-  );
-}
-
-function createTeam(
-  side,
-  name
-) {
-  return {
-    id:
-      `${side}-team`,
-
-    name,
-
-    side,
-
-    formation: "4-3-3",
-
-    players:
-      createPlayers(
-        side,
-        name
-      ),
-
-    substitutes: [
-      {
-        number: 12,
-        name: "Reserve GK",
-        position: "GK",
-      },
-      {
-        number: 13,
-        name: "Reserve Defender",
-        position: "CB",
-      },
-      {
-        number: 14,
-        name: "Reserve Defender",
-        position: "RB",
-      },
-      {
-        number: 15,
-        name: "Reserve Midfielder",
-        position: "CM",
-      },
-      {
-        number: 16,
-        name: "Reserve Midfielder",
-        position: "CM",
-      },
-      {
-        number: 17,
-        name: "Reserve Forward",
-        position: "ST",
-      },
-      {
-        number: 18,
-        name: "Reserve Forward",
-        position: "ST",
-      },
-    ],
-
-    coach:
-      side === "home"
-        ? "Home Coach"
-        : "Away Coach",
-  };
-}
-
-export default function MatchPage({
-  matchId,
-}) {
-  const [engine, setEngine] =
-    useState(null);
+  const {
+    user,
+    loading:
+      authLoading,
+  } = useAuth();
 
   const [
-    status,
-    setStatus,
-  ] = useState(
-    "not_started"
-  );
+    loading,
+    setLoading,
+  ] = useState(true);
 
   const [
-    score,
-    setScore,
-  ] = useState(
-    "0 - 0"
-  );
+    error,
+    setError,
+  ] = useState("");
 
   const [
-    minute,
-    setMinute,
-  ] = useState(0);
-
-  const [
-    ballOwner,
-    setBallOwner,
+    match,
+    setMatch,
   ] = useState(null);
 
-  const homeTeam =
-    useMemo(
-      () =>
-        createTeam(
-          "home",
-          "New Talents FC"
-        ),
+  const [
+    homeClub,
+    setHomeClub,
+  ] = useState(null);
+
+  const [
+    awayClub,
+    setAwayClub,
+  ] = useState(null);
+
+  const [
+    engine,
+    setEngine,
+  ] = useState(null);
+
+  const [
+    snapshot,
+    setSnapshot,
+  ] = useState(null);
+
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  const engineRef =
+    useRef(null);
+
+  const lastSaveRef =
+    useRef(0);
+
+  const loadPlayers =
+    useCallback(
+      async clubId => {
+        if (!clubId) {
+          return [];
+        }
+
+        const playersRef =
+          collection(
+            db,
+            "players"
+          );
+
+        const queries = [
+          query(
+            playersRef,
+            where(
+              "clubId",
+              "==",
+              clubId
+            )
+          ),
+
+          query(
+            playersRef,
+            where(
+              "currentClub",
+              "==",
+              clubId
+            )
+          ),
+
+          query(
+            playersRef,
+            where(
+              "teamId",
+              "==",
+              clubId
+            )
+          ),
+        ];
+
+        const snapshots =
+          await Promise.all(
+            queries.map(
+              async q => {
+                try {
+                  return await getDocs(
+                    q
+                  );
+                } catch {
+                  return null;
+                }
+              }
+            )
+          );
+
+        const unique =
+          new Map();
+
+        snapshots.forEach(
+          snap => {
+            if (!snap) {
+              return;
+            }
+
+            snap.docs.forEach(
+              playerDoc => {
+                unique.set(
+                  playerDoc.id,
+                  {
+                    id:
+                      playerDoc.id,
+                    ...playerDoc.data(),
+                  }
+                );
+              }
+            );
+          }
+        );
+
+        return Array.from(
+          unique.values()
+        );
+      },
       []
     );
 
-  const awayTeam =
-    useMemo(
-      () =>
-        createTeam(
-          "away",
-          "Kigali United"
-        ),
-      []
+  const loadMatch =
+    useCallback(
+      async () => {
+        if (
+          authLoading ||
+          !id
+        ) {
+          return;
+        }
+
+        try {
+          setLoading(
+            true
+          );
+
+          setError("");
+
+          const matchRef =
+            doc(
+              db,
+              "matches",
+              String(id)
+            );
+
+          const matchSnap =
+            await getDoc(
+              matchRef
+            );
+
+          if (
+            !matchSnap.exists()
+          ) {
+            throw new Error(
+              "Match not found."
+            );
+          }
+
+          const matchData = {
+            id:
+              matchSnap.id,
+            ...matchSnap.data(),
+          };
+
+          const [
+            homeSnap,
+            awaySnap,
+          ] =
+            await Promise.all(
+              [
+                matchData.homeClubId
+                  ? getDoc(
+                      doc(
+                        db,
+                        "clubs",
+                        matchData.homeClubId
+                      )
+                    )
+                  : null,
+
+                matchData.awayClubId
+                  ? getDoc(
+                      doc(
+                        db,
+                        "clubs",
+                        matchData.awayClubId
+                      )
+                    )
+                  : null,
+              ]
+            );
+
+          const home =
+            homeSnap?.exists()
+              ? {
+                  id:
+                    homeSnap.id,
+                  ...homeSnap.data(),
+                }
+              : {
+                  id:
+                    matchData.homeClubId,
+                  name:
+                    matchData.homeClubName ||
+                    "Home",
+                };
+
+          const away =
+            awaySnap?.exists()
+              ? {
+                  id:
+                    awaySnap.id,
+                  ...awaySnap.data(),
+                }
+              : {
+                  id:
+                    matchData.awayClubId,
+                  name:
+                    matchData.awayClubName ||
+                    "Away",
+                };
+
+          const [
+            homePlayers,
+            awayPlayers,
+          ] =
+            await Promise.all(
+              [
+                loadPlayers(
+                  home.id
+                ),
+
+                loadPlayers(
+                  away.id
+                ),
+              ]
+            );
+
+          if (
+            homePlayers.length <
+            11
+          ) {
+            throw new Error(
+              `${home.name} does not have enough players.`
+            );
+          }
+
+          if (
+            awayPlayers.length <
+            11
+          ) {
+            throw new Error(
+              `${away.name} does not have enough players.`
+            );
+          }
+
+          const newEngine =
+            new MatchEngine({
+              match:
+                matchData,
+
+              homeClub:
+                home,
+
+              awayClub:
+                away,
+
+              homePlayers,
+
+              awayPlayers,
+            });
+
+          engineRef.current =
+            newEngine;
+
+          setEngine(
+            newEngine
+          );
+
+          setMatch(
+            matchData
+          );
+
+          setHomeClub(
+            home
+          );
+
+          setAwayClub(
+            away
+          );
+
+          setSnapshot(
+            newEngine.getSnapshot()
+          );
+        } catch (
+          loadError
+        ) {
+          console.error(
+            "MATCH LOAD ERROR:",
+            loadError
+          );
+
+          setError(
+            loadError?.message ||
+              "Failed to load match."
+          );
+        } finally {
+          setLoading(
+            false
+          );
+        }
+      },
+      [
+        id,
+        authLoading,
+        loadPlayers,
+      ]
     );
 
   useEffect(() => {
-    const newEngine =
-      new MatchEngine({
-        homeTeam,
-        awayTeam,
-      });
-
-    setEngine(
-      newEngine
-    );
+    loadMatch();
 
     return () => {
-      newEngine.stop();
+      engineRef.current?.stop();
+      engineRef.current =
+        null;
     };
   }, [
-    homeTeam,
-    awayTeam,
+    loadMatch,
   ]);
 
+  const saveMatch =
+    useCallback(
+      async (
+        force = false
+      ) => {
+        const current =
+          engineRef.current;
+
+        if (
+          !current ||
+          !match?.id
+        ) {
+          return;
+        }
+
+        const now =
+          Date.now();
+
+        if (
+          !force &&
+          now -
+            lastSaveRef.current <
+            10000
+        ) {
+          return;
+        }
+
+        lastSaveRef.current =
+          now;
+
+        try {
+          setSaving(
+            true
+          );
+
+          const data =
+            current.getSnapshot();
+
+          await updateDoc(
+            doc(
+              db,
+              "matches",
+              match.id
+            ),
+            {
+              status:
+                data.status,
+
+              minute:
+                data.minute,
+
+              homeScore:
+                data.homeScore,
+
+              awayScore:
+                data.awayScore,
+
+              result: {
+                homeScore:
+                  data.homeScore,
+
+                awayScore:
+                  data.awayScore,
+              },
+
+              events:
+                data.events,
+
+              homeStats:
+                data.homeStats,
+
+              awayStats:
+                data.awayStats,
+
+              homeFormation:
+                data.homeFormation,
+
+              awayFormation:
+                data.awayFormation,
+
+              homeTactics:
+                data.homeTactics,
+
+              awayTactics:
+                data.awayTactics,
+
+              homeLineupIds:
+                current.homeXI.map(
+                  player =>
+                    player.id
+                ),
+
+              awayLineupIds:
+                current.awayXI.map(
+                  player =>
+                    player.id
+                ),
+
+              homeSubsUsed:
+                data.substitutions
+                  .home,
+
+              awaySubsUsed:
+                data.substitutions
+                  .away,
+
+              updatedAt:
+                serverTimestamp(),
+            }
+          );
+        } catch (
+          saveError
+        ) {
+          console.error(
+            "MATCH SAVE ERROR:",
+            saveError
+          );
+        } finally {
+          setSaving(
+            false
+          );
+        }
+      },
+      [match]
+    );
+
   useEffect(() => {
-    if (!engine) {
+    if (
+      !engine
+    ) {
       return;
     }
 
-    const interval =
+    const timer =
       setInterval(() => {
-        const snapshot =
+        const data =
           engine.getSnapshot();
 
-        setStatus(
-          snapshot.status
+        setSnapshot(
+          data
         );
 
-        setScore(
-          `${snapshot.homeScore} - ${snapshot.awayScore}`
-        );
-
-        setMinute(
-          Math.floor(
-            snapshot.time /
-              60
-          )
-        );
-
-        const owner =
-          snapshot.players.find(
-            player =>
-              player.hasBall
+        if (
+          data.status ===
+          MATCH_STATUS.FINISHED
+        ) {
+          saveMatch(
+            true
           );
-
-        setBallOwner(
-          owner || null
-        );
-      }, 100);
+        } else {
+          saveMatch(
+            false
+          );
+        }
+      }, 250);
 
     return () => {
       clearInterval(
-        interval
+        timer
       );
     };
-  }, [engine]);
+  }, [
+    engine,
+    saveMatch,
+  ]);
 
-  const startMatch = () => {
-    if (!engine) {
-      return;
-    }
+  const startMatch =
+    () => {
+      if (
+        !engine
+      ) {
+        return;
+      }
 
-    engine.start();
+      engine.start();
 
-    setStatus(
-      "playing"
-    );
-  };
-
-  const pauseMatch = () => {
-    if (!engine) {
-      return;
-    }
-
-    engine.pause();
-
-    setStatus(
-      "paused"
-    );
-  };
-
-  const resumeMatch = () => {
-    if (!engine) {
-      return;
-    }
-
-    engine.resume();
-
-    setStatus(
-      "playing"
-    );
-  };
-
-  const stopMatch = () => {
-    if (!engine) {
-      return;
-    }
-
-    engine.stop();
-
-    setStatus(
-      "finished"
-    );
-  };
-
-  const formatMinute = () => {
-    const minuteValue =
-      Math.floor(
-        minute
+      saveMatch(
+        true
       );
+    };
 
-    const display =
-      Math.min(
-        minuteValue,
-        90
+  const pauseMatch =
+    () => {
+      engine?.pause();
+
+      saveMatch(
+        true
       );
+    };
 
-    return `${display}'`;
-  };
+  const resumeMatch =
+    () => {
+      engine?.resume();
+
+      saveMatch(
+        true
+      );
+    };
+
+  const stopMatch =
+    () => {
+      engine?.stop();
+
+      saveMatch(
+        true
+      );
+    };
+
+  const score =
+    snapshot
+      ? `${snapshot.homeScore} - ${snapshot.awayScore}`
+      : "0 - 0";
+
+  const minute =
+    snapshot?.minute ??
+    0;
+
+  const status =
+    snapshot?.status ||
+    "loading";
+
+  const ballOwner =
+    useMemo(() => {
+      if (
+        !snapshot
+      ) {
+        return null;
+      }
+
+      return (
+        snapshot.players.find(
+          player =>
+            player.hasBall
+        ) || null
+      );
+    }, [
+      snapshot,
+    ]);
+
+  const recentEvents =
+    useMemo(
+      () =>
+        snapshot?.events?.slice(
+          0,
+          8
+        ) || [],
+      [snapshot]
+    );
+
+  if (
+    authLoading ||
+    loading
+  ) {
+    return (
+      <main
+        className={
+          styles.loadingPage
+        }
+      >
+        <div
+          className={
+            styles.spinner
+          }
+        />
+
+        <h2>
+          Loading Match Engine
+        </h2>
+
+        <p>
+          Loading clubs,
+          players and
+          match intelligence...
+        </p>
+      </main>
+    );
+  }
+
+  if (
+    error
+  ) {
+    return (
+      <main
+        className={
+          styles.errorPage
+        }
+      >
+        <div
+          className={
+            styles.errorIcon
+          }
+        >
+          ⚠️
+        </div>
+
+        <h1>
+          Match Error
+        </h1>
+
+        <p>
+          {error}
+        </p>
+
+        <button
+          onClick={() =>
+            router.push(
+              "/fixtures"
+            )
+          }
+          className={
+            styles.primaryButton
+          }
+        >
+          ← Back to Fixtures
+        </button>
+      </main>
+    );
+  }
+
+  if (
+    !engine ||
+    !snapshot ||
+    !homeClub ||
+    !awayClub
+  ) {
+    return null;
+  }
 
   return (
     <>
       <Head>
         <title>
-          2D Match Engine | New Talents
+          {homeClub.name} vs{" "}
+          {awayClub.name} |
+          Match Centre
         </title>
 
         <meta
-          name="description"
-          content="Real-time 2D football match simulation engine."
+          name="theme-color"
+          content="#050816"
         />
 
         <meta
@@ -406,74 +742,152 @@ export default function MatchPage({
           styles.page
         }
       >
-        <section
+        <header
           className={
             styles.header
           }
         >
-          <div>
-            <span
-              className={
-                styles.eyebrow
-              }
-            >
-              VIRTUAL FOOTBALL MANAGER
+          <button
+            className={
+              styles.backButton
+            }
+            onClick={() =>
+              router.push(
+                "/fixtures"
+              )
+            }
+          >
+            ← Fixtures
+          </button>
+
+          <div
+            className={
+              styles.headerTitle
+            }
+          >
+            <span>
+              {match?.leagueName ||
+                match?.competition ||
+                "Football Match"}
             </span>
 
             <h1>
-              2D Match Engine
+              Match Centre
             </h1>
-
-            <p>
-              Match ID:{" "}
-              {matchId}
-            </p>
           </div>
 
           <div
             className={
-              styles.scoreBox
+              styles.statusBadge
             }
           >
+            {saving
+              ? "SAVING"
+              : status.toUpperCase()}
+          </div>
+        </header>
+
+        <section
+          className={
+            styles.scoreboard
+          }
+        >
+          <div
+            className={
+              styles.teamScore
+            }
+          >
+            <div
+              className={
+                styles.logo
+              }
+            >
+              {homeClub.logo ? (
+                <img
+                  src={
+                    homeClub.logo
+                  }
+                  alt=""
+                />
+              ) : (
+                "⚽"
+              )}
+            </div>
+
+            <strong>
+              {homeClub.name}
+            </strong>
+
             <span>
-              {formatMinute()}
+              HOME
             </span>
+          </div>
+
+          <div
+            className={
+              styles.scoreCenter
+            }
+          >
+            <small>
+              {minute}'
+            </small>
 
             <strong>
               {score}
             </strong>
 
-            <small>
+            <span>
               {status}
-            </small>
+            </span>
+          </div>
+
+          <div
+            className={
+              styles.teamScore
+            }
+          >
+            <div
+              className={
+                styles.logo
+              }
+            >
+              {awayClub.logo ? (
+                <img
+                  src={
+                    awayClub.logo
+                  }
+                  alt=""
+                />
+              ) : (
+                "⚽"
+              )}
+            </div>
+
+            <strong>
+              {awayClub.name}
+            </strong>
+
+            <span>
+              AWAY
+            </span>
           </div>
         </section>
 
         <section
           className={
-            styles.matchArea
+            styles.mainGrid
           }
         >
           <div
             className={
-              styles.pitchWrapper
+              styles.pitchCard
             }
           >
-            {engine ? (
-              <MatchCanvas
-                engine={
-                  engine
-                }
-              />
-            ) : (
-              <div
-                className={
-                  styles.loading
-                }
-              >
-                Loading engine...
-              </div>
-            )}
+            <MatchCanvas
+              engine={
+                engine
+              }
+            />
           </div>
 
           <aside
@@ -481,262 +895,346 @@ export default function MatchPage({
               styles.sidebar
             }
           >
-            <div
-              className={
-                styles.teamCard
-              }
-            >
-              <div
-                className={
-                  styles.teamHeader
-                }
-              >
-                <span
-                  className={
-                    styles.homeDot
-                  }
-                />
-
-                <strong>
-                  {homeTeam.name}
-                </strong>
-              </div>
-
-              <div
-                className={
-                  styles.teamMeta
-                }
-              >
-                Formation:{" "}
-                {homeTeam.formation}
-              </div>
-
-              <div
-                className={
-                  styles.bench
-                }
-              >
-                <h3>
-                  Substitutes
-                </h3>
-
-                {homeTeam.substitutes.map(
-                  player => (
-                    <div
-                      key={
-                        player.number
-                      }
-                      className={
-                        styles.benchPlayer
-                      }
-                    >
-                      <span>
-                        {
-                          player.number
-                        }
-                      </span>
-
-                      <label>
-                        {
-                          player.name
-                        }
-                      </label>
-                    </div>
-                  )
-                )}
-              </div>
-
-              <div
-                className={
-                  styles.coach
-                }
-              >
-                <span>
-                  COACH
-                </span>
-
-                <strong>
-                  {
-                    homeTeam.coach
-                  }
-                </strong>
-              </div>
-            </div>
-
-            <div
-              className={
-                styles.teamCard
-              }
-            >
-              <div
-                className={
-                  styles.teamHeader
-                }
-              >
-                <span
-                  className={
-                    styles.awayDot
-                  }
-                />
-
-                <strong>
-                  {awayTeam.name}
-                </strong>
-              </div>
-
-              <div
-                className={
-                  styles.teamMeta
-                }
-              >
-                Formation:{" "}
-                {awayTeam.formation}
-              </div>
-
-              <div
-                className={
-                  styles.bench
-                }
-              >
-                <h3>
-                  Substitutes
-                </h3>
-
-                {awayTeam.substitutes.map(
-                  player => (
-                    <div
-                      key={
-                        player.number
-                      }
-                      className={
-                        styles.benchPlayer
-                      }
-                    >
-                      <span>
-                        {
-                          player.number
-                        }
-                      </span>
-
-                      <label>
-                        {
-                          player.name
-                        }
-                      </label>
-                    </div>
-                  )
-                )}
-              </div>
-
-              <div
-                className={
-                  styles.coach
-                }
-              >
-                <span>
-                  COACH
-                </span>
-
-                <strong>
-                  {
-                    awayTeam.coach
-                  }
-                </strong>
-              </div>
-            </div>
-
-            <div
+            <section
               className={
                 styles.controlCard
               }
             >
-              <h3>
+              <h2>
                 Match Controls
-              </h3>
+              </h2>
 
               <div
                 className={
-                  styles.controls
+                  styles.buttonGrid
                 }
               >
                 {status ===
-                "not_started" ? (
+                  MATCH_STATUS.READY && (
                   <button
-                    onClick={
-                      startMatch
-                    }
                     className={
                       styles.primaryButton
                     }
+                    onClick={
+                      startMatch
+                    }
                   >
-                    ▶ Start Match
+                    ▶ Start
                   </button>
-                ) : null}
+                )}
 
                 {status ===
-                "playing" ? (
+                  MATCH_STATUS.LIVE && (
                   <button
-                    onClick={
-                      pauseMatch
-                    }
                     className={
                       styles.secondaryButton
+                    }
+                    onClick={
+                      pauseMatch
                     }
                   >
                     ⏸ Pause
                   </button>
-                ) : null}
+                )}
 
                 {status ===
-                "paused" ? (
+                  MATCH_STATUS.HALF_TIME && (
                   <button
-                    onClick={
-                      resumeMatch
-                    }
                     className={
                       styles.primaryButton
+                    }
+                    onClick={
+                      resumeMatch
                     }
                   >
                     ▶ Resume
                   </button>
-                ) : null}
+                )}
 
-                {status !==
-                  "finished" &&
-                status !==
-                  "not_started" ? (
-                  <button
-                    onClick={
-                      stopMatch
-                    }
+                {status ===
+                  MATCH_STATUS.LIVE &&
+                  snapshot.minute <
+                    90 && (
+                    <button
+                      className={
+                        styles.dangerButton
+                      }
+                      onClick={
+                        stopMatch
+                      }
+                    >
+                      ■ Finish
+                    </button>
+                  )}
+
+                {status ===
+                  MATCH_STATUS.FINISHED && (
+                  <div
                     className={
-                      styles.dangerButton
+                      styles.finishedMessage
                     }
                   >
-                    ■ Stop
-                  </button>
-                ) : null}
+                    Full Time
+                  </div>
+                )}
               </div>
-            </div>
+            </section>
 
-            <div
+            <section
               className={
-                styles.possessionCard
+                styles.infoCard
               }
             >
               <span>
-                BALL POSSESSION
+                BALL
               </span>
 
               <strong>
                 {ballOwner
-                  ? `${ballOwner.teamSide === "home"
-                      ? homeTeam.name
-                      : awayTeam.name
-                    } #${ballOwner.number}`
+                  ? `${ballOwner.name} #${ballOwner.number}`
                   : "Free Ball"}
               </strong>
-            </div>
+            </section>
+
+            <section
+              className={
+                styles.statsCard
+              }
+            >
+              <h2>
+                Match Statistics
+              </h2>
+
+              <StatRow
+                label="Possession"
+                home={
+                  snapshot.homeStats
+                    .possession
+                }
+                away={
+                  snapshot.awayStats
+                    .possession
+                }
+                suffix="%"
+              />
+
+              <StatRow
+                label="Shots"
+                home={
+                  snapshot.homeStats
+                    .shots
+                }
+                away={
+                  snapshot.awayStats
+                    .shots
+                }
+              />
+
+              <StatRow
+                label="On Target"
+                home={
+                  snapshot.homeStats
+                    .shotsOnTarget
+                }
+                away={
+                  snapshot.awayStats
+                    .shotsOnTarget
+                }
+              />
+
+              <StatRow
+                label="Passes"
+                home={
+                  snapshot.homeStats
+                    .passesCompleted
+                }
+                away={
+                  snapshot.awayStats
+                    .passesCompleted
+                }
+              />
+
+              <StatRow
+                label="Tackles"
+                home={
+                  snapshot.homeStats
+                    .tackles
+                }
+                away={
+                  snapshot.awayStats
+                    .tackles
+                }
+              />
+
+              <StatRow
+                label="Corners"
+                home={
+                  snapshot.homeStats
+                    .corners
+                }
+                away={
+                  snapshot.awayStats
+                    .corners
+                }
+              />
+
+              <StatRow
+                label="Fouls"
+                home={
+                  snapshot.homeStats
+                    .fouls
+                }
+                away={
+                  snapshot.awayStats
+                    .fouls
+                }
+              />
+
+              <StatRow
+                label="Saves"
+                home={
+                  snapshot.homeStats
+                    .saves
+                }
+                away={
+                  snapshot.awayStats
+                    .saves
+                }
+              />
+            </section>
+
+            <section
+              className={
+                styles.eventsCard
+              }
+            >
+              <h2>
+                Match Events
+              </h2>
+
+              {recentEvents.length ===
+              0 ? (
+                <p
+                  className={
+                    styles.empty
+                  }
+                >
+                  No events yet.
+                </p>
+              ) : (
+                recentEvents.map(
+                  event => (
+                    <div
+                      key={
+                        event.id
+                      }
+                      className={
+                        styles.event
+                      }
+                    >
+                      <span>
+                        {event.minute}'
+                      </span>
+
+                      <div>
+                        <strong>
+                          {event.type.replace(
+                            "_",
+                            " "
+                          )}
+                        </strong>
+
+                        <p>
+                          {
+                            event.detail
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )
+              )}
+            </section>
+
+            <section
+              className={
+                styles.benchCard
+              }
+            >
+              <h2>
+                Substitutes
+              </h2>
+
+              <div
+                className={
+                  styles.benchColumns
+                }
+              >
+                <div>
+                  <h3>
+                    {homeClub.name}
+                  </h3>
+
+                  {engine.homeBench.map(
+                    player => (
+                      <div
+                        key={
+                          player.id ||
+                          player.playerId
+                        }
+                        className={
+                          styles.benchPlayer
+                        }
+                      >
+                        <span>
+                          {player.shirtNumber ||
+                            player.number ||
+                            "-"}
+                        </span>
+
+                        <label>
+                          {player.name ||
+                            player.fullName ||
+                            "Player"}
+                        </label>
+                      </div>
+                    )
+                  )}
+                </div>
+
+                <div>
+                  <h3>
+                    {awayClub.name}
+                  </h3>
+
+                  {engine.awayBench.map(
+                    player => (
+                      <div
+                        key={
+                          player.id ||
+                          player.playerId
+                        }
+                        className={
+                          styles.benchPlayer
+                        }
+                      >
+                        <span>
+                          {player.shirtNumber ||
+                            player.number ||
+                            "-"}
+                        </span>
+
+                        <label>
+                          {player.name ||
+                            player.fullName ||
+                            "Player"}
+                        </label>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </section>
           </aside>
         </section>
       </main>
@@ -744,17 +1242,31 @@ export default function MatchPage({
   );
 }
 
-export async function getServerSideProps(
-  context
-) {
-  const {
-    id,
-  } = context.params;
+function StatRow({
+  label,
+  home,
+  away,
+  suffix = "",
+}) {
+  return (
+    <div
+      className={
+        styles.statRow
+      }
+    >
+      <strong>
+        {home}
+        {suffix}
+      </strong>
 
-  return {
-    props: {
-      matchId:
-        String(id),
-    },
-  };
+      <span>
+        {label}
+      </span>
+
+      <strong>
+        {away}
+        {suffix}
+      </strong>
+    </div>
+  );
 }
