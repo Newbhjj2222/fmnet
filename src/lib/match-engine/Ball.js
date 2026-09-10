@@ -1,4 +1,5 @@
 import Vector2 from "./Vector2";
+
 import {
   BALL_STATE,
   PITCH,
@@ -6,114 +7,162 @@ import {
 
 export default class Ball {
   constructor() {
-    this.position = new Vector2(
-      PITCH.width / 2,
-      PITCH.height / 2
-    );
+    this.position =
+      new Vector2(
+        PITCH.width / 2,
+        PITCH.height / 2
+      );
 
-    this.velocity = new Vector2();
+    this.velocity =
+      new Vector2();
 
-    this.ownerId = null;
+    this.state =
+      BALL_STATE.FREE;
 
-    this.state = BALL_STATE.FREE;
+    this.ownerId =
+      null;
 
-    this.radius = PITCH.ballRadius;
+    this.targetId =
+      null;
 
-    this.passTargetId = null;
+    this.radius =
+      PITCH.ballRadius;
+
+    this.lastTouchTeam =
+      null;
+
+    this.lastTouchPlayer =
+      null;
+
+    this.actionStartedAt =
+      0;
   }
 
-  attachTo(player) {
-    this.ownerId = player.id;
+  attach(
+    player
+  ) {
+    this.ownerId =
+      player.id;
+
+    this.targetId =
+      null;
 
     this.position.set(
       player.x,
       player.y
     );
 
-    this.velocity.multiply(0);
+    this.velocity.multiply(
+      0
+    );
 
     this.state =
       BALL_STATE.POSSESSED;
+
+    this.lastTouchTeam =
+      player.teamSide;
+
+    this.lastTouchPlayer =
+      player.id;
   }
 
-  release(x, y) {
-    this.ownerId = null;
+  kick(
+    from,
+    target,
+    speed,
+    state,
+    targetId = null
+  ) {
+    const direction =
+      new Vector2(
+        target.x -
+          from.x,
+        target.y -
+          from.y
+      );
 
-    this.position.set(x, y);
+    const distance =
+      direction.length();
 
-    this.state = BALL_STATE.FREE;
+    if (
+      distance === 0
+    ) {
+      return;
+    }
+
+    direction.normalize();
+
+    this.position.set(
+      from.x,
+      from.y
+    );
+
+    this.velocity.set(
+      direction.x *
+        speed,
+      direction.y *
+        speed
+    );
+
+    this.ownerId =
+      null;
+
+    this.targetId =
+      targetId;
+
+    this.state =
+      state;
+
+    this.actionStartedAt =
+      performance.now();
   }
 
-  update(dt, players = []) {
-    if (this.ownerId) {
-      const owner =
-        players.find(
-          player =>
-            player.id === this.ownerId
-        );
-
-      if (owner) {
-        this.position.x = owner.x;
-        this.position.y = owner.y;
-
-        this.velocity.multiply(0);
-
-        return;
-      }
-
-      this.ownerId = null;
+  update(
+    dt
+  ) {
+    if (
+      this.ownerId
+    ) {
+      return;
     }
 
     this.position.x +=
-      this.velocity.x * dt;
+      this.velocity.x *
+      dt;
 
     this.position.y +=
-      this.velocity.y * dt;
+      this.velocity.y *
+      dt;
+
+    const friction =
+      Math.pow(
+        0.04,
+        dt
+      );
 
     this.velocity.x *=
-      Math.pow(0.35, dt);
+      friction;
 
     this.velocity.y *=
-      Math.pow(0.35, dt);
+      friction;
+  }
 
-    if (
-      this.position.x <
-      this.radius
-    ) {
-      this.position.x =
-        this.radius;
+  stop() {
+    this.velocity.multiply(
+      0
+    );
 
-      this.velocity.x *= -0.5;
-    }
+    this.ownerId =
+      null;
 
-    if (
-      this.position.x >
-      PITCH.width - this.radius
-    ) {
-      this.position.x =
-        PITCH.width - this.radius;
+    this.state =
+      BALL_STATE.FREE;
+  }
 
-      this.velocity.x *= -0.5;
-    }
-
-    if (
-      this.position.y <
-      this.radius
-    ) {
-      this.position.y =
-        this.radius;
-
-      this.velocity.y *= -0.5;
-    }
-
-    if (
-      this.position.y >
-      PITCH.height - this.radius
-    ) {
-      this.position.y =
-        PITCH.height - this.radius;
-
-      this.velocity.y *= -0.5;
-    }
+  isMoving() {
+    return (
+      this.velocity.length() >
+      8
+    );
   }
 }
