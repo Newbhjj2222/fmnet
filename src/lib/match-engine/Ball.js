@@ -34,7 +34,7 @@ export default class Ball {
     this.ownerId = null;
     this.targetId = targetId;
     this.state = state;
-    this.actionStartedAt = performance.now();
+    this.actionStartedAt = Date.now();
   }
 
   update(dt) {
