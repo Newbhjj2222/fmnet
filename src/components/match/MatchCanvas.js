@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { PITCH } from "./constants";
-import styles from "./Mach.module.css";
+import { PITCH } from "../../lib/match-engine/constants";
+import styles from "../../pages/match/Mach.module.css";
 
 const HOME_COLOR = "#3b82f6";
 const AWAY_COLOR = "#ef4444";
@@ -21,13 +21,11 @@ function drawPitch(ctx, w, h) {
   ctx.lineWidth = 2;
   ctx.strokeRect(pad, pad, w - pad * 2, h - pad * 2);
 
-  // Halfway line
   ctx.beginPath();
   ctx.moveTo(w / 2, pad);
   ctx.lineTo(w / 2, h - pad);
   ctx.stroke();
 
-  // Center circle
   const scaleX = (w - pad * 2) / PITCH.width;
   const scaleY = (h - pad * 2) / PITCH.height;
   const cr = PITCH.centerCircleRadius * scaleX;
@@ -40,21 +38,18 @@ function drawPitch(ctx, w, h) {
   ctx.fillStyle = LINE;
   ctx.fill();
 
-  // Penalty boxes
   const pbD = PITCH.penaltyBoxDepth * scaleX;
   const pbW = PITCH.penaltyBoxWidth * scaleY;
   const pbY = (h - pbW) / 2;
   ctx.strokeRect(pad, pbY, pbD, pbW);
   ctx.strokeRect(w - pad - pbD, pbY, pbD, pbW);
 
-  // Goal boxes
   const gbD = PITCH.goalBoxDepth * scaleX;
   const gbW = PITCH.goalBoxWidth * scaleY;
   const gbY = (h - gbW) / 2;
   ctx.strokeRect(pad, gbY, gbD, gbW);
   ctx.strokeRect(w - pad - gbD, gbY, gbD, gbW);
 
-  // Goals
   const goalW = PITCH.goalWidth * scaleY;
   const goalY = (h - goalW) / 2;
   ctx.lineWidth = 3;
@@ -68,7 +63,6 @@ function drawPitch(ctx, w, h) {
   ctx.lineTo(w - pad + 5, goalY + goalW); ctx.lineTo(w - pad, goalY + goalW);
   ctx.stroke();
 
-  // Penalty spots
   ctx.beginPath();
   ctx.arc(pad + 115 * scaleX, h / 2, 3, 0, Math.PI * 2);
   ctx.arc(w - pad - 115 * scaleX, h / 2, 3, 0, Math.PI * 2);
@@ -90,13 +84,11 @@ function drawPlayers(ctx, players, ball, w, h) {
 
     ctx.globalAlpha = p.redCard ? 0.2 : 1;
 
-    // Shadow
     ctx.beginPath();
     ctx.arc(px + 1, py + 2, r, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0,0,0,0.4)";
     ctx.fill();
 
-    // Body
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.fillStyle = p.teamSide === "home" ? HOME_COLOR : AWAY_COLOR;
@@ -105,24 +97,22 @@ function drawPlayers(ctx, players, ball, w, h) {
     ctx.lineWidth = p.hasBall ? 3 : 1.5;
     ctx.stroke();
 
-    // Number
     ctx.fillStyle = "#fff";
     ctx.font = "bold 9px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(String(p.number), px, py + 0.5);
 
-    // Stamina bar
     const sw = 18;
     const stX = px - sw / 2;
     const stY = py + r + 2;
     ctx.fillStyle = "rgba(0,0,0,0.55)";
     ctx.fillRect(stX, stY, sw, 2.5);
-    const c = p.stamina > 60 ? "#22c55e" : p.stamina > 30 ? "#eab308" : "#ef4444";
+    const c = p.stamina > 60 ? "#22c55e"
+      : p.stamina > 30 ? "#eab308" : "#ef4444";
     ctx.fillStyle = c;
     ctx.fillRect(stX, stY, sw * (p.stamina / 100), 2.5);
 
-    // Injury indicator
     if (p.injury) {
       ctx.beginPath();
       ctx.arc(px + r - 2, py - r + 2, 4.5, 0, Math.PI * 2);
@@ -133,7 +123,6 @@ function drawPlayers(ctx, players, ball, w, h) {
       ctx.fillText("+", px + r - 2, py - r + 2.5);
     }
 
-    // Yellow card
     if (p.yellowCards > 0 && !p.redCard) {
       ctx.fillStyle = "#facc15";
       ctx.fillRect(px - r - 5, py - r, 3, 5);
@@ -159,8 +148,11 @@ function drawPlayers(ctx, players, ball, w, h) {
   }
 }
 
-export default function MatchCanvas({ engineRef }) {
+export default function MatchCanvas({ engine }) {
   const canvasRef = useRef(null);
+  const engineRef = useRef(engine);
+
+  useEffect(() => { engineRef.current = engine; }, [engine]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,15 +166,13 @@ export default function MatchCanvas({ engineRef }) {
       ctx.clearRect(0, 0, w, h);
       drawPitch(ctx, w, h);
 
-      const engine = engineRef.current;
-      if (engine) {
-        drawPlayers(ctx, engine.players, engine.ball, w, h);
-      }
+      const e = engineRef.current;
+      if (e) drawPlayers(ctx, e.players, e.ball, w, h);
       raf = requestAnimationFrame(loop);
     };
     loop();
     return () => cancelAnimationFrame(raf);
-  }, [engineRef]);
+  }, []);
 
   return (
     <canvas
