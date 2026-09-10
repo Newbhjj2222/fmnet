@@ -1,1365 +1,3770 @@
 import Player from "./Player";
 import Ball from "./Ball";
-import Vector2 from "./Vector2";
-import {
-  BALL_STATE, DEFAULT_TACTICS, EVENT_TYPES, INJURY, MATCH,
-  MATCH_STATUS, PLAYER_STATE, PITCH,
-} from "./constants";
-import { getFormationPosition, normalizeFormation } from "./Formation";
 
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-const rand = (min = 0, max = 1) => min + Math.random() * (max - min);
-const chance = (p) => Math.random() < p;
-const dist = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+import {
+  BALL_STATE,
+  DEFAULT_TACTICS,
+  EVENT_TYPES,
+  INJURY,
+  MATCH,
+  MATCH_STATUS,
+  PITCH,
+  PLAYER_STATE,
+} from "./constants";
+
+import {
+  getFormationPosition,
+  normalizeFormation,
+} from "./Formation";
+
+const clamp = (value, min, max) =>
+  Math.max(min, Math.min(max, value));
+
+const random = (min = 0, max = 1) =>
+  min + Math.random() * (max - min);
+
+const chance = (probability) =>
+  Math.random() < probability;
+
+const distance = (a, b) =>
+  Math.hypot(
+    (a?.x || 0) - (b?.x || 0),
+    (a?.y || 0) - (b?.y || 0)
+  );
+
+const normalizeTactics = (
+  tactics = {}
+) => ({
+  ...DEFAULT_TACTICS,
+  ...(tactics || {}),
+});
+
+const normalizeStatus = (
+  status
+) => {
+  const value =
+    String(status || "")
+      .toLowerCase();
+
+  if (
+    [
+      "live",
+      "playing",
+      "in_progress",
+    ].includes(value)
+  ) {
+    return MATCH_STATUS.LIVE;
+  }
+
+  if (
+    [
+      "halftime",
+      "half_time",
+      "half-time",
+    ].includes(value)
+  ) {
+    return MATCH_STATUS.HALF_TIME;
+  }
+
+  if (
+    [
+      "finished",
+      "complete",
+      "completed",
+    ].includes(value)
+  ) {
+    return MATCH_STATUS.FINISHED;
+  }
+
+  return MATCH_STATUS.READY;
+};
+
+const createStats = (
+  stats = {}
+) => ({
+  shots: Number(stats.shots) || 0,
+
+  shotsOnTarget:
+    Number(stats.shotsOnTarget) || 0,
+
+  goals:
+    Number(stats.goals) || 0,
+
+  corners:
+    Number(stats.corners) || 0,
+
+  fouls:
+    Number(stats.fouls) || 0,
+
+  offsides:
+    Number(stats.offsides) || 0,
+
+  yellowCards:
+    Number(stats.yellowCards) || 0,
+
+  redCards:
+    Number(stats.redCards) || 0,
+
+  passes:
+    Number(stats.passes) || 0,
+
+  completedPasses:
+    Number(stats.completedPasses) || 0,
+
+  tackles:
+    Number(stats.tackles) || 0,
+
+  interceptions:
+    Number(stats.interceptions) || 0,
+
+  possessionSeconds:
+    Number(stats.possessionSeconds) || 0,
+});
+
+const normalizePosition = (
+  position
+) => {
+  const value =
+    String(position || "")
+      .toUpperCase();
+
+  if (
+    value.includes("GK") ||
+    value.includes("KEEP")
+  ) {
+    return "GK";
+  }
+
+  if (
+    value.includes("CB") ||
+    value.includes("LB") ||
+    value.includes("RB") ||
+    value.includes("DEF")
+  ) {
+    return "DEF";
+  }
+
+  if (
+    value.includes("ST") ||
+    value.includes("CF") ||
+    value.includes("FW") ||
+    value.includes("ATT") ||
+    value.includes("FWD")
+  ) {
+    return "FWD";
+  }
+
+  return "MID";
+};
+
+const getOverall = (player) => {
+  const rating = Number(
+    player?.overall ??
+    player?.rating ??
+    player?.ovr ??
+    player?.score
+  );
+
+  return Number.isFinite(rating)
+    ? rating
+    : 65;
+};
 
 export default class MatchEngine {
-  constructor({ match, homeClub, awayClub, homePlayers, awayPlayers }) {
+  constructor({
+    match = {},
+    homeClub = {},
+    awayClub = {},
+    homePlayers = [],
+    awayPlayers = [],
+  } = {}) {
     this.match = match;
+
     this.homeClub = homeClub;
+
     this.awayClub = awayClub;
 
     this.running = false;
+
     this.paused = false;
+
     this.finished = false;
-    this.userControlled = "home";
 
-    this.simulationTime = clamp(Number(match?.minute) || 0, 0, 90);
-    this.homeScore = Number(match?.homeScore) || 0;
-    this.awayScore = Number(match?.awayScore) || 0;
-    this.status = normalizeStatus(match?.status);
+    this.userControlled = null;
 
-    this.accumulator = 0;
+    this.simulationTime = clamp(
+      Number(match?.minute) || 0,
+      0,
+      90
+    );
+
+    this.homeScore =
+      Number(match?.homeScore) || 0;
+
+    this.awayScore =
+      Number(match?.awayScore) || 0;
+
+    this.status =
+      normalizeStatus(
+        match?.status
+      );
+
     this.decisionTimer = 0;
+
     this.aiTimer = 0;
+
     this.aiTacticsTimer = 0;
+
     this.subsTimer = 0;
+
     this.eventCounter = 0;
+
     this.lastEvent = null;
-    this.halfTimeEmitted = this.simulationTime >= 45;
 
     this.ball = new Ball();
+
     this.players = [];
-    this.homeXI = []; this.awayXI = [];
-    this.homeBench = []; this.awayBench = [];
-    this.substitutions = { home: 0, away: 0 };
-    this.injuries = { home: 0, away: 0 };
 
-    this.homeFormation = normalizeFormation(match?.homeFormation || "4-4-2");
-    this.awayFormation = normalizeFormation(match?.awayFormation || "4-4-2");
+    this.homeXI = [];
 
-    this.homeTactics = normalizeTactics(match?.homeTactics);
-    this.awayTactics = normalizeTactics(match?.awayTactics);
+    this.awayXI = [];
 
-    this.homeStats = createStats(match?.homeStats);
-    this.awayStats = createStats(match?.awayStats);
-    this.events = Array.isArray(match?.events) ? [...match.events] : [];
+    this.homeBench = [];
 
-    this.buildTeams(homePlayers, awayPlayers);
+    this.awayBench = [];
+
+    this.substitutions = {
+      home:
+        Number(
+          match?.homeSubsUsed ??
+          match?.substitutions?.home
+        ) || 0,
+
+      away:
+        Number(
+          match?.awaySubsUsed ??
+          match?.substitutions?.away
+        ) || 0,
+    };
+
+    this.injuries = {
+      home: 0,
+      away: 0,
+    };
+
+    this.homeFormation =
+      normalizeFormation(
+        match?.homeFormation ||
+        "4-4-2"
+      );
+
+    this.awayFormation =
+      normalizeFormation(
+        match?.awayFormation ||
+        "4-4-2"
+      );
+
+    this.homeTactics =
+      normalizeTactics(
+        match?.homeTactics
+      );
+
+    this.awayTactics =
+      normalizeTactics(
+        match?.awayTactics
+      );
+
+    this.homeStats =
+      createStats(
+        match?.homeStats
+      );
+
+    this.awayStats =
+      createStats(
+        match?.awayStats
+      );
+
+    this.events =
+      Array.isArray(match?.events)
+        ? [...match.events]
+        : [];
+
+    this.buildTeams(
+      homePlayers,
+      awayPlayers
+    );
+
+    if (
+      this.status ===
+        MATCH_STATUS.FINISHED ||
+      this.simulationTime >= 90
+    ) {
+      this.simulationTime = 90;
+
+      this.status =
+        MATCH_STATUS.FINISHED;
+
+      this.finished = true;
+
+      this.running = false;
+    } else if (
+      this.status ===
+        MATCH_STATUS.HALF_TIME ||
+      this.simulationTime >= 45
+    ) {
+      this.simulationTime = 45;
+
+      this.status =
+        MATCH_STATUS.HALF_TIME;
+
+      this.running = false;
+
+      this.paused = true;
+    }
+
+    this.placeBallForKickoff();
+  }
+
+  static chooseBestXI(
+    players = [],
+    formation = "4-4-2"
+  ) {
+    const list =
+      Array.isArray(players)
+        ? players
+        : [];
+
+    const requirements =
+      MatchEngine.getFormationRequirements(
+        formation
+      );
+
+    const used =
+      new Set();
+
+    const result = [];
+
+    for (
+      const role of requirements
+    ) {
+      let candidates =
+        list
+          .map(
+            (player, index) => ({
+              player,
+              index,
+            })
+          )
+          .filter(
+            ({ player, index }) =>
+              !used.has(index) &&
+              normalizePosition(
+                player?.position
+              ) === role
+          )
+          .sort(
+            (a, b) =>
+              getOverall(b.player) -
+              getOverall(a.player)
+          );
+
+      if (!candidates.length) {
+        candidates =
+          list
+            .map(
+              (player, index) => ({
+                player,
+                index,
+              })
+            )
+            .filter(
+              ({ index }) =>
+                !used.has(index)
+            )
+            .sort(
+              (a, b) =>
+                getOverall(b.player) -
+                getOverall(a.player)
+            );
+      }
+
+      if (candidates[0]) {
+        used.add(
+          candidates[0].index
+        );
+
+        result.push(
+          candidates[0].player
+        );
+      }
+    }
+
+    return result.slice(0, 11);
+  }
+
+  static getFormationRequirements(
+    formation
+  ) {
+    const map = {
+      "4-4-2": [
+        "GK",
+        "DEF",
+        "DEF",
+        "DEF",
+        "DEF",
+        "MID",
+        "MID",
+        "MID",
+        "MID",
+        "FWD",
+        "FWD",
+      ],
+
+      "4-3-3": [
+        "GK",
+        "DEF",
+        "DEF",
+        "DEF",
+        "DEF",
+        "MID",
+        "MID",
+        "MID",
+        "FWD",
+        "FWD",
+        "FWD",
+      ],
+
+      "3-5-2": [
+        "GK",
+        "DEF",
+        "DEF",
+        "DEF",
+        "MID",
+        "MID",
+        "MID",
+        "MID",
+        "MID",
+        "FWD",
+        "FWD",
+      ],
+
+      "5-3-2": [
+        "GK",
+        "DEF",
+        "DEF",
+        "DEF",
+        "DEF",
+        "DEF",
+        "MID",
+        "MID",
+        "MID",
+        "FWD",
+        "FWD",
+      ],
+
+      "4-2-3-1": [
+        "GK",
+        "DEF",
+        "DEF",
+        "DEF",
+        "DEF",
+        "MID",
+        "MID",
+        "MID",
+        "MID",
+        "MID",
+        "FWD",
+      ],
+    };
+
+    return (
+      map[
+        normalizeFormation(
+          formation
+        )
+      ] ||
+      map["4-4-2"]
+    );
+  }
+
+  buildTeams(
+    homePlayers = [],
+    awayPlayers = []
+  ) {
+    const home =
+      this.prepareRawPlayers(
+        homePlayers,
+        "home"
+      );
+
+    const away =
+      this.prepareRawPlayers(
+        awayPlayers,
+        "away"
+      );
+
+    this.homeXI =
+      this.createPlayers(
+        this.pickSavedXI(
+          home,
+          this.match?.homeLineupIds,
+          this.homeFormation
+        ),
+        "home"
+      );
+
+    this.awayXI =
+      this.createPlayers(
+        this.pickSavedXI(
+          away,
+          this.match?.awayLineupIds,
+          this.awayFormation
+        ),
+        "away"
+      );
+
+    this.homeBench =
+      this.createBench(
+        home,
+        this.homeXI,
+        "home"
+      );
+
+    this.awayBench =
+      this.createBench(
+        away,
+        this.awayXI,
+        "away"
+      );
+
+    while (
+      this.homeXI.length < 11
+    ) {
+      this.homeXI.push(
+        this.makeFallbackPlayer(
+          "home",
+          this.homeXI.length
+        )
+      );
+    }
+
+    while (
+      this.awayXI.length < 11
+    ) {
+      this.awayXI.push(
+        this.makeFallbackPlayer(
+          "away",
+          this.awayXI.length
+        )
+      );
+    }
+
+    this.players = [
+      ...this.homeXI,
+      ...this.awayXI,
+      ...this.homeBench,
+      ...this.awayBench,
+    ];
+
+    this.positionTeam("home");
+
+    this.positionTeam("away");
+
+    const owner =
+      this.activePlayers()
+        .find(
+          (player) =>
+            player.id ===
+            String(
+              this.match?.ballOwnerId
+            )
+        );
+
+    if (owner) {
+      this.ball.attach(owner);
+    }
+  }
+
+  prepareRawPlayers(
+    players,
+    team
+  ) {
+    const list =
+      Array.isArray(players)
+        ? players.filter(Boolean)
+        : [];
+
+    if (list.length >= 18) {
+      return list;
+    }
+
+    const result = [...list];
+
+    for (
+      let i = result.length;
+      i < 18;
+      i += 1
+    ) {
+      result.push(
+        this.makeFallbackRaw(
+          team,
+          i
+        )
+      );
+    }
+
+    return result;
+  }
+
+  makeFallbackRaw(
+    team,
+    index
+  ) {
+    const roles = [
+      "GK",
+      "DEF",
+      "DEF",
+      "DEF",
+      "DEF",
+      "MID",
+      "MID",
+      "MID",
+      "MID",
+      "FWD",
+      "FWD",
+      "MID",
+      "DEF",
+      "MID",
+      "FWD",
+      "DEF",
+      "MID",
+      "FWD",
+    ];
+
+    const role =
+      roles[index] || "MID";
+
+    const rating =
+      58 +
+      (index % 5) * 2;
+
+    return {
+      id:
+        `fallback-${team}-${index + 1}`,
+
+      name:
+        `${team === "home" ? "Home" : "Away"} Player ${index + 1}`,
+
+      number:
+        index + 1,
+
+      position:
+        role,
+
+      overall:
+        rating,
+
+      passing:
+        rating,
+
+      shooting:
+        rating,
+
+      dribbling:
+        rating,
+
+      tackling:
+        rating,
+
+      defending:
+        rating,
+
+      pace:
+        rating,
+
+      stamina:
+        90,
+    };
+  }
+
+  makeFallbackPlayer(
+    team,
+    index
+  ) {
+    return new Player(
+      this.makeFallbackRaw(
+        team,
+        index
+      ),
+      team,
+      index
+    );
+  }
+
+  pickSavedXI(
+    rawPlayers,
+    savedIds,
+    formation
+  ) {
+    const ids =
+      Array.isArray(savedIds)
+        ? savedIds.map(String)
+        : [];
+
+    if (ids.length === 11) {
+      const map =
+        new Map(
+          rawPlayers.map(
+            (player) => [
+              String(
+                player.id ??
+                player.playerId
+              ),
+              player,
+            ]
+          )
+        );
+
+      const selected =
+        ids
+          .map(
+            (id) => map.get(id)
+          )
+          .filter(Boolean);
+
+      if (selected.length === 11) {
+        return selected;
+      }
+    }
+
+    return MatchEngine.chooseBestXI(
+      rawPlayers,
+      formation
+    );
+  }
+
+  createPlayers(
+    rawPlayers,
+    team
+  ) {
+    return rawPlayers
+      .slice(0, 11)
+      .map(
+        (raw, index) =>
+          new Player(
+            raw,
+            team,
+            index
+          )
+      );
+  }
+
+  createBench(
+    rawPlayers,
+    xi
+  ) {
+    const ids =
+      new Set(
+        xi.map(
+          (player) =>
+            String(player.id)
+        )
+      );
+
+    return rawPlayers
+      .filter(
+        (raw) =>
+          !ids.has(
+            String(
+              raw.id ??
+              raw.playerId
+            )
+          )
+      )
+      .slice(0, 9)
+      .map(
+        (raw, index) =>
+          new Player(
+            raw,
+            "bench",
+            11 + index
+          )
+      );
+  }
+
+  positionTeam(team) {
+    const formation =
+      team === "home"
+        ? this.homeFormation
+        : this.awayFormation;
+
+    const players =
+      team === "home"
+        ? this.homeXI
+        : this.awayXI;
+
+    players.forEach(
+      (player, index) => {
+        const position =
+          getFormationPosition(
+            formation,
+            index,
+            team
+          );
+
+        player.index = index;
+
+        player.setPosition(
+          position.x,
+          position.y
+        );
+
+        player.state =
+          PLAYER_STATE.IDLE;
+      }
+    );
+  }
+
+  placeBallForKickoff() {
+    this.ball.stop();
+
+    this.ball.position.set(
+      PITCH.width / 2,
+      PITCH.height / 2
+    );
+
+    const team =
+      this.homeScore === 0 &&
+      this.awayScore === 0
+        ? "home"
+        : "away";
+
+    const players =
+      this.getTeam(team)
+        .filter(
+          (player) =>
+            player.active &&
+            !player.injury &&
+            !player.redCard
+        );
+
+    const striker =
+      players.find(
+        (player) =>
+          player.position === "FWD"
+      ) ||
+      players[0];
+
+    if (!striker) {
+      return;
+    }
+
+    striker.setPosition(
+      team === "home"
+        ? PITCH.width / 2 - 14
+        : PITCH.width / 2 + 14,
+      PITCH.height / 2
+    );
+
+    this.ball.attach(striker);
+  }
+
+  setUserControlled(team) {
+    this.userControlled =
+      team === "home" ||
+      team === "away"
+        ? team
+        : null;
+  }
+
+  isUserControlled(team) {
+    return (
+      this.userControlled ===
+      team
+    );
+  }
+
+  start() {
+    if (this.finished) {
+      return false;
+    }
+
+    if (
+      this.status ===
+        MATCH_STATUS.HALF_TIME ||
+      this.simulationTime >= 45
+    ) {
+      return this.startSecondHalf();
+    }
+
+    this.status =
+      MATCH_STATUS.LIVE;
+
+    this.running = true;
+
+    this.paused = false;
+
+    if (
+      this.simulationTime <= 0 &&
+      !this.hasEvent(
+        EVENT_TYPES.KICKOFF
+      )
+    ) {
+      this.addEvent(
+        EVENT_TYPES.KICKOFF,
+        "Kick-off"
+      );
+    }
+
+    return true;
+  }
+
+  startSecondHalf() {
+    if (
+      this.finished ||
+      this.simulationTime >= 90
+    ) {
+      return false;
+    }
+
+    this.simulationTime =
+      Math.max(
+        45,
+        this.simulationTime
+      );
+
+    this.status =
+      MATCH_STATUS.LIVE;
+
+    this.running = true;
+
+    this.paused = false;
+
     this.placeBallForKickoff();
 
-    if (this.status === MATCH_STATUS.FINISHED) this.finished = true;
+    this.addEvent(
+      EVENT_TYPES.SECOND_HALF,
+      "Second half"
+    );
+
+    return true;
   }
 
-  /* ====================== SETUP ====================== */
-  buildTeams(rawHome, rawAway) {
-    const homeXI = this.selectStartingXI(rawHome, "home", this.homeFormation, this.match?.homeLineupIds);
-    const awayXI = this.selectStartingXI(rawAway, "away", this.awayFormation, this.match?.awayLineupIds);
-
-    this.homeXI = this.createPlayers(homeXI, "home", this.homeFormation);
-    this.awayXI = this.createPlayers(awayXI, "away", this.awayFormation);
-
-    const homeIds = new Set(this.homeXI.map(p => p.id));
-    const awayIds = new Set(this.awayXI.map(p => p.id));
-
-    this.homeBench = this.createBench(rawHome, homeIds, "home");
-    this.awayBench = this.createBench(rawAway, awayIds, "away");
-
-    this.players = [...this.homeXI, ...this.awayXI];
-  }
-
-  createPlayers(source, side, formation) {
-    return source.slice(0, 11).map((data, index) => {
-      const pos = getFormationPosition(formation, index, side);
-      return new Player({
-        ...data, teamSide: side,
-        teamId: side === "home" ? this.homeClub?.id : this.awayClub?.id,
-      }, pos);
-    });
-  }
-
-  createBench(source, selectedIds, side) {
-    if (!Array.isArray(source)) return [];
-    return source
-      .filter(p => !selectedIds.has(String(p.id ?? p.playerId)))
-      .slice(0, 9)
-      .map(p => ({ ...p, teamSide: side }));
-  }
-
-  selectStartingXI(source, side, formation, savedIds) {
-    if (!Array.isArray(source)) return [];
-    const clean = source.filter(Boolean);
-
-    if (Array.isArray(savedIds) && savedIds.length === 11) {
-      const map = new Map();
-      clean.forEach(p => map.set(String(p.id ?? p.playerId), p));
-      const saved = savedIds.map(id => map.get(String(id))).filter(Boolean);
-      if (saved.length === 11) return saved;
+  pause() {
+    if (this.finished) {
+      return;
     }
-    return chooseBestXI(clean, formation);
-  }
 
-  placeBallForKickoff(side = "home") {
-    this.ball = new Ball();
-    this.ball.position.set(PITCH.width / 2, PITCH.height / 2);
-    const team = side === "home" ? this.homeXI : this.awayXI;
-    const striker = team.find(p => p.position === "ST") || team[9];
-    if (striker) striker.setTarget(PITCH.width / 2, PITCH.height / 2);
-  }
-
-  /* ====================== CONTROL ====================== */
-  start() {
-    if (this.finished) return;
-    this.running = true;
-    this.paused = false;
-    this.status = MATCH_STATUS.LIVE;
-    this.addEvent({ type: EVENT_TYPES.KICKOFF, team: "neutral", detail: "Match started." });
-  }
-
-  pause() { this.paused = true; }
-  resume() {
-    if (this.finished) return;
-    this.paused = false;
-    this.running = true;
-    this.status = MATCH_STATUS.LIVE;
-  }
-  stop() {
-    if (this.finished) return;
     this.running = false;
-    this.finished = true;
-    this.status = MATCH_STATUS.FINISHED;
-    this.addEvent({ type: EVENT_TYPES.FULL_TIME, team: "neutral", detail: "Full time." });
+
+    this.paused = true;
   }
 
-  setUserControlled(side) { this.userControlled = side; }
-  isUserControlled(team) { return this.userControlled === team; }
+  resume() {
+    if (this.finished) {
+      return;
+    }
 
-  setTactics(team, tactics) {
-    const current = this.getTactics(team);
-    Object.assign(current, tactics);
+    if (
+      this.status ===
+      MATCH_STATUS.HALF_TIME
+    ) {
+      return this.startSecondHalf();
+    }
+
+    this.running = true;
+
+    this.paused = false;
+
+    this.status =
+      MATCH_STATUS.LIVE;
   }
 
-  /* ====================== MAIN LOOP ====================== */
-  update(realDelta) {
-    if (!this.running || this.paused || this.finished) return;
-    const dt = Math.min(Number(realDelta) || 0, 0.1);
-    this.accumulator += dt;
-    const fixed = 1 / MATCH.FPS;
-    while (this.accumulator >= fixed) {
-      this.fixedUpdate(fixed);
-      this.accumulator -= fixed;
+  stop() {
+    this.finishMatch();
+  }
+
+  setTactics(
+    team,
+    tactics
+  ) {
+    if (team === "home") {
+      this.homeTactics =
+        normalizeTactics({
+          ...this.homeTactics,
+          ...tactics,
+        });
+    }
+
+    if (team === "away") {
+      this.awayTactics =
+        normalizeTactics({
+          ...this.awayTactics,
+          ...tactics,
+        });
+    }
+  }
+
+  setFormation(
+    team,
+    formation
+  ) {
+    const normalized =
+      normalizeFormation(
+        formation
+      );
+
+    if (team === "home") {
+      this.homeFormation =
+        normalized;
+    }
+
+    if (team === "away") {
+      this.awayFormation =
+        normalized;
+    }
+
+    this.positionTeam(team);
+  }
+
+  update(
+    realDeltaSeconds
+  ) {
+    if (
+      !this.running ||
+      this.finished
+    ) {
+      return;
+    }
+
+    let remaining =
+      clamp(
+        Number(
+          realDeltaSeconds
+        ) || 0,
+        0,
+        0.12
+      );
+
+    while (
+      remaining > 0 &&
+      this.running
+    ) {
+      const dt =
+        Math.min(
+          MATCH.FIXED_DT,
+          remaining
+        );
+
+      this.fixedUpdate(dt);
+
+      remaining -= dt;
     }
   }
 
   fixedUpdate(dt) {
-    const minPerSec = MATCH.SIMULATION_MINUTES / MATCH.REAL_DURATION_SECONDS;
-    this.simulationTime += dt * minPerSec;
-
-    if (this.simulationTime >= 45 && !this.halfTimeEmitted) {
-      this.halfTimeEmitted = true;
-      this.addEvent({ type: EVENT_TYPES.HALF_TIME, team: "neutral", detail: "Half time." });
-    }
-
-    if (this.simulationTime >= 90) {
-      this.simulationTime = 90;
-      this.stop();
+    if (
+      !this.running ||
+      this.finished
+    ) {
       return;
     }
 
-    this.aiTimer += dt;
-    this.decisionTimer += dt;
-    this.aiTacticsTimer += dt;
-    this.subsTimer += dt;
+    const previousMinute =
+      this.simulationTime;
 
-    this.updateBall(dt);
-    this.updatePlayers(dt);
-    this.resolvePossession();
-    this.resolveTackles();
-    this.checkBallOut();
-    this.checkGoal();
-    this.updateStamina(dt);
+    this.simulationTime +=
+      dt *
+      MATCH.SIM_MINUTES_PER_REAL_SECOND;
 
-    if (this.aiTimer >= MATCH.AI_UPDATE_INTERVAL) {
-      this.aiTimer = 0;
-      this.updateAI();
+    if (
+      previousMinute < 45 &&
+      this.simulationTime >= 45
+    ) {
+      this.simulationTime = 45;
+
+      this.status =
+        MATCH_STATUS.HALF_TIME;
+
+      this.running = false;
+
+      this.paused = true;
+
+      this.ball.stop();
+
+      this.addEvent(
+        EVENT_TYPES.HALF_TIME,
+        "Half-time"
+      );
+
+      return;
     }
-    if (this.decisionTimer >= MATCH.DECISION_INTERVAL) {
-      this.decisionTimer = 0;
-      this.makeDecisions();
+
+    if (
+      this.simulationTime >= 90
+    ) {
+      this.simulationTime = 90;
+
+      this.finishMatch();
+
+      return;
     }
-    if (this.aiTacticsTimer >= MATCH.AI_TACTICS_INTERVAL) {
-      this.aiTacticsTimer = 0;
+
+    this.aiTimer -= dt;
+
+    this.decisionTimer -= dt;
+
+    this.aiTacticsTimer -= dt;
+
+    this.subsTimer -= dt;
+
+    if (
+      this.aiTacticsTimer <= 0
+    ) {
+      this.aiTacticsTimer =
+        MATCH.AI_TACTICS_INTERVAL;
+
       this.adaptAITactics();
     }
-    if (this.subsTimer >= 1) {
-      this.subsTimer = 0;
+
+    if (
+      this.aiTimer <= 0
+    ) {
+      this.aiTimer =
+        MATCH.AI_UPDATE_INTERVAL;
+
+      this.updateAI();
+    }
+
+    this.updatePlayers(dt);
+
+    this.updateBall(dt);
+
+    this.checkPassReception();
+
+    this.checkInterception();
+
+    this.resolvePossession();
+
+    this.resolveTackles(dt);
+
+    this.updateStamina(dt);
+
+    this.checkGoal();
+
+    if (
+      this.decisionTimer <= 0
+    ) {
+      this.decisionTimer =
+        MATCH.DECISION_INTERVAL;
+
+      this.makeBallDecision();
+    }
+
+    this.checkBallOut();
+
+    if (
+      this.subsTimer <= 0
+    ) {
+      this.subsTimer = 4;
+
       this.runAutomaticSubstitutions();
     }
 
-    this.updatePossessionStats();
+    this.updatePossessionStats(
+      dt
+    );
   }
 
-  /* ====================== AI ====================== */
-  adaptAITactics() {
-    const aiSide = this.userControlled === "home" ? "away" : "home";
-    const aiScore = aiSide === "home" ? this.homeScore : this.awayScore;
-    const oppScore = aiSide === "home" ? this.awayScore : this.homeScore;
-    const diff = aiScore - oppScore;
-    const minute = this.getMinute();
-    const t = this.getTactics(aiSide);
+  activePlayers(team = null) {
+    let players;
 
-    if (diff < 0 && minute > 55) {
-      t.mentality = "attacking";
-      t.tempo = "fast";
-      t.pressing = "high";
-      t.defensiveLine = "high";
-    } else if (diff > 1 && minute > 65) {
-      t.mentality = "defensive";
-      t.tempo = "slow";
-      t.pressing = "low";
-      t.defensiveLine = "deep";
+    if (team === "home") {
+      players = this.homeXI;
+    } else if (team === "away") {
+      players = this.awayXI;
     } else {
-      t.mentality = "balanced";
-      t.tempo = "normal";
-      t.pressing = "medium";
-      t.defensiveLine = "normal";
+      players = [
+        ...this.homeXI,
+        ...this.awayXI,
+      ];
     }
-  }
 
-  updateAI() {
-    const ball = this.ball.position;
-    const owner = this.findPlayer(this.ball.ownerId);
-
-    this.players.forEach(player => {
-      if (player.redCard || player.isInjured()) return;
-      if (player.position === "GK") { this.updateGoalkeeper(player); return; }
-      if (owner && owner.teamSide !== player.teamSide) { this.defensiveMovement(player, owner); return; }
-      if (owner && owner.teamSide === player.teamSide) { this.attackingMovement(player, owner); return; }
-      this.freeBallMovement(player, ball);
-    });
-  }
-
-  defensiveMovement(player, attacker) {
-    const dToBall = player.distanceToPoint(this.ball.position.x, this.ball.position.y);
-    const t = this.getTactics(player.teamSide);
-    const pressDist = t.pressing === "high" ? 280 : t.pressing === "low" ? 130 : 200;
-
-    if (dToBall < pressDist) {
-      const nearest = this.getNearestDefender(player.teamSide);
-      if (nearest?.id === player.id) {
-        player.state = PLAYER_STATE.CHASING;
-        const dir = attacker.teamSide === "home" ? 1 : -1;
-        player.setTarget(attacker.x - dir * 8, attacker.y);
-        return;
-      }
-    }
-    const tactical = this.getTacticalTarget(player);
-    player.setTarget(tactical.x, tactical.y);
-  }
-
-  attackingMovement(player, owner) {
-    if (player.id === owner.id) { this.moveBallCarrier(player); return; }
-    const target = this.getAttackingTarget(player, owner);
-    player.setTarget(target.x, target.y);
-  }
-
-  freeBallMovement(player, ball) {
-    const nearest = this.getNearestPlayerToBall(player.teamSide);
-    if (nearest?.id === player.id && player.distanceToPoint(ball.x, ball.y) < 320) {
-      player.state = PLAYER_STATE.CHASING;
-      player.setTarget(ball.x, ball.y);
-      return;
-    }
-    const tactical = this.getTacticalTarget(player);
-    player.setTarget(tactical.x, tactical.y);
-  }
-
-  updateGoalkeeper(gk) {
-    const ball = this.ball.position;
-    const ownGoalX = gk.teamSide === "home" ? 25 : PITCH.width - 25;
-    const danger = this.distanceToOwnGoal(ball, gk.teamSide);
-
-    if (
-      (this.ball.state === BALL_STATE.SHOOTING || this.ball.state === BALL_STATE.CROSSING) &&
-      danger < 320
-    ) {
-      gk.setTarget(ownGoalX, clamp(ball.y, 230, 450));
-      return;
-    }
-    const t = this.getTactics(gk.teamSide);
-    const sweep = t.defensiveLine === "high" ? 25 : 0;
-    gk.setTarget(
-      ownGoalX + (gk.teamSide === "home" ? sweep : -sweep),
-      PITCH.height / 2 + clamp(ball.y - PITCH.height / 2, -100, 100) * 0.25
+    return players.filter(
+      (player) =>
+        player.active &&
+        !player.injury &&
+        !player.redCard
     );
   }
 
-  /* ====================== DECISIONS ====================== */
-  makeDecisions() {
-    const owner = this.findPlayer(this.ball.ownerId);
-    if (!owner || owner.redCard || owner.isInjured()) return;
-
-    const pressure = this.calculatePressure(owner);
-    const opponents = this.getOpponents(owner.teamSide);
-    const dGoal = this.distanceToOpponentGoal(owner);
-
-    if (this.shouldShoot(owner, dGoal, pressure)) { this.shoot(owner, pressure); return; }
-    if (this.shouldCross(owner, dGoal)) { this.cross(owner); return; }
-    if (this.shouldPass(owner, pressure)) {
-      const target = this.choosePassTarget(owner, opponents);
-      if (target) { this.pass(owner, target); return; }
-    }
-    if (this.shouldDribble(owner, pressure)) { this.dribble(owner, pressure); return; }
-    if (pressure > 0.78) {
-      const safe = this.choosePassTarget(owner, opponents, true);
-      if (safe) { this.pass(owner, safe); return; }
-      this.tryHoldBall(owner);
-    }
+  getTeam(team) {
+    return team === "home"
+      ? this.homeXI
+      : this.awayXI;
   }
 
-  calculatePressure(player) {
-    const defenders = this.getOpponents(player.teamSide);
-    if (!defenders.length) return 0;
-    const distances = defenders.map(d => dist(player, d)).sort((a, b) => a - b);
-    const nearest = distances[0] || 999;
-    const second = distances[1] || 999;
-    const p1 = clamp(1 - nearest / 180, 0, 1);
-    const p2 = clamp(1 - second / 280, 0, 1);
-    return clamp(p1 * 0.72 + p2 * 0.28, 0, 1);
+  getBench(team) {
+    return team === "home"
+      ? this.homeBench
+      : this.awayBench;
   }
 
-  mentalityMod(team) {
-    const m = this.getTactics(team).mentality;
-    return m === "attacking" ? 1.08 : m === "defensive" ? 0.92 : 1.0;
-  }
-
-  shouldShoot(player, dGoal, pressure) {
-    if (player.position === "GK") return false;
-    const range = player.position === "ATT" ? 320
-      : player.position === "MID" ? 240 : 190;
-    if (dGoal > range) return false;
-
-    const shooting = player.shooting / 100;
-    const composure = player.composure / 100;
-    const form = player.form / 100;
-    const teamMod = this.mentalityMod(player.teamSide);
-
-    const p = clamp(
-      (0.18 + shooting * 0.32 + composure * 0.12 + form * 0.05 - pressure * 0.20) * teamMod,
-      0.06, 0.75
+  getOpponents(team) {
+    return this.activePlayers(
+      team === "home"
+        ? "away"
+        : "home"
     );
-    return chance(p);
   }
 
-  shouldCross(player, dGoal) {
-    if (!["LW", "RW", "LM", "RM", "LWB", "RWB"].includes(player.position)) return false;
-    return dGoal < 400 && chance(0.42);
-  }
-
-  shouldPass(player, pressure) {
-    const t = this.getTactics(player.teamSide);
-    let p = 0.55;
-    if (t.passingStyle === "short") p += 0.14;
-    if (t.passingStyle === "direct") p -= 0.06;
-    if (t.tempo === "fast") p += 0.05;
-    if (t.tempo === "slow") p -= 0.05;
-    p += (player.passing / 100) * 0.15;
-    p += (player.vision / 100) * 0.10;
-    p += pressure * 0.18;
-    return chance(clamp(p, 0.25, 0.94));
-  }
-
-  shouldDribble(player, pressure) {
-    const d = player.dribbling / 100;
-    return chance(clamp(0.14 + d * 0.36 - pressure * 0.14, 0.06, 0.55));
-  }
-
-  choosePassTarget(passer, opponents, safeOnly = false) {
-    const teammates = this.getTeamPlayers(passer.teamSide)
-      .filter(p => p.id !== passer.id && !p.redCard && !p.isInjured());
-    if (!teammates.length) return null;
-
-    const t = this.getTactics(passer.teamSide);
-    const styleBias = t.passingStyle === "direct" ? 1.35
-      : t.passingStyle === "short" ? 0.7 : 1.0;
-
-    const candidates = teammates.map(tm => {
-      const pd = dist(passer, tm);
-      const nearestOpp = Math.min(...opponents.map(o => dist(tm, o)));
-      const forward = this.forwardProgress(passer, tm);
-      const spaceScore = clamp(nearestOpp / 200, 0, 1);
-      const progressScore = clamp(forward / 240, -1, 1);
-      const positionBonus = tm.position === "ATT" ? 0.16
-        : tm.position === "MID" ? 0.08 : 0;
-      const distanceScore = clamp(1 - pd / 520, 0, 1);
-
-      let score = spaceScore * 0.42 + progressScore * 0.28 + distanceScore * 0.17 + positionBonus;
-      score *= (1 + styleBias * (pd / 600 - 0.5) * 0.15);
-      if (safeOnly) score = spaceScore * 0.7 + distanceScore * 0.3;
-      return { player: tm, score, distance: pd };
-    }).filter(c => c.distance < 560).sort((a, b) => b.score - a.score);
-
-    return candidates[0]?.player || null;
-  }
-
-  pass(passer, target) {
-    const opponents = this.getOpponents(passer.teamSide);
-    const pd = dist(passer, target);
-    const pressure = this.calculatePressure(passer);
-
-    let success = 0.60 + (passer.passing / 100) * 0.20 +
-      (passer.vision / 100) * 0.10 + (passer.stamina / 100) * 0.05 +
-      (passer.form / 100) * 0.03;
-    success -= pressure * 0.18;
-    success -= clamp(pd / 900, 0, 0.16);
-
-    const interceptors = opponents.filter(o => this.pointNearLine(passer, target, o, 34));
-    if (interceptors.length) success -= interceptors.length * 0.10;
-    success = clamp(success, 0.32, 0.96);
-
-    passer.stats.passes += 1;
-
-    if (this.isOffsideAtPass(target)) {
-      this.addEvent({
-        type: EVENT_TYPES.OFFSIDE, team: passer.teamSide,
-        playerId: target.id, playerName: target.name,
-        detail: `${target.name} was offside.`,
-      });
-      this.awardGoalKick(passer.teamSide === "home" ? "away" : "home");
-      return;
+  getBallCarrier() {
+    if (!this.ball.ownerId) {
+      return null;
     }
 
-    if (chance(success)) {
-      passer.stats.passesCompleted += 1;
-      const style = this.getTactics(passer.teamSide).passingStyle;
-      const longPass = pd > 280 || style === "direct";
-      const through = this.isThroughBall(passer, target);
-
-      this.ball.kick(passer, target, longPass ? 340 : 250, BALL_STATE.PASSING, target.id);
-      this.ball.lastTouchTeam = passer.teamSide;
-      this.ball.lastTouchPlayer = passer.id;
-
-      passer.hasBall = false;
-      passer.state = PLAYER_STATE.MOVING;
-      target.state = PLAYER_STATE.RECEIVING;
-
-      this.addEvent({
-        type: through ? EVENT_TYPES.THROUGH_BALL : EVENT_TYPES.PASS,
-        team: passer.teamSide, playerId: passer.id, playerName: passer.name,
-        targetPlayerId: target.id,
-        detail: `${passer.name} → ${target.name}`,
-      });
-      return;
-    }
-
-    this.ball.kick(passer, {
-      x: passer.x + rand(-90, 90),
-      y: passer.y + rand(-90, 90),
-    }, 190, BALL_STATE.PASSING);
-    passer.hasBall = false;
-    this.addEvent({
-      type: EVENT_TYPES.PASS, team: passer.teamSide,
-      playerId: passer.id, playerName: passer.name,
-      detail: `${passer.name}'s pass went astray.`,
-    });
-  }
-
-  isThroughBall(passer, target) {
-    if (passer.position === "ST") return chance(0.30);
-    const fwd = this.forwardProgress(passer, target);
-    return fwd > 80 && chance(0.25);
-  }
-
-  dribble(player, pressure) {
-    const defenders = this.getOpponents(player.teamSide);
-    const nearest = defenders.sort((a, b) => dist(player, a) - dist(player, b))[0];
-    const dribbleAbility = player.dribbling / 100;
-    const defenderAbility = nearest
-      ? (nearest.tackling + nearest.positioning) / 200 : 0.5;
-
-    let success = 0.50 + dribbleAbility * 0.26 - defenderAbility * 0.18;
-    success -= pressure * 0.12;
-    success = clamp(success, 0.16, 0.88);
-
-    player.stats.dribbles += 1;
-
-    if (chance(success)) {
-      const dir = player.teamSide === "home" ? 1 : -1;
-      const nx = clamp(player.x + dir * rand(35, 85), 20, PITCH.width - 20);
-      const ny = clamp(player.y + rand(-55, 55), 25, PITCH.height - 25);
-      player.setTarget(nx, ny);
-      this.addEvent({
-        type: EVENT_TYPES.DRIBBLE, team: player.teamSide,
-        playerId: player.id, playerName: player.name,
-        detail: `${player.name} beats his man.`,
-      });
-      return;
-    }
-    if (nearest) this.tryTackle(nearest, player);
-  }
-
-  cross(player) {
-    const attackers = this.getTeamPlayers(player.teamSide).filter(t =>
-      t.id !== player.id && ["ST", "ATT", "AM", "LW", "RW"].includes(t.position)
-    );
-    if (!attackers.length) return;
-    const target = attackers.sort((a, b) =>
-      this.distanceToOpponentGoal(a) - this.distanceToOpponentGoal(b))[0];
-
-    const crossTarget = {
-      x: player.teamSide === "home" ? PITCH.width - 95 : 95,
-      y: clamp(target.y + rand(-60, 60), 70, PITCH.height - 70),
-    };
-
-    this.ball.kick(player, crossTarget, 300, BALL_STATE.CROSSING, target.id);
-    player.hasBall = false;
-    this.addEvent({
-      type: EVENT_TYPES.CROSS, team: player.teamSide,
-      playerId: player.id, playerName: player.name,
-      targetPlayerId: target.id,
-      detail: `${player.name} whips in a cross.`,
-    });
-  }
-
-  shoot(player, pressure) {
-    const oppSide = player.teamSide === "home" ? "away" : "home";
-    const gk = this.getTeamPlayers(oppSide).find(p => p.position === "GK");
-    if (!gk) return;
-
-    player.stats.shots += 1;
-    const goalX = player.teamSide === "home" ? PITCH.width + 35 : -35;
-    const goalY = PITCH.height / 2 + rand(-PITCH.goalWidth / 2 + 12, PITCH.goalWidth / 2 - 12);
-
-    const accuracy = clamp(
-      0.35 + (player.shooting / 100) * 0.42 +
-      (player.composure / 100) * 0.15 +
-      (player.form / 100) * 0.05 - pressure * 0.20,
-      0.15, 0.94
-    );
-
-    const targetY = chance(accuracy)
-      ? goalY
-      : clamp(goalY + rand(-130, 130), 35, PITCH.height - 35);
-    const power = 340 + player.shooting * 1.8;
-
-    this.ball.kick(player, { x: goalX, y: targetY }, power, BALL_STATE.SHOOTING);
-    this.ball.lastTouchTeam = player.teamSide;
-    this.ball.lastTouchPlayer = player.id;
-
-    player.hasBall = false;
-    player.state = PLAYER_STATE.SHOOTING;
-
-    this.addEvent({
-      type: EVENT_TYPES.SHOT, team: player.teamSide,
-      playerId: player.id, playerName: player.name,
-      detail: `${player.name} shoots!`,
-    });
-  }
-
-  /* ====================== BALL & POSSESSION ====================== */
-  updateBall(dt) {
-    const owner = this.findPlayer(this.ball.ownerId);
-    if (owner) { this.ball.position.set(owner.x, owner.y); return; }
-    this.ball.update(dt);
-    this.checkPassReception();
+    return this.activePlayers()
+      .find(
+        (player) =>
+          player.id ===
+          this.ball.ownerId
+      ) || null;
   }
 
   updatePlayers(dt) {
-    this.players.forEach(p => {
-      if (p.redCard) return;
-      p.update(dt);
-      if (p.hasBall) this.keepPlayerBall(p);
-    });
-    this.preventPlayerOverlap();
+    const carrier =
+      this.getBallCarrier();
+
+    const players =
+      this.activePlayers();
+
+    for (
+      const player of players
+    ) {
+      if (
+        carrier &&
+        player.id === carrier.id
+      ) {
+        player.target.set(
+          player.x,
+          player.y
+        );
+
+        player.state =
+          PLAYER_STATE.POSSESSED;
+
+        this.ball.position.set(
+          player.x,
+          player.y
+        );
+
+        continue;
+      }
+
+      if (
+        carrier &&
+        carrier.team ===
+          player.team
+      ) {
+        const target =
+          this.getSupportTarget(
+            player,
+            carrier
+          );
+
+        player.setTarget(
+          target.x,
+          target.y
+        );
+      }
+
+      player.update(dt);
+    }
+  }
+
+  updateBall(dt) {
+    const carrier =
+      this.getBallCarrier();
+
+    if (carrier) {
+      this.ball.position.set(
+        carrier.x,
+        carrier.y
+      );
+
+      return;
+    }
+
+    this.ball.update(dt);
+  }
+
+  updateAI() {
+    const carrier =
+      this.getBallCarrier();
+
+    for (
+      const team of [
+        "home",
+        "away",
+      ]
+    ) {
+      const players =
+        this.getTeam(team);
+
+      const tactics =
+        team === "home"
+          ? this.homeTactics
+          : this.awayTactics;
+
+      for (
+        const player of players
+      ) {
+        if (
+          !player.active ||
+          player.redCard ||
+          player.injury
+        ) {
+          continue;
+        }
+
+        const formationPoint =
+          getFormationPosition(
+            team === "home"
+              ? this.homeFormation
+              : this.awayFormation,
+            player.index,
+            team
+          );
+
+        if (
+          carrier &&
+          carrier.id === player.id
+        ) {
+          this.setCarrierTarget(
+            player,
+            tactics
+          );
+
+          continue;
+        }
+
+        if (!carrier) {
+          const ballDistance =
+            distance(
+              player,
+              this.ball.position
+            );
+
+          if (
+            ballDistance < 230 &&
+            player.position !== "GK"
+          ) {
+            player.state =
+              PLAYER_STATE.CHASING;
+
+            player.setTarget(
+              this.ball.position.x,
+              this.ball.position.y
+            );
+          } else {
+            player.setTarget(
+              formationPoint.x,
+              formationPoint.y
+            );
+          }
+
+          continue;
+        }
+
+        if (
+          carrier.team !== team
+        ) {
+          this.setDefensiveTarget(
+            player,
+            carrier,
+            formationPoint,
+            tactics
+          );
+        } else {
+          this.setAttackingTarget(
+            player,
+            carrier,
+            formationPoint,
+            tactics
+          );
+        }
+      }
+    }
+  }
+
+  setCarrierTarget(
+    player,
+    tactics
+  ) {
+    const direction =
+      player.team === "home"
+        ? 1
+        : -1;
+
+    const goalX =
+      player.team === "home"
+        ? PITCH.width
+        : 0;
+
+    const distanceToGoal =
+      Math.abs(
+        goalX - player.x
+      );
+
+    if (
+      player.position === "GK"
+    ) {
+      player.setTarget(
+        player.team === "home"
+          ? 100
+          : PITCH.width - 100,
+
+        PITCH.height / 2
+      );
+
+      return;
+    }
+
+    if (
+      distanceToGoal < 220
+    ) {
+      player.setTarget(
+        player.x +
+          direction * 65,
+
+        clamp(
+          player.y +
+            random(-35, 35),
+          55,
+          PITCH.height - 55
+        )
+      );
+
+      return;
+    }
+
+    const tempo =
+      tactics.tempo === "fast"
+        ? 1.2
+        : tactics.tempo === "slow"
+          ? 0.75
+          : 1;
+
+    player.setTarget(
+      clamp(
+        player.x +
+          direction *
+            80 *
+            tempo,
+        30,
+        PITCH.width - 30
+      ),
+
+      clamp(
+        player.y +
+          random(-20, 20),
+        45,
+        PITCH.height - 45
+      )
+    );
+  }
+
+  setDefensiveTarget(
+    player,
+    carrier,
+    formationPoint,
+    tactics
+  ) {
+    if (
+      player.position === "GK"
+    ) {
+      this.updateGoalkeeper(
+        player,
+        carrier
+      );
+
+      return;
+    }
+
+    const pressing =
+      tactics.pressing === "high"
+        ? 1
+        : tactics.pressing === "low"
+          ? 0.35
+          : 0.65;
+
+    const d =
+      distance(
+        player,
+        carrier
+      );
+
+    if (
+      d <
+      210 * pressing
+    ) {
+      player.state =
+        PLAYER_STATE.CHASING;
+
+      player.setTarget(
+        carrier.x,
+        carrier.y
+      );
+
+      return;
+    }
+
+    const x =
+      formationPoint.x +
+      (carrier.x -
+        PITCH.width / 2) *
+        0.12;
+
+    const y =
+      formationPoint.y +
+      (carrier.y -
+        PITCH.height / 2) *
+        0.16;
+
+    player.setTarget(
+      clamp(
+        x,
+        35,
+        PITCH.width - 35
+      ),
+
+      clamp(
+        y,
+        35,
+        PITCH.height - 35
+      )
+    );
+  }
+
+  setAttackingTarget(
+    player,
+    carrier,
+    formationPoint,
+    tactics
+  ) {
+    if (
+      player.position === "GK"
+    ) {
+      player.setTarget(
+        formationPoint.x,
+        formationPoint.y
+      );
+
+      return;
+    }
+
+    const direction =
+      player.team === "home"
+        ? 1
+        : -1;
+
+    const width =
+      tactics.width === "wide"
+        ? 1.25
+        : tactics.width === "narrow"
+          ? 0.72
+          : 1;
+
+    let x =
+      formationPoint.x +
+      direction * 24;
+
+    let y =
+      PITCH.height / 2 +
+      (formationPoint.y -
+        PITCH.height / 2) *
+        width;
+
+    if (
+      player.position === "FWD"
+    ) {
+      x += direction * 55;
+    }
+
+    if (
+      distance(
+        player,
+        carrier
+      ) < 70
+    ) {
+      y +=
+        player.y <
+        PITCH.height / 2
+          ? 65
+          : -65;
+    }
+
+    player.setTarget(
+      clamp(
+        x,
+        35,
+        PITCH.width - 35
+      ),
+
+      clamp(
+        y,
+        35,
+        PITCH.height - 35
+      )
+    );
+  }
+
+  updateGoalkeeper(
+    player,
+    carrier
+  ) {
+    const goalX =
+      player.team === "home"
+        ? 42
+        : PITCH.width - 42;
+
+    const goalY =
+      PITCH.height / 2;
+
+    let targetY =
+      clamp(
+        carrier?.y ??
+          goalY,
+
+        goalY -
+          PITCH.goalWidth / 2 +
+          15,
+
+        goalY +
+          PITCH.goalWidth / 2 -
+          15
+      );
+
+    let targetX = goalX;
+
+    if (
+      distance(
+        player,
+        this.ball.position
+      ) < 220
+    ) {
+      targetX +=
+        player.team === "home"
+          ? 30
+          : -30;
+
+      targetY =
+        this.ball.position.y;
+    }
+
+    player.setTarget(
+      targetX,
+      targetY
+    );
+  }
+
+  adaptAITactics() {
+    for (
+      const team of [
+        "home",
+        "away",
+      ]
+    ) {
+      if (
+        team ===
+        this.userControlled
+      ) {
+        continue;
+      }
+
+      const scoreFor =
+        team === "home"
+          ? this.homeScore
+          : this.awayScore;
+
+      const scoreAgainst =
+        team === "home"
+          ? this.awayScore
+          : this.homeScore;
+
+      const minute =
+        this.simulationTime;
+
+      let mentality =
+        "balanced";
+
+      if (
+        scoreFor <
+        scoreAgainst
+      ) {
+        mentality =
+          minute > 65
+            ? "attacking"
+            : "positive";
+      }
+
+      if (
+        scoreFor >
+        scoreAgainst
+      ) {
+        mentality =
+          minute > 75
+            ? "defensive"
+            : "balanced";
+      }
+
+      const current =
+        team === "home"
+          ? this.homeTactics
+          : this.awayTactics;
+
+      this.setTactics(
+        team,
+        {
+          mentality,
+
+          pressing:
+            mentality ===
+            "attacking"
+              ? "high"
+              : mentality ===
+                  "defensive"
+                ? "low"
+                : current.pressing,
+
+          tempo:
+            mentality ===
+            "attacking"
+              ? "fast"
+              : mentality ===
+                  "defensive"
+                ? "slow"
+                : current.tempo,
+        }
+      );
+    }
+  }
+
+  makeBallDecision() {
+    const carrier =
+      this.getBallCarrier();
+
+    if (!carrier) {
+      return;
+    }
+
+    const tactics =
+      carrier.team === "home"
+        ? this.homeTactics
+        : this.awayTactics;
+
+    const goalX =
+      carrier.team === "home"
+        ? PITCH.width
+        : 0;
+
+    const distanceToGoal =
+      Math.abs(
+        goalX - carrier.x
+      );
+
+    const defenders =
+      this.getOpponents(
+        carrier.team
+      );
+
+    const nearest =
+      this.nearestTo(
+        defenders,
+        carrier
+      );
+
+    if (
+      carrier.position === "GK"
+    ) {
+      this.passFromGK(
+        carrier
+      );
+
+      return;
+    }
+
+    if (
+      distanceToGoal < 205 &&
+      this.canShoot(carrier)
+    ) {
+      this.shoot(carrier);
+
+      return;
+    }
+
+    const pressure =
+      nearest
+        ? distance(
+            nearest,
+            carrier
+          )
+        : 999;
+
+    if (
+      pressure < 50
+    ) {
+      if (chance(0.72)) {
+        const target =
+          this.findPassTarget(
+            carrier,
+            true
+          );
+
+        if (target) {
+          this.pass(
+            carrier,
+            target,
+            true
+          );
+
+          return;
+        }
+      }
+
+      if (chance(0.35)) {
+        this.dribble(carrier);
+
+        return;
+      }
+    }
+
+    if (
+      carrier.position === "FWD" &&
+      distanceToGoal < 330 &&
+      chance(0.26)
+    ) {
+      const target =
+        this.findCrossTarget(
+          carrier
+        );
+
+      if (target) {
+        this.cross(
+          carrier,
+          target
+        );
+
+        return;
+      }
+    }
+
+    const passChance =
+      tactics.passingStyle ===
+      "short"
+        ? 0.72
+        : tactics.passingStyle ===
+            "direct"
+          ? 0.43
+          : 0.58;
+
+    if (
+      chance(passChance)
+    ) {
+      const target =
+        this.findPassTarget(
+          carrier,
+          false
+        );
+
+      if (target) {
+        this.pass(
+          carrier,
+          target,
+          chance(0.22)
+        );
+
+        return;
+      }
+    }
+
+    this.dribble(carrier);
+  }
+
+  passFromGK(player) {
+    const target =
+      this.findPassTarget(
+        player,
+        false
+      );
+
+    if (
+      target &&
+      target !== player
+    ) {
+      this.pass(
+        player,
+        target,
+        false
+      );
+    }
+  }
+
+  findPassTarget(
+    from,
+    underPressure
+  ) {
+    const teammates =
+      this.activePlayers(
+        from.team
+      ).filter(
+        (player) =>
+          player !== from
+      );
+
+    const direction =
+      from.team === "home"
+        ? 1
+        : -1;
+
+    const candidates =
+      teammates
+        .map((player) => {
+          const forward =
+            (player.x -
+              from.x) *
+            direction;
+
+          const opponent =
+            this.nearestTo(
+              this.getOpponents(
+                from.team
+              ),
+              player
+            );
+
+          const space =
+            opponent
+              ? distance(
+                  opponent,
+                  player
+                )
+              : 100;
+
+          const roleBonus =
+            player.position ===
+            "FWD"
+              ? 22
+              : player.position ===
+                  "MID"
+                ? 10
+                : 0;
+
+          const score =
+            forward * 0.55 +
+            space * 0.35 +
+            player.vision *
+              0.45 +
+            roleBonus;
+
+          return {
+            player,
+            score,
+          };
+        })
+        .filter(
+          ({ player }) =>
+            distance(
+              player,
+              from
+            ) <
+            (underPressure
+              ? 330
+              : 470)
+        )
+        .sort(
+          (a, b) =>
+            b.score -
+            a.score
+        );
+
+    return (
+      candidates[0]?.player ||
+      null
+    );
+  }
+
+  findCrossTarget(
+    from
+  ) {
+    return this.activePlayers(
+      from.team
+    )
+      .filter(
+        (player) =>
+          player !== from &&
+          player.position === "FWD"
+      )
+      .sort(
+        (a, b) =>
+          Math.abs(
+            a.x - from.x
+          ) -
+          Math.abs(
+            b.x - from.x
+          )
+      )[0] || null;
+  }
+
+  canShoot(player) {
+    const goalX =
+      player.team === "home"
+        ? PITCH.width
+        : 0;
+
+    const distanceToGoal =
+      Math.abs(
+        goalX - player.x
+      );
+
+    const quality =
+      player.shooting / 100;
+
+    return (
+      distanceToGoal < 245 &&
+      chance(
+        0.58 +
+          quality * 0.32
+      )
+    );
+  }
+
+  pass(
+    from,
+    target,
+    through = false
+  ) {
+    if (
+      !from ||
+      !target
+    ) {
+      return false;
+    }
+
+    const stats =
+      from.team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    stats.passes += 1;
+
+    from.stats.passes += 1;
+
+    const passDistance =
+      distance(
+        from,
+        target
+      );
+
+    const accuracy =
+      clamp(
+        0.58 +
+          from.passing / 240 +
+          from.vision / 300 -
+          passDistance / 900 -
+          (through ? 0.12 : 0),
+
+        0.38,
+        0.96
+      );
+
+    if (
+      chance(accuracy)
+    ) {
+      this.ball.kick(
+        from,
+        target,
+        through
+          ? 330
+          : 275,
+        BALL_STATE.PASSING,
+        target.id
+      );
+
+      stats.completedPasses += 1;
+
+      from.stats.completedPasses += 1;
+
+      this.addEvent(
+        through
+          ? EVENT_TYPES.THROUGH_BALL
+          : EVENT_TYPES.PASS,
+
+        `${from.name} pass to ${target.name}`,
+
+        from.team,
+
+        from.id,
+
+        target.id
+      );
+
+      return true;
+    }
+
+    const opponents =
+      this.getOpponents(
+        from.team
+      );
+
+    const interceptor =
+      this.nearestTo(
+        opponents,
+        {
+          x:
+            (from.x +
+              target.x) /
+            2,
+
+          y:
+            (from.y +
+              target.y) /
+            2,
+        }
+      );
+
+    this.ball.kick(
+      from,
+      interceptor || target,
+      215,
+      BALL_STATE.PASSING,
+      interceptor?.id || null
+    );
+
+    this.addEvent(
+      EVENT_TYPES.PASS,
+      `${from.name} misplaces a pass`,
+      from.team,
+      from.id
+    );
+
+    return false;
+  }
+
+  dribble(player) {
+    if (!player) {
+      return false;
+    }
+
+    const direction =
+      player.team === "home"
+        ? 1
+        : -1;
+
+    const vertical =
+      chance(0.5)
+        ? -1
+        : 1;
+
+    player.hasBall = true;
+
+    this.ball.attach(player);
+
+    const success =
+      chance(
+        clamp(
+          0.48 +
+            player.dribbling / 250 -
+            this.nearestOpponentDistance(
+              player
+            ) / 700,
+
+          0.18,
+          0.9
+        )
+      );
+
+    if (success) {
+      player.setTarget(
+        clamp(
+          player.x +
+            direction * 80,
+          25,
+          PITCH.width - 25
+        ),
+
+        clamp(
+          player.y +
+            vertical *
+              random(25, 85),
+          25,
+          PITCH.height - 25
+        )
+      );
+
+      this.addEvent(
+        EVENT_TYPES.DRIBBLE,
+        `${player.name} dribbles`,
+        player.team,
+        player.id
+      );
+
+      return true;
+    }
+
+    const defender =
+      this.nearestTo(
+        this.getOpponents(
+          player.team
+        ),
+        player
+      );
+
+    if (
+      defender &&
+      distance(
+        defender,
+        player
+      ) < 80
+    ) {
+      this.resolveTackle(
+        defender,
+        player
+      );
+    }
+
+    return false;
+  }
+
+  cross(
+    from,
+    target
+  ) {
+    const accuracy =
+      clamp(
+        0.5 +
+          from.passing / 240 +
+          from.vision / 350,
+
+        0.35,
+        0.94
+      );
+
+    if (
+      chance(accuracy)
+    ) {
+      this.ball.kick(
+        from,
+        {
+          x:
+            target.x +
+            (from.team === "home"
+              ? 25
+              : -25),
+
+          y: target.y,
+        },
+        300,
+        BALL_STATE.CROSSING,
+        target.id
+      );
+
+      this.addEvent(
+        EVENT_TYPES.CROSS,
+        `${from.name} crosses`,
+        from.team,
+        from.id,
+        target.id
+      );
+
+      return true;
+    }
+
+    this.ball.kick(
+      from,
+      {
+        x:
+          from.team === "home"
+            ? PITCH.width + 30
+            : -30,
+
+        y:
+          random(
+            80,
+            PITCH.height - 80
+          ),
+      },
+      280,
+      BALL_STATE.CROSSING
+    );
+
+    this.addEvent(
+      EVENT_TYPES.CROSS,
+      `${from.name} crosses unsuccessfully`,
+      from.team,
+      from.id
+    );
+
+    return false;
+  }
+
+  shoot(player) {
+    if (!player) {
+      return false;
+    }
+
+    const stats =
+      player.team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    stats.shots += 1;
+
+    player.stats.shots += 1;
+
+    const goalX =
+      player.team === "home"
+        ? PITCH.width + 20
+        : -20;
+
+    const goalY =
+      clamp(
+        PITCH.height / 2 +
+          random(
+            -PITCH.goalWidth / 2 + 10,
+            PITCH.goalWidth / 2 - 10
+          ),
+
+        PITCH.height / 2 -
+          PITCH.goalWidth / 2 +
+          8,
+
+        PITCH.height / 2 +
+          PITCH.goalWidth / 2 -
+          8
+      );
+
+    const target = {
+      x: goalX,
+      y: goalY,
+    };
+
+    const distanceToGoal =
+      Math.abs(
+        (player.team === "home"
+          ? PITCH.width
+          : 0) -
+          player.x
+      );
+
+    const quality =
+      clamp(
+        0.30 +
+          player.shooting / 190 +
+          player.composure / 400 -
+          distanceToGoal / 900,
+
+        0.20,
+        0.92
+      );
+
+    const onTarget =
+      chance(quality);
+
+    if (onTarget) {
+      stats.shotsOnTarget += 1;
+
+      player.stats.shotsOnTarget += 1;
+    }
+
+    this.ball.kick(
+      player,
+      target,
+      420,
+      BALL_STATE.SHOOTING
+    );
+
+    this.addEvent(
+      EVENT_TYPES.SHOT,
+      `${player.name} shoots`,
+      player.team,
+      player.id
+    );
+
+    return true;
   }
 
   checkPassReception() {
-    if (!this.ball.targetId) { this.checkInterception(); return; }
-    const target = this.findPlayer(this.ball.targetId);
-    if (!target || target.redCard || target.isInjured()) {
-      this.ball.targetId = null;
+    if (
+      this.ball.ownerId
+    ) {
       return;
     }
 
-    const d = dist(this.ball.position, target);
-    if (d < 30) {
-      const pressure = this.getOpponents(target.teamSide)
-        .map(o => dist(target, o))
-        .sort((a, b) => a - b)[0] || 999;
-      const control = clamp(
-        0.60 + (target.overall / 100) * 0.22 - pressure / 500,
-        0.32, 0.94
+    const target =
+      this.players.find(
+        (player) =>
+          player.id ===
+            this.ball.targetId &&
+          player.active &&
+          !player.injury &&
+          !player.redCard
       );
-      if (chance(control)) { this.giveBall(target); return; }
+
+    if (
+      target &&
+      distance(
+        target,
+        this.ball.position
+      ) < 34
+    ) {
+      this.ball.attach(
+        target
+      );
+
+      return;
     }
-    this.checkInterception();
+
+    const nearby =
+      this.activePlayers()
+        .filter(
+          (player) =>
+            distance(
+              player,
+              this.ball.position
+            ) < 20
+        );
+
+    if (!nearby.length) {
+      return;
+    }
+
+    nearby.sort(
+      (a, b) => {
+        const aScore =
+          distance(
+            a,
+            this.ball.position
+          ) -
+          (a.team ===
+          this.ball.lastTouchTeam
+            ? 5
+            : 0);
+
+        const bScore =
+          distance(
+            b,
+            this.ball.position
+          ) -
+          (b.team ===
+          this.ball.lastTouchTeam
+            ? 5
+            : 0);
+
+        return aScore - bScore;
+      }
+    );
+
+    this.ball.attach(
+      nearby[0]
+    );
   }
 
   checkInterception() {
-    if (this.ball.ownerId) return;
-    const candidates = this.players
-      .filter(p => !p.redCard && !p.isInjured())
-      .map(p => ({ player: p, distance: dist(p, this.ball.position) }))
-      .filter(i => i.distance < 24)
-      .sort((a, b) => a.distance - b.distance);
+    if (
+      this.ball.ownerId
+    ) {
+      return;
+    }
 
-    const c = candidates[0];
-    if (!c) return;
+    const candidates =
+      this.activePlayers()
+        .filter(
+          (player) =>
+            distance(
+              player,
+              this.ball.position
+            ) < 24
+        );
 
-    const p = c.player;
-    const canControl = clamp(
-      0.58 + (p.overall / 100) * 0.18 + (p.positioning / 100) * 0.12,
-      0.35, 0.94
+    const interceptor =
+      candidates.find(
+        (player) =>
+          player.team !==
+          this.ball.lastTouchTeam
+      );
+
+    if (!interceptor) {
+      return;
+    }
+
+    this.ball.attach(
+      interceptor
     );
 
-    if (chance(canControl)) {
-      this.giveBall(p);
-      if (this.ball.lastTouchTeam && this.ball.lastTouchTeam !== p.teamSide) {
-        p.stats.interceptions += 1;
-        this.getStats(p.teamSide).interceptions += 1;
-        this.addEvent({
-          type: EVENT_TYPES.INTERCEPTION, team: p.teamSide,
-          playerId: p.id, playerName: p.name,
-          detail: `${p.name} intercepts.`,
-        });
-      }
-    }
+    interceptor.stats
+      .interceptions += 1;
+
+    const stats =
+      interceptor.team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    stats.interceptions += 1;
+
+    this.addEvent(
+      EVENT_TYPES.INTERCEPTION,
+      `${interceptor.name} intercepts`,
+      interceptor.team,
+      interceptor.id
+    );
   }
 
   resolvePossession() {
-    if (this.ball.ownerId) return;
-    const nearby = this.players
-      .filter(p => !p.redCard && !p.isInjured())
-      .map(p => ({ player: p, distance: dist(p, this.ball.position) }))
-      .filter(i => i.distance < 22)
-      .sort((a, b) => a.distance - b.distance);
-    if (nearby[0]) this.giveBall(nearby[0].player);
-  }
+    const carrier =
+      this.getBallCarrier();
 
-  giveBall(player) {
-    this.players.forEach(p => {
-      p.hasBall = false;
-      if (p.state === PLAYER_STATE.POSSESSED) p.state = PLAYER_STATE.MOVING;
-    });
-    player.hasBall = true;
-    player.state = PLAYER_STATE.POSSESSED;
-    this.ball.attach(player);
-  }
-
-  keepPlayerBall(player) { this.ball.position.set(player.x, player.y); }
-
-  resolveTackles() {
-    this.players.filter(p => p.hasBall && !p.redCard).forEach(carrier => {
-      const defenders = this.getOpponents(carrier.teamSide)
-        .filter(d => !d.redCard && !d.isInjured())
-        .sort((a, b) => dist(a, carrier) - dist(b, carrier));
-      const defender = defenders[0];
-      if (!defender) return;
-      if (dist(defender, carrier) > 28) return;
-      if (chance(0.045)) this.tryTackle(defender, carrier);
-    });
-  }
-
-  tryTackle(defender, attacker) {
-    if (defender.redCard) return;
-    const tackling = defender.tackling / 100;
-    const attackerDribbling = attacker.dribbling / 100;
-    const success = clamp(0.40 + tackling * 0.36 - attackerDribbling * 0.22, 0.18, 0.88);
-
-    defender.stats.tackles += 1;
-    this.getStats(defender.teamSide).tackles += 1;
-
-    if (chance(success)) {
-      attacker.hasBall = false;
-      defender.hasBall = true;
-      this.ball.attach(defender);
-      this.tryInjure(attacker, "tackle");
-
-      this.addEvent({
-        type: EVENT_TYPES.TACKLE, team: defender.teamSide,
-        playerId: defender.id, playerName: defender.name,
-        detail: `${defender.name} wins the ball.`,
-      });
+    if (!carrier) {
       return;
     }
-    this.commitFoul(defender, attacker);
+
+    const defender =
+      this.nearestTo(
+        this.getOpponents(
+          carrier.team
+        ),
+        carrier
+      );
+
+    if (
+      !defender ||
+      distance(
+        defender,
+        carrier
+      ) > 25
+    ) {
+      return;
+    }
+
+    if (chance(0.18)) {
+      this.resolveTackle(
+        defender,
+        carrier
+      );
+    }
   }
 
-  commitFoul(defender, attacker) {
-    defender.stats.fouls += 1;
-    this.getStats(defender.teamSide).fouls += 1;
-    const injured = this.tryInjure(attacker, "tackle");
+  resolveTackles(dt) {
+    const carrier =
+      this.getBallCarrier();
 
-    const severe = chance(0.025 + (100 - defender.tackling) / 1000);
-    if (severe) {
+    if (!carrier) {
+      return;
+    }
+
+    const defenders =
+      this.getOpponents(
+        carrier.team
+      );
+
+    const defender =
+      this.nearestTo(
+        defenders.filter(
+          (player) =>
+            player.position !==
+            "GK"
+        ),
+        carrier
+      );
+
+    if (!defender) {
+      return;
+    }
+
+    const d =
+      distance(
+        defender,
+        carrier
+      );
+
+    if (
+      d < 27 &&
+      chance(
+        0.16 *
+          dt *
+          30
+      )
+    ) {
+      this.resolveTackle(
+        defender,
+        carrier
+      );
+    }
+  }
+
+  resolveTackle(
+    defender,
+    attacker
+  ) {
+    if (
+      !defender ||
+      !attacker ||
+      !this.ball.ownerId
+    ) {
+      return;
+    }
+
+    defender.stats.tackles += 1;
+
+    const stats =
+      defender.team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    stats.tackles += 1;
+
+    const tacklePower =
+      defender.tackling * 0.62 +
+      defender.strength * 0.25;
+
+    const dribblePower =
+      attacker.dribbling * 0.58 +
+      attacker.strength * 0.25;
+
+    const success =
+      chance(
+        clamp(
+          0.45 +
+            (tacklePower -
+              dribblePower) /
+              220,
+
+          0.18,
+          0.82
+        )
+      );
+
+    if (success) {
+      this.ball.attach(
+        defender
+      );
+
+      this.addEvent(
+        EVENT_TYPES.TACKLE,
+        `${defender.name} wins the ball`,
+        defender.team,
+        defender.id,
+        attacker.id
+      );
+
+      if (chance(0.10)) {
+        this.commitFoul(
+          defender,
+          attacker
+        );
+      }
+
+      return;
+    }
+
+    if (chance(0.05)) {
+      this.commitFoul(
+        defender,
+        attacker
+      );
+    }
+  }
+
+  commitFoul(
+    defender,
+    attacker
+  ) {
+    const stats =
+      defender.team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    stats.fouls += 1;
+
+    defender.stats.fouls += 1;
+
+    this.addEvent(
+      EVENT_TYPES.FOUL,
+      `${defender.name} fouls ${attacker.name}`,
+      defender.team,
+      defender.id,
+      attacker.id
+    );
+
+    if (chance(0.13)) {
       defender.yellowCards += 1;
-      if (defender.yellowCards >= 2) {
+
+      defender.stats.yellow += 1;
+
+      stats.yellowCards += 1;
+
+      this.addEvent(
+        EVENT_TYPES.YELLOW,
+        `${defender.name} receives a yellow card`,
+        defender.team,
+        defender.id
+      );
+
+      if (
+        defender.yellowCards >= 2 &&
+        chance(0.08)
+      ) {
         defender.redCard = true;
-        defender.hasBall = false;
-        this.getStats(defender.teamSide).red += 1;
-        this.addEvent({
-          type: EVENT_TYPES.RED, team: defender.teamSide,
-          playerId: defender.id, playerName: defender.name,
-          detail: `${defender.name} sent off!`,
-        });
-      } else {
-        this.getStats(defender.teamSide).yellow += 1;
-        this.addEvent({
-          type: EVENT_TYPES.YELLOW, team: defender.teamSide,
-          playerId: defender.id, playerName: defender.name,
-          detail: `${defender.name} booked.`,
-        });
+
+        defender.active = false;
+
+        defender.stats.red += 1;
+
+        stats.redCards += 1;
+
+        this.addEvent(
+          EVENT_TYPES.RED,
+          `${defender.name} is sent off`,
+          defender.team,
+          defender.id
+        );
+
+        if (
+          this.ball.ownerId ===
+          defender.id
+        ) {
+          this.ball.stop();
+        }
       }
     }
-
-    this.addEvent({
-      type: EVENT_TYPES.FOUL, team: defender.teamSide,
-      playerId: defender.id, playerName: defender.name,
-      detail: `${defender.name} fouls ${attacker.name}${injured ? " (injury)" : ""}.`,
-    });
-
-    this.awardFreeKick(attacker.teamSide);
   }
 
-  /* ====================== INJURIES ====================== */
-  tryInjure(player, context = "fatigue") {
-    if (!player || player.injury || player.redCard) return false;
-
-    let base;
-    if (context === "tackle") base = INJURY.TACKLE_BASE;
-    else {
-      if (player.stamina > INJURY.STAMINA_THRESHOLD) return false;
-      base = INJURY.FATIGUE_BASE;
+  tryInjure(
+    player,
+    reason = "knock"
+  ) {
+    if (
+      !player ||
+      player.injury ||
+      player.redCard
+    ) {
+      return false;
     }
 
-    const staminaFactor = 1 + (100 - player.stamina) / 70;
-    const fitnessFactor = 1 + (100 - player.fitness) / 150;
-    const p = base * staminaFactor * fitnessFactor;
+    const fatigue =
+      player.stamina <
+      INJURY.STAMINA_THRESHOLD
+        ? 2.5
+        : 1;
 
-    if (Math.random() < p) {
-      const severity = Math.random() < INJURY.SEVERE_CHANCE ? "severe" : "minor";
-      const type = context === "tackle" ? "knock" : "strain";
-      player.injure(type, severity);
-      this.injuries[player.teamSide] += 1;
-      this.addEvent({
-        type: EVENT_TYPES.INJURY, team: player.teamSide,
-        playerId: player.id, playerName: player.name,
-        detail: `${player.name} is injured (${severity})!`,
-      });
+    const probability =
+      INJURY.TACKLE_BASE *
+      fatigue;
+
+    if (
+      !chance(probability)
+    ) {
+      return false;
+    }
+
+    if (
+      player.injure(reason)
+    ) {
+      this.injuries[
+        player.team
+      ] += 1;
+
+      this.addEvent(
+        EVENT_TYPES.INJURY,
+        `${player.name} is injured`,
+        player.team,
+        player.id
+      );
+
+      if (
+        this.ball.ownerId ===
+        player.id
+      ) {
+        this.ball.stop();
+      }
+
       return true;
     }
+
     return false;
   }
 
   updateStamina(dt) {
-    this.players.forEach(p => {
-      if (p.redCard) return;
-      if (!p.isInjured() && p.stamina < INJURY.STAMINA_THRESHOLD) {
-        this.tryInjure(p, "fatigue");
+    for (
+      const player of
+        this.activePlayers()
+    ) {
+      if (
+        player.stamina < 12 &&
+        chance(
+          INJURY.FATIGUE_BASE *
+            dt *
+            30
+        )
+      ) {
+        this.tryInjure(
+          player,
+          "fatigue"
+        );
       }
-      if (p.velocity.length() < 5) {
-        p.fitness = clamp(p.fitness + dt * 0.2, 0, 100);
-      }
-      if (p.stamina < 20) {
-        p.form = clamp(p.form - dt * 0.3, 60, 100);
-      }
-    });
+    }
   }
 
-  /* ====================== SET PIECES ====================== */
-  awardFreeKick(team) {
-    this.ball.stop();
-    const players = this.getTeamPlayers(team);
-    const kicker = players
-      .filter(p => !p.redCard && !p.isInjured() && p.position !== "GK")
-      .sort((a, b) => b.passing - a.passing)[0];
-    if (kicker) {
-      this.ball.position.set(kicker.x, kicker.y);
-      this.giveBall(kicker);
+  checkGoal() {
+    if (
+      this.ball.state !==
+        BALL_STATE.SHOOTING &&
+      this.ball.state !==
+        BALL_STATE.CROSSING
+    ) {
+      return;
     }
+
+    const x =
+      this.ball.position.x;
+
+    const y =
+      this.ball.position.y;
+
+    const top =
+      PITCH.height / 2 -
+      PITCH.goalWidth / 2;
+
+    const bottom =
+      PITCH.height / 2 +
+      PITCH.goalWidth / 2;
+
+    if (
+      y < top ||
+      y > bottom
+    ) {
+      return;
+    }
+
+    if (
+      x >=
+      PITCH.width +
+        PITCH.goalDepth * 0.15
+    ) {
+      if (
+        this.ball.lastTouchTeam ===
+        "home"
+      ) {
+        this.scoreGoal("home");
+      } else {
+        this.ball.stop();
+      }
+
+      return;
+    }
+
+    if (
+      x <=
+      -PITCH.goalDepth * 0.15
+    ) {
+      if (
+        this.ball.lastTouchTeam ===
+        "away"
+      ) {
+        this.scoreGoal("away");
+      } else {
+        this.ball.stop();
+      }
+    }
+  }
+
+  scoreGoal(team) {
+    const scorer =
+      this.findLastShooter(
+        team
+      );
+
+    const stats =
+      team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    if (team === "home") {
+      this.homeScore += 1;
+    } else {
+      this.awayScore += 1;
+    }
+
+    stats.goals += 1;
+
+    if (scorer) {
+      scorer.stats.goals += 1;
+    }
+
+    const clubName =
+      team === "home"
+        ? this.homeClub?.name ||
+          "Home"
+        : this.awayClub?.name ||
+          "Away";
+
+    this.addEvent(
+      EVENT_TYPES.GOAL,
+      `${clubName} score!`,
+      team,
+      scorer?.id || null
+    );
+
+    this.ball.stop();
+
+    this.placeBallForKickoff();
+  }
+
+  findLastShooter(team) {
+    return this.getTeam(team)
+      .find(
+        (player) =>
+          player.id ===
+          this.ball.lastTouchPlayer
+      ) || null;
+  }
+
+  updatePossessionStats(dt) {
+    const carrier =
+      this.getBallCarrier();
+
+    if (!carrier) {
+      return;
+    }
+
+    const stats =
+      carrier.team === "home"
+        ? this.homeStats
+        : this.awayStats;
+
+    stats.possessionSeconds += dt;
   }
 
   checkBallOut() {
-    if (this.ball.ownerId) return;
-    const x = this.ball.position.x;
-    const y = this.ball.position.y;
-    const goalTop = (PITCH.height - PITCH.goalWidth) / 2;
-    const goalBottom = goalTop + PITCH.goalWidth;
+    if (
+      this.ball.ownerId
+    ) {
+      return;
+    }
 
-    if (x >= PITCH.width && (y < goalTop || y > goalBottom)) {
-      this.handleGoalLineOut("away"); return;
+    const x =
+      this.ball.position.x;
+
+    const y =
+      this.ball.position.y;
+
+    const topGoal =
+      PITCH.height / 2 -
+      PITCH.goalWidth / 2;
+
+    const bottomGoal =
+      PITCH.height / 2 +
+      PITCH.goalWidth / 2;
+
+    if (
+      x < 0 ||
+      x > PITCH.width
+    ) {
+      if (
+        x > PITCH.width &&
+        y >= topGoal &&
+        y <= bottomGoal
+      ) {
+        return;
+      }
+
+      if (
+        x < 0 &&
+        y >= topGoal &&
+        y <= bottomGoal
+      ) {
+        return;
+      }
+
+      if (
+        x > PITCH.width
+      ) {
+        this.awardGoalKick(
+          "away"
+        );
+      } else {
+        this.awardGoalKick(
+          "home"
+        );
+      }
+
+      return;
     }
-    if (x <= 0 && (y < goalTop || y > goalBottom)) {
-      this.handleGoalLineOut("home"); return;
+
+    if (
+      y < 0 ||
+      y > PITCH.height
+    ) {
+      this.handleThrowIn(
+        x,
+        y
+      );
     }
-    if (y <= 0 || y >= PITCH.height) this.handleThrowIn();
   }
 
-  handleGoalLineOut(attackingSide) {
-    const lastTouch = this.ball.lastTouchTeam;
-    const defendingSide = attackingSide === "home" ? "away" : "home";
-    if (lastTouch === attackingSide) this.awardCorner(attackingSide);
-    else this.awardGoalKick(defendingSide);
-  }
+  handleThrowIn(
+    x,
+    y
+  ) {
+    const lastTeam =
+      this.ball.lastTouchTeam ||
+      "home";
 
-  awardCorner(team) {
-    this.getStats(team).corners += 1;
+    const team =
+      lastTeam === "home"
+        ? "away"
+        : "home";
+
+    const players =
+      this.activePlayers(
+        team
+      );
+
+    const target =
+      this.nearestTo(
+        players,
+        {
+          x: clamp(
+            x,
+            40,
+            PITCH.width - 40
+          ),
+
+          y:
+            y < 0
+              ? 20
+              : PITCH.height - 20,
+        }
+      );
+
     this.ball.stop();
 
-    const x = team === "home" ? PITCH.width - 8 : 8;
-    const y = this.ball.position.y < PITCH.height / 2 ? 8 : PITCH.height - 8;
-    this.ball.position.set(x, y);
+    if (target) {
+      target.setPosition(
+        clamp(
+          x,
+          25,
+          PITCH.width - 25
+        ),
 
-    const attackers = this.getTeamPlayers(team)
-      .filter(p => !p.redCard && !p.isInjured() && p.position !== "GK");
-    const defenders = this.getOpponents(team)
-      .filter(p => !p.redCard && !p.isInjured() && p.position !== "GK");
+        y < 0
+          ? 22
+          : PITCH.height - 22
+      );
 
-    const targetX = team === "home" ? PITCH.width - 105 : 105;
-    const targetY = PITCH.height / 2;
-
-    const kicker = attackers.sort((a, b) => b.passing - a.passing)[0];
-    attackers.forEach(p => {
-      if (p.id === kicker?.id) return;
-      p.setTarget(targetX + rand(-55, 55), targetY + rand(-150, 150));
-    });
-    defenders.forEach(p => {
-      p.setTarget(targetX + rand(-35, 35), targetY + rand(-150, 150));
-    });
-
-    if (kicker) {
-      kicker.setTarget(x, y);
-      this.giveBall(kicker);
+      this.ball.attach(
+        target
+      );
     }
 
-    this.addEvent({
-      type: EVENT_TYPES.CORNER, team,
-      detail: `${this.getTeamName(team)} win a corner.`,
-    });
+    this.addEvent(
+      EVENT_TYPES.THROW_IN,
+      "Throw-in",
+      team,
+      target?.id || null
+    );
   }
 
   awardGoalKick(team) {
-    this.ball.stop();
-    const gk = this.getTeamPlayers(team).find(p => p.position === "GK");
-    if (gk) {
-      gk.x = team === "home" ? 45 : PITCH.width - 45;
-      gk.y = PITCH.height / 2;
-      this.giveBall(gk);
-    }
-    this.addEvent({
-      type: EVENT_TYPES.GOAL_KICK, team,
-      detail: `${this.getTeamName(team)} goal kick.`,
-    });
-  }
+    const goalkeeper =
+      this.getTeam(team)
+        .find(
+          (player) =>
+            player.position ===
+              "GK" &&
+            player.active &&
+            !player.redCard &&
+            !player.injury
+        );
 
-  handleThrowIn() {
-    const team = this.ball.lastTouchTeam === "home" ? "away" : "home";
-    this.getStats(team).throwIns += 1;
     this.ball.stop();
 
-    const thrower = this.getTeamPlayers(team)
-      .filter(p => !p.redCard && !p.isInjured())
-      .sort((a, b) => b.overall - a.overall)[0];
-    if (thrower) {
-      this.ball.position.y = clamp(this.ball.position.y, 15, PITCH.height - 15);
-      this.giveBall(thrower);
+    if (goalkeeper) {
+      goalkeeper.setPosition(
+        team === "home"
+          ? 55
+          : PITCH.width - 55,
+
+        PITCH.height / 2
+      );
+
+      this.ball.attach(
+        goalkeeper
+      );
     }
-    this.addEvent({
-      type: EVENT_TYPES.THROW_IN, team,
-      detail: `${this.getTeamName(team)} throw-in.`,
-    });
-  }
 
-  /* ====================== GOALS ====================== */
-  checkGoal() {
-    if (![BALL_STATE.SHOOTING, BALL_STATE.CROSSING, BALL_STATE.PASSING]
-      .includes(this.ball.state)) return;
-
-    const x = this.ball.position.x;
-    const y = this.ball.position.y;
-    const goalTop = (PITCH.height - PITCH.goalWidth) / 2;
-    const goalBottom = goalTop + PITCH.goalWidth;
-    if (y < goalTop || y > goalBottom) return;
-
-    let scoringSide = null;
-    if (x > PITCH.width + 5) scoringSide = "home";
-    if (x < -5) scoringSide = "away";
-    if (!scoringSide) return;
-
-    const shooter = this.findLastShooter();
-    const gk = this.getTeamPlayers(scoringSide === "home" ? "away" : "home")
-      .find(p => p.position === "GK");
-
-    if (gk && this.shouldGoalkeeperSave(gk, shooter)) {
-      this.handleSave(gk, scoringSide);
-      return;
-    }
-    this.scoreGoal(scoringSide, shooter);
-  }
-
-  shouldGoalkeeperSave(gk, shooter) {
-    const skill = (gk.diving + gk.reaction + gk.handling + gk.positioning) / 400;
-    const shooterSkill = shooter ? shooter.shooting / 100 : 0.65;
-    const distance = shooter ? this.distanceToOpponentGoal(shooter) : 260;
-
-    const difficulty = clamp(
-      0.20 + shooterSkill * 0.32 +
-      clamp(1 - distance / 500, 0, 1) * 0.22,
-      0.15, 0.85
+    this.addEvent(
+      EVENT_TYPES.GOAL_KICK,
+      "Goal kick",
+      team,
+      goalkeeper?.id || null
     );
-    const saveP = clamp(
-      skill * 0.72 - difficulty * 0.42 + gk.reaction / 100 * 0.20,
-      0.04, 0.72
-    );
-    return chance(saveP);
   }
 
-  handleSave(gk, attackingSide) {
-    gk.stats.saves += 1;
-    this.getStats(gk.teamSide).saves += 1;
+  awardCorner(team) {
+    const players =
+      this.activePlayers(
+        team
+      ).filter(
+        (player) =>
+          player.position !==
+          "GK"
+      );
 
-    const catchP = clamp(0.35 + (gk.handling / 100) * 0.40, 0.20, 0.82);
-    if (chance(catchP)) {
-      this.giveBall(gk);
-      this.ball.state = BALL_STATE.SAVED;
-    } else {
-      const dir = gk.teamSide === "home" ? 1 : -1;
-      this.ball.kick(gk, {
-        x: gk.x + dir * rand(80, 230),
-        y: clamp(gk.y + rand(-130, 130), 30, PITCH.height - 30),
-      }, 220, BALL_STATE.DEFLECTED);
-    }
-    this.addEvent({
-      type: EVENT_TYPES.SAVE, team: gk.teamSide,
-      playerId: gk.id, playerName: gk.name,
-      detail: `${gk.name} saves!`,
-    });
-  }
+    const target =
+      this.nearestTo(
+        players,
+        {
+          x:
+            team === "home"
+              ? PITCH.width - 18
+              : 18,
 
-  scoreGoal(team, shooter) {
-    if (team === "home") this.homeScore += 1;
-    else this.awayScore += 1;
+          y:
+            this.ball.position.y <
+            PITCH.height / 2
+              ? 18
+              : PITCH.height - 18,
+        }
+      );
 
-    if (shooter) shooter.stats.goals += 1;
-    this.getStats(team).shotsOnTarget += 1;
-
-    this.addEvent({
-      type: EVENT_TYPES.GOAL, team,
-      playerId: shooter?.id || null,
-      playerName: shooter?.name || "Unknown",
-      detail: `GOAL! ${shooter?.name || "Unknown"} for ${this.getTeamName(team)}!`,
-    });
-
-    this.players.forEach(p => p.resetToFormation());
     this.ball.stop();
-    this.ball.position.set(PITCH.width / 2, PITCH.height / 2);
-    this.placeBallForKickoff(team === "home" ? "away" : "home");
-  }
 
-  findLastShooter() { return this.findPlayer(this.ball.lastTouchPlayer); }
+    if (target) {
+      target.setPosition(
+        team === "home"
+          ? PITCH.width - 18
+          : 18,
 
-  updatePossessionStats() {
-    const owner = this.findPlayer(this.ball.ownerId);
-    if (!owner) return;
-    this.getStats(owner.teamSide).possessionSeconds += 1 / MATCH.FPS;
-  }
+        this.ball.position.y <
+          PITCH.height / 2
+          ? 18
+          : PITCH.height - 18
+      );
 
-  /* ====================== SUBSTITUTIONS ====================== */
-  performSubstitution(team, playerOutId, playerInId) {
-    if (this.substitutions[team] >= MATCH.MAX_SUBSTITUTIONS) return false;
+      this.ball.attach(
+        target
+      );
+    }
 
-    const lineup = team === "home" ? this.homeXI : this.awayXI;
-    const bench = team === "home" ? this.homeBench : this.awayBench;
+    const stats =
+      team === "home"
+        ? this.homeStats
+        : this.awayStats;
 
-    const outIndex = lineup.findIndex(p => p.id === String(playerOutId));
-    const inIndex = bench.findIndex(p =>
-      String(p.id ?? p.playerId) === String(playerInId));
-    if (outIndex < 0 || inIndex < 0) return false;
+    stats.corners += 1;
 
-    const oldPlayer = lineup[outIndex];
-    const rawNew = bench[inIndex];
-    const position = getFormationPosition(
-      team === "home" ? this.homeFormation : this.awayFormation,
-      outIndex, team
+    this.addEvent(
+      EVENT_TYPES.CORNER,
+      "Corner",
+      team,
+      target?.id || null
     );
-
-    const newPlayer = new Player({
-      ...rawNew, teamSide: team,
-      teamId: team === "home" ? this.homeClub?.id : this.awayClub?.id,
-    }, position);
-
-    lineup[outIndex] = newPlayer;
-    bench.splice(inIndex, 1);
-    bench.push({ ...oldPlayer });
-
-    this.players = [...this.homeXI, ...this.awayXI];
-    this.substitutions[team] += 1;
-
-    this.addEvent({
-      type: EVENT_TYPES.SUBSTITUTION, team,
-      minute: this.getMinute(),
-      detail: `${oldPlayer.name} ➜ ${newPlayer.name}`,
-    });
-    return true;
   }
 
   runAutomaticSubstitutions() {
-    ["home", "away"].forEach(team => {
-      this.autoSubInjured(team);
-      if (this.isUserControlled(team)) return;
-      if (this.substitutions[team] >= MATCH.MAX_SUBSTITUTIONS) return;
-      if (this.getMinute() < 50) return;
+    for (
+      const team of [
+        "home",
+        "away",
+      ]
+    ) {
+      if (
+        team ===
+        this.userControlled
+      ) {
+        continue;
+      }
 
-      const lineup = team === "home" ? this.homeXI : this.awayXI;
-      const bench = team === "home" ? this.homeBench : this.awayBench;
-      if (!bench.length) return;
+      if (
+        this.substitutions[team] >=
+        MATCH.MAX_SUBSTITUTIONS
+      ) {
+        continue;
+      }
 
-      const tired = lineup
-        .filter(p => p.position !== "GK" && !p.redCard && !p.isInjured())
-        .sort((a, b) => a.stamina - b.stamina)[0];
-      if (!tired || tired.stamina > 45) return;
+      if (
+        this.simulationTime < 55 ||
+        this.simulationTime > 88
+      ) {
+        continue;
+      }
 
-      const replacement = bench.slice()
-        .sort((a, b) => Number(b.overall ?? 60) - Number(a.overall ?? 60))[0];
+      const players =
+        this.getTeam(team);
+
+      const bench =
+        this.getBench(team)
+          .filter(
+            (player) =>
+              player.active &&
+              !player.injury &&
+              !player.redCard
+          );
+
+      const tired =
+        players
+          .filter(
+            (player) =>
+              player.active &&
+              !player.injury &&
+              !player.redCard
+          )
+          .sort(
+            (a, b) =>
+              a.stamina -
+              b.stamina
+          )[0];
+
+      if (
+        !tired ||
+        tired.stamina > 24 ||
+        !bench.length
+      ) {
+        continue;
+      }
+
+      const replacement =
+        bench
+          .filter(
+            (player) =>
+              normalizePosition(
+                player.position
+              ) ===
+              normalizePosition(
+                tired.position
+              )
+          )
+          .sort(
+            (a, b) =>
+              b.overall -
+              a.overall
+          )[0] ||
+        bench[0];
+
       if (replacement) {
-        this.performSubstitution(team, tired.id, replacement.id ?? replacement.playerId);
-      }
-    });
-  }
-
-  autoSubInjured(team) {
-    if (this.substitutions[team] >= MATCH.MAX_SUBSTITUTIONS) return;
-    const lineup = team === "home" ? this.homeXI : this.awayXI;
-    const bench = team === "home" ? this.homeBench : this.awayBench;
-
-    const injured = lineup.find(p => p.isInjured() && !p.redCard);
-    if (!injured || !bench.length) return;
-
-    const replacement = bench.slice()
-      .sort((a, b) => Number(b.overall ?? 60) - Number(a.overall ?? 60))[0];
-    if (replacement) {
-      this.performSubstitution(team, injured.id, replacement.id ?? replacement.playerId);
-    }
-  }
-
-  /* ====================== HELPERS ====================== */
-  getTacticalTarget(player) {
-    const t = this.getTactics(player.teamSide);
-    const dir = player.teamSide === "home" ? 1 : -1;
-    let x = player.homeX, y = player.homeY;
-    const ball = this.ball.position;
-    const influence = t.mentality === "attacking" ? 0.19
-      : t.mentality === "defensive" ? 0.08 : 0.13;
-
-    x += (ball.x - PITCH.width / 2) * influence * dir;
-    y += (ball.y - PITCH.height / 2) * 0.10;
-
-    if (t.width === "wide") y += player.homeY < PITCH.height / 2 ? -18 : 18;
-    if (t.width === "narrow") y += player.homeY < PITCH.height / 2 ? 15 : -15;
-
-    const lineMod = t.defensiveLine === "high" ? 45
-      : t.defensiveLine === "deep" ? -35 : 0;
-    if (player.position !== "GK") x += dir * lineMod;
-
-    return {
-      x: clamp(x, 25, PITCH.width - 25),
-      y: clamp(y, 25, PITCH.height - 25),
-    };
-  }
-
-  getAttackingTarget(player, owner) {
-    const dir = player.teamSide === "home" ? 1 : -1;
-    let x = player.homeX, y = player.homeY;
-    const t = this.getTactics(player.teamSide);
-    const push = t.mentality === "attacking" ? 1.25
-      : t.mentality === "defensive" ? 0.7 : 1.0;
-
-    if (player.position === "ST") x += dir * 70 * push;
-    if (["LW", "RW", "LM", "RM", "LWB", "RWB"].includes(player.position)) x += dir * 40 * push;
-    if (["MID", "CM", "AM"].includes(player.position)) x += dir * 25 * push;
-
-    const ownerDist = dist(player, owner);
-    if (ownerDist < 120) y += player.y < PITCH.height / 2 ? -45 : 45;
-
-    const fwd = this.forwardProgress(owner, player);
-    if (fwd < 0) x -= dir * 20;
-
-    return {
-      x: clamp(x, 30, PITCH.width - 30),
-      y: clamp(y, 25, PITCH.height - 25),
-    };
-  }
-
-  moveBallCarrier(player) {
-    const dir = player.teamSide === "home" ? 1 : -1;
-    const goalX = player.teamSide === "home" ? PITCH.width : 0;
-    const pressure = this.calculatePressure(player);
-    const t = this.getTactics(player.teamSide);
-    const tempoPush = t.tempo === "fast" ? 85
-      : t.tempo === "slow" ? 55 : 70;
-
-    let x = player.x, y = player.y;
-    if (pressure < 0.35) x += dir * tempoPush;
-    else y += player.y < PITCH.height / 2 ? 35 : -35;
-
-    x = clamp(x, 20, PITCH.width - 20);
-    y = clamp(y, 20, PITCH.height - 20);
-    if (this.distanceToOpponentGoal(player) < 150) x = goalX;
-    player.setTarget(x, y);
-  }
-
-  tryHoldBall(player) {
-    player.setTarget(player.x, player.y);
-    player.velocity.multiply(0.4);
-  }
-
-  preventPlayerOverlap() {
-    for (let i = 0; i < this.players.length; i++) {
-      const a = this.players[i];
-      if (a.redCard) continue;
-      for (let j = i + 1; j < this.players.length; j++) {
-        const b = this.players[j];
-        if (b.redCard) continue;
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        const min = a.radius + b.radius + 4;
-        if (d <= 0 || d >= min) continue;
-        const nx = dx / d, ny = dy / d;
-        const push = (min - d) / 2;
-        a.x -= nx * push; a.y -= ny * push;
-        b.x += nx * push; b.y += ny * push;
+        this.performSubstitution(
+          team,
+          tired.id,
+          replacement.id,
+          true
+        );
       }
     }
   }
 
-  pointNearLine(start, end, point, tolerance) {
-    const lx = end.x - start.x, ly = end.y - start.y;
-    const len = Math.sqrt(lx * lx + ly * ly);
-    if (len === 0) return false;
-    const t = clamp(((point.x - start.x) * lx + (point.y - start.y) * ly) / (len * len), 0, 1);
-    const cx = start.x + lx * t, cy = start.y + ly * t;
-    const d = Math.sqrt((point.x - cx) ** 2 + (point.y - cy) ** 2);
-    return d <= tolerance;
+  performSubstitution(
+    team,
+    outId,
+    inId,
+    automatic = false
+  ) {
+    if (
+      team !== "home" &&
+      team !== "away"
+    ) {
+      return false;
+    }
+
+    if (
+      this.substitutions[team] >=
+      MATCH.MAX_SUBSTITUTIONS
+    ) {
+      return false;
+    }
+
+    const xi =
+      this.getTeam(team);
+
+    const bench =
+      this.getBench(team);
+
+    const outgoing =
+      xi.find(
+        (player) =>
+          player.id ===
+          String(outId)
+      );
+
+    const incoming =
+      bench.find(
+        (player) =>
+          player.id ===
+          String(inId)
+      );
+
+    if (
+      !outgoing ||
+      !incoming
+    ) {
+      return false;
+    }
+
+    if (
+      !outgoing.active ||
+      incoming.injury ||
+      incoming.redCard
+    ) {
+      return false;
+    }
+
+    const index =
+      xi.indexOf(
+        outgoing
+      );
+
+    incoming.active = true;
+
+    incoming.injury = null;
+
+    incoming.redCard = false;
+
+    incoming.index =
+      outgoing.index;
+
+    incoming.setPosition(
+      outgoing.x,
+      outgoing.y
+    );
+
+    if (
+      outgoing.hasBall
+    ) {
+      this.ball.attach(
+        incoming
+      );
+    }
+
+    outgoing.hasBall = false;
+
+    outgoing.active = false;
+
+    xi[index] = incoming;
+
+    bench.splice(
+      bench.indexOf(
+        incoming
+      ),
+      1
+    );
+
+    bench.push(
+      outgoing
+    );
+
+    this.substitutions[team] += 1;
+
+    this.players = [
+      ...this.homeXI,
+      ...this.awayXI,
+      ...this.homeBench,
+      ...this.awayBench,
+    ];
+
+    this.addEvent(
+      EVENT_TYPES.SUBSTITUTION,
+
+      `${incoming.name} replaces ${outgoing.name}`,
+
+      team,
+
+      incoming.id,
+
+      outgoing.id,
+
+      {
+        automatic,
+      }
+    );
+
+    return true;
   }
 
-  isOffsideAtPass(target) {
-    const team = target.teamSide;
-    const opponents = this.getOpponents(team).filter(p => p.position !== "GK" && !p.redCard);
-    if (opponents.length < 2) return false;
+  nearestTo(
+    players,
+    point
+  ) {
+    if (
+      !players?.length
+    ) {
+      return null;
+    }
 
-    const dir = team === "home" ? 1 : -1;
-    const sorted = opponents.map(p => p.x).sort((a, b) => dir === 1 ? b - a : a - b);
-    const secondLast = sorted[1];
-    const targetBeyond = dir === 1 ? target.x > secondLast : target.x < secondLast;
-    const oppHalf = dir === 1 ? target.x > PITCH.width / 2 : target.x < PITCH.width / 2;
-    return targetBeyond && oppHalf;
+    let closest =
+      players[0];
+
+    let closestDistance =
+      distance(
+        closest,
+        point
+      );
+
+    for (
+      let i = 1;
+      i < players.length;
+      i += 1
+    ) {
+      const current =
+        distance(
+          players[i],
+          point
+        );
+
+      if (
+        current <
+        closestDistance
+      ) {
+        closest =
+          players[i];
+
+        closestDistance =
+          current;
+      }
+    }
+
+    return closest;
   }
 
-  distanceToOpponentGoal(player) {
-    const goalX = player.teamSide === "home" ? PITCH.width : 0;
-    return Math.abs(player.x - goalX);
+  nearestOpponentDistance(
+    player
+  ) {
+    const opponent =
+      this.nearestTo(
+        this.getOpponents(
+          player.team
+        ),
+        player
+      );
+
+    return opponent
+      ? distance(
+          opponent,
+          player
+        )
+      : 999;
   }
 
-  distanceToOwnGoal(point, side) {
-    const goalX = side === "home" ? 0 : PITCH.width;
-    return Math.abs(point.x - goalX);
-  }
+  getSupportTarget(
+    player,
+    carrier
+  ) {
+    const direction =
+      player.team === "home"
+        ? 1
+        : -1;
 
-  forwardProgress(from, to) {
-    const dir = from.teamSide === "home" ? 1 : -1;
-    return (to.x - from.x) * dir;
-  }
+    return {
+      x: clamp(
+        carrier.x -
+          direction *
+            random(25, 75),
 
-  getNearestPlayerToBall(team) {
-    return this.getTeamPlayers(team)
-      .filter(p => !p.redCard && !p.isInjured())
-      .sort((a, b) => dist(a, this.ball.position) - dist(b, this.ball.position))[0];
-  }
+        30,
+        PITCH.width - 30
+      ),
 
-  getNearestDefender(team) {
-    return this.getOpponents(team)
-      .filter(p => p.position !== "GK" && !p.redCard && !p.isInjured())
-      .sort((a, b) => dist(a, this.ball.position) - dist(b, this.ball.position))[0];
-  }
+      y: clamp(
+        player.y +
+          random(-45, 45),
 
-  getTeamPlayers(team) { return this.players.filter(p => p.teamSide === team); }
-  getOpponents(team) { return this.players.filter(p => p.teamSide !== team && !p.redCard); }
-  findPlayer(id) {
-    if (!id) return null;
-    return this.players.find(p => String(p.id) === String(id)) || null;
-  }
-  getStats(team) { return team === "home" ? this.homeStats : this.awayStats; }
-  getTactics(team) { return team === "home" ? this.homeTactics : this.awayTactics; }
-  getTeamName(team) {
-    return team === "home"
-      ? (this.homeClub?.name || "Home")
-      : (this.awayClub?.name || "Away");
-  }
-  getMinute() { return clamp(Math.floor(this.simulationTime), 0, 90); }
-
-  addEvent(event) {
-    const complete = {
-      id: `ev-${Date.now()}-${this.eventCounter++}`,
-      minute: this.getMinute(),
-      timestamp: Date.now(),
-      ...event,
+        30,
+        PITCH.height - 30
+      ),
     };
-    this.events.unshift(complete);
-    this.lastEvent = complete;
-    if (this.events.length > 200) this.events = this.events.slice(0, 200);
   }
 
-  /* ====================== SNAPSHOT ====================== */
+  hasEvent(type) {
+    return this.events.some(
+      (event) =>
+        event.type === type
+    );
+  }
+
+  addEvent(
+    type,
+    text,
+    team = null,
+    playerId = null,
+    relatedPlayerId = null,
+    extra = {}
+  ) {
+    const event = {
+      id:
+        `${Date.now()}-${this.eventCounter++}`,
+
+      type,
+
+      minute:
+        Math.round(
+          this.simulationTime * 10
+        ) / 10,
+
+      text,
+
+      team,
+
+      playerId,
+
+      relatedPlayerId,
+
+      ...extra,
+    };
+
+    this.events.push(
+      event
+    );
+
+    if (
+      this.events.length >
+      MATCH.MAX_EVENTS
+    ) {
+      this.events.splice(
+        0,
+        this.events.length -
+          MATCH.MAX_EVENTS
+      );
+    }
+
+    this.lastEvent = event;
+
+    return event;
+  }
+
+  finishMatch() {
+    this.simulationTime = 90;
+
+    this.status =
+      MATCH_STATUS.FINISHED;
+
+    this.running = false;
+
+    this.paused = false;
+
+    this.finished = true;
+
+    this.ball.stop();
+
+    if (
+      !this.hasEvent(
+        EVENT_TYPES.FULL_TIME
+      )
+    ) {
+      this.addEvent(
+        EVENT_TYPES.FULL_TIME,
+
+        `Full-time: ${this.homeScore}-${this.awayScore}`
+      );
+    }
+  }
+
+  getPossession() {
+    const total =
+      this.homeStats
+        .possessionSeconds +
+      this.awayStats
+        .possessionSeconds;
+
+    if (total <= 0) {
+      return {
+        home: 50,
+        away: 50,
+      };
+    }
+
+    const home =
+      (
+        this.homeStats
+          .possessionSeconds /
+        total
+      ) * 100;
+
+    return {
+      home:
+        Math.round(
+          home * 10
+        ) / 10,
+
+      away:
+        Math.round(
+          (100 - home) * 10
+        ) / 10,
+    };
+  }
+
   getSnapshot() {
-    const total = this.homeStats.possessionSeconds + this.awayStats.possessionSeconds;
-    const homePoss = total > 0
-      ? (this.homeStats.possessionSeconds / total) * 100 : 50;
-
-    const players = this.players.map(p => ({
-      id: p.id, name: p.name, number: p.number,
-      teamSide: p.teamSide, position: p.position, rawPosition: p.rawPosition,
-      x: p.x, y: p.y, stamina: p.stamina, fitness: p.fitness, form: p.form,
-      overall: p.overall, hasBall: p.hasBall, redCard: p.redCard,
-      yellowCards: p.yellowCards, state: p.state, injury: p.injury,
-      stats: p.stats,
-    }));
-
     return {
-      status: this.status,
-      minute: this.getMinute(),
-      simulationTime: this.simulationTime,
-      homeScore: this.homeScore,
-      awayScore: this.awayScore,
-      ball: {
-        x: this.ball.position.x, y: this.ball.position.y,
-        state: this.ball.state, ownerId: this.ball.ownerId,
+      minute:
+        Math.round(
+          this.simulationTime * 10
+        ) / 10,
+
+      status:
+        this.status,
+
+      running:
+        this.running,
+
+      paused:
+        this.paused,
+
+      finished:
+        this.finished,
+
+      homeScore:
+        this.homeScore,
+
+      awayScore:
+        this.awayScore,
+
+      homeClub:
+        this.homeClub,
+
+      awayClub:
+        this.awayClub,
+
+      homeFormation:
+        this.homeFormation,
+
+      awayFormation:
+        this.awayFormation,
+
+      homeTactics: {
+        ...this.homeTactics,
       },
-      players,
-      homeStats: { ...this.homeStats, possession: Number(homePoss.toFixed(1)) },
-      awayStats: { ...this.awayStats, possession: Number((100 - homePoss).toFixed(1)) },
-      events: [...this.events],
-      substitutions: { ...this.substitutions },
-      injuries: { ...this.injuries },
-      homeFormation: this.homeFormation,
-      awayFormation: this.awayFormation,
-      homeTactics: { ...this.homeTactics },
-      awayTactics: { ...this.awayTactics },
-      homeBench: this.homeBench.map(b => ({
-        id: String(b.id ?? b.playerId),
-        name: b.name || b.fullName || "Unknown",
-        position: b.position || b.primaryPosition || "MID",
-        overall: b.overall ?? b.rating ?? 60,
-        number: b.shirtNumber ?? b.number ?? "-",
-      })),
-      awayBench: this.awayBench.map(b => ({
-        id: String(b.id ?? b.playerId),
-        name: b.name || b.fullName || "Unknown",
-        position: b.position || b.primaryPosition || "MID",
-        overall: b.overall ?? b.rating ?? 60,
-        number: b.shirtNumber ?? b.number ?? "-",
-      })),
-      homeLineup: this.homeXI.map(p => ({
-        id: p.id, name: p.name, number: p.number, position: p.position,
-        overall: p.overall, stamina: Math.round(p.stamina),
-        fitness: Math.round(p.fitness), injury: p.injury,
-        goals: p.stats.goals, yellowCards: p.yellowCards, redCard: p.redCard,
-        hasBall: p.hasBall,
-      })),
-      awayLineup: this.awayXI.map(p => ({
-        id: p.id, name: p.name, number: p.number, position: p.position,
-        overall: p.overall, stamina: Math.round(p.stamina),
-        fitness: Math.round(p.fitness), injury: p.injury,
-        goals: p.stats.goals, yellowCards: p.yellowCards, redCard: p.redCard,
-        hasBall: p.hasBall,
-      })),
+
+      awayTactics: {
+        ...this.awayTactics,
+      },
+
+      homeStats: {
+        ...this.homeStats,
+      },
+
+      awayStats: {
+        ...this.awayStats,
+      },
+
+      possession:
+        this.getPossession(),
+
+      substitutions: {
+        ...this.substitutions,
+      },
+
+      homeXI:
+        this.homeXI.map(
+          (player) =>
+            player.toSnapshot()
+        ),
+
+      awayXI:
+        this.awayXI.map(
+          (player) =>
+            player.toSnapshot()
+        ),
+
+      homeBench:
+        this.homeBench.map(
+          (player) =>
+            player.toSnapshot()
+        ),
+
+      awayBench:
+        this.awayBench.map(
+          (player) =>
+            player.toSnapshot()
+        ),
+
+      ball:
+        this.ball.toSnapshot(),
+
+      lastEvent:
+        this.lastEvent,
+
+      events: [
+        ...this.events,
+      ],
+    };
+  }
+
+  getSavePayload() {
+    return {
+      status:
+        this.status,
+
+      minute:
+        this.simulationTime,
+
+      homeScore:
+        this.homeScore,
+
+      awayScore:
+        this.awayScore,
+
+      homeStats: {
+        ...this.homeStats,
+      },
+
+      awayStats: {
+        ...this.awayStats,
+      },
+
+      homeFormation:
+        this.homeFormation,
+
+      awayFormation:
+        this.awayFormation,
+
+      homeTactics: {
+        ...this.homeTactics,
+      },
+
+      awayTactics: {
+        ...this.awayTactics,
+      },
+
+      homeLineupIds:
+        this.homeXI.map(
+          (player) =>
+            player.id
+        ),
+
+      awayLineupIds:
+        this.awayXI.map(
+          (player) =>
+            player.id
+        ),
+
+      homeSubsUsed:
+        this.substitutions.home,
+
+      awaySubsUsed:
+        this.substitutions.away,
+
+      ballOwnerId:
+        this.ball.ownerId,
+
+      events: [
+        ...this.events,
+      ],
     };
   }
 }
 
-/* ====================== STATIC HELPERS ====================== */
-function chooseBestXI(players, formation) {
-  const req = getFormationRequirements(formation);
-  const remaining = [...players];
-  const result = [];
-
-  const take = (cat, count) => {
-    const candidates = remaining
-      .filter(p => normalizePosition(p.position) === cat)
-      .sort((a, b) => getOverall(b) - getOverall(a))
-      .slice(0, count);
-    candidates.forEach(p => {
-      const idx = remaining.indexOf(p);
-      if (idx >= 0) remaining.splice(idx, 1);
-      result.push(p);
-    });
-  };
-  take("GK", req.GK);
-  take("DEF", req.DEF);
-  take("MID", req.MID);
-  take("ATT", req.ATT);
-
-  remaining.sort((a, b) => getOverall(b) - getOverall(a));
-  while (result.length < 11 && remaining.length) result.push(remaining.shift());
-  return result.slice(0, 11);
-}
-
-function getFormationRequirements(formation) {
-  const v = {
-    "4-4-2": { GK: 1, DEF: 4, MID: 4, ATT: 2 },
-    "4-3-3": { GK: 1, DEF: 4, MID: 3, ATT: 3 },
-    "3-5-2": { GK: 1, DEF: 3, MID: 5, ATT: 2 },
-    "5-3-2": { GK: 1, DEF: 5, MID: 3, ATT: 2 },
-    "4-2-3-1": { GK: 1, DEF: 4, MID: 5, ATT: 1 },
-  };
-  return v[formation] || v["4-4-2"];
-}
-
-function normalizePosition(value) {
-  const p = String(value || "").toLowerCase();
-  if (p === "gk" || p.includes("goalkeeper") || p.includes("keeper")) return "GK";
-  if (p.includes("def") || p.includes("back") ||
-    ["cb", "lb", "rb", "lwb", "rwb"].includes(p)) return "DEF";
-  if (p.includes("attack") || p.includes("forward") || p.includes("striker") ||
-    ["st", "cf", "lw", "rw"].includes(p)) return "ATT";
-  return "MID";
-}
-
-function getOverall(p) {
-  return clamp(Number(p?.overall ?? p?.rating ?? p?.ovr ?? 60) || 60, 35, 99);
-}
-
-function normalizeStatus(status) {
-  const v = String(status || "").toLowerCase();
-  if (["finished", "completed", "full-time", "full_time", "ended"].includes(v))
-    return MATCH_STATUS.FINISHED;
-  if (["live", "playing", "started", "in-progress", "in_progress"].includes(v))
-    return MATCH_STATUS.LIVE;
-  if (["half-time", "halftime", "half_time"].includes(v))
-    return MATCH_STATUS.HALF_TIME;
-  return MATCH_STATUS.READY;
-}
-
-function normalizeTactics(t) { return { ...DEFAULT_TACTICS, ...(t || {}) }; }
-
-function createStats(source) {
-  return {
-    possessionSeconds: 0, possession: 50,
-    shots: 0, shotsOnTarget: 0,
-    passes: 0, passesCompleted: 0,
-    tackles: 0, interceptions: 0, fouls: 0,
-    corners: 0, throwIns: 0, saves: 0,
-    yellow: 0, red: 0,
-    attacks: 0, dangerousAttacks: 0,
-    dribbles: 0, offsides: 0,
-    ...(source || {}),
-  };
-}
+export {
+  normalizeStatus,
+  normalizeTactics,
+  normalizePosition,
+  getOverall,
+  createStats,
+};
