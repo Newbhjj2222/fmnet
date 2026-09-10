@@ -1,179 +1,483 @@
 import Vector2 from "./Vector2";
-import { PLAYER_STATE, PITCH, INJURY } from "./constants";
+import {
+  PITCH,
+  PLAYER_STATE,
+} from "./constants";
 
-const num = (v, f) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : f;
+const numberValue = (value, fallback) => {
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : fallback;
 };
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
-function overallOf(data) {
-  return clamp(
-    num(data?.overall ?? data?.rating ?? data?.ovr ?? data?.overallRating, 60),
-    35, 99
-  );
-}
+const clamp = (value, min, max) => {
+  return Math.max(min, Math.min(max, value));
+};
 
 export default class Player {
-  constructor(data, positionData) {
-    this.id = String(data?.id ?? data?.playerId ??
-      `p-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    this.name = data?.name || data?.fullName ||
-      `${data?.firstName || ""} ${data?.lastName || ""}`.trim() || "Unknown Player";
-    this.teamId = data.teamId;
-    this.teamSide = data.teamSide;
-    this.number = num(data?.shirtNumber ?? data?.number, 1);
-    this.rawPosition = data?.position || data?.primaryPosition || data?.role ||
-      positionData?.role || "MID";
-    this.position = positionData?.role || normalizePosition(this.rawPosition);
-    this.overall = overallOf(data);
+  constructor(raw = {}, team = "home", index = 0) {
+    this.id = String(
+      raw.id ??
+      raw.playerId ??
+      raw.uid ??
+      `${team}-${index}`
+    );
 
-    this.speed = num(data?.speed, deriveStat(this.overall, 70));
-    this.acceleration = num(data?.acceleration, deriveStat(this.overall, 68));
-    this.stamina = clamp(num(data?.stamina, deriveStat(this.overall, 82)), 1, 100);
+    this.name = String(
+      raw.name ??
+      raw.fullName ??
+      raw.playerName ??
+      `Player ${index + 1}`
+    );
 
-    this.passing = deriveStat2(data, ["passing", "pass", "passingRating"], this.overall);
-    this.vision = deriveStat2(data, ["vision", "creativity"], this.overall);
-    this.dribbling = deriveStat2(data, ["dribbling", "dribble"], this.overall);
-    this.shooting = deriveStat2(data, ["shooting", "finishing", "shot"], this.overall);
-    this.tackling = deriveStat2(data, ["tackling", "defending"], this.overall);
-    this.positioning = deriveStat2(data, ["positioning", "defensivePositioning"], this.overall);
-    this.composure = deriveStat2(data, ["composure", "mental"], this.overall);
-    this.reaction = deriveStat2(data, ["reaction", "reflexes"], this.overall);
-    this.handling = deriveStat2(data, ["handling", "goalkeeping"], this.overall);
-    this.diving = deriveStat2(data, ["diving", "goalkeeperDiving"], this.overall);
+    this.number = Math.max(
+      1,
+      Math.round(
+        numberValue(
+          raw.shirtNumber ??
+          raw.number ??
+          raw.jerseyNumber,
+          index + 1
+        )
+      )
+    );
 
-    this.height = num(data?.height, 175);
-    this.age = num(data?.age, 25);
+    this.team = team;
 
-    this.x = positionData.x;
-    this.y = positionData.y;
-    this.homeX = positionData.x;
-    this.homeY = positionData.y;
+    this.index = index;
 
-    this.target = new Vector2(this.x, this.y);
+    this.rawPosition = String(
+      raw.position ??
+      raw.pos ??
+      raw.role ??
+      (index === 0 ? "GK" : "MID")
+    ).toUpperCase();
+
+    this.position = this.normalizePosition(
+      this.rawPosition
+    );
+
+    this.overall = clamp(
+      numberValue(
+        raw.overall ??
+        raw.rating ??
+        raw.ovr ??
+        raw.score,
+        65
+      ),
+      35,
+      99
+    );
+
+    this.passing = clamp(
+      numberValue(
+        raw.passing ??
+        raw.pass ??
+        raw.passingRating,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.vision = clamp(
+      numberValue(
+        raw.vision ??
+        raw.creativity,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.shooting = clamp(
+      numberValue(
+        raw.shooting ??
+        raw.shoot ??
+        raw.finishing,
+        this.overall
+      ),
+      25,
+      99
+    );
+
+    this.composure = clamp(
+      numberValue(
+        raw.composure ??
+        raw.mental,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.dribbling = clamp(
+      numberValue(
+        raw.dribbling ??
+        raw.dribble,
+        this.overall
+      ),
+      25,
+      99
+    );
+
+    this.tackling = clamp(
+      numberValue(
+        raw.tackling ??
+        raw.defending ??
+        raw.defence,
+        this.overall
+      ),
+      25,
+      99
+    );
+
+    this.defending = clamp(
+      numberValue(
+        raw.defending ??
+        raw.defence ??
+        raw.tackling,
+        this.overall
+      ),
+      25,
+      99
+    );
+
+    this.strength = clamp(
+      numberValue(
+        raw.strength ??
+        raw.physical,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.pace = clamp(
+      numberValue(
+        raw.pace ??
+        raw.speed,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.reaction = clamp(
+      numberValue(
+        raw.reaction ??
+        raw.reflexes,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.diving = clamp(
+      numberValue(
+        raw.diving ??
+        raw.gkDiving,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.handling = clamp(
+      numberValue(
+        raw.handling ??
+        raw.gkHandling,
+        this.overall
+      ),
+      30,
+      99
+    );
+
+    this.stamina = clamp(
+      numberValue(
+        raw.stamina ??
+        raw.condition,
+        90
+      ),
+      25,
+      100
+    );
+
+    this.fitness = clamp(
+      numberValue(raw.fitness, 100),
+      30,
+      100
+    );
+
+    this.radius = 17;
+
+    this.speed =
+      76 +
+      this.pace * 0.38;
+
+    this.x = PITCH.width / 2;
+    this.y = PITCH.height / 2;
+
     this.velocity = new Vector2();
 
-    this.hasBall = false;
+    this.target = new Vector2(
+      this.x,
+      this.y
+    );
+
     this.state = PLAYER_STATE.IDLE;
 
-    this.yellowCards = 0;
+    this.hasBall = false;
+
     this.redCard = false;
 
-    this.minutesPlayed = 0;
-    this.lastActionAt = 0;
+    this.yellowCards = 0;
 
     this.injury = null;
-    this.fitness = 100;
-    this.form = 100;
+
+    this.active = true;
 
     this.stats = {
-      passes: 0, passesCompleted: 0, assists: 0,
-      shots: 0, shotsOnTarget: 0, goals: 0,
-      tackles: 0, interceptions: 0, fouls: 0,
-      dribbles: 0, saves: 0,
-    };
+      passes: 0,
+      completedPasses: 0,
 
-    this.radius = this.position === "GK"
-      ? PITCH.goalkeeperRadius
-      : PITCH.playerRadius;
+      shots: 0,
+      shotsOnTarget: 0,
+
+      goals: 0,
+      assists: 0,
+
+      tackles: 0,
+      interceptions: 0,
+
+      fouls: 0,
+
+      yellow: 0,
+      red: 0,
+    };
+  }
+
+  normalizePosition(position) {
+    const value = String(position || "")
+      .toUpperCase();
+
+    if (
+      value.includes("GK") ||
+      value.includes("KEEP")
+    ) {
+      return "GK";
+    }
+
+    if (
+      value.includes("CB") ||
+      value.includes("LB") ||
+      value.includes("RB") ||
+      value.includes("DEF")
+    ) {
+      return "DEF";
+    }
+
+    if (
+      value.includes("ST") ||
+      value.includes("CF") ||
+      value.includes("FW") ||
+      value.includes("ATT") ||
+      value.includes("FWD")
+    ) {
+      return "FWD";
+    }
+
+    return "MID";
   }
 
   setTarget(x, y) {
+    this.target.set(x, y);
+
+    if (!this.hasBall) {
+      this.state = PLAYER_STATE.MOVING;
+    }
+  }
+
+  setPosition(x, y) {
+    this.x = clamp(
+      x,
+      this.radius,
+      PITCH.width - this.radius
+    );
+
+    this.y = clamp(
+      y,
+      this.radius,
+      PITCH.height - this.radius
+    );
+
     this.target.set(
-      clamp(x, this.radius, PITCH.width - this.radius),
-      clamp(y, this.radius, PITCH.height - this.radius)
+      this.x,
+      this.y
     );
   }
 
-  distanceToPoint(x, y) {
-    return Math.sqrt((this.x - x) ** 2 + (this.y - y) ** 2);
-  }
-  distanceToPlayer(p) { return this.distanceToPoint(p.x, p.y); }
-
-  isInjured() { return !!this.injury; }
-
-  injure(type = "strain", severity = "minor") {
-    const range = severity === "severe"
-      ? INJURY.MINUTES_OUT_SEVERE
-      : INJURY.MINUTES_OUT_MINOR;
-    const minutesOut = range[0] + Math.random() * (range[1] - range[0]);
-    this.injury = { type, severity, minutesOut };
-    this.state = PLAYER_STATE.INJURED;
-    this.hasBall = false;
-    this.velocity.multiply(0);
-  }
-
-  recover() {
-    this.injury = null;
-    if (this.state === PLAYER_STATE.INJURED) this.state = PLAYER_STATE.IDLE;
-  }
-
   update(dt) {
-    if (this.redCard || this.state === PLAYER_STATE.INJURED) return;
+    if (
+      !this.active ||
+      this.redCard ||
+      this.injury
+    ) {
+      this.velocity.set(0, 0);
 
-    const dx = this.target.x - this.x;
-    const dy = this.target.y - this.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+      this.state =
+        PLAYER_STATE.INJURED;
 
-    if (dist < 2) {
-      this.velocity.multiply(0.7);
-      this.stamina = clamp(this.stamina + dt * 0.4, 0, 100);
       return;
     }
 
-    const dir = new Vector2(dx, dy).normalize();
-    const formFactor = 0.85 + (this.form / 100) * 0.15;
-    const staminaFactor = 0.55 + (this.stamina / 100) * 0.45;
-    const maxSpeed = (34 + this.speed * 0.72) * staminaFactor * formFactor;
-    const desired = dir.multiply(maxSpeed);
+    const dx =
+      this.target.x - this.x;
 
-    const accel = Math.min(1, this.acceleration * dt * 0.035 * (0.9 + this.fitness / 500));
-    this.velocity.x += (desired.x - this.velocity.x) * accel;
-    this.velocity.y += (desired.y - this.velocity.y) * accel;
+    const dy =
+      this.target.y - this.y;
 
-    const vl = this.velocity.length();
-    if (vl > maxSpeed) this.velocity.normalize().multiply(maxSpeed);
+    const distance =
+      Math.sqrt(
+        dx * dx +
+        dy * dy
+      );
 
-    this.x += this.velocity.x * dt;
-    this.y += this.velocity.y * dt;
-    this.x = clamp(this.x, this.radius, PITCH.width - this.radius);
-    this.y = clamp(this.y, this.radius, PITCH.height - this.radius);
+    if (distance < 2) {
+      this.velocity.set(0, 0);
 
-    const movement = this.velocity.length();
-    if (movement > 15) {
-      const drain = (movement / 100) * dt * 0.55;
-      this.stamina = clamp(this.stamina - drain, 0, 100);
-      this.fitness = clamp(this.fitness - dt * 0.05, 0, 100);
-      this.minutesPlayed += dt / 60;
+      if (!this.hasBall) {
+        this.state =
+          PLAYER_STATE.IDLE;
+      }
+
+      this.stamina = clamp(
+        this.stamina +
+          dt * 0.75,
+        0,
+        100
+      );
+
+      return;
     }
+
+    const direction =
+      new Vector2(dx, dy)
+        .normalize();
+
+    const fatigue =
+      this.stamina < 30
+        ? 0.72
+        : 1;
+
+    const currentSpeed =
+      this.speed * fatigue;
+
+    this.velocity
+      .copy(direction)
+      .multiply(currentSpeed);
+
+    this.x +=
+      this.velocity.x * dt;
+
+    this.y +=
+      this.velocity.y * dt;
+
+    this.x = clamp(
+      this.x,
+      this.radius,
+      PITCH.width -
+        this.radius
+    );
+
+    this.y = clamp(
+      this.y,
+      this.radius,
+      PITCH.height -
+        this.radius
+    );
+
+    const movementCost =
+      (currentSpeed / 140) *
+      dt *
+      0.9;
+
+    this.stamina = clamp(
+      this.stamina -
+        movementCost,
+      0,
+      100
+    );
+
+    this.state =
+      this.hasBall
+        ? PLAYER_STATE.POSSESSED
+        : PLAYER_STATE.MOVING;
   }
 
-  resetToFormation() {
-    this.x = this.homeX;
-    this.y = this.homeY;
-    this.target.set(this.homeX, this.homeY);
-    this.velocity.multiply(0);
+  injure(reason = "knock") {
+    if (this.injury) {
+      return false;
+    }
+
+    this.injury = {
+      reason,
+      minute: 0,
+    };
+
+    this.active = false;
+
     this.hasBall = false;
-    if (!this.isInjured()) this.state = PLAYER_STATE.IDLE;
+
+    this.velocity.set(0, 0);
+
+    this.state =
+      PLAYER_STATE.INJURED;
+
+    return true;
   }
-}
 
-function deriveStat(overall, base) {
-  return clamp(base + (overall - 60) * 0.55, 40, 98);
-}
+  toSnapshot() {
+    return {
+      id: this.id,
 
-function deriveStat2(data, fields, overall) {
-  for (const f of fields) {
-    if (data?.[f] !== undefined) return clamp(num(data[f], overall), 1, 99);
+      name: this.name,
+
+      number: this.number,
+
+      team: this.team,
+
+      position: this.position,
+
+      overall: this.overall,
+
+      x: this.x,
+
+      y: this.y,
+
+      stamina: this.stamina,
+
+      state: this.state,
+
+      hasBall: this.hasBall,
+
+      yellowCards:
+        this.yellowCards,
+
+      redCard:
+        this.redCard,
+
+      injury:
+        this.injury,
+
+      active:
+        this.active,
+
+      stats: {
+        ...this.stats,
+      },
+    };
   }
-  return deriveStat(overall, 68);
-}
-
-function normalizePosition(position) {
-  const p = String(position || "").toLowerCase();
-  if (p.includes("goalkeeper") || p === "gk" || p.includes("keeper")) return "GK";
-  if (p.includes("back") || p.includes("def") || ["cb", "lb", "rb", "lwb", "rwb"].includes(p)) return "DEF";
-  if (p.includes("striker") || p.includes("forward") || p.includes("attack") || ["st", "cf", "lw", "rw"].includes(p)) return "ATT";
-  return "MID";
 }
