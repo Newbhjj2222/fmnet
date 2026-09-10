@@ -28,7 +28,7 @@ import { useAuth } from "../../context/AuthContext";
 
 import MatchEngine from "../../lib/match/MatchEngine";
 
-import styles from "./mach.module.css";
+import styles from "./Mach.module.css";
 
 const MatchCanvas =
   dynamic(
