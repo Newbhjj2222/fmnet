@@ -1,0 +1,27 @@
+.wrap {
+  width: 100%;
+  overflow: hidden;
+
+  border-radius: 18px;
+
+  background: #06111d;
+
+  border: 1px solid
+    rgba(125, 211, 252, 0.18);
+
+  box-shadow:
+    0 18px 60px
+      rgba(0, 0, 0, 0.38);
+}
+
+.canvas {
+  display: block;
+
+  width: 100%;
+
+  height: auto;
+
+  aspect-ratio: 1050 / 680;
+
+  touch-action: none;
+}
