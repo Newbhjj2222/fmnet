@@ -56,13 +56,14 @@ export function createPlayer(
 
   const isGK = position === "GK";
 
+  // ✅ BUG FIX 1: yBase (was "yBase" n'ibindi ariko "y" yakoreshejwe nabi)
   const xBase = slot?.x ?? 0.35;
   const yBase = slot?.y ?? 0.50;
 
-  const x =
-    side === "home"
-      ? xBase
-      : 1 - xBase;
+  // ✅ BUG FIX 2: team.js yamaze kumirror away team
+  // Ntukongere kumirror hano — koresha xBase directly
+  const x = xBase;
+  const y = yBase;
 
   const number = numberFromPlayer(
     data,
@@ -112,6 +113,7 @@ export function createPlayer(
     x: 0,
     y: 0,
 
+    // ✅ BUG FIX 3: homeY: yBase (was "homeY: y" — line yateraga error)
     homeX: x,
     homeY: y,
 
@@ -252,6 +254,7 @@ export function createPlayer(
     lastActionAt: 0,
   };
 
+  // ✅ Shyiraho x na y uhereye kuri homeX na homeY
   player.x = player.homeX;
   player.y = player.homeY;
 
