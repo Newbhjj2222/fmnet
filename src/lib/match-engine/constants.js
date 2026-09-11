@@ -1,178 +1,266 @@
-export const PITCH = {
+// lib/match-engine/constants.js
+
+export const FIELD = {
   width: 1050,
   height: 680,
 
-  goalWidth: 150,
+  goalWidth: 120,
   goalDepth: 28,
 
-  penaltyWidth: 360,
-  penaltyHeight: 220,
+  centerX: 525,
+  centerY: 340,
 
-  sixYardWidth: 170,
-  sixYardHeight: 90,
+  penaltyBoxWidth: 165,
+  penaltyBoxHeight: 360,
 
-  centerCircle: 82,
+  sixYardWidth: 70,
+  sixYardHeight: 170,
 };
 
 export const MATCH = {
-  realDuration: 240,
-  matchMinutes: 90,
+  REAL_DURATION_SECONDS: 240,
+  MATCH_MINUTES: 90,
 
-  firstHalf: 45,
-  secondHalf: 90,
+  FIRST_HALF: 45,
+  SECOND_HALF: 90,
 
-  playerDecisionInterval: 0.65,
-  teamDecisionInterval: 1.25,
+  MAX_SUBSTITUTIONS: 5,
 
-  maxDt: 0.05,
+  SIM_MINUTES_PER_REAL_SECOND:
+    90 / 240,
+
+  UI_UPDATE_MS: 33,
+  SAVE_INTERVAL_MS: 10000,
+};
+
+export const PLAYER = {
+  radius: 13,
+
+  minSpeed: 25,
+  maxSpeed: 105,
+
+  acceleration: 180,
+  deceleration: 220,
+
+  staminaMax: 100,
 };
 
 export const BALL = {
   radius: 6,
-  maxPassSpeed: 680,
-  maxShotSpeed: 920,
-  controlDistance: 18,
+
+  maxPassSpeed: 250,
+  minPassSpeed: 90,
+
+  maxShotSpeed: 390,
+
+  friction: 0.985,
 };
 
-export const PLAYER = {
-  radius: 15,
-
-  baseSpeed: 105,
-  sprintSpeed: 150,
-
-  acceleration: 320,
-  deceleration: 260,
-
-  tackleDistance: 27,
-  pressureDistance: 105,
-
-  staminaDrain: 0.018,
-  sprintDrain: 0.045,
+export const TEAM_SIDE = {
+  HOME: "home",
+  AWAY: "away",
 };
 
-export const FORMATIONS = {
-  "4-4-2": [
-    "GK",
-    "LB",
-    "CB",
-    "CB",
-    "RB",
-    "LM",
-    "CM",
-    "CM",
-    "RM",
-    "ST",
-    "ST",
-  ],
+export const BALL_STATE = {
+  FREE: "free",
+  POSSESSED: "possessed",
+  PASSING: "passing",
+  SHOOTING: "shooting",
+  CROSSING: "crossing",
+  SAVED: "saved",
+  DEFLECTED: "deflected",
+  OUT: "out",
+  GOAL: "goal",
+};
 
-  "4-3-3": [
-    "GK",
-    "LB",
-    "CB",
-    "CB",
-    "RB",
-    "CM",
-    "CM",
-    "CM",
-    "LW",
-    "ST",
-    "RW",
-  ],
+export const PLAYER_STATES = {
+  IDLE: "idle",
+  SUPPORT: "support",
+  ATTACK: "attack",
+  PRESS: "press",
+  MARK: "mark",
+  RETREAT: "retreat",
+  CARRY: "carry",
+  PASS: "pass",
+  SHOOT: "shoot",
+  RECOVER: "recover",
+};
 
-  "3-5-2": [
-    "GK",
-    "CB",
-    "CB",
-    "CB",
-    "LWB",
-    "CM",
-    "CDM",
-    "CM",
-    "RWB",
-    "ST",
-    "ST",
-  ],
+export const POSITIONS = {
+  GK: "GK",
 
-  "5-3-2": [
-    "GK",
-    "LWB",
-    "CB",
-    "CB",
-    "CB",
-    "RWB",
-    "CM",
-    "CM",
-    "CM",
-    "ST",
-    "ST",
-  ],
+  CB: "CB",
+  LB: "LB",
+  RB: "RB",
+  LWB: "LWB",
+  RWB: "RWB",
 
-  "4-2-3-1": [
-    "GK",
-    "LB",
-    "CB",
-    "CB",
-    "RB",
-    "CDM",
-    "CDM",
-    "LW",
-    "CAM",
-    "RW",
-    "ST",
-  ],
+  CDM: "CDM",
+  CM: "CM",
+  CAM: "CAM",
+  LM: "LM",
+  RM: "RM",
+
+  LW: "LW",
+  RW: "RW",
+  CF: "CF",
+  ST: "ST",
 };
 
 export const DEFAULT_TACTICS = {
   mentality: "balanced",
   pressing: "medium",
+  defensiveLine: "medium",
+  width: "medium",
   tempo: "medium",
-  width: 55,
-  defensiveLine: 50,
   passingStyle: "mixed",
   counterAttack: true,
 };
 
 export const MENTALITY = {
-  defensive: {
-    attack: 0.75,
-    width: 0.85,
-    defensiveLine: -35,
-    risk: 0.65,
-  },
-
-  balanced: {
-    attack: 1,
-    width: 1,
-    defensiveLine: 0,
-    risk: 1,
-  },
-
-  attacking: {
-    attack: 1.3,
-    width: 1.15,
-    defensiveLine: 30,
-    risk: 1.3,
-  },
+  DEFENSIVE: "defensive",
+  BALANCED: "balanced",
+  ATTACKING: "attacking",
 };
 
-export const EVENT_TYPES = {
+export const PRESSING = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+};
+
+export const EVENTS = {
   KICKOFF: "kickoff",
-  PASS: "pass",
   SHOT: "shot",
   SHOT_ON_TARGET: "shot_on_target",
-  SAVE: "save",
   GOAL: "goal",
-  ASSIST: "assist",
+  SAVE: "save",
+  PASS: "pass",
   TACKLE: "tackle",
-  INTERCEPTION: "interception",
   FOUL: "foul",
   YELLOW: "yellow",
   RED: "red",
-  OFFSIDE: "offside",
   CORNER: "corner",
   THROW_IN: "throw_in",
   GOAL_KICK: "goal_kick",
+  OFFSIDE: "offside",
   SUBSTITUTION: "substitution",
   HALFTIME: "halftime",
   FULLTIME: "fulltime",
+  DRIBBLE: "dribble",
+  INTERCEPTION: "interception",
+};
+
+export const DEFAULT_STATS = () => ({
+  possessionSeconds: 0,
+
+  passes: 0,
+  passesCompleted: 0,
+
+  shots: 0,
+  shotsOnTarget: 0,
+
+  goals: 0,
+  assists: 0,
+
+  tackles: 0,
+  interceptions: 0,
+  fouls: 0,
+
+  corners: 0,
+  offsides: 0,
+
+  yellowCards: 0,
+  redCards: 0,
+
+  saves: 0,
+
+  dribbles: 0,
+  crosses: 0,
+
+  xG: 0,
+});
+
+export const clamp = (value, min, max) =>
+  Math.max(min, Math.min(max, value));
+
+export const lerp = (a, b, t) =>
+  a + (b - a) * t;
+
+export const distance = (a, b) =>
+  Math.hypot(
+    b.x - a.x,
+    b.y - a.y
+  );
+
+export const randomBetween = (min, max) =>
+  min + Math.random() * (max - min);
+
+export const randomInt = (min, max) =>
+  Math.floor(randomBetween(min, max + 1));
+
+export const normalizePosition = (position = "") => {
+  const value = String(position)
+    .trim()
+    .toUpperCase();
+
+  if (
+    ["GK", "GKP", "GOALKEEPER", "KEEPER"].includes(value)
+  ) {
+    return "GK";
+  }
+
+  if (
+    [
+      "CB",
+      "DC",
+      "DF",
+      "LB",
+      "RB",
+      "LWB",
+      "RWB",
+      "DEF",
+    ].includes(value)
+  ) {
+    return value === "DF" ? "CB" : value;
+  }
+
+  if (
+    [
+      "CDM",
+      "DM",
+      "CM",
+      "CAM",
+      "AM",
+      "LM",
+      "RM",
+      "MF",
+    ].includes(value)
+  ) {
+    if (value === "DM") return "CDM";
+    if (value === "AM") return "CAM";
+    if (value === "MF") return "CM";
+
+    return value;
+  }
+
+  if (
+    [
+      "ST",
+      "CF",
+      "LW",
+      "RW",
+      "LF",
+      "RF",
+      "FW",
+    ].includes(value)
+  ) {
+    if (value === "FW") return "ST";
+    if (value === "LF") return "LW";
+    if (value === "RF") return "RW";
+
+    return value;
+  }
+
+  return "CM";
 };
