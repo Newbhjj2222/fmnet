@@ -1,24 +1,13 @@
+// components/match/MatchCanvas.js
+
 import {
   useEffect,
   useRef,
 } from "react";
 
 import {
-  PITCH,
-  TEAM_COLORS,
+  FIELD,
 } from "../../lib/match-engine/constants";
-
-import styles from "./MatchCanvas.module.css";
-
-const clamp = (
-  value,
-  min,
-  max
-) =>
-  Math.max(
-    min,
-    Math.min(max, value)
-  );
 
 export default function MatchCanvas({
   snapshot,
@@ -30,33 +19,26 @@ export default function MatchCanvas({
     const canvas =
       canvasRef.current;
 
-    if (
-      !canvas ||
-      !snapshot
-    ) {
-      return undefined;
+    if (!canvas || !snapshot) {
+      return;
     }
 
-    const context =
+    const ctx =
       canvas.getContext("2d");
 
+    const rect =
+      canvas.getBoundingClientRect();
+
     const dpr =
-      Math.max(
-        1,
-        Math.min(
-          window.devicePixelRatio ||
-            1,
-          2
-        )
-      );
+      window.devicePixelRatio || 1;
 
     canvas.width =
-      PITCH.width * dpr;
+      rect.width * dpr;
 
     canvas.height =
-      PITCH.height * dpr;
+      rect.height * dpr;
 
-    context.setTransform(
+    ctx.setTransform(
       dpr,
       0,
       0,
@@ -65,358 +47,380 @@ export default function MatchCanvas({
       0
     );
 
-    const drawPitch = () => {
-      const width =
-        PITCH.width;
+    const scaleX =
+      rect.width /
+      FIELD.width;
 
-      const height =
-        PITCH.height;
+    const scaleY =
+      rect.height /
+      FIELD.height;
 
-      context.clearRect(
-        0,
-        0,
-        width,
-        height
+    const scale =
+      Math.min(
+        scaleX,
+        scaleY
       );
 
-      const grass =
-        context.createLinearGradient(
-          0,
-          0,
-          width,
-          height
-        );
-
-      grass.addColorStop(
-        0,
-        "#126b43"
-      );
-
-      grass.addColorStop(
-        1,
-        "#073b2a"
-      );
-
-      context.fillStyle =
-        grass;
-
-      context.fillRect(
-        0,
-        0,
-        width,
-        height
-      );
-
-      for (
-        let index = 0;
-        index < 14;
-        index += 1
-      ) {
-        context.fillStyle =
-          index % 2 === 0
-            ? "rgba(255,255,255,.018)"
-            : "rgba(0,0,0,.018)";
-
-        context.fillRect(
-          (index * width) / 14,
-          0,
-          width / 14,
-          height
-        );
-      }
-
-      context.strokeStyle =
-        "rgba(255,255,255,.82)";
-
-      context.lineWidth = 3;
-
-      context.strokeRect(
-        10,
-        10,
-        width - 20,
-        height - 20
-      );
-
-      context.beginPath();
-
-      context.moveTo(
-        width / 2,
-        10
-      );
-
-      context.lineTo(
-        width / 2,
-        height - 10
-      );
-
-      context.stroke();
-
-      context.beginPath();
-
-      context.arc(
-        width / 2,
-        height / 2,
-        PITCH.centerCircle,
-        0,
-        Math.PI * 2
-      );
-
-      context.stroke();
-
-      context.beginPath();
-
-      context.arc(
-        width / 2,
-        height / 2,
-        4,
-        0,
-        Math.PI * 2
-      );
-
-      context.fillStyle =
-        "#ffffff";
-
-      context.fill();
-
-      const penaltyY =
-        (height -
-          PITCH.penaltyBoxHeight) /
-        2;
-
-      context.strokeRect(
-        10,
-        penaltyY,
-        PITCH.penaltyBoxWidth,
-        PITCH.penaltyBoxHeight
-      );
-
-      context.strokeRect(
-        width -
-          10 -
-          PITCH.penaltyBoxWidth,
-
-        penaltyY,
-
-        PITCH.penaltyBoxWidth,
-        PITCH.penaltyBoxHeight
-      );
-
-      const goalBoxY =
-        (height -
-          PITCH.goalBoxHeight) /
-        2;
-
-      context.strokeRect(
-        10,
-        goalBoxY,
-        PITCH.goalBoxWidth,
-        PITCH.goalBoxHeight
-      );
-
-      context.strokeRect(
-        width -
-          10 -
-          PITCH.goalBoxWidth,
-
-        goalBoxY,
-
-        PITCH.goalBoxWidth,
-        PITCH.goalBoxHeight
-      );
-
-      context.fillStyle =
-        "rgba(255,255,255,.16)";
-
-      context.fillRect(
-        0,
-        height / 2 - 75,
-        PITCH.goalDepth,
-        150
-      );
-
-      context.fillRect(
-        width -
-          PITCH.goalDepth,
-        height / 2 - 75,
-        PITCH.goalDepth,
-        150
-      );
-    };
-
-    const drawPlayer = (
-      player,
-      teamColor
-    ) => {
-      const x =
-        clamp(
-          Number(player.x) || 0,
-          10,
-          PITCH.width - 10
-        );
-
-      const y =
-        clamp(
-          Number(player.y) || 0,
-          10,
-          PITCH.height - 10
-        );
-
-      const radius = 17;
-
-      context.beginPath();
-
-      context.arc(
-        x + 1,
-        y + 3,
-        radius + 1,
-        0,
-        Math.PI * 2
-      );
-
-      context.fillStyle =
-        "rgba(0,0,0,.35)";
-
-      context.fill();
-
-      context.beginPath();
-
-      context.arc(
-        x,
-        y,
-        radius,
-        0,
-        Math.PI * 2
-      );
-
-      context.fillStyle =
-        player.redCard
-          ? "#7f1d1d"
-          : teamColor;
-
-      context.fill();
-
-      context.lineWidth =
-        player.hasBall
-          ? 4
-          : 2;
-
-      context.strokeStyle =
-        player.hasBall
-          ? "#fef08a"
-          : "rgba(255,255,255,.9)";
-
-      context.stroke();
-
-      context.fillStyle =
-        "#07111b";
-
-      context.font =
-        "800 12px Arial";
-
-      context.textAlign =
-        "center";
-
-      context.textBaseline =
-        "middle";
-
-      context.fillText(
-        String(player.number),
-        x,
-        y
-      );
-
-      if (
-        player.stamina < 25
-      ) {
-        context.fillStyle =
-          "rgba(255,255,255,.8)";
-
-        context.font =
-          "700 8px Arial";
-
-        context.fillText(
-          Math.round(
-            player.stamina
-          ),
-          x,
-          y - 26
-        );
-      }
-    };
-
-    const drawBall = () => {
-      const ball =
-        snapshot.ball;
-
-      if (!ball) {
-        return;
-      }
-
-      context.beginPath();
-
-      context.arc(
-        ball.x,
-        ball.y + 2,
-        7,
-        0,
-        Math.PI * 2
-      );
-
-      context.fillStyle =
-        "rgba(0,0,0,.3)";
-
-      context.fill();
-
-      context.beginPath();
-
-      context.arc(
-        ball.x,
-        ball.y,
-        5.5,
-        0,
-        Math.PI * 2
-      );
-
-      context.fillStyle =
-        "#ffffff";
-
-      context.fill();
-
-      context.strokeStyle =
-        "#111827";
-
-      context.lineWidth = 1;
-
-      context.stroke();
-    };
-
-    drawPitch();
-
-    snapshot.homeXI?.forEach(
-      (player) =>
-        drawPlayer(
-          player,
-          TEAM_COLORS.home
-        )
+    ctx.save();
+
+    ctx.translate(
+      (
+        rect.width -
+        FIELD.width * scale
+      ) / 2,
+      (
+        rect.height -
+        FIELD.height * scale
+      ) / 2
     );
 
-    snapshot.awayXI?.forEach(
-      (player) =>
-        drawPlayer(
-          player,
-          TEAM_COLORS.away
-        )
+    ctx.scale(
+      scale,
+      scale
     );
 
-    drawBall();
+    drawPitch(ctx);
+
+    drawPlayers(
+      ctx,
+      snapshot.players
+    );
+
+    drawBall(
+      ctx,
+      snapshot.ball
+    );
+
+    ctx.restore();
   }, [snapshot]);
 
   return (
-    <div className={styles.wrap}>
+    <div
+      style={{
+        width: "100%",
+        aspectRatio: "1050 / 680",
+      }}
+    >
       <canvas
         ref={canvasRef}
-        className={styles.canvas}
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "block",
+        }}
       />
     </div>
   );
+}
+
+function drawPitch(ctx) {
+  ctx.fillStyle =
+    "#087f3d";
+
+  ctx.fillRect(
+    0,
+    0,
+    FIELD.width,
+    FIELD.height
+  );
+
+  ctx.strokeStyle =
+    "rgba(255,255,255,.88)";
+
+  ctx.lineWidth = 3;
+
+  ctx.strokeRect(
+    FIELD.left,
+    FIELD.top,
+    FIELD.right -
+      FIELD.left,
+    FIELD.bottom -
+      FIELD.top
+  );
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    FIELD.centerX,
+    FIELD.top
+  );
+
+  ctx.lineTo(
+    FIELD.centerX,
+    FIELD.bottom
+  );
+
+  ctx.stroke();
+
+  ctx.beginPath();
+
+  ctx.arc(
+    FIELD.centerX,
+    FIELD.centerY,
+    72,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.stroke();
+
+  ctx.beginPath();
+
+  ctx.arc(
+    FIELD.centerX,
+    FIELD.centerY,
+    5,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.fillStyle =
+    "#fff";
+
+  ctx.fill();
+
+  drawPenaltyArea(
+    ctx,
+    "home"
+  );
+
+  drawPenaltyArea(
+    ctx,
+    "away"
+  );
+
+  drawGoalArea(
+    ctx,
+    "home"
+  );
+
+  drawGoalArea(
+    ctx,
+    "away"
+  );
+
+  drawGoals(ctx);
+
+  for (
+    let i = 0;
+    i < 10;
+    i++
+  ) {
+    if (i % 2 === 0) {
+      ctx.fillStyle =
+        "rgba(255,255,255,.025)";
+
+      ctx.fillRect(
+        FIELD.left +
+          i *
+            (
+              (
+                FIELD.right -
+                FIELD.left
+              ) / 10
+            ),
+        FIELD.top,
+        (
+          FIELD.right -
+          FIELD.left
+        ) / 10,
+        FIELD.bottom -
+          FIELD.top
+      );
+    }
+  }
+}
+
+function drawPenaltyArea(
+  ctx,
+  team
+) {
+  const width =
+    165;
+
+  const height =
+    300;
+
+  const x =
+    team === "home"
+      ? FIELD.left
+      : FIELD.right - width;
+
+  ctx.strokeRect(
+    x,
+    FIELD.centerY -
+      height / 2,
+    width,
+    height
+  );
+}
+
+function drawGoalArea(
+  ctx,
+  team
+) {
+  const width =
+    65;
+
+  const height =
+    145;
+
+  const x =
+    team === "home"
+      ? FIELD.left
+      : FIELD.right - width;
+
+  ctx.strokeRect(
+    x,
+    FIELD.centerY -
+      height / 2,
+    width,
+    height
+  );
+}
+
+function drawGoals(ctx) {
+  ctx.strokeStyle =
+    "#f4f4f4";
+
+  ctx.lineWidth = 5;
+
+  ctx.strokeRect(
+    FIELD.left -
+      FIELD.goalDepth,
+    FIELD.centerY -
+      FIELD.goalWidth / 2,
+    FIELD.goalDepth,
+    FIELD.goalWidth
+  );
+
+  ctx.strokeRect(
+    FIELD.right,
+    FIELD.centerY -
+      FIELD.goalWidth / 2,
+    FIELD.goalDepth,
+    FIELD.goalWidth
+  );
+}
+
+function drawPlayers(
+  ctx,
+  players
+) {
+  for (const player of players) {
+    const isHome =
+      player.team === "home";
+
+    ctx.beginPath();
+
+    ctx.arc(
+      player.x,
+      player.y,
+      13,
+      0,
+      Math.PI * 2
+    );
+
+    ctx.fillStyle =
+      isHome
+        ? "#1677ff"
+        : "#e33d48";
+
+    ctx.fill();
+
+    ctx.lineWidth =
+      player.hasBall
+        ? 4
+        : 2;
+
+    ctx.strokeStyle =
+      player.hasBall
+        ? "#ffd83d"
+        : "#ffffff";
+
+    ctx.stroke();
+
+    if (
+      player.position ===
+      "GK"
+    ) {
+      ctx.beginPath();
+
+      ctx.arc(
+        player.x,
+        player.y,
+        17,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.strokeStyle =
+        "#ffe66d";
+
+      ctx.lineWidth = 2;
+
+      ctx.stroke();
+    }
+
+    ctx.fillStyle =
+      "#fff";
+
+    ctx.font =
+      "bold 11px Arial";
+
+    ctx.textAlign =
+      "center";
+
+    ctx.textBaseline =
+      "middle";
+
+    ctx.fillText(
+      String(
+        player.number
+      ),
+      player.x,
+      player.y
+    );
+
+    if (
+      player.yellowCards > 0
+    ) {
+      ctx.fillStyle =
+        "#ffd400";
+
+      ctx.fillRect(
+        player.x + 11,
+        player.y - 18,
+        6,
+        9
+      );
+    }
+  }
+}
+
+function drawBall(
+  ctx,
+  ball
+) {
+  ctx.beginPath();
+
+  ctx.arc(
+    ball.x,
+    ball.y,
+    5,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.fillStyle =
+    "#ffffff";
+
+  ctx.fill();
+
+  ctx.strokeStyle =
+    "#111";
+
+  ctx.lineWidth = 1;
+
+  ctx.stroke();
 }
