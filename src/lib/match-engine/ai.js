@@ -17,56 +17,34 @@ import {
   attemptTackle,
 } from "./defending";
 
-function opponentDistance(
-  player,
-  opponents
-) {
-  return opponents.reduce(
+function opponentDistance(player, opponents) {
+  // ✅ FIX: opponents ni TEAM object — koresha opponents.players
+  return opponents.players.reduce(
     (nearest, opponent) =>
       Math.min(
         nearest,
-        distance(
-          player,
-          opponent
-        )
+        distance(player, opponent)
       ),
     Infinity
   );
 }
 
-function chooseAction(
-  engine,
-  team,
-  opponents,
-  player
-) {
+function chooseAction(engine, team, opponents, player) {
   const goal = {
     x:
       team.attackDirection === 1
         ? FIELD.width
         : 0,
-
-    y:
-      FIELD.centerY,
+    y: FIELD.centerY,
   };
 
-  const goalDistance =
-    distance(
-      player,
-      goal
-    );
+  const goalDistance = distance(player, goal);
 
-  const pressure =
-    opponentDistance(
-      player,
-      opponents
-    );
+  const pressure = opponentDistance(player, opponents);
 
   const shootingChance =
     goalDistance < 430
-      ? 0.28 +
-        player.shooting /
-          400
+      ? 0.28 + player.shooting / 400
       : 0.02;
 
   const passingChance =
@@ -74,8 +52,7 @@ function chooseAction(
       ? 0.72
       : 0.55;
 
-  const random =
-    Math.random();
+  const random = Math.random();
 
   if (
     goalDistance < 320 &&
@@ -84,45 +61,31 @@ function chooseAction(
     return "shot";
   }
 
-  if (
-    random <
-    passingChance
-  ) {
+  if (random < passingChance) {
     return "pass";
   }
 
   return "dribble";
 }
 
-export function updateAI(
-  engine,
-  team,
-  opponents,
-  dt
-) {
-  const carrier =
-    team.players.find(
-      (p) =>
-        p.hasBall &&
-        !p.redCard
-    );
+export function updateAI(engine, team, opponents, dt) {
+  const carrier = team.players.find(
+    (p) => p.hasBall && !p.redCard
+  );
 
   if (carrier) {
     carrier.lastActionAt += dt;
 
     if (
       carrier.lastActionAt >
-      1.1 +
-        Math.random() *
-          1.6
+      1.1 + Math.random() * 1.6
     ) {
-      const action =
-        chooseAction(
-          engine,
-          team,
-          opponents,
-          carrier
-        );
+      const action = chooseAction(
+        engine,
+        team,
+        opponents,
+        carrier
+      );
 
       if (action === "shot") {
         if (
@@ -135,9 +98,7 @@ export function updateAI(
         ) {
           carrier.lastActionAt = 0;
         }
-      } else if (
-        action === "pass"
-      ) {
+      } else if (action === "pass") {
         if (
           attemptPass(
             engine,
@@ -149,13 +110,9 @@ export function updateAI(
           carrier.lastActionAt = 0;
         }
       } else {
-        const direction =
-          team.attackDirection;
+        const direction = team.attackDirection;
 
-        carrier.x +=
-          direction *
-          10 *
-          dt;
+        carrier.x += direction * 10 * dt;
 
         carrier.lastActionAt = 0;
 
@@ -172,63 +129,42 @@ export function updateAI(
     }
   }
 
-  const opponentCarrier =
-    opponents.players.find(
-      (p) =>
-        p.hasBall &&
-        !p.redCard
-    );
+  const opponentCarrier = opponents.players.find(
+    (p) => p.hasBall && !p.redCard
+  );
 
   if (opponentCarrier) {
-    const nearest =
-      team.players
-        .filter(
-          (p) =>
-            !p.redCard &&
-            p.position !== "GK"
-        )
-        .sort(
-          (a, b) =>
-            distance(
-              a,
-              opponentCarrier
-            ) -
-            distance(
-              b,
-              opponentCarrier
-            )
-        )[0];
+    const nearest = team.players
+      .filter(
+        (p) =>
+          !p.redCard &&
+          p.position !== "GK"
+      )
+      .sort(
+        (a, b) =>
+          distance(a, opponentCarrier) -
+          distance(b, opponentCarrier)
+      )[0];
 
     if (nearest) {
-      const d =
-        distance(
-          nearest,
-          opponentCarrier
-        );
+      const d = distance(nearest, opponentCarrier);
 
       const pressRange =
-        team.tactics.pressing ===
-        "high"
+        team.tactics.pressing === "high"
           ? 170
-          : team.tactics.pressing ===
-            "low"
+          : team.tactics.pressing === "low"
           ? 75
           : 115;
 
-      if (
-        d <
-        pressRange
-      ) {
-        nearest.state =
-          "press";
+      if (d < pressRange) {
+        nearest.state = "press";
       }
 
       if (
         d < 28 &&
         Math.random() <
           0.08 *
-            (team.tactics.pressing ===
-            "high"
+            (team.tactics.pressing === "high"
               ? 1.5
               : 1)
       ) {
