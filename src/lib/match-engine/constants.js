@@ -1,121 +1,215 @@
-export const PITCH = {
+// lib/match-engine/constants.js
+
+export const FIELD = {
   width: 1050,
   height: 680,
 
-  goalWidth: 150,
-  goalDepth: 30,
+  left: 30,
+  right: 1020,
+  top: 30,
+  bottom: 650,
 
-  penaltyBoxWidth: 165,
-  penaltyBoxHeight: 390,
+  centerX: 525,
+  centerY: 340,
 
-  goalBoxWidth: 55,
-  goalBoxHeight: 190,
+  goalWidth: 120,
+  goalDepth: 28,
 
-  centerCircle: 92,
+  penaltyWidth: 440,
+  penaltyHeight: 190,
+
+  goalAreaWidth: 180,
+  goalAreaHeight: 80,
 };
 
 export const MATCH = {
-  // 4 real minutes = 90 football minutes
-  REAL_DURATION_SECONDS: 240,
+  realDurationSeconds: 240,
+  matchMinutes: 90,
+  halfTimeMinute: 45,
 
-  SIMULATION_MINUTES: 90,
+  playerRadius: 13,
+  ballRadius: 5,
 
-  SIM_MINUTES_PER_REAL_SECOND: 90 / 240,
+  decisionInterval: 0.8,
+  tacticalInterval: 5,
+  substitutionCheckInterval: 8,
 
-  FIXED_DT: 1 / 30,
-
-  AI_UPDATE_INTERVAL: 0.16,
-
-  DECISION_INTERVAL: 0.65,
-
-  AI_TACTICS_INTERVAL: 8,
-
-  MAX_SUBSTITUTIONS: 5,
-
-  MAX_EVENTS: 300,
+  maxSubstitutions: 5,
 };
 
-export const MATCH_STATUS = {
-  READY: "ready",
-  LIVE: "live",
-  HALF_TIME: "halftime",
-  FINISHED: "finished",
-};
+export const FORMATIONS = {
+  "4-4-2": [
+    { role: "GK", x: 0.055, y: 0.50 },
 
-export const BALL_STATE = {
-  IDLE: "idle",
-  PASSING: "passing",
-  SHOOTING: "shooting",
-  CROSSING: "crossing",
-  DEFLECTED: "deflected",
-  SAVED: "saved",
-};
+    { role: "LB", x: 0.17, y: 0.18 },
+    { role: "CB", x: 0.15, y: 0.39 },
+    { role: "CB", x: 0.15, y: 0.61 },
+    { role: "RB", x: 0.17, y: 0.82 },
 
-export const PLAYER_STATE = {
-  IDLE: "idle",
-  MOVING: "moving",
-  CHASING: "chasing",
-  RECEIVING: "receiving",
-  POSSESSED: "possessed",
-  SHOOTING: "shooting",
-  INJURED: "injured",
-};
+    { role: "LM", x: 0.34, y: 0.18 },
+    { role: "CM", x: 0.35, y: 0.39 },
+    { role: "CM", x: 0.35, y: 0.61 },
+    { role: "RM", x: 0.34, y: 0.82 },
 
-export const EVENT_TYPES = {
-  KICKOFF: "kickoff",
-  HALF_TIME: "half_time",
-  SECOND_HALF: "second_half",
-  FULL_TIME: "full_time",
+    { role: "ST", x: 0.52, y: 0.38 },
+    { role: "ST", x: 0.52, y: 0.62 },
+  ],
 
-  PASS: "pass",
-  THROUGH_BALL: "through_ball",
-  DRIBBLE: "dribble",
-  CROSS: "cross",
+  "4-3-3": [
+    { role: "GK", x: 0.055, y: 0.50 },
 
-  SHOT: "shot",
-  GOAL: "goal",
-  SAVE: "save",
+    { role: "LB", x: 0.17, y: 0.18 },
+    { role: "CB", x: 0.15, y: 0.39 },
+    { role: "CB", x: 0.15, y: 0.61 },
+    { role: "RB", x: 0.17, y: 0.82 },
 
-  INTERCEPTION: "interception",
-  TACKLE: "tackle",
+    { role: "CM", x: 0.31, y: 0.30 },
+    { role: "CDM", x: 0.30, y: 0.50 },
+    { role: "CM", x: 0.31, y: 0.70 },
 
-  FOUL: "foul",
-  YELLOW: "yellow",
-  RED: "red",
+    { role: "LW", x: 0.50, y: 0.20 },
+    { role: "ST", x: 0.55, y: 0.50 },
+    { role: "RW", x: 0.50, y: 0.80 },
+  ],
 
-  INJURY: "injury",
+  "3-5-2": [
+    { role: "GK", x: 0.055, y: 0.50 },
 
-  CORNER: "corner",
-  GOAL_KICK: "goal_kick",
-  THROW_IN: "throw_in",
-  OFFSIDE: "offside",
+    { role: "CB", x: 0.15, y: 0.30 },
+    { role: "CB", x: 0.14, y: 0.50 },
+    { role: "CB", x: 0.15, y: 0.70 },
 
-  SUBSTITUTION: "substitution",
+    { role: "LM", x: 0.30, y: 0.12 },
+    { role: "CM", x: 0.32, y: 0.34 },
+    { role: "CDM", x: 0.30, y: 0.50 },
+    { role: "CM", x: 0.32, y: 0.66 },
+    { role: "RM", x: 0.30, y: 0.88 },
+
+    { role: "ST", x: 0.54, y: 0.40 },
+    { role: "ST", x: 0.54, y: 0.60 },
+  ],
+
+  "5-3-2": [
+    { role: "GK", x: 0.055, y: 0.50 },
+
+    { role: "LWB", x: 0.17, y: 0.13 },
+    { role: "CB", x: 0.14, y: 0.32 },
+    { role: "CB", x: 0.13, y: 0.50 },
+    { role: "CB", x: 0.14, y: 0.68 },
+    { role: "RWB", x: 0.17, y: 0.87 },
+
+    { role: "CM", x: 0.32, y: 0.30 },
+    { role: "CDM", x: 0.30, y: 0.50 },
+    { role: "CM", x: 0.32, y: 0.70 },
+
+    { role: "ST", x: 0.54, y: 0.40 },
+    { role: "ST", x: 0.54, y: 0.60 },
+  ],
+
+  "4-2-3-1": [
+    { role: "GK", x: 0.055, y: 0.50 },
+
+    { role: "LB", x: 0.17, y: 0.18 },
+    { role: "CB", x: 0.15, y: 0.39 },
+    { role: "CB", x: 0.15, y: 0.61 },
+    { role: "RB", x: 0.17, y: 0.82 },
+
+    { role: "CDM", x: 0.30, y: 0.40 },
+    { role: "CDM", x: 0.30, y: 0.60 },
+
+    { role: "LW", x: 0.45, y: 0.20 },
+    { role: "CAM", x: 0.44, y: 0.50 },
+    { role: "RW", x: 0.45, y: 0.80 },
+
+    { role: "ST", x: 0.57, y: 0.50 },
+  ],
 };
 
 export const DEFAULT_TACTICS = {
   mentality: "balanced",
-
-  tempo: "normal",
-
   pressing: "medium",
-
-  defensiveLine: "normal",
-
+  width: 55,
+  defensiveLine: 50,
+  tempo: 55,
   passingStyle: "mixed",
-
-  width: "balanced",
+  attackingFocus: "balanced",
+  counterAttack: true,
 };
 
-export const INJURY = {
-  TACKLE_BASE: 0.0008,
+export const MENTALITY = {
+  defensive: {
+    attack: -0.20,
+    defense: 0.25,
+    width: -8,
+    line: -12,
+  },
 
-  FATIGUE_BASE: 0.00003,
+  balanced: {
+    attack: 0,
+    defense: 0,
+    width: 0,
+    line: 0,
+  },
 
-  STAMINA_THRESHOLD: 17,
+  attacking: {
+    attack: 0.25,
+    defense: -0.18,
+    width: 10,
+    line: 12,
+  },
 };
 
-export const TEAM_COLORS = {
-  home: "#38bdf8",
-  away: "#fb7185",
+export const ROLE_GROUPS = {
+  goalkeeper: ["GK", "GKP", "GOALKEEPER"],
+
+  defender: [
+    "CB",
+    "DC",
+    "LB",
+    "RB",
+    "LWB",
+    "RWB",
+    "DF",
+    "DEF",
+  ],
+
+  midfielder: [
+    "CM",
+    "CDM",
+    "CAM",
+    "LM",
+    "RM",
+    "DM",
+    "AM",
+    "MF",
+  ],
+
+  attacker: [
+    "ST",
+    "CF",
+    "LW",
+    "RW",
+    "LF",
+    "RF",
+    "FW",
+  ],
 };
+
+export const clamp = (value, min, max) =>
+  Math.max(min, Math.min(max, value));
+
+export const random = (min, max) =>
+  Math.random() * (max - min) + min;
+
+export const randomInt = (min, max) =>
+  Math.floor(random(min, max + 1));
+
+export const distance = (a, b) =>
+  Math.hypot(a.x - b.x, a.y - b.y);
+
+export const lerp = (a, b, t) =>
+  a + (b - a) * t;
+
+export function teamDirection(team) {
+  return team === "home" ? 1 : -1;
+}
