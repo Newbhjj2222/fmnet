@@ -1,38 +1,39 @@
 // components/match/MatchCanvas.js
 
-import {
-  useEffect,
-  useRef,
-} from "react";
+import { useEffect, useRef } from "react";
 
-import {
-  FIELD,
-} from "../../lib/match-engine/constants";
+import { FIELD } from "../../lib/match-engine/constants";
 
 import styles from "./MatchCanvas.module.css";
 
-export default function MatchCanvas({
-  snapshot,
-}) {
-  const canvasRef =
-    useRef(null);
+export default function MatchCanvas({ snapshot }) {
+  const canvasRef = useRef(null);
 
   useEffect(() => {
-    const canvas =
-      canvasRef.current;
+    const canvas = canvasRef.current;
 
     if (!canvas) return;
 
-    const parent =
-      canvas.parentElement;
+    const parent = canvas.parentElement;
+
+    if (!parent) return;
 
     const resize = () => {
-      const rect =
-        parent.getBoundingClientRect();
+      const rect = parent.getBoundingClientRect();
 
-      const ratio =
-        window.devicePixelRatio ||
-        1;
+      const ratio = Math.max(
+        1,
+        window.devicePixelRatio || 1
+      );
+
+      const displayWidth = Math.max(
+        1,
+        rect.width
+      );
+
+      const displayHeight =
+        displayWidth *
+        (FIELD.height / FIELD.width);
 
       canvas.width =
         FIELD.width * ratio;
@@ -41,15 +42,15 @@ export default function MatchCanvas({
         FIELD.height * ratio;
 
       canvas.style.width =
-        `${rect.width}px`;
+        `${displayWidth}px`;
 
       canvas.style.height =
-        `${rect.width *
-          (FIELD.height /
-            FIELD.width)}px`;
+        `${displayHeight}px`;
 
       const ctx =
         canvas.getContext("2d");
+
+      if (!ctx) return;
 
       ctx.setTransform(
         ratio,
@@ -60,37 +61,42 @@ export default function MatchCanvas({
         0
       );
 
-      draw(
-        ctx,
-        snapshot
-      );
+      draw(ctx, snapshot);
     };
 
     const observer =
-      new ResizeObserver(
-        resize
-      );
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(resize)
+        : null;
 
-    observer.observe(parent);
+    if (observer) {
+      observer.observe(parent);
+    }
 
     resize();
 
-    return () =>
-      observer.disconnect();
+    return () => {
+      if (observer) {
+        observer.disconnect();
+      }
+    };
   }, [snapshot]);
 
   useEffect(() => {
-    const canvas =
-      canvasRef.current;
+    const canvas = canvasRef.current;
 
     if (!canvas) return;
 
     const ctx =
       canvas.getContext("2d");
 
+    if (!ctx) return;
+
     const ratio =
-      window.devicePixelRatio ||
-      1;
+      Math.max(
+        1,
+        window.devicePixelRatio || 1
+      );
 
     ctx.setTransform(
       ratio,
@@ -101,10 +107,7 @@ export default function MatchCanvas({
       0
     );
 
-    draw(
-      ctx,
-      snapshot
-    );
+    draw(ctx, snapshot);
   }, [snapshot]);
 
   return (
@@ -117,10 +120,11 @@ export default function MatchCanvas({
   );
 }
 
-function draw(
-  ctx,
-  snapshot
-) {
+/* =========================================================
+   MAIN DRAW
+========================================================= */
+
+function draw(ctx, snapshot) {
   if (!ctx) return;
 
   ctx.clearRect(
@@ -132,7 +136,9 @@ function draw(
 
   drawPitch(ctx);
 
-  if (!snapshot) return;
+  if (!snapshot) {
+    return;
+  }
 
   drawPlayers(
     ctx,
@@ -152,9 +158,12 @@ function draw(
   );
 }
 
+/* =========================================================
+   PITCH
+========================================================= */
+
 function drawPitch(ctx) {
-  ctx.fillStyle =
-    "#087f45";
+  ctx.fillStyle = "#087f45";
 
   ctx.fillRect(
     0,
@@ -163,23 +172,27 @@ function drawPitch(ctx) {
     FIELD.height
   );
 
+  /* Pitch stripes */
+
   for (
-    let x = 0;
-    x < FIELD.width;
-    x += 70
+    let stripeX = 0;
+    stripeX < FIELD.width;
+    stripeX += 70
   ) {
     ctx.fillStyle =
-      x % 140 === 0
+      stripeX % 140 === 0
         ? "rgba(255,255,255,.025)"
         : "rgba(0,0,0,.025)";
 
     ctx.fillRect(
-      x,
+      stripeX,
       0,
       70,
       FIELD.height
     );
   }
+
+  /* Outer line */
 
   ctx.strokeStyle =
     "rgba(255,255,255,.85)";
@@ -192,6 +205,8 @@ function drawPitch(ctx) {
     FIELD.width - 8,
     FIELD.height - 8
   );
+
+  /* Halfway line */
 
   ctx.beginPath();
 
@@ -207,6 +222,8 @@ function drawPitch(ctx) {
 
   ctx.stroke();
 
+  /* Center circle */
+
   ctx.beginPath();
 
   ctx.arc(
@@ -218,6 +235,8 @@ function drawPitch(ctx) {
   );
 
   ctx.stroke();
+
+  /* Center spot */
 
   ctx.fillStyle =
     "rgba(255,255,255,.9)";
@@ -234,6 +253,8 @@ function drawPitch(ctx) {
 
   ctx.fill();
 
+  /* Penalty areas */
+
   drawPenaltyArea(
     ctx,
     0,
@@ -246,8 +267,14 @@ function drawPitch(ctx) {
     true
   );
 
+  /* Goals */
+
   drawGoals(ctx);
 }
+
+/* =========================================================
+   PENALTY AREA
+========================================================= */
 
 function drawPenaltyArea(
   ctx,
@@ -255,10 +282,10 @@ function drawPenaltyArea(
   right
 ) {
   const width =
-    FIELD.penaltyBoxWidth;
+    Number(FIELD.penaltyBoxWidth) || 0;
 
   const height =
-    FIELD.penaltyBoxHeight;
+    Number(FIELD.penaltyBoxHeight) || 0;
 
   const startX =
     right
@@ -266,9 +293,7 @@ function drawPenaltyArea(
       : x;
 
   const startY =
-    (FIELD.height -
-      height) /
-    2;
+    (FIELD.height - height) / 2;
 
   ctx.strokeRect(
     startX,
@@ -278,10 +303,10 @@ function drawPenaltyArea(
   );
 
   const sixWidth =
-    FIELD.sixYardWidth;
+    Number(FIELD.sixYardWidth) || 0;
 
   const sixHeight =
-    FIELD.sixYardHeight;
+    Number(FIELD.sixYardHeight) || 0;
 
   const sixX =
     right
@@ -289,9 +314,7 @@ function drawPenaltyArea(
       : x;
 
   const sixY =
-    (FIELD.height -
-      sixHeight) /
-    2;
+    (FIELD.height - sixHeight) / 2;
 
   ctx.strokeRect(
     sixX,
@@ -301,30 +324,48 @@ function drawPenaltyArea(
   );
 }
 
+/* =========================================================
+   GOALS
+========================================================= */
+
 function drawGoals(ctx) {
   ctx.strokeStyle =
     "rgba(255,255,255,.95)";
 
   ctx.lineWidth = 4;
 
+  const goalWidth =
+    Number(FIELD.goalWidth) || 0;
+
+  const goalDepth =
+    Number(FIELD.goalDepth) || 0;
+
   const top =
     FIELD.centerY -
-    FIELD.goalWidth / 2;
+    goalWidth / 2;
+
+  /* Left goal */
 
   ctx.strokeRect(
-    -FIELD.goalDepth,
+    -goalDepth,
     top,
-    FIELD.goalDepth,
-    FIELD.goalWidth
+    goalDepth,
+    goalWidth
   );
+
+  /* Right goal */
 
   ctx.strokeRect(
     FIELD.width,
     top,
-    FIELD.goalDepth,
-    FIELD.goalWidth
+    goalDepth,
+    goalWidth
   );
 }
+
+/* =========================================================
+   PLAYERS
+========================================================= */
 
 function drawPlayers(
   ctx,
@@ -336,28 +377,44 @@ function drawPlayers(
   }
 
   for (const player of players) {
-    if (
-      player.redCard
-    ) {
+    if (!player) {
       continue;
     }
 
-    const x =
-      player.x;
+    if (player.redCard) {
+      continue;
+    }
 
-    const y =
-      player.y;
+    const playerX =
+      Number(player.x);
+
+    const playerY =
+      Number(player.y);
+
+    /*
+     * Prevent Canvas errors when a player
+     * temporarily has invalid coordinates.
+     */
+
+    if (
+      !Number.isFinite(playerX) ||
+      !Number.isFinite(playerY)
+    ) {
+      continue;
+    }
 
     const radius =
       player.position === "GK"
         ? 15
         : 13;
 
+    /* Player body */
+
     ctx.beginPath();
 
     ctx.arc(
-      x,
-      y,
+      playerX,
+      playerY,
       radius,
       0,
       Math.PI * 2
@@ -379,14 +436,14 @@ function drawPlayers(
 
     ctx.stroke();
 
-    if (
-      player.hasBall
-    ) {
+    /* Ball possession indicator */
+
+    if (player.hasBall) {
       ctx.beginPath();
 
       ctx.arc(
-        x,
-        y,
+        playerX,
+        playerY,
         radius + 5,
         0,
         Math.PI * 2
@@ -399,6 +456,8 @@ function drawPlayers(
 
       ctx.stroke();
     }
+
+    /* Player number */
 
     ctx.fillStyle =
       home
@@ -416,21 +475,22 @@ function drawPlayers(
 
     ctx.fillText(
       String(
-        player.number
+        player.number ?? ""
       ),
-      x,
-      y
+      playerX,
+      playerY
     );
 
+    /* Pressing indicator */
+
     if (
-      player.state ===
-      "press"
+      player.state === "press"
     ) {
       ctx.beginPath();
 
       ctx.arc(
-        x,
-        y,
+        playerX,
+        playerY,
         radius + 8,
         0,
         Math.PI * 2
@@ -446,17 +506,36 @@ function drawPlayers(
   }
 }
 
+/* =========================================================
+   BALL
+========================================================= */
+
 function drawBall(
   ctx,
   ball
 ) {
-  if (!ball) return;
+  if (!ball) {
+    return;
+  }
+
+  const ballX =
+    Number(ball.x);
+
+  const ballY =
+    Number(ball.y);
+
+  if (
+    !Number.isFinite(ballX) ||
+    !Number.isFinite(ballY)
+  ) {
+    return;
+  }
 
   ctx.beginPath();
 
   ctx.arc(
-    ball.x,
-    ball.y,
+    ballX,
+    ballY,
     6,
     0,
     Math.PI * 2
