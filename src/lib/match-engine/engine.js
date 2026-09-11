@@ -1,3 +1,5 @@
+// lib/match-engine/engine.js
+
 import {
   BALL_STATE,
   EVENTS,
@@ -48,65 +50,51 @@ import {
 
 /*
 |--------------------------------------------------------------------------
-| MATCH ENGINE
+| MATCH TIME
 |--------------------------------------------------------------------------
+|
+| 90 football minutes = 8 real minutes
+|
+| 8 minutes = 480 real seconds
+|
+| 90 / 480 = 0.1875 football minutes per real second
 |
 | IMPORTANT:
 |
-| Real match duration:
-|     8 minutes
+| This multiplier is ONLY for the match clock.
 |
-| Football duration:
-|     90 minutes
-|
-| Therefore:
-|
-|     90 / 480 = 0.1875 football minutes / real second
-|
-| Or:
-|
-|     1 football minute = 5.333 real seconds
-|
-| But player movement DOES NOT use this multiplier.
-|
-| Player movement receives the real frame dt.
-|
-| Example:
-|
-|     requestAnimationFrame -> dt = 0.016
-|
-| The player moves according to his actual speed.
-|
-| Only the match clock is accelerated.
+| Player movement still receives normal real dt.
 |
 |--------------------------------------------------------------------------
 */
 
+const DEFAULT_REAL_MATCH_SECONDS = 8 * 60;
 
-const REAL_MATCH_SECONDS = 8 * 60;
-const FOOTBALL_MATCH_MINUTES = 90;
+const DEFAULT_FOOTBALL_MINUTES = 90;
 
-const SIM_MINUTES_PER_REAL_SECOND =
-  FOOTBALL_MATCH_MINUTES / REAL_MATCH_SECONDS;
+const FOOTBALL_SECONDS =
+  DEFAULT_FOOTBALL_MINUTES * 60;
 
 
 /*
 |--------------------------------------------------------------------------
-| Utility helpers
+| Utility functions
 |--------------------------------------------------------------------------
 */
 
-function safeNumber(value, fallback = 0) {
+function number(value, fallback = 0) {
   const n = Number(value);
 
-  return Number.isFinite(n) ? n : fallback;
+  return Number.isFinite(n)
+    ? n
+    : fallback;
 }
 
 
-function getPlayerRating(player) {
+function getRating(player) {
   if (!player) return 50;
 
-  return safeNumber(
+  return number(
     player.overall ??
     player.rating ??
     player.overallRating ??
@@ -116,20 +104,44 @@ function getPlayerRating(player) {
 }
 
 
-function getPlayerAttribute(player, names, fallback = 50) {
-  if (!player) return fallback;
+function getAttribute(
+  player,
+  names = [],
+  fallback = 50
+) {
+  if (!player) {
+    return fallback;
+  }
 
   for (const name of names) {
-    if (player[name] !== undefined) {
-      return safeNumber(player[name], fallback);
+    if (
+      player[name] !== undefined &&
+      player[name] !== null
+    ) {
+      return number(
+        player[name],
+        fallback
+      );
     }
 
-    if (player.attributes && player.attributes[name] !== undefined) {
-      return safeNumber(player.attributes[name], fallback);
+    if (
+      player.attributes &&
+      player.attributes[name] !== undefined
+    ) {
+      return number(
+        player.attributes[name],
+        fallback
+      );
     }
 
-    if (player.stats && player.stats[name] !== undefined) {
-      return safeNumber(player.stats[name], fallback);
+    if (
+      player.stats &&
+      player.stats[name] !== undefined
+    ) {
+      return number(
+        player.stats[name],
+        fallback
+      );
     }
   }
 
@@ -137,33 +149,8 @@ function getPlayerAttribute(player, names, fallback = 50) {
 }
 
 
-function getPlayerSpeed(player) {
-  return getPlayerAttribute(
-    player,
-    [
-      "pace",
-      "speed",
-      "acceleration",
-    ],
-    55
-  );
-}
-
-
-function getPlayerStamina(player) {
-  return getPlayerAttribute(
-    player,
-    [
-      "stamina",
-      "fitness",
-    ],
-    70
-  );
-}
-
-
-function getPlayerPassing(player) {
-  return getPlayerAttribute(
+function getPassing(player) {
+  return getAttribute(
     player,
     [
       "passing",
@@ -176,20 +163,59 @@ function getPlayerPassing(player) {
 }
 
 
-function getPlayerShooting(player) {
-  return getPlayerAttribute(
+function getShooting(player) {
+  return getAttribute(
     player,
     [
       "shooting",
-      "shot",
       "finishing",
+      "shot",
     ],
     50
   );
 }
 
 
-function isPlayerAvailable(player) {
+function getStamina(player) {
+  return getAttribute(
+    player,
+    [
+      "stamina",
+      "fitness",
+    ],
+    70
+  );
+}
+
+
+function getSpeed(player) {
+  return getAttribute(
+    player,
+    [
+      "pace",
+      "speed",
+      "acceleration",
+    ],
+    55
+  );
+}
+
+
+function getDecision(player) {
+  return getAttribute(
+    player,
+    [
+      "decisionMaking",
+      "decision",
+      "vision",
+      "composure",
+    ],
+    55
+  );
+}
+
+
+function isAvailable(player) {
   if (!player) return false;
 
   if (player.redCard) return false;
@@ -200,45 +226,43 @@ function isPlayerAvailable(player) {
 
   if (player.substituted) return false;
 
-  if (player.onPitch === false) return false;
+  if (player.onPitch === false) {
+    return false;
+  }
 
   return true;
 }
 
 
-function getTeamPlayers(team) {
+function playersOf(team) {
   if (!team) return [];
 
-  if (Array.isArray(team.players)) {
-    return team.players;
+  return Array.isArray(team.players)
+    ? team.players
+    : [];
+}
+
+
+function activePlayers(team) {
+  return playersOf(team).filter(
+    isAvailable
+  );
+}
+
+
+function playerById(team, id) {
+  if (!team || id === null || id === undefined) {
+    return null;
   }
 
-  return [];
-}
-
-
-function getActivePlayers(team) {
-  return getTeamPlayers(team).filter(isPlayerAvailable);
-}
-
-
-function getPlayerById(team, playerId) {
-  if (!team || !playerId) return null;
-
-  return getTeamPlayers(team).find(
-    (player) => String(player.id) === String(playerId)
+  return playersOf(team).find(
+    (player) =>
+      String(player.id) === String(id)
   ) || null;
 }
 
 
-function getOpponentTeam(team, home, away) {
-  if (!team) return null;
-
-  return team.side === "home" ? away : home;
-}
-
-
-function getTeamDirection(team) {
+function teamDirection(team) {
   if (!team) return 1;
 
   if (
@@ -253,44 +277,35 @@ function getTeamDirection(team) {
 }
 
 
-function getGoalX(team) {
-  const direction = getTeamDirection(team);
-
-  if (direction === 1) {
-    return FIELD.width;
-  }
-
-  return 0;
+function goalX(team) {
+  return teamDirection(team) === 1
+    ? FIELD.width
+    : 0;
 }
 
 
-function getOwnGoalX(team) {
-  const direction = getTeamDirection(team);
-
-  if (direction === 1) {
-    return 0;
-  }
-
-  return FIELD.width;
+function ownGoalX(team) {
+  return teamDirection(team) === 1
+    ? 0
+    : FIELD.width;
 }
 
 
-function getGoalDistance(player, team) {
-  if (!player || !team) return Infinity;
+function getRole(player) {
+  return String(
+    player?.role ??
+    player?.position ??
+    ""
+  ).toLowerCase();
+}
 
-  return Math.abs(
-    getGoalX(team) - safeNumber(player.x, FIELD.centerX)
+
+function random(min, max) {
+  return (
+    min +
+    Math.random() *
+    (max - min)
   );
-}
-
-
-function normalizeTime(seconds) {
-  return Math.max(0, safeNumber(seconds, 0));
-}
-
-
-function randomBetween(min, max) {
-  return min + Math.random() * (max - min);
 }
 
 
@@ -304,8 +319,8 @@ export default class MatchEngine {
   constructor({
     matchId = null,
 
-    homeTeam,
-    awayTeam,
+    homeTeam = {},
+    awayTeam = {},
 
     homePlayers = [],
     awayPlayers = [],
@@ -319,37 +334,62 @@ export default class MatchEngine {
     tacticsHome = {},
     tacticsAway = {},
 
-    durationSeconds = REAL_MATCH_SECONDS,
+    durationSeconds =
+      DEFAULT_REAL_MATCH_SECONDS,
 
     initialScore = {},
     initialMinute = 0,
     initialEvents = [],
 
     onEvent = null,
-  }) {
+  } = {}) {
+    /*
+    |--------------------------------------------------------------------------
+    | Basic information
+    |--------------------------------------------------------------------------
+    */
+
     this.matchId = matchId;
+
+    this.onEvent =
+      typeof onEvent === "function"
+        ? onEvent
+        : null;
+
 
     /*
     |--------------------------------------------------------------------------
-    | REAL TIME
+    | Match duration
     |--------------------------------------------------------------------------
     */
 
     this.realDurationSeconds =
-      safeNumber(durationSeconds, REAL_MATCH_SECONDS) ||
-      REAL_MATCH_SECONDS;
+      number(
+        durationSeconds,
+        DEFAULT_REAL_MATCH_SECONDS
+      );
+
+    if (
+      this.realDurationSeconds <= 0
+    ) {
+      this.realDurationSeconds =
+        DEFAULT_REAL_MATCH_SECONDS;
+    }
+
 
     /*
     |--------------------------------------------------------------------------
-    | FOOTBALL TIME
+    | 90 minutes / 8 real minutes
     |--------------------------------------------------------------------------
     */
 
-    this.footballDurationMinutes = FOOTBALL_MATCH_MINUTES;
+    this.footballDurationMinutes =
+      DEFAULT_FOOTBALL_MINUTES;
 
     this.simMinutesPerRealSecond =
-      FOOTBALL_MATCH_MINUTES /
+      this.footballDurationMinutes /
       this.realDurationSeconds;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -357,13 +397,17 @@ export default class MatchEngine {
     |--------------------------------------------------------------------------
     */
 
+    const startingMinute =
+      clamp(
+        number(initialMinute, 0),
+        0,
+        90
+      );
+
     this.realTime = 0;
 
     this.simTime =
-      Math.max(
-        0,
-        safeNumber(initialMinute, 0) * 60
-      );
+      startingMinute * 60;
 
     this.minute =
       Math.floor(
@@ -375,7 +419,15 @@ export default class MatchEngine {
         this.simTime % 60
       );
 
-    this.previousMinute = this.minute;
+    this.previousMinute =
+      this.minute;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | State
+    |--------------------------------------------------------------------------
+    */
 
     this.running = false;
 
@@ -383,9 +435,19 @@ export default class MatchEngine {
 
     this.halfTime = false;
 
-    this.halfTimeTriggered = false;
+    this.halfTimeTriggered =
+      this.minute >= 45;
 
-    this.fullTimeTriggered = false;
+    this.fullTimeTriggered =
+      this.minute >= 90;
+
+    this.state =
+      this.minute >= 90
+        ? "FULLTIME"
+        : this.minute >= 45
+          ? "SECOND_HALF"
+          : "NOT_STARTED";
+
 
     /*
     |--------------------------------------------------------------------------
@@ -395,23 +457,37 @@ export default class MatchEngine {
 
     this.home = createTeam({
       ...homeTeam,
+
       side: "home",
+
       players: homePlayers,
+
       lineupIds: homeLineupIds,
+
       formation: formationHome,
+
       tactics: tacticsHome,
+
       attackDirection: 1,
     });
 
+
     this.away = createTeam({
       ...awayTeam,
+
       side: "away",
+
       players: awayPlayers,
+
       lineupIds: awayLineupIds,
+
       formation: formationAway,
+
       tactics: tacticsAway,
+
       attackDirection: -1,
     });
+
 
     /*
     |--------------------------------------------------------------------------
@@ -420,18 +496,19 @@ export default class MatchEngine {
     */
 
     this.home.score =
-      safeNumber(
+      number(
         initialScore.home ??
         initialScore.homeScore,
         0
       );
 
     this.away.score =
-      safeNumber(
+      number(
         initialScore.away ??
         initialScore.awayScore,
         0
       );
+
 
     /*
     |--------------------------------------------------------------------------
@@ -444,20 +521,18 @@ export default class MatchEngine {
       y: FIELD.centerY,
     });
 
+
     /*
     |--------------------------------------------------------------------------
     | Events
     |--------------------------------------------------------------------------
     */
 
-    this.events = Array.isArray(initialEvents)
-      ? [...initialEvents]
-      : [];
+    this.events =
+      Array.isArray(initialEvents)
+        ? [...initialEvents]
+        : [];
 
-    this.onEvent =
-      typeof onEvent === "function"
-        ? onEvent
-        : null;
 
     /*
     |--------------------------------------------------------------------------
@@ -475,6 +550,7 @@ export default class MatchEngine {
       away: 0,
     };
 
+
     /*
     |--------------------------------------------------------------------------
     | Last actions
@@ -491,23 +567,17 @@ export default class MatchEngine {
 
     this.lastPossessionPlayer = null;
 
+
     /*
     |--------------------------------------------------------------------------
     | AI timers
     |--------------------------------------------------------------------------
     */
 
-    this.aiSubstitutionTimer = 0;
-
     this.aiDecisionTimer = 0;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Match state
-    |--------------------------------------------------------------------------
-    */
+    this.aiSubstitutionTimer = 0;
 
-    this.state = "NOT_STARTED";
 
     /*
     |--------------------------------------------------------------------------
@@ -516,6 +586,7 @@ export default class MatchEngine {
     */
 
     this.maxDeltaTime = 0.05;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -529,14 +600,18 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | START
+  | START MATCH
   |--------------------------------------------------------------------------
   */
 
   start() {
-    if (this.finished) return;
+    if (this.finished) {
+      return;
+    }
 
     this.running = true;
+
+    this.halfTime = false;
 
     this.state =
       this.minute >= 45
@@ -544,10 +619,16 @@ export default class MatchEngine {
         : "FIRST_HALF";
 
     this.emitEvent({
-      type: EVENTS?.KICKOFF || "kickoff",
+      type:
+        EVENTS?.KICKOFF ||
+        "kickoff",
+
       minute: this.minute,
+
       second: this.second,
-      team: "home",
+
+      team: this.lastPossessionTeam ||
+        "home",
     });
   }
 
@@ -559,11 +640,13 @@ export default class MatchEngine {
   */
 
   pause() {
+    if (this.finished) {
+      return;
+    }
+
     this.running = false;
 
-    if (!this.finished) {
-      this.state = "PAUSED";
-    }
+    this.state = "PAUSED";
   }
 
 
@@ -574,9 +657,13 @@ export default class MatchEngine {
   */
 
   resume() {
-    if (this.finished) return;
+    if (this.finished) {
+      return;
+    }
 
     this.running = true;
+
+    this.halfTime = false;
 
     this.state =
       this.minute >= 45
@@ -587,46 +674,58 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | UPDATE
+  | MAIN UPDATE
   |--------------------------------------------------------------------------
   |
   | dt = REAL seconds.
   |
-  | This is the most important part.
+  | Example:
   |
-  | NEVER:
+  | 60 FPS:
+  | dt ≈ 0.016
   |
-  |     dt *= simMinutesPerRealSecond
+  | Player movement:
   |
-  | for player movement.
+  | updatePlayerMovement(..., 0.016)
   |
-  | The match clock is accelerated separately.
+  | Match clock:
+  |
+  | 0.016 * 11.25
+  |
+  | Only the clock is accelerated.
   |
   |--------------------------------------------------------------------------
   */
 
   update(dt) {
-    if (!this.running || this.finished) {
+    if (
+      !this.running ||
+      this.finished ||
+      this.halfTime
+    ) {
       return;
     }
 
-    let realDt = safeNumber(dt, 0);
+    let realDt =
+      number(dt, 0);
 
     /*
     |--------------------------------------------------------------------------
-    | Prevent huge jumps after tab switching / phone sleep
+    | Prevent huge jumps
     |--------------------------------------------------------------------------
     */
 
-    realDt = clamp(
-      realDt,
-      0,
-      this.maxDeltaTime
-    );
+    realDt =
+      clamp(
+        realDt,
+        0,
+        this.maxDeltaTime
+      );
 
     if (realDt <= 0) {
       return;
     }
+
 
     /*
     |--------------------------------------------------------------------------
@@ -636,40 +735,45 @@ export default class MatchEngine {
 
     this.realTime += realDt;
 
+
     /*
     |--------------------------------------------------------------------------
-    | FOOTBALL CLOCK
+    | FOOTBALL TIME
     |--------------------------------------------------------------------------
     |
     | 8 real minutes -> 90 football minutes.
     |
-    | IMPORTANT:
-    | Only clock uses this multiplier.
-    |
     |--------------------------------------------------------------------------
     */
 
-    const previousSimTime = this.simTime;
+    const previousSimTime =
+      this.simTime;
 
-    this.simTime +=
+    const footballSeconds =
       realDt *
       this.simMinutesPerRealSecond *
       60;
 
+    this.simTime +=
+      footballSeconds;
+
+
     /*
     |--------------------------------------------------------------------------
-    | Limit to 90 minutes
+    | Never exceed 90 minutes
     |--------------------------------------------------------------------------
     */
 
-    this.simTime = Math.min(
-      this.simTime,
-      this.footballDurationMinutes * 60
-    );
+    this.simTime =
+      Math.min(
+        this.simTime,
+        FOOTBALL_SECONDS
+      );
+
 
     /*
     |--------------------------------------------------------------------------
-    | Current football time
+    | Current match clock
     |--------------------------------------------------------------------------
     */
 
@@ -683,13 +787,17 @@ export default class MatchEngine {
         this.simTime % 60
       );
 
+
     /*
     |--------------------------------------------------------------------------
-    | Match minute change
+    | Minute events
     |--------------------------------------------------------------------------
     */
 
-    if (this.minute !== this.previousMinute) {
+    if (
+      this.minute !==
+      this.previousMinute
+    ) {
       this.handleMinuteChange(
         this.previousMinute,
         this.minute
@@ -699,41 +807,107 @@ export default class MatchEngine {
         this.minute;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | PLAYER / BALL SIMULATION
+    | PLAYER MOVEMENT
     |--------------------------------------------------------------------------
     |
     | VERY IMPORTANT:
     |
-    | realDt is passed here.
+    | realDt is used here.
     |
-    | NOT the accelerated football clock.
+    | NOT footballSeconds.
     |
     |--------------------------------------------------------------------------
     */
 
     this.updatePlayers(realDt);
 
-    this.updatePossession();
-
-    this.updateBallPhysics(realDt);
-
-    this.handleBallOwner(realDt);
-
-    this.handleBallPhysics();
-
-    this.handleTackles(realDt);
-
-    this.updateAIDecisions(realDt);
-
-    this.updateTeamStats(realDt);
-
-    this.updateSubstitutions(realDt);
 
     /*
     |--------------------------------------------------------------------------
-    | Halftime
+    | Possession
+    |--------------------------------------------------------------------------
+    */
+
+    this.updatePossession();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ball
+    |--------------------------------------------------------------------------
+    */
+
+    this.updateBallPhysics(
+      realDt
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Owner
+    |--------------------------------------------------------------------------
+    */
+
+    this.handleBallOwner();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ball physics / reception
+    |--------------------------------------------------------------------------
+    */
+
+    this.handleBallPhysics();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tackles
+    |--------------------------------------------------------------------------
+    */
+
+    this.handleTackles();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI
+    |--------------------------------------------------------------------------
+    */
+
+    this.updateAIDecisions(
+      realDt
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stats and fatigue
+    |--------------------------------------------------------------------------
+    */
+
+    this.updateTeamStats(
+      realDt
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI substitutions
+    |--------------------------------------------------------------------------
+    */
+
+    this.updateSubstitutions(
+      realDt
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Half time
     |--------------------------------------------------------------------------
     */
 
@@ -743,7 +917,9 @@ export default class MatchEngine {
       this.simTime >= 45 * 60
     ) {
       this.triggerHalfTime();
+      return;
     }
+
 
     /*
     |--------------------------------------------------------------------------
@@ -752,7 +928,8 @@ export default class MatchEngine {
     */
 
     if (
-      this.simTime >= 90 * 60
+      this.simTime >=
+      FOOTBALL_SECONDS
     ) {
       this.triggerFullTime();
     }
@@ -772,12 +949,20 @@ export default class MatchEngine {
     |--------------------------------------------------------------------------
     */
 
-    updatePlayerMovement(
-      this.home,
-      this.away,
-      this.ball,
-      realDt
-    );
+    try {
+      updatePlayerMovement(
+        this.home,
+        this.away,
+        this.ball,
+        realDt
+      );
+    } catch (error) {
+      console.error(
+        "Home movement error:",
+        error
+      );
+    }
+
 
     /*
     |--------------------------------------------------------------------------
@@ -785,30 +970,34 @@ export default class MatchEngine {
     |--------------------------------------------------------------------------
     */
 
-    updatePlayerMovement(
-      this.away,
-      this.home,
-      this.ball,
-      realDt
-    );
+    try {
+      updatePlayerMovement(
+        this.away,
+        this.home,
+        this.ball,
+        realDt
+      );
+    } catch (error) {
+      console.error(
+        "Away movement error:",
+        error
+      );
+    }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Additional continuous movement
-    |--------------------------------------------------------------------------
-    |
-    | We deliberately do NOT multiply player speed by the match clock.
-    |
+    | Keep players active
     |--------------------------------------------------------------------------
     */
 
-    this.keepPlayersActive(
+    this.refreshMovementIntent(
       this.home,
       this.away,
       realDt
     );
 
-    this.keepPlayersActive(
+    this.refreshMovementIntent(
       this.away,
       this.home,
       realDt
@@ -818,229 +1007,185 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | KEEP PLAYERS ACTIVE
+  | REFRESH MOVEMENT INTENT
   |--------------------------------------------------------------------------
   |
-  | Prevents players from freezing after reaching one target.
+  | Players don't just run to one point and freeze.
   |
   |--------------------------------------------------------------------------
   */
 
-  keepPlayersActive(
+  refreshMovementIntent(
     team,
     opponent,
     dt
   ) {
     const players =
-      getActivePlayers(team);
+      activePlayers(team);
 
-    if (!players.length) return;
+    if (!players.length) {
+      return;
+    }
+
+    const ball =
+      this.ball;
 
     for (const player of players) {
       if (!player) continue;
 
       /*
       |--------------------------------------------------------------------------
-      | Natural stamina effect
-      |--------------------------------------------------------------------------
-      */
-
-      const stamina =
-        getPlayerStamina(player);
-
-      player.stamina =
-        player.stamina !== undefined
-          ? player.stamina
-          : stamina;
-
-      /*
-      |--------------------------------------------------------------------------
-      | Don't force movement if movement.js
-      | already controls the player.
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        player.targetX === undefined &&
-        player.targetY === undefined
-      ) {
-        player.targetX =
-          safeNumber(player.x, FIELD.centerX);
-
-        player.targetY =
-          safeNumber(player.y, FIELD.centerY);
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Small movement heartbeat.
-      |--------------------------------------------------------------------------
-      |
-      | This prevents a player from becoming permanently idle.
-      |
+      | Don't interfere with current movement target too frequently.
       |--------------------------------------------------------------------------
       */
 
       player.activityTimer =
-        safeNumber(
+        number(
           player.activityTimer,
           0
         ) + dt;
 
       /*
       |--------------------------------------------------------------------------
-      | Every few real seconds, refresh movement intent.
+      | Different players refresh at different times.
+      |--------------------------------------------------------------------------
+      */
+
+      const refreshTime =
+        number(
+          player.movementRefreshTime,
+          2.8 +
+            (
+              (getSpeed(player) % 30) /
+              30
+            )
+        );
+
+      if (
+        player.activityTimer <
+        refreshTime
+      ) {
+        continue;
+      }
+
+      player.activityTimer = 0;
+
+      player.movementRefreshTime =
+        random(
+          2.5,
+          4.5
+        );
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Don't force a player with the ball.
+      |--------------------------------------------------------------------------
+      */
+
+      if (player.hasBall) {
+        continue;
+      }
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Don't constantly overwrite movement.js
       |--------------------------------------------------------------------------
       */
 
       if (
-        player.activityTimer >=
-        randomBetween(2.5, 4.5)
+        player.targetX !== undefined &&
+        player.targetY !== undefined
       ) {
-        player.activityTimer = 0;
+        const d =
+          distance(
+            number(player.x),
+            number(player.y),
+            number(player.targetX),
+            number(player.targetY)
+          );
 
-        this.refreshPlayerIntent(
-          player,
-          team,
-          opponent
-        );
+        if (d > 50) {
+          continue;
+        }
       }
+
+
+      this.assignNewMovementTarget(
+        player,
+        team,
+        opponent,
+        ball
+      );
     }
   }
 
 
   /*
   |--------------------------------------------------------------------------
-  | REFRESH PLAYER INTENT
+  | ASSIGN NEW MOVEMENT TARGET
   |--------------------------------------------------------------------------
   */
 
-  refreshPlayerIntent(
+  assignNewMovementTarget(
     player,
     team,
-    opponent
+    opponent,
+    ball
   ) {
-    if (!player || !team) return;
+    const direction =
+      teamDirection(team);
 
-    const ball = this.ball;
+    const role =
+      getRole(player);
 
     const bx =
-      safeNumber(
+      number(
         ball?.x,
         FIELD.centerX
       );
 
     const by =
-      safeNumber(
+      number(
         ball?.y,
         FIELD.centerY
       );
 
-    const px =
-      safeNumber(
-        player.x,
-        FIELD.centerX
-      );
-
-    const py =
-      safeNumber(
-        player.y,
-        FIELD.centerY
-      );
-
-    const direction =
-      getTeamDirection(team);
-
-    const role =
-      String(
-        player.role ??
-        player.position ??
-        ""
-      ).toLowerCase();
 
     /*
     |--------------------------------------------------------------------------
-    | Ball proximity
-    |--------------------------------------------------------------------------
-    */
-
-    const ballDistance =
-      distance(
-        px,
-        py,
-        bx,
-        by
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Attackers move more toward ball / goal
+    | Goalkeeper
     |--------------------------------------------------------------------------
     */
 
     if (
-      role.includes("st") ||
-      role.includes("cf") ||
-      role.includes("fw") ||
-      role.includes("att")
+      role.includes("gk") ||
+      role.includes("goalkeeper") ||
+      role === "keeper"
     ) {
-      const forwardX =
+      player.targetX =
+        ownGoalX(team) +
+        direction *
+        random(
+          15,
+          55
+        );
+
+      player.targetY =
         clamp(
-          bx +
-            direction *
-            randomBetween(35, 90),
+          FIELD.centerY +
+            (
+              by -
+              FIELD.centerY
+            ) * 0.25,
           40,
-          FIELD.width - 40
+          FIELD.height - 40
         );
-
-      const forwardY =
-        clamp(
-          by +
-            randomBetween(-65, 65),
-          30,
-          FIELD.height - 30
-        );
-
-      player.targetX = forwardX;
-      player.targetY = forwardY;
 
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Midfielders stay connected to play
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      role.includes("cm") ||
-      role.includes("dm") ||
-      role.includes("am") ||
-      role.includes("mid")
-    ) {
-      const targetX =
-        clamp(
-          bx +
-            direction *
-            randomBetween(-20, 70),
-          50,
-          FIELD.width - 50
-        );
-
-      const targetY =
-        clamp(
-          by +
-            randomBetween(-90, 90),
-          35,
-          FIELD.height - 35
-        );
-
-      player.targetX = targetX;
-      player.targetY = targetY;
-
-      return;
-    }
 
     /*
     |--------------------------------------------------------------------------
@@ -1055,20 +1200,17 @@ export default class MatchEngine {
       role.includes("df") ||
       role.includes("def")
     ) {
-      const ownGoalX =
-        getOwnGoalX(team);
-
-      const desiredX =
-        ownGoalX +
+      const targetX =
+        ownGoalX(team) +
         direction *
-        randomBetween(
+        random(
           80,
-          180
+          220
         );
 
       player.targetX =
         clamp(
-          desiredX,
+          targetX,
           35,
           FIELD.width - 35
         );
@@ -1076,7 +1218,49 @@ export default class MatchEngine {
       player.targetY =
         clamp(
           by +
-            randomBetween(-100, 100),
+            random(
+              -100,
+              100
+            ),
+          35,
+          FIELD.height - 35
+        );
+
+      return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Strikers / attackers
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      role.includes("st") ||
+      role.includes("cf") ||
+      role.includes("fw") ||
+      role.includes("att")
+    ) {
+      player.targetX =
+        clamp(
+          bx +
+            direction *
+            random(
+              35,
+              100
+            ),
+          35,
+          FIELD.width - 35
+        );
+
+      player.targetY =
+        clamp(
+          by +
+            random(
+              -80,
+              80
+            ),
           30,
           FIELD.height - 30
         );
@@ -1084,36 +1268,45 @@ export default class MatchEngine {
       return;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Goalkeeper
+    | Midfielders
     |--------------------------------------------------------------------------
     */
 
     if (
-      role.includes("gk") ||
-      role.includes("goalkeeper") ||
-      role === "keeper"
+      role.includes("cm") ||
+      role.includes("dm") ||
+      role.includes("am") ||
+      role.includes("mid")
     ) {
-      const ownGoalX =
-        getOwnGoalX(team);
-
       player.targetX =
-        ownGoalX +
-        direction *
-        randomBetween(20, 60);
+        clamp(
+          bx +
+            direction *
+            random(
+              -30,
+              70
+            ),
+          45,
+          FIELD.width - 45
+        );
 
       player.targetY =
         clamp(
-          FIELD.centerY +
-            (by - FIELD.centerY) *
-            0.25,
-          50,
-          FIELD.height - 50
+          by +
+            random(
+              -100,
+              100
+            ),
+          30,
+          FIELD.height - 30
         );
 
       return;
     }
+
 
     /*
     |--------------------------------------------------------------------------
@@ -1121,24 +1314,28 @@ export default class MatchEngine {
     |--------------------------------------------------------------------------
     */
 
-    if (ballDistance > 250) {
-      player.targetX =
-        clamp(
-          bx +
-            direction *
-            randomBetween(-30, 80),
-          30,
-          FIELD.width - 30
-        );
+    player.targetX =
+      clamp(
+        bx +
+          direction *
+          random(
+            -50,
+            70
+          ),
+        30,
+        FIELD.width - 30
+      );
 
-      player.targetY =
-        clamp(
-          by +
-            randomBetween(-80, 80),
-          30,
-          FIELD.height - 30
-        );
-    }
+    player.targetY =
+      clamp(
+        by +
+          random(
+            -90,
+            90
+          ),
+        30,
+        FIELD.height - 30
+      );
   }
 
 
@@ -1149,77 +1346,70 @@ export default class MatchEngine {
   */
 
   updatePossession() {
-    const homePlayers =
-      getActivePlayers(this.home);
+    const home =
+      activePlayers(
+        this.home
+      );
 
-    const awayPlayers =
-      getActivePlayers(this.away);
+    const away =
+      activePlayers(
+        this.away
+      );
 
-    let homeCount = 0;
-    let awayCount = 0;
+    const homeOwner =
+      home.find(
+        (player) =>
+          player.hasBall
+      );
 
-    for (const player of homePlayers) {
-      if (player.hasBall) {
-        homeCount++;
-      }
-    }
+    const awayOwner =
+      away.find(
+        (player) =>
+          player.hasBall
+      );
 
-    for (const player of awayPlayers) {
-      if (player.hasBall) {
-        awayCount++;
-      }
-    }
 
-    if (homeCount > 0) {
-      this.lastPossessionTeam = "home";
-
-      this.lastPossessionPlayer =
-        homePlayers.find(
-          (p) => p.hasBall
-        )?.id || null;
-    }
-
-    if (awayCount > 0) {
-      this.lastPossessionTeam = "away";
+    if (homeOwner) {
+      this.lastPossessionTeam =
+        "home";
 
       this.lastPossessionPlayer =
-        awayPlayers.find(
-          (p) => p.hasBall
-        )?.id || null;
+        homeOwner.id;
     }
+
+
+    if (awayOwner) {
+      this.lastPossessionTeam =
+        "away";
+
+      this.lastPossessionPlayer =
+        awayOwner.id;
+    }
+
 
     /*
     |--------------------------------------------------------------------------
-    | No owner
+    | Accumulate possession
     |--------------------------------------------------------------------------
     */
 
-    if (
-      homeCount === 0 &&
-      awayCount === 0
-    ) {
-      return;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Update raw possession
-    |--------------------------------------------------------------------------
-    */
-
-    if (homeCount > 0) {
+    if (homeOwner) {
       this.possessionAccumulator.home += 1;
     }
 
-    if (awayCount > 0) {
+    if (awayOwner) {
       this.possessionAccumulator.away += 1;
     }
+
 
     const total =
       this.possessionAccumulator.home +
       this.possessionAccumulator.away;
 
-    if (total <= 0) return;
+    if (total <= 0) {
+      return;
+    }
+
 
     this.possession.home =
       (
@@ -1241,67 +1431,77 @@ export default class MatchEngine {
   |--------------------------------------------------------------------------
   */
 
-  updateBallPhysics(realDt) {
-    updateBall(
-      this.ball,
-      realDt
-    );
+  updateBallPhysics(
+    realDt
+  ) {
+    try {
+      updateBall(
+        this.ball,
+        realDt
+      );
+    } catch (error) {
+      console.error(
+        "Ball update error:",
+        error
+      );
+    }
   }
 
 
   /*
   |--------------------------------------------------------------------------
-  | OWNER HANDLING
+  | OWNER
   |--------------------------------------------------------------------------
   */
 
   handleBallOwner() {
-    if (!this.ball) return;
+    const ball =
+      this.ball;
+
+    if (!ball) return;
 
     if (
-      this.ball.state !==
+      ball.state !==
       BALL_STATE.POSSESSED
     ) {
       return;
     }
 
+
     const owner =
       this.findPlayerById(
-        this.ball.ownerId
+        ball.ownerId
       );
 
-    if (!owner) {
-      this.ball.ownerId = null;
 
-      this.ball.state =
+    if (
+      !owner ||
+      !isAvailable(owner)
+    ) {
+      ball.ownerId = null;
+
+      ball.state =
         BALL_STATE.FREE;
 
       return;
     }
 
-    if (!isPlayerAvailable(owner)) {
-      this.ball.ownerId = null;
-
-      this.ball.state =
-        BALL_STATE.FREE;
-
-      return;
-    }
 
     /*
     |--------------------------------------------------------------------------
-    | Keep ball attached to player
+    | Keep ball with player
     |--------------------------------------------------------------------------
     */
 
     moveBallWithOwner(
-      this.ball,
+      ball,
       owner
     );
 
+
     /*
     |--------------------------------------------------------------------------
-    | Check nearby opponents
+    | Pressure / tackling
     |--------------------------------------------------------------------------
     */
 
@@ -1311,51 +1511,54 @@ export default class MatchEngine {
         : this.home;
 
     const opponents =
-      getActivePlayers(
+      activePlayers(
         opponentTeam
       );
+
 
     for (const defender of opponents) {
       if (!defender) continue;
 
       const d =
         distance(
-          owner.x,
-          owner.y,
-          defender.x,
-          defender.y
+          number(owner.x),
+          number(owner.y),
+          number(defender.x),
+          number(defender.y)
         );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Tackle range
-      |--------------------------------------------------------------------------
-      */
+      if (d <= 36) {
+        try {
+          const tackled =
+            attemptTackle(
+              opponentTeam,
+              owner,
+              defender,
+              ball
+            );
 
-      if (d < 38) {
-        const tackled =
-          attemptTackle(
-            opponentTeam,
-            owner,
-            defender,
-            this.ball
+          if (tackled) {
+            this.lastTouch = {
+              team: defender.side,
+              playerId: defender.id,
+              type: "tackle",
+            };
+
+            return;
+          }
+        } catch (error) {
+          console.error(
+            "Tackle error:",
+            error
           );
-
-        if (tackled) {
-          this.lastTouch = {
-            team: defender.side,
-            playerId: defender.id,
-            type: "tackle",
-          };
-
-          return;
         }
       }
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Attacking decision
+    | Attack decision
     |--------------------------------------------------------------------------
     */
 
@@ -1368,7 +1571,7 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | ATTACKING DECISION
+  | ATTACK DECISION
   |--------------------------------------------------------------------------
   */
 
@@ -1376,29 +1579,38 @@ export default class MatchEngine {
     owner,
     opponentTeam
   ) {
-    if (!owner || !owner.hasBall) {
+    if (
+      !owner ||
+      !owner.hasBall
+    ) {
       return;
     }
+
 
     const team =
       owner.side === "home"
         ? this.home
         : this.away;
 
+
     const goalDistance =
-      getGoalDistance(
-        owner,
-        team
+      Math.abs(
+        goalX(team) -
+        number(
+          owner.x,
+          FIELD.centerX
+        )
       );
 
+
     const shooting =
-      getPlayerShooting(owner);
+      getShooting(owner);
 
     const passing =
-      getPlayerPassing(owner);
+      getPassing(owner);
 
-    const stamina =
-      getPlayerStamina(owner);
+    const decision =
+      getDecision(owner);
 
     const pressure =
       this.getPressure(
@@ -1406,13 +1618,10 @@ export default class MatchEngine {
         opponentTeam
       );
 
+
     /*
     |--------------------------------------------------------------------------
-    | Action cooldown
-    |--------------------------------------------------------------------------
-    |
-    | This is REAL time.
-    |
+    | Real-time action cooldown
     |--------------------------------------------------------------------------
     */
 
@@ -1420,23 +1629,41 @@ export default class MatchEngine {
       this.realTime;
 
     const lastAction =
-      safeNumber(
+      number(
         owner.lastActionAt,
         -100
       );
 
     const actionAge =
-      now - lastAction;
+      now -
+      lastAction;
+
+
+    if (
+      actionAge < 0.85
+    ) {
+      return;
+    }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Prevent frame-by-frame shooting/passing
+    | Tired players take slightly longer decisions.
     |--------------------------------------------------------------------------
     */
 
-    if (actionAge < 0.8) {
-      return;
-    }
+    const stamina =
+      number(
+        owner.currentStamina,
+        getStamina(owner)
+      );
+
+
+    const fatiguePenalty =
+      stamina < 35
+        ? 0.10
+        : 0;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -1445,107 +1672,136 @@ export default class MatchEngine {
     */
 
     const shootingRange =
-      FIELD.width * 0.30;
+      FIELD.width * 0.31;
+
 
     /*
     |--------------------------------------------------------------------------
-    | Shot decision
+    | SHOT
     |--------------------------------------------------------------------------
     */
 
     if (
-      goalDistance <= shootingRange &&
-      actionAge >= 1.1
+      goalDistance <=
+      shootingRange &&
+      actionAge >= 1.05
     ) {
-      const shootingChance =
-        0.12 +
-        shooting / 600;
+      let shotChance =
+        0.10 +
+        shooting / 650 +
+        decision / 1800;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Better players make better decisions
-      |--------------------------------------------------------------------------
-      */
+      shotChance -=
+        pressure / 1300;
 
-      const decision =
-        getPlayerAttribute(
-          owner,
-          [
-            "decisionMaking",
-            "decision",
-            "composure",
-          ],
-          55
+      shotChance -=
+        fatiguePenalty;
+
+
+      shotChance =
+        clamp(
+          shotChance,
+          0.04,
+          0.48
         );
 
-      const finalShotChance =
-        shootingChance +
-        decision / 1500 -
-        pressure / 1000;
 
       if (
         Math.random() <
-        clamp(
-          finalShotChance,
-          0.06,
-          0.55
-        )
+        shotChance
       ) {
-        const success =
-          attemptShot(
-            this,
-            team,
-            opponentTeam,
-            owner
+        try {
+          const shot =
+            attemptShot(
+              this,
+              team,
+              opponentTeam,
+              owner
+            );
+
+          if (shot) {
+            owner.lastActionAt =
+              now;
+
+            return;
+          }
+        } catch (error) {
+          console.error(
+            "Shot error:",
+            error
           );
-
-        if (success) {
-          owner.lastActionAt =
-            now;
-
-          return;
         }
       }
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Passing
+    | PASS
     |--------------------------------------------------------------------------
     */
 
     if (
-      actionAge >= 0.9
+      actionAge >= 0.90
     ) {
-      const passChance =
-        0.35 +
-        passing / 250;
+      let passChance =
+        0.28 +
+        passing / 280 +
+        decision / 900;
 
-      const decision =
-        getPlayerAttribute(
-          owner,
-          [
-            "decisionMaking",
-            "vision",
-            "passing",
-          ],
-          55
+      passChance -=
+        pressure / 1300;
+
+
+      passChance =
+        clamp(
+          passChance,
+          0.25,
+          0.82
         );
 
-      const finalPassChance =
-        passChance +
-        decision / 500 -
-        pressure / 1200;
 
       if (
         Math.random() <
-        clamp(
-          finalPassChance,
-          0.25,
-          0.85
-        )
+        passChance
       ) {
-        const success =
+        try {
+          const passed =
+            attemptPass(
+              this,
+              team,
+              opponentTeam,
+              owner
+            );
+
+          if (passed) {
+            owner.lastActionAt =
+              now;
+
+            return;
+          }
+        } catch (error) {
+          console.error(
+            "Pass error:",
+            error
+          );
+        }
+      }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Heavy pressure = quick pass
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      pressure >= 72 &&
+      actionAge >= 0.75
+    ) {
+      try {
+        const passed =
           attemptPass(
             this,
             team,
@@ -1553,58 +1809,16 @@ export default class MatchEngine {
             owner
           );
 
-        if (success) {
+        if (passed) {
           owner.lastActionAt =
             now;
-
-          return;
         }
-      }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | If player is under heavy pressure,
-    | prioritize a quick pass.
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      pressure > 75 &&
-      actionAge >= 0.75
-    ) {
-      const success =
-        attemptPass(
-          this,
-          team,
-          opponentTeam,
-          owner
+      } catch (error) {
+        console.error(
+          "Emergency pass error:",
+          error
         );
-
-      if (success) {
-        owner.lastActionAt =
-          now;
       }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Stamina affects decisions,
-    | NOT movement clock.
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      stamina < 25
-    ) {
-      owner.lastActionAt =
-        Math.min(
-          safeNumber(
-            owner.lastActionAt,
-            now
-          ),
-          now - 0.4
-        );
     }
   }
 
@@ -1619,45 +1833,65 @@ export default class MatchEngine {
     player,
     opponentTeam
   ) {
-    if (!player || !opponentTeam) {
+    if (
+      !player ||
+      !opponentTeam
+    ) {
       return 0;
     }
 
+
     const opponents =
-      getActivePlayers(
+      activePlayers(
         opponentTeam
       );
+
+
+    if (!opponents.length) {
+      return 0;
+    }
+
 
     let closest =
       Infinity;
 
+
     for (const opponent of opponents) {
       const d =
         distance(
-          player.x,
-          player.y,
-          opponent.x,
-          opponent.y
+          number(player.x),
+          number(player.y),
+          number(opponent.x),
+          number(opponent.y)
         );
 
-      if (d < closest) {
+      if (
+        d < closest
+      ) {
         closest = d;
       }
     }
 
-    if (closest <= 20) {
+
+    if (
+      closest <= 18
+    ) {
       return 100;
     }
 
-    if (closest >= 180) {
+
+    if (
+      closest >= 180
+    ) {
       return 0;
     }
+
 
     return clamp(
       100 -
         (
-          (closest - 20) /
-          160
+          (closest - 18) /
+          162
         ) * 100,
       0,
       100
@@ -1672,80 +1906,81 @@ export default class MatchEngine {
   */
 
   handleBallPhysics() {
-    if (!this.ball) return;
+    const ball =
+      this.ball;
+
+    if (!ball) return;
+
 
     /*
     |--------------------------------------------------------------------------
-    | Passing
+    | PASSING
     |--------------------------------------------------------------------------
     */
 
     if (
-      this.ball.state ===
+      ball.state ===
       BALL_STATE.PASSING
     ) {
       this.checkPassReception();
-
       return;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Shooting
+    | SHOOTING
     |--------------------------------------------------------------------------
     */
 
     if (
-      this.ball.state ===
+      ball.state ===
       BALL_STATE.SHOOTING
     ) {
       this.checkShot();
-
       return;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Free ball
+    | FREE BALL
     |--------------------------------------------------------------------------
     */
 
     if (
-      this.ball.state ===
+      ball.state ===
       BALL_STATE.FREE
     ) {
       this.checkFreeBallReception();
-
       this.checkBoundaries();
-
       return;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Saved ball
+    | SAVED
     |--------------------------------------------------------------------------
     */
 
     if (
-      this.ball.state ===
+      ball.state ===
       BALL_STATE.SAVED
     ) {
-      if (this.ball.ownerId) {
-        const owner =
+      if (ball.ownerId) {
+        const goalkeeper =
           this.findPlayerById(
-            this.ball.ownerId
+            ball.ownerId
           );
 
-        if (owner) {
+        if (goalkeeper) {
           setBallOwner(
-            this.ball,
-            owner
+            ball,
+            goalkeeper
           );
         }
       }
-
-      return;
     }
   }
 
@@ -1757,34 +1992,40 @@ export default class MatchEngine {
   */
 
   checkPassReception() {
-    const ball = this.ball;
+    const ball =
+      this.ball;
 
     if (!ball) return;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | First look for intended receiver.
+    |--------------------------------------------------------------------------
+    */
 
     const target =
       this.findPlayerById(
         ball.targetId
       );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Target player gets priority
-    |--------------------------------------------------------------------------
-    */
 
     if (
       target &&
-      isPlayerAvailable(target)
+      isAvailable(target)
     ) {
       const d =
         distance(
-          ball.x,
-          ball.y,
-          target.x,
-          target.y
+          number(ball.x),
+          number(ball.y),
+          number(target.x),
+          number(target.y)
         );
 
-      if (d <= 34) {
+
+      if (
+        d <= 32
+      ) {
         setBallOwner(
           ball,
           target
@@ -1798,110 +2039,137 @@ export default class MatchEngine {
       }
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Nearby players can intercept
+    | Interception
     |--------------------------------------------------------------------------
     */
 
     const allPlayers = [
-      ...getActivePlayers(this.home),
-      ...getActivePlayers(this.away),
+      ...activePlayers(
+        this.home
+      ),
+      ...activePlayers(
+        this.away
+      ),
     ];
 
-    let closest = null;
-    let closestDistance = Infinity;
+
+    let closest =
+      null;
+
+    let closestDistance =
+      Infinity;
+
 
     for (const player of allPlayers) {
       const d =
         distance(
-          ball.x,
-          ball.y,
-          player.x,
-          player.y
+          number(ball.x),
+          number(ball.y),
+          number(player.x),
+          number(player.y)
         );
 
-      if (d < closestDistance) {
+
+      if (
+        d < closestDistance
+      ) {
         closestDistance = d;
         closest = player;
       }
     }
 
+
     if (
-      closest &&
-      closestDistance <= 25
+      !closest ||
+      closestDistance > 26
     ) {
-      /*
-      |--------------------------------------------------------------------------
-      | Target team gets a little advantage
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        ball.passTeam &&
-        closest.side === ball.passTeam
-      ) {
-        setBallOwner(
-          ball,
-          closest
-        );
-
-        this.completePass(
-          closest
-        );
-
-        return;
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Opponent interception
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        Math.random() < 0.45
-      ) {
-        setBallOwner(
-          ball,
-          closest
-        );
-
-        this.emitEvent({
-          type:
-            EVENTS?.INTERCEPTION ||
-            "interception",
-
-          minute: this.minute,
-
-          second: this.second,
-
-          team: closest.side,
-
-          playerId: closest.id,
-
-          fromPlayerId:
-            ball.passerId || null,
-        });
-
-        return;
-      }
+      return;
     }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Pass lost
+    | Same team gets the ball.
     |--------------------------------------------------------------------------
     */
 
     if (
-      Math.abs(ball.vx) +
-      Math.abs(ball.vy) < 3
+      ball.passTeam &&
+      closest.side ===
+        ball.passTeam
     ) {
-      ball.state =
-        BALL_STATE.FREE;
+      setBallOwner(
+        ball,
+        closest
+      );
 
-      ball.ownerId = null;
+      this.completePass(
+        closest
+      );
+
+      return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Opponent interception
+    |--------------------------------------------------------------------------
+    */
+
+    const interceptionChance =
+      clamp(
+        0.28 +
+          (
+            1 -
+            closestDistance / 26
+          ) * 0.40,
+        0.20,
+        0.75
+      );
+
+
+    if (
+      Math.random() <
+      interceptionChance
+    ) {
+      setBallOwner(
+        ball,
+        closest
+      );
+
+      this.emitEvent({
+        type:
+          EVENTS?.INTERCEPTION ||
+          "interception",
+
+        minute: this.minute,
+
+        second: this.second,
+
+        team:
+          closest.side,
+
+        playerId:
+          closest.id,
+
+        fromPlayerId:
+          ball.passerId ||
+          null,
+      });
+
+
+      this.lastTouch = {
+        team: closest.side,
+
+        playerId:
+          closest.id,
+
+        type: "interception",
+      };
     }
   }
 
@@ -1913,12 +2181,19 @@ export default class MatchEngine {
   */
 
   completePass(receiver) {
-    if (!receiver) return;
+    if (!receiver) {
+      return;
+    }
+
 
     const pass =
       this.lastPass;
 
-    if (!pass) return;
+
+    if (!pass) {
+      return;
+    }
+
 
     if (
       pass.completed
@@ -1926,27 +2201,33 @@ export default class MatchEngine {
       return;
     }
 
+
     pass.completed = true;
+
 
     const team =
       pass.team === "home"
         ? this.home
         : this.away;
 
+
     team.stats =
       team.stats || {};
 
+
     team.stats.passesCompleted =
-      safeNumber(
+      number(
         team.stats.passesCompleted,
         0
       ) + 1;
 
+
     receiver.stats =
       receiver.stats || {};
 
+
     receiver.stats.receivedPasses =
-      safeNumber(
+      number(
         receiver.stats.receivedPasses,
         0
       ) + 1;
@@ -1955,31 +2236,43 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | FREE BALL RECEPTION
+  | FREE BALL
   |--------------------------------------------------------------------------
   */
 
   checkFreeBallReception() {
-    const ball = this.ball;
+    const ball =
+      this.ball;
 
     if (!ball) return;
 
+
     const allPlayers = [
-      ...getActivePlayers(this.home),
-      ...getActivePlayers(this.away),
+      ...activePlayers(
+        this.home
+      ),
+      ...activePlayers(
+        this.away
+      ),
     ];
 
-    let closest = null;
-    let closestDistance = Infinity;
+
+    let closest =
+      null;
+
+    let closestDistance =
+      Infinity;
+
 
     for (const player of allPlayers) {
       const d =
         distance(
-          ball.x,
-          ball.y,
-          player.x,
-          player.y
+          number(ball.x),
+          number(ball.y),
+          number(player.x),
+          number(player.y)
         );
+
 
       if (
         d < closestDistance
@@ -1989,18 +2282,23 @@ export default class MatchEngine {
       }
     }
 
+
     if (
       closest &&
-      closestDistance <= 24
+      closestDistance <= 25
     ) {
       setBallOwner(
         ball,
         closest
       );
 
+
       this.lastTouch = {
         team: closest.side,
-        playerId: closest.id,
+
+        playerId:
+          closest.id,
+
         type: "recovery",
       };
     }
@@ -2014,64 +2312,100 @@ export default class MatchEngine {
   */
 
   checkShot() {
-    const ball = this.ball;
+    const ball =
+      this.ball;
 
     if (!ball) return;
 
-    /*
-    |--------------------------------------------------------------------------
-    | If shooting ball reaches goal line
-    |--------------------------------------------------------------------------
-    */
 
     const reachedRight =
-      ball.x >= FIELD.width;
+      number(ball.x) >=
+      FIELD.width;
+
 
     const reachedLeft =
-      ball.x <= 0;
+      number(ball.x) <= 0;
+
 
     if (
       reachedRight ||
       reachedLeft
     ) {
       const shootingTeam =
-        ball.shotTeam === "home"
-          ? this.home
-          : this.away;
-
-      const defendingTeam =
-        ball.shotTeam === "home"
+        ball.shotTeam === "away"
           ? this.away
           : this.home;
 
-      resolveShot(
-        this,
-        shootingTeam,
-        defendingTeam
-      );
+
+      const defendingTeam =
+        ball.shotTeam === "away"
+          ? this.home
+          : this.away;
+
+
+      try {
+        resolveShot(
+          this,
+          shootingTeam,
+          defendingTeam
+        );
+      } catch (error) {
+        console.error(
+          "Resolve shot error:",
+          error
+        );
+
+        ball.state =
+          BALL_STATE.FREE;
+      }
+
 
       return;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Prevent endlessly travelling shot
+    | Very slow / stopped shot
     |--------------------------------------------------------------------------
     */
 
-    if (
-      Math.abs(ball.vx) +
-      Math.abs(ball.vy) < 2
-    ) {
-      resolveShot(
-        this,
-        ball.shotTeam === "home"
-          ? this.home
-          : this.away,
-        ball.shotTeam === "home"
-          ? this.away
-          : this.home
+    const velocity =
+      Math.abs(
+        number(ball.vx)
+      ) +
+      Math.abs(
+        number(ball.vy)
       );
+
+
+    if (
+      velocity < 1.5
+    ) {
+      const shootingTeam =
+        ball.shotTeam === "away"
+          ? this.away
+          : this.home;
+
+
+      const defendingTeam =
+        ball.shotTeam === "away"
+          ? this.home
+          : this.away;
+
+
+      try {
+        resolveShot(
+          this,
+          shootingTeam,
+          defendingTeam
+        );
+      } catch (error) {
+        console.error(
+          "Stopped shot error:",
+          error
+        );
+      }
     }
   }
 
@@ -2083,51 +2417,74 @@ export default class MatchEngine {
   */
 
   handleTackles() {
-    const teams = [
-      [this.home, this.away],
-      [this.away, this.home],
+    const pairs = [
+      [
+        this.home,
+        this.away,
+      ],
+      [
+        this.away,
+        this.home,
+      ],
     ];
 
-    for (const [team, opponent] of teams) {
-      const players =
-        getActivePlayers(team);
 
-      const opponents =
-        getActivePlayers(opponent);
+    for (const [
+      defendingTeam,
+      attackingTeam,
+    ] of pairs) {
+      const defenders =
+        activePlayers(
+          defendingTeam
+        );
 
-      for (const player of players) {
-        if (!player) continue;
+      const attackers =
+        activePlayers(
+          attackingTeam
+        );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Only attempt tackle when opponent has ball
-        |--------------------------------------------------------------------------
-        */
 
-        const opponentOwner =
-          opponents.find(
-            (p) => p.hasBall
-          );
+      const owner =
+        attackers.find(
+          (player) =>
+            player.hasBall
+        );
 
-        if (!opponentOwner) {
-          continue;
-        }
+
+      if (!owner) {
+        continue;
+      }
+
+
+      for (const defender of defenders) {
+        if (!defender) continue;
+
 
         const d =
           distance(
-            player.x,
-            player.y,
-            opponentOwner.x,
-            opponentOwner.y
+            number(defender.x),
+            number(defender.y),
+            number(owner.x),
+            number(owner.y)
           );
 
-        if (d <= 34) {
-          attemptTackle(
-            team,
-            opponentOwner,
-            player,
-            this.ball
-          );
+
+        if (
+          d <= 35
+        ) {
+          try {
+            attemptTackle(
+              defendingTeam,
+              owner,
+              defender,
+              this.ball
+            );
+          } catch (error) {
+            console.error(
+              "Tackle processing error:",
+              error
+            );
+          }
         }
       }
     }
@@ -2136,36 +2493,55 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | AI
+  | AI DECISIONS
   |--------------------------------------------------------------------------
   */
 
   updateAIDecisions(dt) {
     this.aiDecisionTimer += dt;
 
+
     /*
     |--------------------------------------------------------------------------
-    | AI doesn't need to calculate every frame.
+    | Don't calculate AI every frame.
     |--------------------------------------------------------------------------
     */
 
     if (
-      this.aiDecisionTimer < 0.20
+      this.aiDecisionTimer <
+      0.20
     ) {
       return;
     }
 
+
     this.aiDecisionTimer = 0;
 
-    updateAI(
-      this.home,
-      this.away
-    );
 
-    updateAI(
-      this.away,
-      this.home
-    );
+    try {
+      updateAI(
+        this.home,
+        this.away
+      );
+    } catch (error) {
+      console.error(
+        "Home AI error:",
+        error
+      );
+    }
+
+
+    try {
+      updateAI(
+        this.away,
+        this.home
+      );
+    } catch (error) {
+      console.error(
+        "Away AI error:",
+        error
+      );
+    }
   }
 
 
@@ -2178,19 +2554,23 @@ export default class MatchEngine {
   updateSubstitutions(dt) {
     this.aiSubstitutionTimer += dt;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Every 7 real seconds AI checks substitutions.
-    |--------------------------------------------------------------------------
-    */
 
     if (
-      this.aiSubstitutionTimer < 7
+      this.aiSubstitutionTimer <
+      7
     ) {
       return;
     }
 
+
     this.aiSubstitutionTimer = 0;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI substitutions only after halftime.
+    |--------------------------------------------------------------------------
+    */
 
     if (
       this.minute < 45
@@ -2198,22 +2578,12 @@ export default class MatchEngine {
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | AI home
-    |--------------------------------------------------------------------------
-    */
 
     this.performAITeamSubstitution(
       this.home,
       this.away
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | AI away
-    |--------------------------------------------------------------------------
-    */
 
     this.performAITeamSubstitution(
       this.away,
@@ -2224,7 +2594,7 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | AI TEAM SUBSTITUTION
+  | AI SUBSTITUTION
   |--------------------------------------------------------------------------
   */
 
@@ -2232,16 +2602,13 @@ export default class MatchEngine {
     team,
     opponent
   ) {
-    if (!team) return;
+    if (!team) {
+      return;
+    }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Don't substitute too frequently
-    |--------------------------------------------------------------------------
-    */
 
     if (
-      safeNumber(
+      number(
         team.substitutionsUsed,
         0
       ) >= 5
@@ -2249,17 +2616,19 @@ export default class MatchEngine {
       return;
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Random decision
+    | Not every check results in a substitution.
     |--------------------------------------------------------------------------
     */
 
     if (
-      Math.random() > 0.25
+      Math.random() > 0.20
     ) {
       return;
     }
+
 
     try {
       const result =
@@ -2269,34 +2638,50 @@ export default class MatchEngine {
           this.minute
         );
 
+
       if (!result) {
         return;
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Some substitution systems return
-      | { playerOut, playerIn }
-      |--------------------------------------------------------------------------
-      */
 
       if (
         result.playerOut &&
         result.playerIn
       ) {
-        performSubstitution(
-          team,
-          result.playerOut,
-          result.playerIn
-        );
+        const success =
+          performSubstitution(
+            team,
+            result.playerOut,
+            result.playerIn
+          );
+
+
+        if (
+          success !== false
+        ) {
+          this.emitEvent({
+            type:
+              EVENTS?.SUBSTITUTION ||
+              "substitution",
+
+            minute:
+              this.minute,
+
+            second:
+              this.second,
+
+            team:
+              team.side,
+
+            playerOutId:
+              result.playerOut.id,
+
+            playerInId:
+              result.playerIn.id,
+          });
+        }
       }
     } catch (error) {
-      /*
-      |--------------------------------------------------------------------------
-      | AI substitution must never crash the match.
-      |--------------------------------------------------------------------------
-      */
-
       console.error(
         "AI substitution error:",
         error
@@ -2314,125 +2699,131 @@ export default class MatchEngine {
   updateTeamStats(dt) {
     /*
     |--------------------------------------------------------------------------
-    | Minutes
-    |--------------------------------------------------------------------------
-    |
-    | Team minute calculations should follow
-    | football clock, not player movement.
+    | Convert REAL seconds to football seconds
     |--------------------------------------------------------------------------
     */
 
-    const footballMinutes =
+    const footballSeconds =
       dt *
-      this.simMinutesPerRealSecond;
+      this.simMinutesPerRealSecond *
+      60;
+
+
+    const footballMinutes =
+      footballSeconds / 60;
+
 
     try {
       updateTeamMinutes(
         this.home,
         footballMinutes
       );
+    } catch (error) {
+      console.error(
+        "Home team minutes error:",
+        error
+      );
+    }
 
+
+    try {
       updateTeamMinutes(
         this.away,
         footballMinutes
       );
-    } catch {
-      /*
-      |--------------------------------------------------------------------------
-      | Don't let optional team stats crash the match.
-      |--------------------------------------------------------------------------
-      */
+    } catch (error) {
+      console.error(
+        "Away team minutes error:",
+        error
+      );
     }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Player fatigue
+    | Fatigue
     |--------------------------------------------------------------------------
     */
 
     this.updatePlayerFatigue(
       this.home,
-      dt
+      footballSeconds
     );
+
 
     this.updatePlayerFatigue(
       this.away,
-      dt
+      footballSeconds
     );
   }
 
 
   /*
   |--------------------------------------------------------------------------
-  | PLAYER FATIGUE
-  |--------------------------------------------------------------------------
-  |
-  | Fatigue is based on football time, but movement speed itself
-  | remains controlled by movement.js.
+  | FATIGUE
   |--------------------------------------------------------------------------
   */
 
   updatePlayerFatigue(
     team,
-    realDt
+    footballSeconds
   ) {
     const players =
-      getActivePlayers(team);
+      activePlayers(team);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Football seconds elapsed
-    |--------------------------------------------------------------------------
-    */
-
-    const footballDt =
-      realDt *
-      this.simMinutesPerRealSecond *
-      60;
 
     for (const player of players) {
       if (!player) continue;
 
+
       player.matchSeconds =
-        safeNumber(
+        number(
           player.matchSeconds,
           0
-        ) + footballDt;
+        ) +
+        footballSeconds;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Initialize stamina
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        player.currentStamina === undefined
-      ) {
-        player.currentStamina =
-          getPlayerStamina(player);
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Very light natural fatigue
-      |--------------------------------------------------------------------------
-      */
 
       const baseStamina =
-        getPlayerStamina(player);
+        getStamina(player);
+
+
+      if (
+        player.currentStamina ===
+        undefined
+      ) {
+        player.currentStamina =
+          baseStamina;
+      }
+
 
       const minutesPlayed =
-        player.matchSeconds / 60;
+        player.matchSeconds /
+        60;
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Light fatigue.
+      |--------------------------------------------------------------------------
+      |
+      | It affects decisions slightly,
+      | not the match clock.
+      |
+      |--------------------------------------------------------------------------
+      */
 
       const fatigue =
         Math.max(
           0,
-          minutesPlayed - 25
+          minutesPlayed - 20
         ) * 0.035;
+
 
       player.currentStamina =
         clamp(
-          baseStamina - fatigue,
+          baseStamina -
+            fatigue,
           10,
           100
         );
@@ -2447,9 +2838,11 @@ export default class MatchEngine {
   */
 
   checkBoundaries() {
-    const ball = this.ball;
+    const ball =
+      this.ball;
 
     if (!ball) return;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -2469,17 +2862,23 @@ export default class MatchEngine {
       ball.vx = 0;
       ball.vy = 0;
 
+
       this.emitEvent({
         type:
           EVENTS?.THROW_IN ||
           "throw_in",
 
-        minute: this.minute,
+        minute:
+          this.minute,
 
-        second: this.second,
+        second:
+          this.second,
       });
 
+
       this.restartFromSide();
+
+      return;
     }
 
 
@@ -2495,7 +2894,7 @@ export default class MatchEngine {
     ) {
       /*
       |--------------------------------------------------------------------------
-      | If this was a shot, checkShot handles it.
+      | A shot is handled by checkShot().
       |--------------------------------------------------------------------------
       */
 
@@ -2506,6 +2905,7 @@ export default class MatchEngine {
         return;
       }
 
+
       ball.state =
         BALL_STATE.OUT;
 
@@ -2513,6 +2913,7 @@ export default class MatchEngine {
 
       ball.vx = 0;
       ball.vy = 0;
+
 
       this.restartFromGoalLine();
     }
@@ -2528,17 +2929,25 @@ export default class MatchEngine {
   restartFromSide() {
     this.ball.x =
       clamp(
-        this.ball.x,
+        number(this.ball.x),
         10,
         FIELD.width - 10
       );
 
+
     this.ball.y =
       clamp(
-        this.ball.y,
+        number(this.ball.y),
         10,
         FIELD.height - 10
       );
+
+
+    this.ball.vx = 0;
+
+    this.ball.vy = 0;
+
+    this.ball.ownerId = null;
 
     this.ball.state =
       BALL_STATE.FREE;
@@ -2559,9 +2968,12 @@ export default class MatchEngine {
       FIELD.centerY;
 
     this.ball.vx = 0;
+
     this.ball.vy = 0;
 
     this.ball.ownerId = null;
+
+    this.ball.targetId = null;
 
     this.ball.state =
       BALL_STATE.FREE;
@@ -2570,7 +2982,7 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | GOAL
+  | SCORE GOAL
   |--------------------------------------------------------------------------
   */
 
@@ -2582,11 +2994,19 @@ export default class MatchEngine {
       return;
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Score
+    |--------------------------------------------------------------------------
+    */
+
     scoringTeam.score =
-      safeNumber(
+      number(
         scoringTeam.score,
         0
       ) + 1;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -2597,15 +3017,17 @@ export default class MatchEngine {
     scoringTeam.stats =
       scoringTeam.stats || {};
 
+
     scoringTeam.stats.goals =
-      safeNumber(
+      number(
         scoringTeam.stats.goals,
         0
       ) + 1;
 
+
     /*
     |--------------------------------------------------------------------------
-    | Shooter
+    | Shooter stats
     |--------------------------------------------------------------------------
     */
 
@@ -2613,18 +3035,21 @@ export default class MatchEngine {
       shooter.stats =
         shooter.stats || {};
 
+
       shooter.stats.goals =
-        safeNumber(
+        number(
           shooter.stats.goals,
           0
         ) + 1;
 
+
       shooter.goals =
-        safeNumber(
+        number(
           shooter.goals,
           0
         ) + 1;
     }
+
 
     /*
     |--------------------------------------------------------------------------
@@ -2642,31 +3067,30 @@ export default class MatchEngine {
           this.lastPass.passerId
         );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Don't give assist to shooter
-      |--------------------------------------------------------------------------
-      */
 
       if (
         assister &&
-        (!shooter ||
-          assister.id !== shooter.id)
+        (
+          !shooter ||
+          assister.id !== shooter.id
+        )
       ) {
         assister.stats =
           assister.stats || {};
 
+
         assister.stats.assists =
-          safeNumber(
+          number(
             assister.stats.assists,
             0
           ) + 1;
       }
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Event
+    | Goal event
     |--------------------------------------------------------------------------
     */
 
@@ -2675,19 +3099,24 @@ export default class MatchEngine {
         EVENTS?.GOAL ||
         "goal",
 
-      minute: this.minute,
+      minute:
+        this.minute,
 
-      second: this.second,
+      second:
+        this.second,
 
-      team: scoringTeam.side,
+      team:
+        scoringTeam.side,
 
       teamName:
         scoringTeam.name ||
         scoringTeam.teamName ||
-        scoringTeam.id,
+        scoringTeam.id ||
+        scoringTeam.side,
 
       playerId:
-        shooter?.id || null,
+        shooter?.id ||
+        null,
 
       playerName:
         shooter?.name ||
@@ -2695,14 +3124,18 @@ export default class MatchEngine {
         null,
 
       score: {
-        home: this.home.score,
-        away: this.away.score,
+        home:
+          this.home.score,
+
+        away:
+          this.away.score,
       },
     });
 
+
     /*
     |--------------------------------------------------------------------------
-    | Reset
+    | Kickoff after goal
     |--------------------------------------------------------------------------
     */
 
@@ -2717,32 +3150,30 @@ export default class MatchEngine {
   */
 
   setupKickoff() {
+    const allPlayers = [
+      ...playersOf(this.home),
+      ...playersOf(this.away),
+    ];
+
+
     /*
     |--------------------------------------------------------------------------
-    | Reset player ball states
+    | Clear ball ownership
     |--------------------------------------------------------------------------
     */
 
     for (
-      const player of [
-        ...getTeamPlayers(this.home),
-        ...getTeamPlayers(this.away),
-      ]
+      const player of allPlayers
     ) {
       if (!player) continue;
 
       player.hasBall = false;
-
-      if (
-        player.onPitch === undefined
-      ) {
-        player.onPitch = true;
-      }
     }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Ball
+    | Reset ball
     |--------------------------------------------------------------------------
     */
 
@@ -2753,6 +3184,7 @@ export default class MatchEngine {
       FIELD.centerY;
 
     this.ball.vx = 0;
+
     this.ball.vy = 0;
 
     this.ball.ownerId = null;
@@ -2768,29 +3200,53 @@ export default class MatchEngine {
     this.ball.state =
       BALL_STATE.FREE;
 
+
     /*
     |--------------------------------------------------------------------------
-    | Give kickoff to team that should start
+    | Select kickoff team
     |--------------------------------------------------------------------------
     */
 
-    const kickoffTeam =
+    let kickoffTeam =
+      this.home;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | At the beginning home starts.
+    |--------------------------------------------------------------------------
+    */
+
+    if (
       this.minute === 0
-        ? this.home
-        : (
-            this.lastPossessionTeam === "home"
-              ? this.away
-              : this.home
-          );
+    ) {
+      kickoffTeam =
+        this.home;
+    } else {
+      /*
+      |--------------------------------------------------------------------------
+      | After a goal, opponent kicks off.
+      |--------------------------------------------------------------------------
+      */
+
+      kickoffTeam =
+        this.lastPossessionTeam ===
+        "home"
+          ? this.away
+          : this.home;
+    }
+
 
     const players =
-      getActivePlayers(
+      activePlayers(
         kickoffTeam
       );
+
 
     if (!players.length) {
       return;
     }
+
 
     /*
     |--------------------------------------------------------------------------
@@ -2804,14 +3260,18 @@ export default class MatchEngine {
     let bestDistance =
       Infinity;
 
-    for (const player of players) {
+
+    for (
+      const player of players
+    ) {
       const d =
         distance(
-          player.x,
-          player.y,
+          number(player.x),
+          number(player.y),
           FIELD.centerX,
           FIELD.centerY
         );
+
 
       if (
         d < bestDistance
@@ -2821,6 +3281,13 @@ export default class MatchEngine {
       }
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Put only kickoff player near center.
+    |--------------------------------------------------------------------------
+    */
+
     if (kickoffPlayer) {
       kickoffPlayer.x =
         FIELD.centerX;
@@ -2828,10 +3295,23 @@ export default class MatchEngine {
       kickoffPlayer.y =
         FIELD.centerY;
 
+      kickoffPlayer.targetX =
+        FIELD.centerX;
+
+      kickoffPlayer.targetY =
+        FIELD.centerY;
+
       setBallOwner(
         this.ball,
         kickoffPlayer
       );
+
+
+      this.lastPossessionTeam =
+        kickoffTeam.side;
+
+      this.lastPossessionPlayer =
+        kickoffPlayer.id;
     }
   }
 
@@ -2849,19 +3329,23 @@ export default class MatchEngine {
     this.emitEvent({
       type: "minute",
 
-      minute: currentMinute,
+      minute:
+        currentMinute,
 
-      second: this.second,
+      second:
+        this.second,
     });
+
 
     /*
     |--------------------------------------------------------------------------
-    | Debug / UI
+    | 45 minutes
     |--------------------------------------------------------------------------
     */
 
     if (
-      currentMinute === 45
+      currentMinute >= 45 &&
+      !this.halfTimeTriggered
     ) {
       this.triggerHalfTime();
     }
@@ -2882,6 +3366,7 @@ export default class MatchEngine {
       return;
     }
 
+
     this.halfTimeTriggered = true;
 
     this.halfTime = true;
@@ -2890,6 +3375,7 @@ export default class MatchEngine {
 
     this.state =
       "HALFTIME";
+
 
     this.emitEvent({
       type:
@@ -2901,8 +3387,11 @@ export default class MatchEngine {
       second: 0,
 
       score: {
-        home: this.home.score,
-        away: this.away.score,
+        home:
+          this.home.score,
+
+        away:
+          this.away.score,
       },
     });
   }
@@ -2921,6 +3410,28 @@ export default class MatchEngine {
       return;
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Make sure clock starts from 45.
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      this.simTime <
+      45 * 60
+    ) {
+      this.simTime =
+        45 * 60;
+    }
+
+
+    this.minute = 45;
+
+    this.second = 0;
+
+    this.previousMinute = 45;
+
     this.halfTime = false;
 
     this.running = true;
@@ -2928,10 +3439,22 @@ export default class MatchEngine {
     this.state =
       "SECOND_HALF";
 
-    this.ball.state =
-      BALL_STATE.FREE;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Second half kickoff
+    |--------------------------------------------------------------------------
+    */
+
+    this.lastPossessionTeam =
+      this.lastPossessionTeam ===
+      "home"
+        ? "away"
+        : "home";
+
 
     this.setupKickoff();
+
 
     this.emitEvent({
       type:
@@ -2960,21 +3483,32 @@ export default class MatchEngine {
       return;
     }
 
+
     this.fullTimeTriggered = true;
 
     this.finished = true;
 
     this.running = false;
 
+    this.halfTime = false;
+
     this.state =
       "FULLTIME";
 
+
     this.simTime =
-      90 * 60;
+      FOOTBALL_SECONDS;
 
     this.minute = 90;
 
     this.second = 0;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fulltime event
+    |--------------------------------------------------------------------------
+    */
 
     this.emitEvent({
       type:
@@ -2986,8 +3520,11 @@ export default class MatchEngine {
       second: 0,
 
       score: {
-        home: this.home.score,
-        away: this.away.score,
+        home:
+          this.home.score,
+
+        away:
+          this.away.score,
       },
     });
   }
@@ -2999,15 +3536,23 @@ export default class MatchEngine {
   |--------------------------------------------------------------------------
   */
 
-  findPlayerById(playerId) {
-    if (!playerId) return null;
+  findPlayerById(
+    playerId
+  ) {
+    if (
+      playerId === null ||
+      playerId === undefined
+    ) {
+      return null;
+    }
+
 
     return (
-      getPlayerById(
+      playerById(
         this.home,
         playerId
       ) ||
-      getPlayerById(
+      playerById(
         this.away,
         playerId
       )
@@ -3017,72 +3562,160 @@ export default class MatchEngine {
 
   /*
   |--------------------------------------------------------------------------
-  | EVENT
+  | GET SNAPSHOT
+  |--------------------------------------------------------------------------
+  |
+  | This fixes:
+  |
+  | TypeError: ee.getSnapshot is not a function
+  |
   |--------------------------------------------------------------------------
   */
 
-  emitEvent(event) {
-    if (!event) return;
+  getSnapshot() {
+    return {
+      matchId:
+        this.matchId,
 
-    const enriched = {
-      ...event,
+      state:
+        this.state,
 
-      timestamp:
-        Date.now(),
+      running:
+        this.running,
+
+      finished:
+        this.finished,
+
+      halfTime:
+        this.halfTime,
 
       realTime:
         this.realTime,
 
-      matchMinute:
+      realDurationSeconds:
+        this.realDurationSeconds,
+
+      footballDurationMinutes:
+        this.footballDurationMinutes,
+
+      simMinutesPerRealSecond:
+        this.simMinutesPerRealSecond,
+
+      minute:
         this.minute,
 
-      matchSecond:
+      second:
         this.second,
+
+      simTime:
+        this.simTime,
+
+      score: {
+        home:
+          number(
+            this.home?.score,
+            0
+          ),
+
+        away:
+          number(
+            this.away?.score,
+            0
+          ),
+      },
+
+      possession: {
+        home:
+          Number(
+            number(
+              this.possession?.home,
+              50
+            ).toFixed(1)
+          ),
+
+        away:
+          Number(
+            number(
+              this.possession?.away,
+              50
+            ).toFixed(1)
+          ),
+      },
+
+      ball:
+        this.ball
+          ? {
+              ...this.ball,
+            }
+          : null,
+
+      home:
+        this.home
+          ? {
+              ...this.home,
+
+              players:
+                Array.isArray(
+                  this.home.players
+                )
+                  ? this.home.players.map(
+                      (player) => ({
+                        ...player,
+                      })
+                    )
+                  : [],
+            }
+          : null,
+
+      away:
+        this.away
+          ? {
+              ...this.away,
+
+              players:
+                Array.isArray(
+                  this.away.players
+                )
+                  ? this.away.players.map(
+                      (player) => ({
+                        ...player,
+                      })
+                    )
+                  : [],
+            }
+          : null,
+
+      events:
+        Array.isArray(
+          this.events
+        )
+          ? [...this.events]
+          : [],
     };
-
-    this.events.push(
-      enriched
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Don't allow infinite event memory
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      this.events.length > 500
-    ) {
-      this.events =
-        this.events.slice(-500);
-    }
-
-    if (
-      typeof this.onEvent ===
-      "function"
-    ) {
-      try {
-        this.onEvent(
-          enriched
-        );
-      } catch (error) {
-        console.error(
-          "Match event callback error:",
-          error
-        );
-      }
-    }
   }
 
 
   /*
   |--------------------------------------------------------------------------
-  | USER TACTICS
+  | GET STATE
   |--------------------------------------------------------------------------
   |
-  | IMPORTANT:
+  | Keep this for old code that calls getState().
   |
-  | This method updates ONLY the managed team.
+  |--------------------------------------------------------------------------
+  */
+
+  getState() {
+    return this.getSnapshot();
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | SET USER TACTICS
+  |--------------------------------------------------------------------------
+  |
+  | Only managed side should call this from the UI.
   |
   |--------------------------------------------------------------------------
   */
@@ -3096,21 +3729,26 @@ export default class MatchEngine {
         ? this.away
         : this.home;
 
-    if (!team) return;
+
+    if (!team) {
+      return false;
+    }
+
 
     team.tactics = {
       ...(team.tactics || {}),
+
       ...(tactics || {}),
     };
+
+
+    return true;
   }
 
 
   /*
   |--------------------------------------------------------------------------
   | USER SUBSTITUTION
-  |--------------------------------------------------------------------------
-  |
-  | Only managed team can be changed from UI.
   |--------------------------------------------------------------------------
   */
 
@@ -3124,21 +3762,25 @@ export default class MatchEngine {
         ? this.away
         : this.home;
 
+
     if (!team) {
       return false;
     }
 
+
     const playerOut =
-      getPlayerById(
+      playerById(
         team,
         playerOutId
       );
 
+
     const playerIn =
-      getPlayerById(
+      playerById(
         team,
         playerInId
       );
+
 
     if (
       !playerOut ||
@@ -3147,6 +3789,7 @@ export default class MatchEngine {
       return false;
     }
 
+
     if (
       playerOut.id ===
       playerIn.id
@@ -3154,183 +3797,14 @@ export default class MatchEngine {
       return false;
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Player coming in must not already be playing.
+    |--------------------------------------------------------------------------
+    */
+
     if (
       playerIn.onPitch === true
     ) {
       return false;
-    }
-
-    try {
-      const result =
-        performSubstitution(
-          team,
-          playerOut,
-          playerIn
-        );
-
-      if (
-        result === false
-      ) {
-        return false;
-      }
-
-      this.emitEvent({
-        type:
-          EVENTS?.SUBSTITUTION ||
-          "substitution",
-
-        minute: this.minute,
-
-        second: this.second,
-
-        team: team.side,
-
-        playerOutId:
-          playerOut.id,
-
-        playerInId:
-          playerIn.id,
-      });
-
-      return true;
-    } catch (error) {
-      console.error(
-        "User substitution error:",
-        error
-      );
-
-      return false;
-    }
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | GET STATE
-  |--------------------------------------------------------------------------
-  */
-
-  getState() {
-    return {
-      matchId: this.matchId,
-
-      state: this.state,
-
-      running: this.running,
-
-      finished: this.finished,
-
-      halfTime: this.halfTime,
-
-      realTime:
-        this.realTime,
-
-      realDurationSeconds:
-        this.realDurationSeconds,
-
-      footballDurationMinutes:
-        this.footballDurationMinutes,
-
-      minute:
-        this.minute,
-
-      second:
-        this.second,
-
-      simTime:
-        this.simTime,
-
-      score: {
-        home: this.home.score,
-        away: this.away.score,
-      },
-
-      possession: {
-        home:
-          Number(
-            this.possession.home.toFixed(1)
-          ),
-
-        away:
-          Number(
-            this.possession.away.toFixed(1)
-          ),
-      },
-
-      ball: {
-        ...this.ball,
-      },
-
-      home: this.home,
-
-      away: this.away,
-
-      events: this.events,
-    };
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | RESET
-  |--------------------------------------------------------------------------
-  */
-
-  reset() {
-    this.realTime = 0;
-
-    this.simTime = 0;
-
-    this.minute = 0;
-
-    this.second = 0;
-
-    this.previousMinute = 0;
-
-    this.running = false;
-
-    this.finished = false;
-
-    this.halfTime = false;
-
-    this.halfTimeTriggered = false;
-
-    this.fullTimeTriggered = false;
-
-    this.state =
-      "NOT_STARTED";
-
-    this.possession = {
-      home: 50,
-      away: 50,
-    };
-
-    this.possessionAccumulator = {
-      home: 0,
-      away: 0,
-    };
-
-    this.lastPass = null;
-
-    this.lastShot = null;
-
-    this.lastTouch = null;
-
-    this.lastPossessionTeam = null;
-
-    this.lastPossessionPlayer = null;
-
-    this.events = [];
-
-    this.home.score = 0;
-    this.away.score = 0;
-
-    this.ball =
-      createBall({
-        x: FIELD.centerX,
-        y: FIELD.centerY,
-      });
-
-    this.setupKickoff();
-  }
-}
