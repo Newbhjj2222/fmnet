@@ -11,7 +11,7 @@ import {
 import {
   getFormationPositions,
   getRoleGroup,
-} from "./Formations";
+} from "./Formation";
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
