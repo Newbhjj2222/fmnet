@@ -1,215 +1,178 @@
-// lib/match-engine/constants.js
-
-export const FIELD = {
+export const PITCH = {
   width: 1050,
   height: 680,
 
-  left: 30,
-  right: 1020,
-  top: 30,
-  bottom: 650,
-
-  centerX: 525,
-  centerY: 340,
-
-  goalWidth: 120,
+  goalWidth: 150,
   goalDepth: 28,
 
-  penaltyWidth: 440,
-  penaltyHeight: 190,
+  penaltyWidth: 360,
+  penaltyHeight: 220,
 
-  goalAreaWidth: 180,
-  goalAreaHeight: 80,
+  sixYardWidth: 170,
+  sixYardHeight: 90,
+
+  centerCircle: 82,
 };
 
 export const MATCH = {
-  realDurationSeconds: 240,
+  realDuration: 240,
   matchMinutes: 90,
-  halfTimeMinute: 45,
 
-  playerRadius: 13,
-  ballRadius: 5,
+  firstHalf: 45,
+  secondHalf: 90,
 
-  decisionInterval: 0.8,
-  tacticalInterval: 5,
-  substitutionCheckInterval: 8,
+  playerDecisionInterval: 0.65,
+  teamDecisionInterval: 1.25,
 
-  maxSubstitutions: 5,
+  maxDt: 0.05,
+};
+
+export const BALL = {
+  radius: 6,
+  maxPassSpeed: 680,
+  maxShotSpeed: 920,
+  controlDistance: 18,
+};
+
+export const PLAYER = {
+  radius: 15,
+
+  baseSpeed: 105,
+  sprintSpeed: 150,
+
+  acceleration: 320,
+  deceleration: 260,
+
+  tackleDistance: 27,
+  pressureDistance: 105,
+
+  staminaDrain: 0.018,
+  sprintDrain: 0.045,
 };
 
 export const FORMATIONS = {
   "4-4-2": [
-    { role: "GK", x: 0.055, y: 0.50 },
-
-    { role: "LB", x: 0.17, y: 0.18 },
-    { role: "CB", x: 0.15, y: 0.39 },
-    { role: "CB", x: 0.15, y: 0.61 },
-    { role: "RB", x: 0.17, y: 0.82 },
-
-    { role: "LM", x: 0.34, y: 0.18 },
-    { role: "CM", x: 0.35, y: 0.39 },
-    { role: "CM", x: 0.35, y: 0.61 },
-    { role: "RM", x: 0.34, y: 0.82 },
-
-    { role: "ST", x: 0.52, y: 0.38 },
-    { role: "ST", x: 0.52, y: 0.62 },
+    "GK",
+    "LB",
+    "CB",
+    "CB",
+    "RB",
+    "LM",
+    "CM",
+    "CM",
+    "RM",
+    "ST",
+    "ST",
   ],
 
   "4-3-3": [
-    { role: "GK", x: 0.055, y: 0.50 },
-
-    { role: "LB", x: 0.17, y: 0.18 },
-    { role: "CB", x: 0.15, y: 0.39 },
-    { role: "CB", x: 0.15, y: 0.61 },
-    { role: "RB", x: 0.17, y: 0.82 },
-
-    { role: "CM", x: 0.31, y: 0.30 },
-    { role: "CDM", x: 0.30, y: 0.50 },
-    { role: "CM", x: 0.31, y: 0.70 },
-
-    { role: "LW", x: 0.50, y: 0.20 },
-    { role: "ST", x: 0.55, y: 0.50 },
-    { role: "RW", x: 0.50, y: 0.80 },
+    "GK",
+    "LB",
+    "CB",
+    "CB",
+    "RB",
+    "CM",
+    "CM",
+    "CM",
+    "LW",
+    "ST",
+    "RW",
   ],
 
   "3-5-2": [
-    { role: "GK", x: 0.055, y: 0.50 },
-
-    { role: "CB", x: 0.15, y: 0.30 },
-    { role: "CB", x: 0.14, y: 0.50 },
-    { role: "CB", x: 0.15, y: 0.70 },
-
-    { role: "LM", x: 0.30, y: 0.12 },
-    { role: "CM", x: 0.32, y: 0.34 },
-    { role: "CDM", x: 0.30, y: 0.50 },
-    { role: "CM", x: 0.32, y: 0.66 },
-    { role: "RM", x: 0.30, y: 0.88 },
-
-    { role: "ST", x: 0.54, y: 0.40 },
-    { role: "ST", x: 0.54, y: 0.60 },
+    "GK",
+    "CB",
+    "CB",
+    "CB",
+    "LWB",
+    "CM",
+    "CDM",
+    "CM",
+    "RWB",
+    "ST",
+    "ST",
   ],
 
   "5-3-2": [
-    { role: "GK", x: 0.055, y: 0.50 },
-
-    { role: "LWB", x: 0.17, y: 0.13 },
-    { role: "CB", x: 0.14, y: 0.32 },
-    { role: "CB", x: 0.13, y: 0.50 },
-    { role: "CB", x: 0.14, y: 0.68 },
-    { role: "RWB", x: 0.17, y: 0.87 },
-
-    { role: "CM", x: 0.32, y: 0.30 },
-    { role: "CDM", x: 0.30, y: 0.50 },
-    { role: "CM", x: 0.32, y: 0.70 },
-
-    { role: "ST", x: 0.54, y: 0.40 },
-    { role: "ST", x: 0.54, y: 0.60 },
+    "GK",
+    "LWB",
+    "CB",
+    "CB",
+    "CB",
+    "RWB",
+    "CM",
+    "CM",
+    "CM",
+    "ST",
+    "ST",
   ],
 
   "4-2-3-1": [
-    { role: "GK", x: 0.055, y: 0.50 },
-
-    { role: "LB", x: 0.17, y: 0.18 },
-    { role: "CB", x: 0.15, y: 0.39 },
-    { role: "CB", x: 0.15, y: 0.61 },
-    { role: "RB", x: 0.17, y: 0.82 },
-
-    { role: "CDM", x: 0.30, y: 0.40 },
-    { role: "CDM", x: 0.30, y: 0.60 },
-
-    { role: "LW", x: 0.45, y: 0.20 },
-    { role: "CAM", x: 0.44, y: 0.50 },
-    { role: "RW", x: 0.45, y: 0.80 },
-
-    { role: "ST", x: 0.57, y: 0.50 },
+    "GK",
+    "LB",
+    "CB",
+    "CB",
+    "RB",
+    "CDM",
+    "CDM",
+    "LW",
+    "CAM",
+    "RW",
+    "ST",
   ],
 };
 
 export const DEFAULT_TACTICS = {
   mentality: "balanced",
   pressing: "medium",
+  tempo: "medium",
   width: 55,
   defensiveLine: 50,
-  tempo: 55,
   passingStyle: "mixed",
-  attackingFocus: "balanced",
   counterAttack: true,
 };
 
 export const MENTALITY = {
   defensive: {
-    attack: -0.20,
-    defense: 0.25,
-    width: -8,
-    line: -12,
+    attack: 0.75,
+    width: 0.85,
+    defensiveLine: -35,
+    risk: 0.65,
   },
 
   balanced: {
-    attack: 0,
-    defense: 0,
-    width: 0,
-    line: 0,
+    attack: 1,
+    width: 1,
+    defensiveLine: 0,
+    risk: 1,
   },
 
   attacking: {
-    attack: 0.25,
-    defense: -0.18,
-    width: 10,
-    line: 12,
+    attack: 1.3,
+    width: 1.15,
+    defensiveLine: 30,
+    risk: 1.3,
   },
 };
 
-export const ROLE_GROUPS = {
-  goalkeeper: ["GK", "GKP", "GOALKEEPER"],
-
-  defender: [
-    "CB",
-    "DC",
-    "LB",
-    "RB",
-    "LWB",
-    "RWB",
-    "DF",
-    "DEF",
-  ],
-
-  midfielder: [
-    "CM",
-    "CDM",
-    "CAM",
-    "LM",
-    "RM",
-    "DM",
-    "AM",
-    "MF",
-  ],
-
-  attacker: [
-    "ST",
-    "CF",
-    "LW",
-    "RW",
-    "LF",
-    "RF",
-    "FW",
-  ],
+export const EVENT_TYPES = {
+  KICKOFF: "kickoff",
+  PASS: "pass",
+  SHOT: "shot",
+  SHOT_ON_TARGET: "shot_on_target",
+  SAVE: "save",
+  GOAL: "goal",
+  ASSIST: "assist",
+  TACKLE: "tackle",
+  INTERCEPTION: "interception",
+  FOUL: "foul",
+  YELLOW: "yellow",
+  RED: "red",
+  OFFSIDE: "offside",
+  CORNER: "corner",
+  THROW_IN: "throw_in",
+  GOAL_KICK: "goal_kick",
+  SUBSTITUTION: "substitution",
+  HALFTIME: "halftime",
+  FULLTIME: "fulltime",
 };
-
-export const clamp = (value, min, max) =>
-  Math.max(min, Math.min(max, value));
-
-export const random = (min, max) =>
-  Math.random() * (max - min) + min;
-
-export const randomInt = (min, max) =>
-  Math.floor(random(min, max + 1));
-
-export const distance = (a, b) =>
-  Math.hypot(a.x - b.x, a.y - b.y);
-
-export const lerp = (a, b, t) =>
-  a + (b - a) * t;
-
-export function teamDirection(team) {
-  return team === "home" ? 1 : -1;
-}
