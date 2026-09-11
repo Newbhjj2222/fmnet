@@ -1,5 +1,3 @@
-// pages/match/[id].js
-
 import {
   useCallback,
   useEffect,
@@ -34,43 +32,206 @@ import MatchEvents from "../../components/match/MatchEvents";
 
 import styles from "./Mach.module.css";
 
+/* =========================================================
+   ERROR HELPERS
+========================================================= */
+
+function getErrorLocation(error) {
+  const stack = String(
+    error?.stack || ""
+  );
+
+  /*
+   * Matches:
+   *   at function (file.js:10:20)
+   *   at file.js:10:20
+   *   file.js:10:20
+   */
+  const patterns = [
+    /at\s+.*?\((.*?):(\d+):(\d+)\)/,
+    /at\s+(.*?):(\d+):(\d+)/,
+    /(.*?):(\d+):(\d+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = stack.match(pattern);
+
+    if (match) {
+      return {
+        file: match[1] || "Unknown file",
+        line: match[2] || "?",
+        column: match[3] || "?",
+      };
+    }
+  }
+
+  return {
+    file: "Unknown file",
+    line: "?",
+    column: "?",
+  };
+}
+
+function createDetailedError(
+  error,
+  context = "Unknown context"
+) {
+  const message =
+    error?.message ||
+    String(error) ||
+    "Unknown error";
+
+  const stack =
+    error?.stack ||
+    `${error?.name || "Error"}: ${message}`;
+
+  const location =
+    getErrorLocation(error);
+
+  return {
+    name:
+      error?.name ||
+      "Error",
+
+    message,
+
+    context,
+
+    file:
+      location.file,
+
+    line:
+      location.line,
+
+    column:
+      location.column,
+
+    stack,
+  };
+}
+
+function printDetailedError(
+  error,
+  context = "Unknown context"
+) {
+  const details =
+    createDetailedError(
+      error,
+      context
+    );
+
+  console.error(
+    "\n========================================"
+  );
+
+  console.error(
+    "🔥 MATCH ENGINE ERROR"
+  );
+
+  console.error(
+    "========================================"
+  );
+
+  console.error(
+    "Context:",
+    details.context
+  );
+
+  console.error(
+    "Name:",
+    details.name
+  );
+
+  console.error(
+    "Message:",
+    details.message
+  );
+
+  console.error(
+    "File:",
+    details.file
+  );
+
+  console.error(
+    "Line:",
+    details.line
+  );
+
+  console.error(
+    "Column:",
+    details.column
+  );
+
+  console.error(
+    "Stack:",
+    details.stack
+  );
+
+  console.error(
+    "========================================\n"
+  );
+
+  return details;
+}
+
+/* =========================================================
+   PLAYER NORMALIZATION
+========================================================= */
+
 function normalizePlayer(
   data,
   id
 ) {
+  const source =
+    data || {};
+
+  const overall = Number(
+    source.overall ??
+      source.rating ??
+      source.ovr ??
+      60
+  );
+
   return {
     id,
 
-    ...data,
+    ...source,
 
     shirtNumber:
-      data?.shirtNumber ??
-      data?.jerseyNumber ??
-      data?.kitNumber ??
-      data?.number ??
+      source.shirtNumber ??
+      source.jerseyNumber ??
+      source.kitNumber ??
+      source.number ??
       null,
 
     number:
-      data?.shirtNumber ??
-      data?.jerseyNumber ??
-      data?.kitNumber ??
-      data?.number ??
+      source.shirtNumber ??
+      source.jerseyNumber ??
+      source.kitNumber ??
+      source.number ??
       null,
 
     overall:
-      Number(
-        data?.overall ??
-        data?.rating ??
-        data?.ovr ??
-        60
-      ),
+      Number.isFinite(
+        overall
+      )
+        ? overall
+        : 60,
   };
 }
+
+/* =========================================================
+   LOAD PLAYERS
+========================================================= */
 
 async function loadPlayers(
   clubId
 ) {
   if (!clubId) {
+    console.warn(
+      "⚠️ loadPlayers called without clubId"
+    );
+
     return [];
   }
 
@@ -122,27 +283,45 @@ async function loadPlayers(
         );
       }
     } catch (error) {
-      console.error(
-        `Player query failed: ${field}`,
-        error
+      printDetailedError(
+        error,
+        `loadPlayers -> players where ${field}`
       );
     }
   }
 
+  console.warn(
+    `⚠️ No players found for club ${clubId}`
+  );
+
   return [];
 }
+
+/* =========================================================
+   PLAYER IDS
+========================================================= */
 
 function idsFromPlayers(
   players
 ) {
+  if (
+    !Array.isArray(players)
+  ) {
+    return [];
+  }
+
   return players
     .map(
       (player) =>
-        player.id ??
-        player.playerId
+        player?.id ??
+        player?.playerId
     )
     .filter(Boolean);
 }
+
+/* =========================================================
+   EMBEDDED PLAYERS
+========================================================= */
 
 function getEmbeddedPlayers(
   match,
@@ -151,14 +330,14 @@ function getEmbeddedPlayers(
   const candidates =
     side === "home"
       ? [
-          match.homePlayers,
-          match.homeLineup,
-          match.homeSquad,
+          match?.homePlayers,
+          match?.homeLineup,
+          match?.homeSquad,
         ]
       : [
-          match.awayPlayers,
-          match.awayLineup,
-          match.awaySquad,
+          match?.awayPlayers,
+          match?.awayLineup,
+          match?.awaySquad,
         ];
 
   for (
@@ -172,8 +351,8 @@ function getEmbeddedPlayers(
         (player, index) =>
           normalizePlayer(
             player,
-            player.id ??
-              player.playerId ??
+            player?.id ??
+              player?.playerId ??
               `embedded-${side}-${index}`
           )
       );
@@ -183,6 +362,10 @@ function getEmbeddedPlayers(
   return [];
 }
 
+/* =========================================================
+   MAIN PAGE
+========================================================= */
+
 export default function MatchPage() {
   const router =
     useRouter();
@@ -190,6 +373,10 @@ export default function MatchPage() {
   const {
     id: matchId,
   } = router.query;
+
+  /* -------------------------------------------------------
+     REFS
+  ------------------------------------------------------- */
 
   const engineRef =
     useRef(null);
@@ -209,16 +396,20 @@ export default function MatchPage() {
   const mountedRef =
     useRef(true);
 
+  const crashedRef =
+    useRef(false);
+
+  /* -------------------------------------------------------
+     STATE
+  ------------------------------------------------------- */
+
   const [loading, setLoading] =
     useState(true);
 
   const [error, setError] =
-    useState("");
-
-  const [snapshot, setSnapshot] =
     useState(null);
 
-  const [matchData, setMatchData] =
+  const [snapshot, setSnapshot] =
     useState(null);
 
   const [userTactics, setUserTactics] =
@@ -227,10 +418,107 @@ export default function MatchPage() {
     );
 
   const [formation, setFormation] =
-    useState("4-4-2");
+    useState(
+      "4-4-2"
+    );
 
   const [saving, setSaving] =
     useState(false);
+
+  /* =======================================================
+     GLOBAL BROWSER ERROR HANDLERS
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return;
+    }
+
+    function handleWindowError(
+      event
+    ) {
+      const originalError =
+        event?.error ||
+        new Error(
+          event?.message ||
+            "Unknown window error"
+        );
+
+      const details =
+        printDetailedError(
+          originalError,
+          "window.onerror"
+        );
+
+      if (
+        mountedRef.current
+      ) {
+        setError(
+          details
+        );
+      }
+    }
+
+    function handleUnhandledRejection(
+      event
+    ) {
+      const reason =
+        event?.reason;
+
+      const originalError =
+        reason instanceof Error
+          ? reason
+          : new Error(
+              String(
+                reason ||
+                  "Unhandled promise rejection"
+              )
+            );
+
+      const details =
+        printDetailedError(
+          originalError,
+          "unhandledrejection"
+        );
+
+      if (
+        mountedRef.current
+      ) {
+        setError(
+          details
+        );
+      }
+    }
+
+    window.addEventListener(
+      "error",
+      handleWindowError
+    );
+
+    window.addEventListener(
+      "unhandledrejection",
+      handleUnhandledRejection
+    );
+
+    return () => {
+      window.removeEventListener(
+        "error",
+        handleWindowError
+      );
+
+      window.removeEventListener(
+        "unhandledrejection",
+        handleUnhandledRejection
+      );
+    };
+  }, []);
+
+  /* =======================================================
+     SAVE MATCH
+  ======================================================= */
 
   const saveMatch =
     useCallback(
@@ -238,22 +526,48 @@ export default function MatchPage() {
         engine,
         final = false
       ) => {
-        if (!matchId || !engine) {
+        if (
+          !matchId ||
+          !engine
+        ) {
           return;
         }
 
         try {
           setSaving(true);
 
-          const result =
-            engine.serializeResult();
+          let result;
 
-          await updateDoc(
+          try {
+            result =
+              engine.serializeResult();
+          } catch (error) {
+            const details =
+              printDetailedError(
+                error,
+                "engine.serializeResult()"
+              );
+
+            if (
+              mountedRef.current
+            ) {
+              setError(
+                details
+              );
+            }
+
+            return;
+          }
+
+          const matchRef =
             doc(
               db,
               "matches",
               matchId
-            ),
+            );
+
+          await updateDoc(
+            matchRef,
             {
               status:
                 final
@@ -261,59 +575,89 @@ export default function MatchPage() {
                   : "live",
 
               minute:
-                result.minute,
+                result?.minute ??
+                0,
 
               second:
-                engine.second,
+                engine?.second ??
+                0,
 
               homeScore:
-                result.homeScore,
+                result?.homeScore ??
+                0,
 
               awayScore:
-                result.awayScore,
+                result?.awayScore ??
+                0,
 
               score:
-                result.score,
+                result?.score ?? {
+                  home: 0,
+                  away: 0,
+                },
 
               homeStats:
-                result.homeStats,
+                result?.homeStats ??
+                {},
 
               awayStats:
-                result.awayStats,
+                result?.awayStats ??
+                {},
 
               events:
-                result.events,
+                Array.isArray(
+                  result?.events
+                )
+                  ? result.events
+                  : [],
 
               homeLineupIds:
-                engine.home.players.map(
-                  (p) => p.id
-                ),
+                Array.isArray(
+                  engine?.home?.players
+                )
+                  ? engine.home.players.map(
+                      (p) => p.id
+                    )
+                  : [],
 
               awayLineupIds:
-                engine.away.players.map(
-                  (p) => p.id
-                ),
+                Array.isArray(
+                  engine?.away?.players
+                )
+                  ? engine.away.players.map(
+                      (p) => p.id
+                    )
+                  : [],
 
               homeFormation:
-                engine.home.formation,
+                engine?.home?.formation ??
+                "4-4-2",
 
               awayFormation:
-                engine.away.formation,
+                engine?.away?.formation ??
+                "4-4-2",
 
               homeTactics:
-                engine.home.tactics,
+                engine?.home?.tactics ??
+                {},
 
               awayTactics:
-                engine.away.tactics,
+                engine?.away?.tactics ??
+                {},
 
               homeSubsUsed:
-                engine.home.substitutionsUsed,
+                engine?.home
+                  ?.substitutionsUsed ??
+                0,
 
               awaySubsUsed:
-                engine.away.substitutionsUsed,
+                engine?.away
+                  ?.substitutionsUsed ??
+                0,
 
               result:
-                result.result,
+                result?.result ??
+                null,
 
               ...(final
                 ? {
@@ -326,11 +670,20 @@ export default function MatchPage() {
                 serverTimestamp(),
             }
           );
-        } catch (err) {
-          console.error(
-            "Match save error:",
-            err
-          );
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "saveMatch -> Firestore updateDoc"
+            );
+
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
         } finally {
           if (
             mountedRef.current
@@ -341,6 +694,10 @@ export default function MatchPage() {
       },
       [matchId]
     );
+
+  /* =======================================================
+     MOUNT / UNMOUNT
+  ======================================================= */
 
   useEffect(() => {
     mountedRef.current =
@@ -356,9 +713,34 @@ export default function MatchPage() {
         cancelAnimationFrame(
           animationRef.current
         );
+
+        animationRef.current =
+          null;
+      }
+
+      const engine =
+        engineRef.current;
+
+      if (
+        engine &&
+        typeof engine.stop ===
+          "function"
+      ) {
+        try {
+          engine.stop();
+        } catch (error) {
+          printDetailedError(
+            error,
+            "engine.stop() during cleanup"
+          );
+        }
       }
     };
   }, []);
+
+  /* =======================================================
+     INITIALIZE MATCH
+  ======================================================= */
 
   useEffect(() => {
     if (
@@ -374,7 +756,14 @@ export default function MatchPage() {
     async function initialize() {
       try {
         setLoading(true);
-        setError("");
+        setError(null);
+        crashedRef.current =
+          false;
+
+        console.log(
+          "🏟️ Initializing match:",
+          matchId
+        );
 
         const matchRef =
           doc(
@@ -392,7 +781,7 @@ export default function MatchPage() {
           !matchSnap.exists()
         ) {
           throw new Error(
-            "Match not found."
+            `Match not found: ${matchId}`
           );
         }
 
@@ -403,24 +792,27 @@ export default function MatchPage() {
           return;
         }
 
+        console.log(
+          "📦 Match data loaded:",
+          match
+        );
+
         const homeClubId =
-          match.homeClubId ??
-          match.homeTeamId;
+          match?.homeClubId ??
+          match?.homeTeamId;
 
         const awayClubId =
-          match.awayClubId ??
-          match.awayTeamId;
+          match?.awayClubId ??
+          match?.awayTeamId;
+
+        /* -----------------------------------------------
+           HOME PLAYERS
+        ------------------------------------------------ */
 
         let homePlayers =
           getEmbeddedPlayers(
             match,
             "home"
-          );
-
-        let awayPlayers =
-          getEmbeddedPlayers(
-            match,
-            "away"
           );
 
         if (
@@ -432,6 +824,16 @@ export default function MatchPage() {
             );
         }
 
+        /* -----------------------------------------------
+           AWAY PLAYERS
+        ------------------------------------------------ */
+
+        let awayPlayers =
+          getEmbeddedPlayers(
+            match,
+            "away"
+          );
+
         if (
           !awayPlayers.length
         ) {
@@ -441,9 +843,23 @@ export default function MatchPage() {
             );
         }
 
+        console.log(
+          "👥 Home players:",
+          homePlayers.length
+        );
+
+        console.log(
+          "👥 Away players:",
+          awayPlayers.length
+        );
+
+        /* -----------------------------------------------
+           LINEUPS
+        ------------------------------------------------ */
+
         const homeLineupIds =
           Array.isArray(
-            match.homeLineupIds
+            match?.homeLineupIds
           )
             ? match.homeLineupIds
             : idsFromPlayers(
@@ -455,7 +871,7 @@ export default function MatchPage() {
 
         const awayLineupIds =
           Array.isArray(
-            match.awayLineupIds
+            match?.awayLineupIds
           )
             ? match.awayLineupIds
             : idsFromPlayers(
@@ -465,120 +881,180 @@ export default function MatchPage() {
                 )
               );
 
+        /* -----------------------------------------------
+           FORMATIONS
+        ------------------------------------------------ */
+
         const homeFormation =
-          match.homeFormation ??
+          match?.homeFormation ??
           "4-4-2";
 
         const awayFormation =
-          match.awayFormation ??
+          match?.awayFormation ??
           "4-4-2";
+
+        /* -----------------------------------------------
+           TACTICS
+        ------------------------------------------------ */
 
         const homeTactics = {
           ...DEFAULT_TACTICS,
-          ...(match.homeTactics ||
+          ...(match?.homeTactics ||
             {}),
         };
 
         const awayTactics = {
           ...DEFAULT_TACTICS,
-          ...(match.awayTactics ||
+          ...(match?.awayTactics ||
             {}),
         };
+
+        /* -----------------------------------------------
+           SCORE
+        ------------------------------------------------ */
 
         const initialScore = {
           home:
             Number(
-              match.homeScore ??
-              match.score?.home ??
-              0
-            ),
+              match?.homeScore ??
+                match?.score?.home ??
+                0
+            ) || 0,
 
           away:
             Number(
-              match.awayScore ??
-              match.score?.away ??
-              0
-            ),
+              match?.awayScore ??
+                match?.score?.away ??
+                0
+            ) || 0,
         };
 
-        const engine =
-          new MatchEngine({
-            matchId,
+        /* -----------------------------------------------
+           ENGINE CONFIG
+        ------------------------------------------------ */
 
-            homeTeam: {
-              id:
-                homeClubId,
+        const engineConfig = {
+          matchId,
 
-              name:
-                match.homeTeamName ??
-                match.homeClubName ??
-                match.homeTeam?.name ??
-                "Home",
+          homeTeam: {
+            id:
+              homeClubId,
 
-              logo:
-                match.homeTeamLogo ??
-                match.homeTeam?.logo ??
-                "",
-            },
+            name:
+              match?.homeTeamName ??
+              match?.homeClubName ??
+              match?.homeTeam?.name ??
+              "Home",
 
-            awayTeam: {
-              id:
-                awayClubId,
+            logo:
+              match?.homeTeamLogo ??
+              match?.homeTeam?.logo ??
+              "",
+          },
 
-              name:
-                match.awayTeamName ??
-                match.awayClubName ??
-                match.awayTeam?.name ??
-                "Away",
+          awayTeam: {
+            id:
+              awayClubId,
 
-              logo:
-                match.awayTeamLogo ??
-                match.awayTeam?.logo ??
-                "",
-            },
+            name:
+              match?.awayTeamName ??
+              match?.awayClubName ??
+              match?.awayTeam?.name ??
+              "Away",
 
-            homePlayers,
-            awayPlayers,
+            logo:
+              match?.awayTeamLogo ??
+              match?.awayTeam?.logo ??
+              "",
+          },
 
-            homeLineupIds,
-            awayLineupIds,
+          homePlayers,
+          awayPlayers,
 
-            formationHome:
-              homeFormation,
+          homeLineupIds,
+          awayLineupIds,
 
-            formationAway:
-              awayFormation,
+          formationHome:
+            homeFormation,
 
-            tacticsHome:
-              homeTactics,
+          formationAway:
+            awayFormation,
 
-            tacticsAway:
-              awayTactics,
+          tacticsHome:
+            homeTactics,
 
-            initialScore,
+          tacticsAway:
+            awayTactics,
 
-            initialMinute:
-              Number(
-                match.minute || 0
-              ),
+          initialScore,
 
-            initialEvents:
-              Array.isArray(
-                match.events
-              )
-                ? match.events
-                : [],
-          });
+          initialMinute:
+            Number(
+              match?.minute || 0
+            ) || 0,
+
+          initialEvents:
+            Array.isArray(
+              match?.events
+            )
+              ? match.events
+              : [],
+        };
+
+        console.log(
+          "⚙️ Creating MatchEngine:",
+          engineConfig
+        );
+
+        /* -----------------------------------------------
+           CREATE ENGINE
+        ------------------------------------------------ */
+
+        let engine;
+
+        try {
+          engine =
+            new MatchEngine(
+              engineConfig
+            );
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "new MatchEngine()"
+            );
+
+          throw Object.assign(
+            new Error(
+              `MatchEngine initialization failed: ${details.message}`
+            ),
+            {
+              originalError:
+                error,
+              details,
+            }
+          );
+        }
+
+        if (!engine) {
+          throw new Error(
+            "MatchEngine returned undefined."
+          );
+        }
 
         engineRef.current =
           engine;
 
         eventIndexRef.current =
-          engine.events.length;
+          Array.isArray(
+            engine.events
+          )
+            ? engine.events.length
+            : 0;
 
-        setMatchData(
-          match
-        );
+        /* -----------------------------------------------
+           UI STATE
+        ------------------------------------------------ */
 
         setUserTactics(
           homeTactics
@@ -588,61 +1064,151 @@ export default function MatchPage() {
           homeFormation
         );
 
+        /* -----------------------------------------------
+           INITIAL SNAPSHOT
+        ------------------------------------------------ */
+
+        let initialSnapshot;
+
+        try {
+          initialSnapshot =
+            engine.getSnapshot();
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "engine.getSnapshot() during initialization"
+            );
+
+          throw Object.assign(
+            new Error(
+              `Could not create initial snapshot: ${details.message}`
+            ),
+            {
+              originalError:
+                error,
+              details,
+            }
+          );
+        }
+
         setSnapshot(
-          engine.getSnapshot()
+          initialSnapshot
         );
 
-        engine.start();
+        /* -----------------------------------------------
+           START ENGINE
+        ------------------------------------------------ */
 
-        await updateDoc(
-          matchRef,
-          {
-            status: "live",
-
-            homeLineupIds:
-              engine.home.players.map(
-                (p) => p.id
-              ),
-
-            awayLineupIds:
-              engine.away.players.map(
-                (p) => p.id
-              ),
-
-            homeFormation:
-              engine.home.formation,
-
-            awayFormation:
-              engine.away.formation,
-
-            homeTactics:
-              engine.home.tactics,
-
-            awayTactics:
-              engine.away.tactics,
-
-            startedAt:
-              serverTimestamp(),
-
-            updatedAt:
-              serverTimestamp(),
+        try {
+          if (
+            typeof engine.start ===
+            "function"
+          ) {
+            engine.start();
           }
-        );
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "engine.start()"
+            );
+
+          throw Object.assign(
+            new Error(
+              `MatchEngine.start() failed: ${details.message}`
+            ),
+            {
+              originalError:
+                error,
+              details,
+            }
+          );
+        }
+
+        /* -----------------------------------------------
+           SAVE LIVE STATUS
+        ------------------------------------------------ */
+
+        try {
+          await updateDoc(
+            matchRef,
+            {
+              status:
+                "live",
+
+              homeLineupIds:
+                engine?.home?.players?.map(
+                  (p) => p.id
+                ) || [],
+
+              awayLineupIds:
+                engine?.away?.players?.map(
+                  (p) => p.id
+                ) || [],
+
+              homeFormation:
+                engine?.home?.formation ??
+                homeFormation,
+
+              awayFormation:
+                engine?.away?.formation ??
+                awayFormation,
+
+              homeTactics:
+                engine?.home?.tactics ??
+                homeTactics,
+
+              awayTactics:
+                engine?.away?.tactics ??
+                awayTactics,
+
+              startedAt:
+                serverTimestamp(),
+
+              updatedAt:
+                serverTimestamp(),
+            }
+          );
+        } catch (error) {
+          /*
+           * Firestore failure should not destroy
+           * the actual match engine.
+           */
+          printDetailedError(
+            error,
+            "initial match Firestore update"
+          );
+        }
+
+        if (cancelled) {
+          return;
+        }
 
         setLoading(false);
 
         startAnimationLoop(
           engine
         );
-      } catch (err) {
-        console.error(err);
+      } catch (error) {
+        const details =
+          error?.details ||
+          printDetailedError(
+            error,
+            "Match initialization"
+          );
+
+        console.error(
+          "❌ MATCH INITIALIZATION FAILED:",
+          details
+        );
 
         if (
-          !cancelled
+          !cancelled &&
+          mountedRef.current
         ) {
           setError(
-            err?.message ||
-              "Failed to load match."
+            details
           );
 
           setLoading(false);
@@ -660,9 +1226,29 @@ export default function MatchPage() {
     matchId,
   ]);
 
+  /* =======================================================
+     ANIMATION LOOP
+  ======================================================= */
+
   function startAnimationLoop(
     engine
   ) {
+    if (!engine) {
+      const details =
+        createDetailedError(
+          new Error(
+            "Cannot start animation loop: engine is undefined."
+          ),
+          "startAnimationLoop"
+        );
+
+      setError(
+        details
+      );
+
+      return;
+    }
+
     lastFrameRef.current =
       performance.now();
 
@@ -671,26 +1257,84 @@ export default function MatchPage() {
 
     function frame(now) {
       if (
-        !mountedRef.current
+        !mountedRef.current ||
+        crashedRef.current
       ) {
         return;
       }
 
-      const dt =
-        Math.min(
-          0.05,
-          Math.max(
-            0,
-            (now -
-              lastFrameRef.current) /
-              1000
-          )
-        );
+      const previousFrame =
+        lastFrameRef.current ??
+        now;
+
+      let dt =
+        (now -
+          previousFrame) /
+        1000;
+
+      dt = Math.min(
+        0.05,
+        Math.max(
+          0,
+          dt
+        )
+      );
 
       lastFrameRef.current =
         now;
 
-      engine.update(dt);
+      /* -----------------------------------------------
+         ENGINE UPDATE
+      ------------------------------------------------ */
+
+      try {
+        if (
+          typeof engine.update !==
+          "function"
+        ) {
+          throw new Error(
+            "MatchEngine.update is not a function."
+          );
+        }
+
+        engine.update(
+          dt
+        );
+      } catch (error) {
+        crashedRef.current =
+          true;
+
+        const details =
+          printDetailedError(
+            error,
+            "engine.update(dt)"
+          );
+
+        if (
+          mountedRef.current
+        ) {
+          setError(
+            details
+          );
+        }
+
+        if (
+          animationRef.current
+        ) {
+          cancelAnimationFrame(
+            animationRef.current
+          );
+
+          animationRef.current =
+            null;
+        }
+
+        return;
+      }
+
+      /* -----------------------------------------------
+         UI UPDATE
+      ------------------------------------------------ */
 
       if (
         now - lastUi >
@@ -698,18 +1342,49 @@ export default function MatchPage() {
       ) {
         lastUi = now;
 
-        setSnapshot(
-          engine.getSnapshot()
-        );
+        try {
+          const nextSnapshot =
+            engine.getSnapshot();
+
+          setSnapshot(
+            nextSnapshot
+          );
+        } catch (error) {
+          crashedRef.current =
+            true;
+
+          const details =
+            printDetailedError(
+              error,
+              "engine.getSnapshot() during animation"
+            );
+
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
+
+          return;
+        }
 
         if (
+          Array.isArray(
+            engine.events
+          ) &&
           engine.events.length >
-          eventIndexRef.current
+            eventIndexRef.current
         ) {
           eventIndexRef.current =
             engine.events.length;
         }
       }
+
+      /* -----------------------------------------------
+         AUTO SAVE TIMER
+      ------------------------------------------------ */
 
       saveTimerRef.current +=
         dt * 1000;
@@ -727,20 +1402,51 @@ export default function MatchPage() {
         );
       }
 
-      if (
-        engine.isFinished()
-      ) {
-        setSnapshot(
-          engine.getSnapshot()
-        );
+      /* -----------------------------------------------
+         FINISH CHECK
+      ------------------------------------------------ */
 
-        saveMatch(
-          engine,
-          true
-        );
+      try {
+        if (
+          typeof engine.isFinished ===
+            "function" &&
+          engine.isFinished()
+        ) {
+          setSnapshot(
+            engine.getSnapshot()
+          );
+
+          saveMatch(
+            engine,
+            true
+          );
+
+          return;
+        }
+      } catch (error) {
+        crashedRef.current =
+          true;
+
+        const details =
+          printDetailedError(
+            error,
+            "engine.isFinished()"
+          );
+
+        if (
+          mountedRef.current
+        ) {
+          setError(
+            details
+          );
+        }
 
         return;
       }
+
+      /* -----------------------------------------------
+         NEXT FRAME
+      ------------------------------------------------ */
 
       animationRef.current =
         requestAnimationFrame(
@@ -754,27 +1460,64 @@ export default function MatchPage() {
       );
   }
 
+  /* =======================================================
+     TACTICS
+  ======================================================= */
+
   async function handleTacticsChange(
     nextTactics
   ) {
     const engine =
       engineRef.current;
 
-    if (!engine) return;
+    if (!engine) {
+      return;
+    }
 
-    setUserTactics(
-      nextTactics
-    );
+    try {
+      const safeTactics = {
+        ...DEFAULT_TACTICS,
+        ...(nextTactics ||
+          {}),
+      };
 
-    engine.setUserTactics(
-      nextTactics
-    );
+      setUserTactics(
+        safeTactics
+      );
 
-    await saveMatch(
-      engine,
-      false
-    );
+      if (
+        typeof engine.setUserTactics !==
+        "function"
+      ) {
+        throw new Error(
+          "engine.setUserTactics is not a function."
+        );
+      }
+
+      engine.setUserTactics(
+        safeTactics
+      );
+
+      await saveMatch(
+        engine,
+        false
+      );
+    } catch (error) {
+      const details =
+        printDetailedError(
+          error,
+          "handleTacticsChange"
+        );
+
+      setError(
+        details
+      );
+    }
   }
+
+  /* =======================================================
+     FORMATION
+  ======================================================= */
 
   async function handleFormationChange(
     nextFormation
@@ -782,22 +1525,61 @@ export default function MatchPage() {
     const engine =
       engineRef.current;
 
-    if (!engine) return;
+    if (!engine) {
+      return;
+    }
 
-    setFormation(
-      nextFormation
-    );
+    try {
+      if (
+        !nextFormation
+      ) {
+        throw new Error(
+          "Formation is empty."
+        );
+      }
 
-    engine.setFormation(
-      "home",
-      nextFormation
-    );
+      setFormation(
+        nextFormation
+      );
 
-    await saveMatch(
-      engine,
-      false
-    );
+      if (
+        typeof engine.setFormation !==
+        "function"
+      ) {
+        throw new Error(
+          "engine.setFormation is not a function."
+        );
+      }
+
+      engine.setFormation(
+        "home",
+        nextFormation
+      );
+
+      setSnapshot(
+        engine.getSnapshot()
+      );
+
+      await saveMatch(
+        engine,
+        false
+      );
+    } catch (error) {
+      const details =
+        printDetailedError(
+          error,
+          "handleFormationChange"
+        );
+
+      setError(
+        details
+      );
+    }
   }
+
+  /* =======================================================
+     SUBSTITUTION
+  ======================================================= */
 
   async function handleSubstitution(
     outgoingId,
@@ -806,32 +1588,202 @@ export default function MatchPage() {
     const engine =
       engineRef.current;
 
-    if (!engine) return;
-
-    const success =
-      engine.substituteUser(
-        outgoingId,
-        incomingId
-      );
-
-    if (!success) {
+    if (!engine) {
       return;
     }
 
-    setSnapshot(
-      engine.getSnapshot()
-    );
+    try {
+      if (
+        typeof engine.substituteUser !==
+        "function"
+      ) {
+        throw new Error(
+          "engine.substituteUser is not a function."
+        );
+      }
 
-    await saveMatch(
-      engine,
-      false
+      const success =
+        engine.substituteUser(
+          outgoingId,
+          incomingId
+        );
+
+      if (!success) {
+        console.warn(
+          "⚠️ Substitution failed:",
+          {
+            outgoingId,
+            incomingId,
+          }
+        );
+
+        return;
+      }
+
+      setSnapshot(
+        engine.getSnapshot()
+      );
+
+      await saveMatch(
+        engine,
+        false
+      );
+    } catch (error) {
+      const details =
+        printDetailedError(
+          error,
+          "handleSubstitution"
+        );
+
+      setError(
+        details
+      );
+    }
+  }
+
+  /* =======================================================
+     ERROR SCREEN
+  ======================================================= */
+
+  if (error) {
+    return (
+      <>
+        <Head>
+          <title>
+            Match Engine Error
+          </title>
+        </Head>
+
+        <main
+          className={styles.error}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "900px",
+              margin: "0 auto",
+              padding: "20px",
+            }}
+          >
+            <h1>
+              Match Engine Error
+            </h1>
+
+            <p>
+              Umukino wahagaritswe kubera
+              error. Noneho aho gukeka file,
+              page irakubwira aho error
+              yaturutse.
+            </p>
+
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "16px",
+                borderRadius: "12px",
+                background:
+                  "rgba(255,0,0,0.08)",
+                border:
+                  "1px solid rgba(255,0,0,0.25)",
+                overflowX: "auto",
+              }}
+            >
+              <p>
+                <strong>
+                  Error:
+                </strong>{" "}
+                {error.message}
+              </p>
+
+              <p>
+                <strong>
+                  Context:
+                </strong>{" "}
+                {error.context}
+              </p>
+
+              <p>
+                <strong>
+                  File:
+                </strong>{" "}
+                {error.file}
+              </p>
+
+              <p>
+                <strong>
+                  Line:
+                </strong>{" "}
+                {error.line}
+              </p>
+
+              <p>
+                <strong>
+                  Column:
+                </strong>{" "}
+                {error.column}
+              </p>
+            </div>
+
+            <details
+              style={{
+                marginTop: "20px",
+              }}
+            >
+              <summary>
+                Show full stack trace
+              </summary>
+
+              <pre
+                style={{
+                  marginTop: "12px",
+                  padding: "16px",
+                  whiteSpace:
+                    "pre-wrap",
+                  wordBreak:
+                    "break-word",
+                  overflowX: "auto",
+                  borderRadius: "12px",
+                  background:
+                    "rgba(0,0,0,0.35)",
+                }}
+              >
+                {error.stack}
+              </pre>
+            </details>
+
+            <button
+              type="button"
+              onClick={() =>
+                window.location.reload()
+              }
+              style={{
+                marginTop: "20px",
+                padding:
+                  "12px 18px",
+                border: "none",
+                borderRadius:
+                  "10px",
+                cursor: "pointer",
+              }}
+            >
+              Reload Match
+            </button>
+          </div>
+        </main>
+      </>
     );
   }
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
   if (loading) {
     return (
       <div
-        className={styles.loading}
+        className={
+          styles.loading
+        }
       >
         <div
           className={
@@ -846,27 +1798,19 @@ export default function MatchPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div
-        className={styles.error}
-      >
-        <h2>
-          Match Error
-        </h2>
-
-        <p>
-          {error}
-        </p>
-      </div>
-    );
-  }
+  /* =======================================================
+     SNAPSHOT
+  ======================================================= */
 
   const home =
     snapshot?.home;
 
   const away =
     snapshot?.away;
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <>
@@ -887,8 +1831,14 @@ export default function MatchPage() {
       </Head>
 
       <main
-        className={styles.page}
+        className={
+          styles.page
+        }
       >
+        {/* ================================================
+            SCORE HEADER
+        ================================================= */}
+
         <header
           className={
             styles.scoreHeader
@@ -900,12 +1850,15 @@ export default function MatchPage() {
             }
           >
             <strong>
-              {home?.name}
+              {home?.name ||
+                "Home"}
             </strong>
           </div>
 
           <div
-            className={styles.score}
+            className={
+              styles.score
+            }
           >
             <span>
               {home?.score ??
@@ -937,10 +1890,15 @@ export default function MatchPage() {
             }
           >
             <strong>
-              {away?.name}
+              {away?.name ||
+                "Away"}
             </strong>
           </div>
         </header>
+
+        {/* ================================================
+            PITCH
+        ================================================= */}
 
         <section
           className={
@@ -970,6 +1928,10 @@ export default function MatchPage() {
             )}
           </div>
         </section>
+
+        {/* ================================================
+            USER CONTROLS
+        ================================================= */}
 
         <section
           className={
@@ -1010,7 +1972,7 @@ export default function MatchPage() {
 
             <SubstitutionPanel
               team={{
-                ...home,
+                ...(home || {}),
                 bench:
                   engineRef.current
                     ?.home
@@ -1027,6 +1989,10 @@ export default function MatchPage() {
             />
           </div>
         </section>
+
+        {/* ================================================
+            AWAY / STATS
+        ================================================= */}
 
         <section
           className={
@@ -1046,6 +2012,10 @@ export default function MatchPage() {
             }
           />
         </section>
+
+        {/* ================================================
+            EVENTS
+        ================================================= */}
 
         <section>
           <MatchEvents
