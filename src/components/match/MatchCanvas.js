@@ -1,28 +1,185 @@
+// components/match/MatchCanvas.js
+
 import {
   useEffect,
   useRef,
 } from "react";
 
+import {
+  FIELD,
+} from "../../lib/match-engine/constants";
+
 import styles from "./MatchCanvas.module.css";
 
-const WIDTH = 1050;
-const HEIGHT = 680;
+export default function MatchCanvas({
+  snapshot,
+}) {
+  const canvasRef =
+    useRef(null);
 
-function drawPitch(ctx) {
+  useEffect(() => {
+    const canvas =
+      canvasRef.current;
+
+    if (!canvas) return;
+
+    const parent =
+      canvas.parentElement;
+
+    const resize = () => {
+      const rect =
+        parent.getBoundingClientRect();
+
+      const ratio =
+        window.devicePixelRatio ||
+        1;
+
+      canvas.width =
+        FIELD.width * ratio;
+
+      canvas.height =
+        FIELD.height * ratio;
+
+      canvas.style.width =
+        `${rect.width}px`;
+
+      canvas.style.height =
+        `${rect.width *
+          (FIELD.height /
+            FIELD.width)}px`;
+
+      const ctx =
+        canvas.getContext("2d");
+
+      ctx.setTransform(
+        ratio,
+        0,
+        0,
+        ratio,
+        0,
+        0
+      );
+
+      draw(
+        ctx,
+        snapshot
+      );
+    };
+
+    const observer =
+      new ResizeObserver(
+        resize
+      );
+
+    observer.observe(parent);
+
+    resize();
+
+    return () =>
+      observer.disconnect();
+  }, [snapshot]);
+
+  useEffect(() => {
+    const canvas =
+      canvasRef.current;
+
+    if (!canvas) return;
+
+    const ctx =
+      canvas.getContext("2d");
+
+    const ratio =
+      window.devicePixelRatio ||
+      1;
+
+    ctx.setTransform(
+      ratio,
+      0,
+      0,
+      ratio,
+      0,
+      0
+    );
+
+    draw(
+      ctx,
+      snapshot
+    );
+  }, [snapshot]);
+
+  return (
+    <div className={styles.wrapper}>
+      <canvas
+        ref={canvasRef}
+        className={styles.canvas}
+      />
+    </div>
+  );
+}
+
+function draw(
+  ctx,
+  snapshot
+) {
+  if (!ctx) return;
+
   ctx.clearRect(
     0,
     0,
-    WIDTH,
-    HEIGHT
+    FIELD.width,
+    FIELD.height
   );
 
-  ctx.fillStyle = "#087f3d";
+  drawPitch(ctx);
+
+  if (!snapshot) return;
+
+  drawPlayers(
+    ctx,
+    snapshot.home?.players,
+    true
+  );
+
+  drawPlayers(
+    ctx,
+    snapshot.away?.players,
+    false
+  );
+
+  drawBall(
+    ctx,
+    snapshot.ball
+  );
+}
+
+function drawPitch(ctx) {
+  ctx.fillStyle =
+    "#087f45";
+
   ctx.fillRect(
     0,
     0,
-    WIDTH,
-    HEIGHT
+    FIELD.width,
+    FIELD.height
   );
+
+  for (
+    let x = 0;
+    x < FIELD.width;
+    x += 70
+  ) {
+    ctx.fillStyle =
+      x % 140 === 0
+        ? "rgba(255,255,255,.025)"
+        : "rgba(0,0,0,.025)";
+
+    ctx.fillRect(
+      x,
+      0,
+      70,
+      FIELD.height
+    );
+  }
 
   ctx.strokeStyle =
     "rgba(255,255,255,.85)";
@@ -32,20 +189,20 @@ function drawPitch(ctx) {
   ctx.strokeRect(
     4,
     4,
-    WIDTH - 8,
-    HEIGHT - 8
+    FIELD.width - 8,
+    FIELD.height - 8
   );
 
   ctx.beginPath();
 
   ctx.moveTo(
-    WIDTH / 2,
-    4
+    FIELD.centerX,
+    0
   );
 
   ctx.lineTo(
-    WIDTH / 2,
-    HEIGHT - 4
+    FIELD.centerX,
+    FIELD.height
   );
 
   ctx.stroke();
@@ -53,9 +210,9 @@ function drawPitch(ctx) {
   ctx.beginPath();
 
   ctx.arc(
-    WIDTH / 2,
-    HEIGHT / 2,
-    82,
+    FIELD.centerX,
+    FIELD.centerY,
+    85,
     0,
     Math.PI * 2
   );
@@ -63,13 +220,13 @@ function drawPitch(ctx) {
   ctx.stroke();
 
   ctx.fillStyle =
-    "rgba(255,255,255,.8)";
+    "rgba(255,255,255,.9)";
 
   ctx.beginPath();
 
   ctx.arc(
-    WIDTH / 2,
-    HEIGHT / 2,
+    FIELD.centerX,
+    FIELD.centerY,
     4,
     0,
     Math.PI * 2
@@ -79,194 +236,222 @@ function drawPitch(ctx) {
 
   drawPenaltyArea(
     ctx,
-    0
+    0,
+    false
   );
 
   drawPenaltyArea(
     ctx,
-    WIDTH - 170
+    FIELD.width,
+    true
   );
 
-  drawGoal(
-    ctx,
-    0
-  );
-
-  drawGoal(
-    ctx,
-    WIDTH
-  );
-
-  ctx.strokeStyle =
-    "rgba(255,255,255,.28)";
-
-  ctx.lineWidth = 1;
-
-  for (
-    let x = 0;
-    x < WIDTH;
-    x += 70
-  ) {
-    ctx.beginPath();
-
-    ctx.moveTo(x, 0);
-    ctx.lineTo(
-      x + 70,
-      HEIGHT
-    );
-
-    ctx.stroke();
-  }
+  drawGoals(ctx);
 }
 
 function drawPenaltyArea(
   ctx,
-  x
+  x,
+  right
 ) {
-  ctx.strokeStyle =
-    "rgba(255,255,255,.85)";
+  const width =
+    FIELD.penaltyBoxWidth;
 
-  ctx.lineWidth = 3;
+  const height =
+    FIELD.penaltyBoxHeight;
+
+  const startX =
+    right
+      ? x - width
+      : x;
+
+  const startY =
+    (FIELD.height -
+      height) /
+    2;
 
   ctx.strokeRect(
-    x,
-    230,
-    170,
-    220
+    startX,
+    startY,
+    width,
+    height
   );
 
+  const sixWidth =
+    FIELD.sixYardWidth;
+
+  const sixHeight =
+    FIELD.sixYardHeight;
+
+  const sixX =
+    right
+      ? x - sixWidth
+      : x;
+
+  const sixY =
+    (FIELD.height -
+      sixHeight) /
+    2;
+
   ctx.strokeRect(
-    x === 0
-      ? 0
-      : WIDTH - 105,
-    295,
-    105,
-    90
+    sixX,
+    sixY,
+    sixWidth,
+    sixHeight
   );
 }
 
-function drawGoal(
-  ctx,
-  side
-) {
+function drawGoals(ctx) {
   ctx.strokeStyle =
-    "#ffffff";
+    "rgba(255,255,255,.95)";
 
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 4;
 
-  const x =
-    side === 0
-      ? 0
-      : WIDTH;
-
-  const direction =
-    side === 0
-      ? -1
-      : 1;
+  const top =
+    FIELD.centerY -
+    FIELD.goalWidth / 2;
 
   ctx.strokeRect(
-    x,
-    HEIGHT / 2 - 75,
-    28 * direction,
-    150
+    -FIELD.goalDepth,
+    top,
+    FIELD.goalDepth,
+    FIELD.goalWidth
+  );
+
+  ctx.strokeRect(
+    FIELD.width,
+    top,
+    FIELD.goalDepth,
+    FIELD.goalWidth
   );
 }
 
-function drawPlayer(
+function drawPlayers(
   ctx,
-  player
+  players,
+  home
 ) {
-  const isHome =
-    player.team === "home";
-
-  ctx.beginPath();
-
-  ctx.arc(
-    player.x,
-    player.y,
-    15,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.fillStyle =
-    isHome
-      ? "#20a4ff"
-      : "#f33d4f";
-
-  ctx.fill();
-
-  ctx.lineWidth = 2;
-
-  ctx.strokeStyle =
-    player.hasBall
-      ? "#ffe45c"
-      : "#ffffff";
-
-  ctx.stroke();
-
-  if (player.red) {
-    ctx.fillStyle =
-      "#111827";
-
-    ctx.fillRect(
-      player.x - 7,
-      player.y - 8,
-      14,
-      16
-    );
+  if (!Array.isArray(players)) {
+    return;
   }
 
-  if (player.yellow) {
-    ctx.fillStyle =
-      "#ffd43b";
+  for (const player of players) {
+    if (
+      player.redCard
+    ) {
+      continue;
+    }
 
-    ctx.fillRect(
-      player.x + 8,
-      player.y - 15,
-      7,
-      10
+    const x =
+      player.x;
+
+    const y =
+      player.y;
+
+    const radius =
+      player.position === "GK"
+        ? 15
+        : 13;
+
+    ctx.beginPath();
+
+    ctx.arc(
+      x,
+      y,
+      radius,
+      0,
+      Math.PI * 2
     );
+
+    ctx.fillStyle =
+      home
+        ? "#e63946"
+        : "#f1f5f9";
+
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+
+    ctx.strokeStyle =
+      home
+        ? "#7f1d1d"
+        : "#1e3a8a";
+
+    ctx.stroke();
+
+    if (
+      player.hasBall
+    ) {
+      ctx.beginPath();
+
+      ctx.arc(
+        x,
+        y,
+        radius + 5,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.strokeStyle =
+        "#facc15";
+
+      ctx.lineWidth = 2;
+
+      ctx.stroke();
+    }
+
+    ctx.fillStyle =
+      home
+        ? "#ffffff"
+        : "#111827";
+
+    ctx.font =
+      "bold 10px Arial";
+
+    ctx.textAlign =
+      "center";
+
+    ctx.textBaseline =
+      "middle";
+
+    ctx.fillText(
+      String(
+        player.number
+      ),
+      x,
+      y
+    );
+
+    if (
+      player.state ===
+      "press"
+    ) {
+      ctx.beginPath();
+
+      ctx.arc(
+        x,
+        y,
+        radius + 8,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.strokeStyle =
+        "rgba(250,204,21,.7)";
+
+      ctx.lineWidth = 1.5;
+
+      ctx.stroke();
+    }
   }
-
-  ctx.fillStyle =
-    "#ffffff";
-
-  ctx.font =
-    "bold 10px Arial";
-
-  ctx.textAlign =
-    "center";
-
-  ctx.textBaseline =
-    "middle";
-
-  ctx.fillText(
-    String(player.number),
-    player.x,
-    player.y
-  );
-
-  ctx.font =
-    "bold 9px Arial";
-
-  ctx.fillStyle =
-    "#ffffff";
-
-  ctx.fillText(
-    player.name
-      ?.split(" ")
-      .slice(-1)[0]
-      ?.slice(0, 10) || "",
-    player.x,
-    player.y + 25
-  );
 }
 
 function drawBall(
   ctx,
   ball
 ) {
+  if (!ball) return;
+
   ctx.beginPath();
 
   ctx.arc(
@@ -288,81 +473,4 @@ function drawBall(
   ctx.lineWidth = 1.5;
 
   ctx.stroke();
-}
-
-export default function MatchCanvas({
-  snapshot,
-}) {
-  const canvasRef =
-    useRef(null);
-
-  useEffect(() => {
-    const canvas =
-      canvasRef.current;
-
-    if (!canvas || !snapshot) {
-      return;
-    }
-
-    const ctx =
-      canvas.getContext("2d");
-
-    const ratio =
-      window.devicePixelRatio ||
-      1;
-
-    canvas.width =
-      WIDTH * ratio;
-
-    canvas.height =
-      HEIGHT * ratio;
-
-    canvas.style.width =
-      "100%";
-
-    canvas.style.height =
-      "auto";
-
-    ctx.setTransform(
-      ratio,
-      0,
-      0,
-      ratio,
-      0,
-      0
-    );
-
-    drawPitch(ctx);
-
-    [
-      ...(snapshot.players?.home ||
-        []),
-      ...(snapshot.players?.away ||
-        []),
-    ].forEach(
-      (player) =>
-        drawPlayer(
-          ctx,
-          player
-        )
-    );
-
-    if (snapshot.ball) {
-      drawBall(
-        ctx,
-        snapshot.ball
-      );
-    }
-  }, [snapshot]);
-
-  return (
-    <div className={styles.canvasWrap}>
-      <canvas
-        ref={canvasRef}
-        className={styles.canvas}
-        width={WIDTH}
-        height={HEIGHT}
-      />
-    </div>
-  );
 }
