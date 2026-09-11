@@ -9,9 +9,13 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   updateDoc,
+  where,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -33,6 +37,25 @@ import MatchEvents from "../../components/match/MatchEvents";
 import styles from "./Mach.module.css";
 
 /* =========================================================
+   MATCH TIME CONFIGURATION
+
+   90 football minutes = 8 real minutes
+
+   8 minutes = 480 seconds
+   480 / 90 = 5.333 real seconds per football minute
+========================================================= */
+
+const MATCH_CONFIG = {
+  footballMinutes: 90,
+
+  realDurationSeconds: 8 * 60,
+
+  firstHalfMinutes: 45,
+
+  secondHalfMinutes: 45,
+};
+
+/* =========================================================
    ERROR HELPERS
 ========================================================= */
 
@@ -41,12 +64,6 @@ function getErrorLocation(error) {
     error?.stack || ""
   );
 
-  /*
-   * Matches:
-   *   at function (file.js:10:20)
-   *   at file.js:10:20
-   *   file.js:10:20
-   */
   const patterns = [
     /at\s+.*?\((.*?):(\d+):(\d+)\)/,
     /at\s+(.*?):(\d+):(\d+)/,
@@ -235,16 +252,6 @@ async function loadPlayers(
     return [];
   }
 
-  const {
-    collection,
-    getDocs,
-    query,
-    where,
-  } =
-    await import(
-      "firebase/firestore"
-    );
-
   const sources = [
     ["clubId", clubId],
     ["teamId", clubId],
@@ -363,6 +370,110 @@ function getEmbeddedPlayers(
 }
 
 /* =========================================================
+   SAFE ENGINE SNAPSHOT
+========================================================= */
+
+function getSafeSnapshot(
+  engine
+) {
+  if (!engine) {
+    return null;
+  }
+
+  if (
+    typeof engine.getSnapshot ===
+    "function"
+  ) {
+    return engine.getSnapshot();
+  }
+
+  if (
+    typeof engine.serializeResult ===
+    "function"
+  ) {
+    return engine.serializeResult();
+  }
+
+  if (
+    typeof engine.getState ===
+    "function"
+  ) {
+    return engine.getState();
+  }
+
+  throw new Error(
+    "MatchEngine has no getSnapshot(), serializeResult(), or getState() method."
+  );
+}
+
+/* =========================================================
+   SAFE SERIALIZE RESULT
+========================================================= */
+
+function getSerializableResult(
+  engine
+) {
+  if (!engine) {
+    return null;
+  }
+
+  if (
+    typeof engine.serializeResult ===
+    "function"
+  ) {
+    return engine.serializeResult();
+  }
+
+  if (
+    typeof engine.getSnapshot ===
+    "function"
+  ) {
+    return engine.getSnapshot();
+  }
+
+  if (
+    typeof engine.getState ===
+    "function"
+  ) {
+    return engine.getState();
+  }
+
+  throw new Error(
+    "MatchEngine cannot serialize its result."
+  );
+}
+
+/* =========================================================
+   FORMAT SCORE
+========================================================= */
+
+function getScore(
+  snapshot,
+  side
+) {
+  const direct =
+    side === "home"
+      ? snapshot?.homeScore
+      : snapshot?.awayScore;
+
+  if (
+    Number.isFinite(
+      Number(direct)
+    )
+  ) {
+    return Number(
+      direct
+    );
+  }
+
+  return Number(
+    snapshot?.score?.[side] ??
+      snapshot?.[side]?.score ??
+      0
+  );
+}
+
+/* =========================================================
    MAIN PAGE
 ========================================================= */
 
@@ -374,9 +485,9 @@ export default function MatchPage() {
     id: matchId,
   } = router.query;
 
-  /* -------------------------------------------------------
+  /* =======================================================
      REFS
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const engineRef =
     useRef(null);
@@ -399,9 +510,18 @@ export default function MatchPage() {
   const crashedRef =
     useRef(false);
 
-  /* -------------------------------------------------------
+  const finishHandledRef =
+    useRef(false);
+
+  const halftimeHandledRef =
+    useRef(false);
+
+  const redirectTimerRef =
+    useRef(null);
+
+  /* =======================================================
      STATE
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const [loading, setLoading] =
     useState(true);
@@ -425,8 +545,20 @@ export default function MatchPage() {
   const [saving, setSaving] =
     useState(false);
 
+  const [matchStarted, setMatchStarted] =
+    useState(false);
+
+  const [starting, setStarting] =
+    useState(false);
+
+  const [halfTime, setHalfTime] =
+    useState(false);
+
+  const [finishing, setFinishing] =
+    useState(false);
+
   /* =======================================================
-     GLOBAL BROWSER ERROR HANDLERS
+     GLOBAL ERROR HANDLERS
   ======================================================= */
 
   useEffect(() => {
@@ -434,7 +566,7 @@ export default function MatchPage() {
       typeof window ===
       "undefined"
     ) {
-      return;
+      return undefined;
     }
 
     function handleWindowError(
@@ -517,186 +649,7 @@ export default function MatchPage() {
   }, []);
 
   /* =======================================================
-     SAVE MATCH
-  ======================================================= */
-
-  const saveMatch =
-    useCallback(
-      async (
-        engine,
-        final = false
-      ) => {
-        if (
-          !matchId ||
-          !engine
-        ) {
-          return;
-        }
-
-        try {
-          setSaving(true);
-
-          let result;
-
-          try {
-            result =
-              engine.serializeResult();
-          } catch (error) {
-            const details =
-              printDetailedError(
-                error,
-                "engine.serializeResult()"
-              );
-
-            if (
-              mountedRef.current
-            ) {
-              setError(
-                details
-              );
-            }
-
-            return;
-          }
-
-          const matchRef =
-            doc(
-              db,
-              "matches",
-              matchId
-            );
-
-          await updateDoc(
-            matchRef,
-            {
-              status:
-                final
-                  ? "finished"
-                  : "live",
-
-              minute:
-                result?.minute ??
-                0,
-
-              second:
-                engine?.second ??
-                0,
-
-              homeScore:
-                result?.homeScore ??
-                0,
-
-              awayScore:
-                result?.awayScore ??
-                0,
-
-              score:
-                result?.score ?? {
-                  home: 0,
-                  away: 0,
-                },
-
-              homeStats:
-                result?.homeStats ??
-                {},
-
-              awayStats:
-                result?.awayStats ??
-                {},
-
-              events:
-                Array.isArray(
-                  result?.events
-                )
-                  ? result.events
-                  : [],
-
-              homeLineupIds:
-                Array.isArray(
-                  engine?.home?.players
-                )
-                  ? engine.home.players.map(
-                      (p) => p.id
-                    )
-                  : [],
-
-              awayLineupIds:
-                Array.isArray(
-                  engine?.away?.players
-                )
-                  ? engine.away.players.map(
-                      (p) => p.id
-                    )
-                  : [],
-
-              homeFormation:
-                engine?.home?.formation ??
-                "4-4-2",
-
-              awayFormation:
-                engine?.away?.formation ??
-                "4-4-2",
-
-              homeTactics:
-                engine?.home?.tactics ??
-                {},
-
-              awayTactics:
-                engine?.away?.tactics ??
-                {},
-
-              homeSubsUsed:
-                engine?.home
-                  ?.substitutionsUsed ??
-                0,
-
-              awaySubsUsed:
-                engine?.away
-                  ?.substitutionsUsed ??
-                0,
-
-              result:
-                result?.result ??
-                null,
-
-              ...(final
-                ? {
-                    finishedAt:
-                      serverTimestamp(),
-                  }
-                : {}),
-
-              updatedAt:
-                serverTimestamp(),
-            }
-          );
-        } catch (error) {
-          const details =
-            printDetailedError(
-              error,
-              "saveMatch -> Firestore updateDoc"
-            );
-
-          if (
-            mountedRef.current
-          ) {
-            setError(
-              details
-            );
-          }
-        } finally {
-          if (
-            mountedRef.current
-          ) {
-            setSaving(false);
-          }
-        }
-      },
-      [matchId]
-    );
-
-  /* =======================================================
-     MOUNT / UNMOUNT
+     CLEANUP
   ======================================================= */
 
   useEffect(() => {
@@ -715,6 +668,17 @@ export default function MatchPage() {
         );
 
         animationRef.current =
+          null;
+      }
+
+      if (
+        redirectTimerRef.current
+      ) {
+        clearTimeout(
+          redirectTimerRef.current
+        );
+
+        redirectTimerRef.current =
           null;
       }
 
@@ -739,6 +703,215 @@ export default function MatchPage() {
   }, []);
 
   /* =======================================================
+     SAVE MATCH
+  ======================================================= */
+
+  const saveMatch =
+    useCallback(
+      async (
+        engine,
+        final = false
+      ) => {
+        if (
+          !matchId ||
+          !engine
+        ) {
+          return false;
+        }
+
+        try {
+          setSaving(true);
+
+          const result =
+            getSerializableResult(
+              engine
+            );
+
+          const homeScore =
+            getScore(
+              result,
+              "home"
+            );
+
+          const awayScore =
+            getScore(
+              result,
+              "away"
+            );
+
+          const matchRef =
+            doc(
+              db,
+              "matches",
+              matchId
+            );
+
+          await updateDoc(
+            matchRef,
+            {
+              status:
+                final
+                  ? "finished"
+                  : "live",
+
+              minute:
+                Number(
+                  result?.minute ??
+                    engine?.minute ??
+                    0
+                ),
+
+              second:
+                Number(
+                  result?.second ??
+                    engine?.second ??
+                    0
+                ),
+
+              homeScore,
+
+              awayScore,
+
+              score: {
+                home:
+                  homeScore,
+
+                away:
+                  awayScore,
+              },
+
+              homeStats:
+                result?.homeStats ??
+                result?.home?.stats ??
+                engine?.home?.stats ??
+                {},
+
+              awayStats:
+                result?.awayStats ??
+                result?.away?.stats ??
+                engine?.away?.stats ??
+                {},
+
+              events:
+                Array.isArray(
+                  result?.events
+                )
+                  ? result.events
+                  : Array.isArray(
+                      engine?.events
+                    )
+                    ? engine.events
+                    : [],
+
+              homeLineupIds:
+                Array.isArray(
+                  engine?.home?.players
+                )
+                  ? engine.home.players
+                      .filter(
+                        (p) =>
+                          p?.onPitch !==
+                            false &&
+                          !p?.substituted
+                      )
+                      .map(
+                        (p) =>
+                          p.id
+                      )
+                  : [],
+
+              awayLineupIds:
+                Array.isArray(
+                  engine?.away?.players
+                )
+                  ? engine.away.players
+                      .filter(
+                        (p) =>
+                          p?.onPitch !==
+                            false &&
+                          !p?.substituted
+                      )
+                      .map(
+                        (p) =>
+                          p.id
+                      )
+                  : [],
+
+              homeFormation:
+                engine?.home?.formation ??
+                "4-4-2",
+
+              awayFormation:
+                engine?.away?.formation ??
+                "4-4-2",
+
+              homeTactics:
+                engine?.home?.tactics ??
+                {},
+
+              awayTactics:
+                engine?.away?.tactics ??
+                {},
+
+              homeSubsUsed:
+                Number(
+                  engine?.home
+                    ?.substitutionsUsed ??
+                    0
+                ),
+
+              awaySubsUsed:
+                Number(
+                  engine?.away
+                    ?.substitutionsUsed ??
+                    0
+                ),
+
+              result:
+                result?.result ??
+                null,
+
+              ...(final
+                ? {
+                    finishedAt:
+                      serverTimestamp(),
+                  }
+                : {}),
+
+              updatedAt:
+                serverTimestamp(),
+            }
+          );
+
+          return true;
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "saveMatch -> Firestore updateDoc"
+            );
+
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
+
+          return false;
+        } finally {
+          if (
+            mountedRef.current
+          ) {
+            setSaving(false);
+          }
+        }
+      },
+      [matchId]
+    );
+
+  /* =======================================================
      INITIALIZE MATCH
   ======================================================= */
 
@@ -747,7 +920,7 @@ export default function MatchPage() {
       !router.isReady ||
       !matchId
     ) {
-      return;
+      return undefined;
     }
 
     let cancelled =
@@ -757,7 +930,14 @@ export default function MatchPage() {
       try {
         setLoading(true);
         setError(null);
+
         crashedRef.current =
+          false;
+
+        finishHandledRef.current =
+          false;
+
+        halftimeHandledRef.current =
           false;
 
         console.log(
@@ -797,17 +977,25 @@ export default function MatchPage() {
           match
         );
 
+        /* =================================================
+           CLUB IDS
+        ================================================= */
+
         const homeClubId =
           match?.homeClubId ??
-          match?.homeTeamId;
+          match?.homeTeamId ??
+          match?.homeTeam?.id ??
+          null;
 
         const awayClubId =
           match?.awayClubId ??
-          match?.awayTeamId;
+          match?.awayTeamId ??
+          match?.awayTeam?.id ??
+          null;
 
-        /* -----------------------------------------------
+        /* =================================================
            HOME PLAYERS
-        ------------------------------------------------ */
+        ================================================= */
 
         let homePlayers =
           getEmbeddedPlayers(
@@ -824,9 +1012,9 @@ export default function MatchPage() {
             );
         }
 
-        /* -----------------------------------------------
+        /* =================================================
            AWAY PLAYERS
-        ------------------------------------------------ */
+        ================================================= */
 
         let awayPlayers =
           getEmbeddedPlayers(
@@ -853,15 +1041,27 @@ export default function MatchPage() {
           awayPlayers.length
         );
 
-        /* -----------------------------------------------
+        /* =================================================
            LINEUPS
-        ------------------------------------------------ */
+        ================================================= */
 
-        const homeLineupIds =
+        const storedHomeLineup =
           Array.isArray(
             match?.homeLineupIds
           )
             ? match.homeLineupIds
+            : [];
+
+        const storedAwayLineup =
+          Array.isArray(
+            match?.awayLineupIds
+          )
+            ? match.awayLineupIds
+            : [];
+
+        const homeLineupIds =
+          storedHomeLineup.length
+            ? storedHomeLineup
             : idsFromPlayers(
                 homePlayers.slice(
                   0,
@@ -870,10 +1070,8 @@ export default function MatchPage() {
               );
 
         const awayLineupIds =
-          Array.isArray(
-            match?.awayLineupIds
-          )
-            ? match.awayLineupIds
+          storedAwayLineup.length
+            ? storedAwayLineup
             : idsFromPlayers(
                 awayPlayers.slice(
                   0,
@@ -881,9 +1079,9 @@ export default function MatchPage() {
                 )
               );
 
-        /* -----------------------------------------------
+        /* =================================================
            FORMATIONS
-        ------------------------------------------------ */
+        ================================================= */
 
         const homeFormation =
           match?.homeFormation ??
@@ -893,25 +1091,27 @@ export default function MatchPage() {
           match?.awayFormation ??
           "4-4-2";
 
-        /* -----------------------------------------------
+        /* =================================================
            TACTICS
-        ------------------------------------------------ */
+        ================================================= */
 
         const homeTactics = {
           ...DEFAULT_TACTICS,
+
           ...(match?.homeTactics ||
             {}),
         };
 
         const awayTactics = {
           ...DEFAULT_TACTICS,
+
           ...(match?.awayTactics ||
             {}),
         };
 
-        /* -----------------------------------------------
+        /* =================================================
            SCORE
-        ------------------------------------------------ */
+        ================================================= */
 
         const initialScore = {
           home:
@@ -929,9 +1129,35 @@ export default function MatchPage() {
             ) || 0,
         };
 
-        /* -----------------------------------------------
-           ENGINE CONFIG
-        ------------------------------------------------ */
+        /* =================================================
+           CURRENT MINUTE
+
+           If an existing live match is loaded, continue
+           from its saved minute.
+
+           Otherwise start at minute 0.
+        ================================================= */
+
+        const initialMinute =
+          Math.max(
+            0,
+            Math.min(
+              90,
+              Number(
+                match?.minute ??
+                  0
+              ) || 0
+            )
+          );
+
+        /* =================================================
+           ENGINE CONFIGURATION
+
+           IMPORTANT:
+
+           90 football minutes
+           = 480 real seconds
+        ================================================= */
 
         const engineConfig = {
           matchId,
@@ -969,9 +1195,11 @@ export default function MatchPage() {
           },
 
           homePlayers,
+
           awayPlayers,
 
           homeLineupIds,
+
           awayLineupIds,
 
           formationHome:
@@ -988,10 +1216,7 @@ export default function MatchPage() {
 
           initialScore,
 
-          initialMinute:
-            Number(
-              match?.minute || 0
-            ) || 0,
+          initialMinute,
 
           initialEvents:
             Array.isArray(
@@ -999,6 +1224,40 @@ export default function MatchPage() {
             )
               ? match.events
               : [],
+
+          /*
+           * MATCH CLOCK
+           */
+
+          durationMinutes:
+            MATCH_CONFIG.footballMinutes,
+
+          matchDurationMinutes:
+            MATCH_CONFIG.footballMinutes,
+
+          realDurationSeconds:
+            MATCH_CONFIG.realDurationSeconds,
+
+          realMatchDurationSeconds:
+            MATCH_CONFIG.realDurationSeconds,
+
+          firstHalfMinutes:
+            MATCH_CONFIG.firstHalfMinutes,
+
+          secondHalfMinutes:
+            MATCH_CONFIG.secondHalfMinutes,
+
+          /*
+           * DO NOT AUTO START.
+           *
+           * User must press Start.
+           */
+
+          autoStart:
+            false,
+
+          startPaused:
+            true,
         };
 
         console.log(
@@ -1006,9 +1265,9 @@ export default function MatchPage() {
           engineConfig
         );
 
-        /* -----------------------------------------------
+        /* =================================================
            CREATE ENGINE
-        ------------------------------------------------ */
+        ================================================= */
 
         let engine;
 
@@ -1031,6 +1290,7 @@ export default function MatchPage() {
             {
               originalError:
                 error,
+
               details,
             }
           );
@@ -1045,6 +1305,58 @@ export default function MatchPage() {
         engineRef.current =
           engine;
 
+        /* =================================================
+           FORCE CLOCK CONFIG IF ENGINE SUPPORTS IT
+        ================================================= */
+
+        if (
+          "realDurationSeconds" in
+          engine
+        ) {
+          engine.realDurationSeconds =
+            MATCH_CONFIG.realDurationSeconds;
+        }
+
+        if (
+          "matchDurationMinutes" in
+          engine
+        ) {
+          engine.matchDurationMinutes =
+            MATCH_CONFIG.footballMinutes;
+        }
+
+        if (
+          "durationMinutes" in
+          engine
+        ) {
+          engine.durationMinutes =
+            MATCH_CONFIG.footballMinutes;
+        }
+
+        if (
+          "autoStart" in
+          engine
+        ) {
+          engine.autoStart =
+            false;
+        }
+
+        if (
+          "running" in
+          engine
+        ) {
+          engine.running =
+            false;
+        }
+
+        if (
+          "started" in
+          engine
+        ) {
+          engine.started =
+            false;
+        }
+
         eventIndexRef.current =
           Array.isArray(
             engine.events
@@ -1052,9 +1364,9 @@ export default function MatchPage() {
             ? engine.events.length
             : 0;
 
-        /* -----------------------------------------------
+        /* =================================================
            UI STATE
-        ------------------------------------------------ */
+        ================================================= */
 
         setUserTactics(
           homeTactics
@@ -1064,120 +1376,85 @@ export default function MatchPage() {
           homeFormation
         );
 
-        /* -----------------------------------------------
+        /* =================================================
            INITIAL SNAPSHOT
-        ------------------------------------------------ */
+        ================================================= */
 
-        let initialSnapshot;
-
-        try {
-          initialSnapshot =
-            engine.getSnapshot();
-        } catch (error) {
-          const details =
-            printDetailedError(
-              error,
-              "engine.getSnapshot() during initialization"
-            );
-
-          throw Object.assign(
-            new Error(
-              `Could not create initial snapshot: ${details.message}`
-            ),
-            {
-              originalError:
-                error,
-              details,
-            }
+        const initialSnapshot =
+          getSafeSnapshot(
+            engine
           );
-        }
 
         setSnapshot(
           initialSnapshot
         );
 
-        /* -----------------------------------------------
-           START ENGINE
-        ------------------------------------------------ */
+        /* =================================================
+           INITIAL UI CLOCK
+        ================================================= */
 
-        try {
-          if (
-            typeof engine.start ===
-            "function"
-          ) {
-            engine.start();
-          }
-        } catch (error) {
-          const details =
-            printDetailedError(
-              error,
-              "engine.start()"
-            );
-
-          throw Object.assign(
-            new Error(
-              `MatchEngine.start() failed: ${details.message}`
-            ),
-            {
-              originalError:
-                error,
-              details,
-            }
+        const currentMinute =
+          Number(
+            initialSnapshot?.minute ??
+              initialMinute ??
+              0
           );
+
+        if (
+          currentMinute >= 45 &&
+          currentMinute < 90
+        ) {
+          setHalfTime(true);
+        } else {
+          setHalfTime(false);
         }
 
-        /* -----------------------------------------------
-           SAVE LIVE STATUS
-        ------------------------------------------------ */
+        setMatchStarted(
+          false
+        );
+
+        /* =================================================
+           SAVE LIVE CONFIG
+
+           We intentionally DON'T start the engine here.
+        ================================================= */
 
         try {
           await updateDoc(
             matchRef,
             {
               status:
-                "live",
+                initialMinute >=
+                  90
+                  ? "finished"
+                  : "ready",
 
-              homeLineupIds:
-                engine?.home?.players?.map(
-                  (p) => p.id
-                ) || [],
+              homeLineupIds,
 
-              awayLineupIds:
-                engine?.away?.players?.map(
-                  (p) => p.id
-                ) || [],
+              awayLineupIds,
 
-              homeFormation:
-                engine?.home?.formation ??
-                homeFormation,
+              homeFormation,
 
-              awayFormation:
-                engine?.away?.formation ??
-                awayFormation,
+              awayFormation,
 
-              homeTactics:
-                engine?.home?.tactics ??
-                homeTactics,
+              homeTactics,
 
-              awayTactics:
-                engine?.away?.tactics ??
-                awayTactics,
+              awayTactics,
 
-              startedAt:
-                serverTimestamp(),
+              matchDurationMinutes:
+                MATCH_CONFIG.footballMinutes,
+
+              realDurationSeconds:
+                MATCH_CONFIG.realDurationSeconds,
 
               updatedAt:
                 serverTimestamp(),
             }
           );
         } catch (error) {
-          /*
-           * Firestore failure should not destroy
-           * the actual match engine.
-           */
           printDetailedError(
             error,
-            "initial match Firestore update"
+            "initial match Firestore configuration update"
           );
         }
 
@@ -1186,6 +1463,15 @@ export default function MatchPage() {
         }
 
         setLoading(false);
+
+        /*
+         * IMPORTANT:
+         *
+         * We start the animation loop,
+         * but NOT the football engine.
+         *
+         * The loop waits for Start button.
+         */
 
         startAnimationLoop(
           engine
@@ -1227,6 +1513,375 @@ export default function MatchPage() {
   ]);
 
   /* =======================================================
+     START / RESUME ENGINE
+  ======================================================= */
+
+  const startMatch =
+    useCallback(
+      async () => {
+        const engine =
+          engineRef.current;
+
+        if (!engine) {
+          return;
+        }
+
+        if (starting) {
+          return;
+        }
+
+        if (
+          finishHandledRef.current
+        ) {
+          return;
+        }
+
+        try {
+          setStarting(true);
+          setError(null);
+
+          /*
+           * Check if match is already finished.
+           */
+
+          if (
+            typeof engine.isFinished ===
+              "function" &&
+            engine.isFinished()
+          ) {
+            return;
+          }
+
+          /*
+           * Different engine versions may use
+           * start() or resume().
+           */
+
+          if (
+            typeof engine.start ===
+            "function"
+          ) {
+            engine.start();
+          } else if (
+            typeof engine.resume ===
+            "function"
+          ) {
+            engine.resume();
+          } else {
+            throw new Error(
+              "MatchEngine has neither start() nor resume()."
+            );
+          }
+
+          /*
+           * Mark engine as running if the
+           * property exists.
+           */
+
+          if (
+            "running" in
+            engine
+          ) {
+            engine.running =
+              true;
+          }
+
+          if (
+            "started" in
+            engine
+          ) {
+            engine.started =
+              true;
+          }
+
+          if (
+            "paused" in
+            engine
+          ) {
+            engine.paused =
+              false;
+          }
+
+          setMatchStarted(
+            true
+          );
+
+          setHalfTime(
+            false
+          );
+
+          /*
+           * Save status immediately.
+           */
+
+          await saveMatch(
+            engine,
+            false
+          );
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "startMatch"
+            );
+
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
+        } finally {
+          if (
+            mountedRef.current
+          ) {
+            setStarting(false);
+          }
+        }
+      },
+      [
+        starting,
+        saveMatch,
+      ]
+    );
+
+  /* =======================================================
+     PAUSE ENGINE
+  ======================================================= */
+
+  const pauseEngine =
+    useCallback(
+      (
+        engine
+      ) => {
+        if (!engine) {
+          return;
+        }
+
+        try {
+          if (
+            typeof engine.pause ===
+            "function"
+          ) {
+            engine.pause();
+          } else if (
+            typeof engine.stop ===
+            "function"
+          ) {
+            /*
+             * DO NOT call stop if engine.stop()
+             * permanently destroys the match.
+             *
+             * Prefer running=false.
+             */
+          }
+
+          if (
+            "running" in
+            engine
+          ) {
+            engine.running =
+              false;
+          }
+
+          if (
+            "paused" in
+            engine
+          ) {
+            engine.paused =
+              true;
+          }
+        } catch (error) {
+          printDetailedError(
+            error,
+            "pauseEngine"
+          );
+        }
+      },
+      []
+    );
+
+  /* =======================================================
+     HANDLE HALFTIME
+  ======================================================= */
+
+  const handleHalfTime =
+    useCallback(
+      async (
+        engine
+      ) => {
+        if (!engine) {
+          return;
+        }
+
+        if (
+          halftimeHandledRef.current
+        ) {
+          return;
+        }
+
+        halftimeHandledRef.current =
+          true;
+
+        pauseEngine(
+          engine
+        );
+
+        setHalfTime(
+          true
+        );
+
+        setMatchStarted(
+          false
+        );
+
+        try {
+          const current =
+            getSafeSnapshot(
+              engine
+            );
+
+          setSnapshot(
+            current
+          );
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "handleHalfTime -> getSnapshot"
+            );
+
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
+        }
+
+        await saveMatch(
+          engine,
+          false
+        );
+      },
+      [
+        pauseEngine,
+        saveMatch,
+      ]
+    );
+
+  /* =======================================================
+     FINISH MATCH
+  ======================================================= */
+
+  const finishMatch =
+    useCallback(
+      async (
+        engine
+      ) => {
+        if (!engine) {
+          return;
+        }
+
+        if (
+          finishHandledRef.current
+        ) {
+          return;
+        }
+
+        finishHandledRef.current =
+          true;
+
+        setFinishing(
+          true
+        );
+
+        try {
+          pauseEngine(
+            engine
+          );
+
+          if (
+            "minute" in
+            engine
+          ) {
+            engine.minute =
+              90;
+          }
+
+          if (
+            "second" in
+            engine
+          ) {
+            engine.second =
+              0;
+          }
+
+          const finalSnapshot =
+            getSafeSnapshot(
+              engine
+            );
+
+          setSnapshot(
+            finalSnapshot
+          );
+
+          /*
+           * Save final result BEFORE redirect.
+           */
+
+          await saveMatch(
+            engine,
+            true
+          );
+
+          /*
+           * Small delay so the user can see
+           * Full Time before leaving.
+           */
+
+          redirectTimerRef.current =
+            setTimeout(
+              () => {
+                if (
+                  mountedRef.current
+                ) {
+                  router.push(
+                    "/fixtures"
+                  );
+                }
+              },
+              1200
+            );
+        } catch (error) {
+          const details =
+            printDetailedError(
+              error,
+              "finishMatch"
+            );
+
+          finishHandledRef.current =
+            false;
+
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
+        }
+      },
+      [
+        pauseEngine,
+        saveMatch,
+        router,
+      ]
+    );
+
+  /* =======================================================
      ANIMATION LOOP
   ======================================================= */
 
@@ -1247,6 +1902,14 @@ export default function MatchPage() {
       );
 
       return;
+    }
+
+    if (
+      animationRef.current
+    ) {
+      cancelAnimationFrame(
+        animationRef.current
+      );
     }
 
     lastFrameRef.current =
@@ -1272,6 +1935,11 @@ export default function MatchPage() {
           previousFrame) /
         1000;
 
+      /*
+       * Prevent giant time jumps when
+       * browser goes to background.
+       */
+
       dt = Math.min(
         0.05,
         Math.max(
@@ -1283,58 +1951,80 @@ export default function MatchPage() {
       lastFrameRef.current =
         now;
 
-      /* -----------------------------------------------
+      /* =================================================
          ENGINE UPDATE
-      ------------------------------------------------ */
 
-      try {
-        if (
-          typeof engine.update !==
-          "function"
-        ) {
-          throw new Error(
-            "MatchEngine.update is not a function."
+         ONLY update when the match is running.
+      ================================================= */
+
+      const engineRunning =
+        engine?.running === true ||
+        engine?.isRunning === true ||
+        engine?.started === true;
+
+      /*
+       * If engine doesn't expose running state,
+       * matchStarted controls it.
+       */
+
+      const shouldUpdate =
+        engineRunning ||
+        matchStarted;
+
+      if (
+        shouldUpdate &&
+        !halfTime &&
+        !finishing
+      ) {
+        try {
+          if (
+            typeof engine.update !==
+            "function"
+          ) {
+            throw new Error(
+              "MatchEngine.update is not a function."
+            );
+          }
+
+          engine.update(
+            dt
           );
-        }
+        } catch (error) {
+          crashedRef.current =
+            true;
 
-        engine.update(
-          dt
-        );
-      } catch (error) {
-        crashedRef.current =
-          true;
+          const details =
+            printDetailedError(
+              error,
+              "engine.update(dt)"
+            );
 
-        const details =
-          printDetailedError(
-            error,
-            "engine.update(dt)"
-          );
+          if (
+            mountedRef.current
+          ) {
+            setError(
+              details
+            );
+          }
 
-        if (
-          mountedRef.current
-        ) {
-          setError(
-            details
-          );
-        }
-
-        if (
-          animationRef.current
-        ) {
-          cancelAnimationFrame(
+          if (
             animationRef.current
-          );
+          ) {
+            cancelAnimationFrame(
+              animationRef.current
+            );
 
-          animationRef.current =
-            null;
+            animationRef.current =
+              null;
+          }
+
+          return;
         }
-
-        return;
       }
 
-      /* -----------------------------------------------
+      /* =================================================
          UI UPDATE
-      ------------------------------------------------ */
+      ================================================= */
 
       if (
         now - lastUi >
@@ -1344,11 +2034,88 @@ export default function MatchPage() {
 
         try {
           const nextSnapshot =
-            engine.getSnapshot();
+            getSafeSnapshot(
+              engine
+            );
 
-          setSnapshot(
-            nextSnapshot
-          );
+          if (
+            mountedRef.current
+          ) {
+            setSnapshot(
+              nextSnapshot
+            );
+          }
+
+          if (
+            Array.isArray(
+              engine.events
+            ) &&
+            engine.events.length >
+              eventIndexRef.current
+          ) {
+            eventIndexRef.current =
+              engine.events.length;
+          }
+
+          /* =============================================
+             MINUTE DETECTION
+          ============================================= */
+
+          const currentMinute =
+            Number(
+              nextSnapshot?.minute ??
+                engine?.minute ??
+                0
+            );
+
+          /*
+           * Half time
+           *
+           * We only trigger this when the match
+           * has actually started.
+           */
+
+          if (
+            currentMinute >=
+              45 &&
+            currentMinute <
+              90 &&
+            matchStarted &&
+            !halftimeHandledRef.current
+          ) {
+            handleHalfTime(
+              engine
+            );
+          }
+
+          /*
+           * Full time
+           */
+
+          if (
+            currentMinute >=
+              90 &&
+            !finishHandledRef.current
+          ) {
+            finishMatch(
+              engine
+            );
+          }
+
+          /*
+           * Engine itself may report finished.
+           */
+
+          if (
+            typeof engine.isFinished ===
+              "function" &&
+            engine.isFinished() &&
+            !finishHandledRef.current
+          ) {
+            finishMatch(
+              engine
+            );
+          }
         } catch (error) {
           crashedRef.current =
             true;
@@ -1356,7 +2123,7 @@ export default function MatchPage() {
           const details =
             printDetailedError(
               error,
-              "engine.getSnapshot() during animation"
+              "engine snapshot during animation"
             );
 
           if (
@@ -1369,84 +2136,38 @@ export default function MatchPage() {
 
           return;
         }
-
-        if (
-          Array.isArray(
-            engine.events
-          ) &&
-          engine.events.length >
-            eventIndexRef.current
-        ) {
-          eventIndexRef.current =
-            engine.events.length;
-        }
       }
 
-      /* -----------------------------------------------
-         AUTO SAVE TIMER
-      ------------------------------------------------ */
+      /* =================================================
+         AUTO SAVE
 
-      saveTimerRef.current +=
-        dt * 1000;
+         Every 10 seconds of real time.
+      ================================================= */
 
       if (
-        saveTimerRef.current >=
-        10000
+        shouldUpdate &&
+        !finishing
       ) {
-        saveTimerRef.current =
-          0;
+        saveTimerRef.current +=
+          dt * 1000;
 
-        saveMatch(
-          engine,
-          false
-        );
-      }
-
-      /* -----------------------------------------------
-         FINISH CHECK
-      ------------------------------------------------ */
-
-      try {
         if (
-          typeof engine.isFinished ===
-            "function" &&
-          engine.isFinished()
+          saveTimerRef.current >=
+          10000
         ) {
-          setSnapshot(
-            engine.getSnapshot()
-          );
+          saveTimerRef.current =
+            0;
 
           saveMatch(
             engine,
-            true
-          );
-
-          return;
-        }
-      } catch (error) {
-        crashedRef.current =
-          true;
-
-        const details =
-          printDetailedError(
-            error,
-            "engine.isFinished()"
-          );
-
-        if (
-          mountedRef.current
-        ) {
-          setError(
-            details
+            false
           );
         }
-
-        return;
       }
 
-      /* -----------------------------------------------
+      /* =================================================
          NEXT FRAME
-      ------------------------------------------------ */
+      ================================================= */
 
       animationRef.current =
         requestAnimationFrame(
@@ -1494,8 +2215,19 @@ export default function MatchPage() {
         );
       }
 
+      /*
+       * This method is intentionally for
+       * the managed HOME team.
+       */
+
       engine.setUserTactics(
         safeTactics
+      );
+
+      setSnapshot(
+        getSafeSnapshot(
+          engine
+        )
       );
 
       await saveMatch(
@@ -1509,9 +2241,13 @@ export default function MatchPage() {
           "handleTacticsChange"
         );
 
-      setError(
-        details
-      );
+      if (
+        mountedRef.current
+      ) {
+        setError(
+          details
+        );
+      }
     }
   }
 
@@ -1551,13 +2287,19 @@ export default function MatchPage() {
         );
       }
 
+      /*
+       * HOME = user's managed team.
+       */
+
       engine.setFormation(
         "home",
         nextFormation
       );
 
       setSnapshot(
-        engine.getSnapshot()
+        getSafeSnapshot(
+          engine
+        )
       );
 
       await saveMatch(
@@ -1571,9 +2313,13 @@ export default function MatchPage() {
           "handleFormationChange"
         );
 
-      setError(
-        details
-      );
+      if (
+        mountedRef.current
+      ) {
+        setError(
+          details
+        );
+      }
     }
   }
 
@@ -1621,7 +2367,9 @@ export default function MatchPage() {
       }
 
       setSnapshot(
-        engine.getSnapshot()
+        getSafeSnapshot(
+          engine
+        )
       );
 
       await saveMatch(
@@ -1635,10 +2383,60 @@ export default function MatchPage() {
           "handleSubstitution"
         );
 
-      setError(
-        details
-      );
+      if (
+        mountedRef.current
+      ) {
+        setError(
+          details
+        );
+      }
     }
+  }
+
+  /* =======================================================
+     START BUTTON LABEL
+  ======================================================= */
+
+  const currentMinute =
+    Number(
+      snapshot?.minute ??
+        engineRef.current?.minute ??
+        0
+    );
+
+  const isFinished =
+    snapshot?.status ===
+      "finished" ||
+    currentMinute >=
+      90 ||
+    (
+      typeof engineRef.current
+        ?.isFinished ===
+        "function" &&
+      engineRef.current.isFinished()
+    );
+
+  let startButtonText =
+    "START FIRST HALF";
+
+  if (
+    halfTime ||
+    (
+      currentMinute >=
+        45 &&
+      currentMinute <
+        90
+    )
+  ) {
+    startButtonText =
+      "START SECOND HALF";
+  }
+
+  if (
+    starting
+  ) {
+    startButtonText =
+      "STARTING...";
   }
 
   /* =======================================================
@@ -1655,14 +2453,20 @@ export default function MatchPage() {
         </Head>
 
         <main
-          className={styles.error}
+          className={
+            styles.error
+          }
         >
           <div
             style={{
-              width: "100%",
-              maxWidth: "900px",
-              margin: "0 auto",
-              padding: "20px",
+              width:
+                "100%",
+              maxWidth:
+                "900px",
+              margin:
+                "0 auto",
+              padding:
+                "20px",
             }}
           >
             <h1>
@@ -1671,21 +2475,30 @@ export default function MatchPage() {
 
             <p>
               Umukino wahagaritswe kubera
-              error. Noneho aho gukeka file,
-              page irakubwira aho error
-              yaturutse.
+              error. Error iri hasi irakwereka
+              neza method cyangwa file byateje
+              ikibazo.
             </p>
 
             <div
               style={{
-                marginTop: "20px",
-                padding: "16px",
-                borderRadius: "12px",
+                marginTop:
+                  "20px",
+
+                padding:
+                  "16px",
+
+                borderRadius:
+                  "12px",
+
                 background:
                   "rgba(255,0,0,0.08)",
+
                 border:
                   "1px solid rgba(255,0,0,0.25)",
-                overflowX: "auto",
+
+                overflowX:
+                  "auto",
               }}
             >
               <p>
@@ -1726,7 +2539,8 @@ export default function MatchPage() {
 
             <details
               style={{
-                marginTop: "20px",
+                marginTop:
+                  "20px",
               }}
             >
               <summary>
@@ -1735,14 +2549,24 @@ export default function MatchPage() {
 
               <pre
                 style={{
-                  marginTop: "12px",
-                  padding: "16px",
+                  marginTop:
+                    "12px",
+
+                  padding:
+                    "16px",
+
                   whiteSpace:
                     "pre-wrap",
+
                   wordBreak:
                     "break-word",
-                  overflowX: "auto",
-                  borderRadius: "12px",
+
+                  overflowX:
+                    "auto",
+
+                  borderRadius:
+                    "12px",
+
                   background:
                     "rgba(0,0,0,0.35)",
                 }}
@@ -1757,13 +2581,23 @@ export default function MatchPage() {
                 window.location.reload()
               }
               style={{
-                marginTop: "20px",
+                marginTop:
+                  "20px",
+
                 padding:
-                  "12px 18px",
-                border: "none",
+                  "13px 20px",
+
+                border:
+                  "none",
+
                 borderRadius:
                   "10px",
-                cursor: "pointer",
+
+                cursor:
+                  "pointer",
+
+                fontWeight:
+                  "700",
               }}
             >
               Reload Match
@@ -1808,6 +2642,18 @@ export default function MatchPage() {
   const away =
     snapshot?.away;
 
+  const homeScore =
+    getScore(
+      snapshot,
+      "home"
+    );
+
+  const awayScore =
+    getScore(
+      snapshot,
+      "away"
+    );
+
   /* =======================================================
      RENDER
   ======================================================= */
@@ -1835,7 +2681,7 @@ export default function MatchPage() {
           styles.page
         }
       >
-        {/* ================================================
+        {/* =================================================
             SCORE HEADER
         ================================================= */}
 
@@ -1861,17 +2707,22 @@ export default function MatchPage() {
             }
           >
             <span>
-              {home?.score ??
-                0}
+              {homeScore}
             </span>
 
             <small>
-              {snapshot?.minute ??
-                0}
+              {String(
+                currentMinute
+              ).padStart(
+                2,
+                "0"
+              )}
               :
               {String(
-                snapshot?.second ??
-                  0
+                Number(
+                  snapshot?.second ??
+                    0
+                )
               ).padStart(
                 2,
                 "0"
@@ -1879,8 +2730,7 @@ export default function MatchPage() {
             </small>
 
             <span>
-              {away?.score ??
-                0}
+              {awayScore}
             </span>
           </div>
 
@@ -1896,7 +2746,141 @@ export default function MatchPage() {
           </div>
         </header>
 
-        {/* ================================================
+        {/* =================================================
+            MATCH STATUS
+        ================================================= */}
+
+        <section
+          style={{
+            display:
+              "flex",
+
+            justifyContent:
+              "center",
+
+            alignItems:
+              "center",
+
+            gap:
+              "10px",
+
+            flexWrap:
+              "wrap",
+
+            padding:
+              "14px 12px",
+          }}
+        >
+          {/* ===============================================
+              START BUTTON
+          =============================================== */}
+
+          {!isFinished && (
+            <button
+              type="button"
+              onClick={
+                startMatch
+              }
+              disabled={
+                starting ||
+                (
+                  matchStarted &&
+                  !halfTime
+                )
+              }
+              style={{
+                minWidth:
+                  "190px",
+
+                padding:
+                  "14px 22px",
+
+                border:
+                  "none",
+
+                borderRadius:
+                  "12px",
+
+                cursor:
+                  starting ||
+                  (
+                    matchStarted &&
+                    !halfTime
+                  )
+                    ? "not-allowed"
+                    : "pointer",
+
+                fontWeight:
+                  "800",
+
+                fontSize:
+                  "15px",
+
+                opacity:
+                  starting ||
+                  (
+                    matchStarted &&
+                    !halfTime
+                  )
+                    ? 0.65
+                    : 1,
+              }}
+            >
+              {startButtonText}
+            </button>
+          )}
+
+          {/* ===============================================
+              HALFTIME MESSAGE
+          =============================================== */}
+
+          {halfTime &&
+            !isFinished && (
+              <div
+                style={{
+                  padding:
+                    "10px 16px",
+
+                  borderRadius:
+                    "10px",
+
+                  fontWeight:
+                    "700",
+                }}
+              >
+                HALF TIME
+              </div>
+            )}
+
+          {/* ===============================================
+              FULL TIME
+          =============================================== */}
+
+          {isFinished && (
+            <div
+              style={{
+                padding:
+                  "12px 18px",
+
+                borderRadius:
+                  "12px",
+
+                fontWeight:
+                  "800",
+              }}
+            >
+              FULL TIME
+              {finishing && (
+                <span>
+                  {" "}
+                  • Saving...
+                </span>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* =================================================
             PITCH
         ================================================= */}
 
@@ -1916,20 +2900,46 @@ export default function MatchPage() {
               styles.liveBadge
             }
           >
-            {snapshot?.status ===
-            "finished"
+            {isFinished
               ? "FULL TIME"
-              : "LIVE"}
+              : halfTime
+                ? "HALF TIME"
+                : matchStarted
+                  ? "LIVE"
+                  : "READY"}
 
             {saving && (
               <span>
-                Saving...
+                {" "}
+                • Saving...
               </span>
             )}
           </div>
         </section>
 
-        {/* ================================================
+        {/* =================================================
+            MATCH CLOCK INFO
+        ================================================= */}
+
+        <section
+          style={{
+            textAlign:
+              "center",
+
+            padding:
+              "10px 15px",
+
+            opacity:
+              0.85,
+          }}
+        >
+          <small>
+            90 football minutes =
+            8 minutes real time
+          </small>
+        </section>
+
+        {/* =================================================
             USER CONTROLS
         ================================================= */}
 
@@ -1940,7 +2950,9 @@ export default function MatchPage() {
         >
           <div>
             <LineupFormation
-              team={home}
+              team={
+                home
+              }
             />
           </div>
 
@@ -1959,8 +2971,7 @@ export default function MatchPage() {
                 handleFormationChange
               }
               disabled={
-                snapshot?.status ===
-                "finished"
+                isFinished
               }
             />
 
@@ -1972,7 +2983,9 @@ export default function MatchPage() {
 
             <SubstitutionPanel
               team={{
-                ...(home || {}),
+                ...(home ||
+                  {}),
+
                 bench:
                   engineRef.current
                     ?.home
@@ -1983,14 +2996,13 @@ export default function MatchPage() {
                 handleSubstitution
               }
               disabled={
-                snapshot?.status ===
-                "finished"
+                isFinished
               }
             />
           </div>
         </section>
 
-        {/* ================================================
+        {/* =================================================
             AWAY / STATS
         ================================================= */}
 
@@ -2000,7 +3012,9 @@ export default function MatchPage() {
           }
         >
           <LineupFormation
-            team={away}
+            team={
+              away
+            }
           />
 
           <MatchStats
@@ -2013,7 +3027,7 @@ export default function MatchPage() {
           />
         </section>
 
-        {/* ================================================
+        {/* =================================================
             EVENTS
         ================================================= */}
 
