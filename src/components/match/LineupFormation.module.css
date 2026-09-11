@@ -1,0 +1,170 @@
+.container {
+  width: 100%;
+  border-radius: 18px;
+  padding: 16px;
+  background: #0b1324;
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 17px;
+}
+
+.header span {
+  display: block;
+  margin-top: 4px;
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.header strong {
+  color: #94a3b8;
+}
+
+.pitch {
+  position: relative;
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 14px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #087f45 0,
+      #087f45 10%,
+      #087742 10%,
+      #087742 20%
+    );
+  border: 2px solid rgba(255,255,255,.5);
+}
+
+.centerLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: rgba(255,255,255,.7);
+}
+
+.centerCircle {
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  border: 2px solid rgba(255,255,255,.7);
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 52px;
+  text-align: center;
+}
+
+.number {
+  width: 34px;
+  height: 34px;
+  margin: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e63946;
+  border: 2px solid #fff;
+  color: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  box-shadow: 0 5px 15px rgba(0,0,0,.3);
+}
+
+.name {
+  margin-top: 4px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-shadow: 0 2px 5px #000;
+}
+
+.rating {
+  margin: 3px auto 0;
+  width: 24px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: rgba(15,23,42,.9);
+  color: #facc15;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.editor {
+  margin-top: 15px;
+  display: grid;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: #111c30;
+}
+
+.playerInfo {
+  min-width: 0;
+  flex: 1;
+}
+
+.playerInfo strong {
+  color: #7dd3fc;
+  margin-right: 6px;
+}
+
+.playerInfo span {
+  color: #fff;
+  font-size: 13px;
+}
+
+.playerInfo small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+}
+
+.select {
+  width: 180px;
+  background: #07111f;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+@media (max-width: 600px) {
+  .pitch {
+    min-height: 360px;
+  }
+
+  .row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .select {
+    width: 100%;
+  }
+}
