@@ -1,149 +1,209 @@
-import { PITCH } from "./constants";
+import { FORMATIONS } from "./constants";
 
-const FORMATIONS = {
-  "4-4-2": [
-    ["GK", 0.07, 0.50],
+const positions = {
+  "4-4-2": {
+    GK: [0.06, 0.50],
 
-    ["DEF", 0.23, 0.18],
-    ["DEF", 0.23, 0.40],
-    ["DEF", 0.23, 0.60],
-    ["DEF", 0.23, 0.82],
+    LB: [0.19, 0.18],
+    CB1: [0.16, 0.40],
+    CB2: [0.16, 0.60],
+    RB: [0.19, 0.82],
 
-    ["MID", 0.46, 0.16],
-    ["MID", 0.46, 0.39],
-    ["MID", 0.46, 0.61],
-    ["MID", 0.46, 0.84],
+    LM: [0.39, 0.16],
+    CM1: [0.37, 0.40],
+    CM2: [0.37, 0.60],
+    RM: [0.39, 0.84],
 
-    ["FWD", 0.70, 0.38],
-    ["FWD", 0.70, 0.62],
-  ],
+    ST1: [0.57, 0.43],
+    ST2: [0.57, 0.57],
+  },
 
-  "4-3-3": [
-    ["GK", 0.07, 0.50],
+  "4-3-3": {
+    GK: [0.06, 0.50],
 
-    ["DEF", 0.23, 0.18],
-    ["DEF", 0.23, 0.40],
-    ["DEF", 0.23, 0.60],
-    ["DEF", 0.23, 0.82],
+    LB: [0.19, 0.18],
+    CB1: [0.16, 0.40],
+    CB2: [0.16, 0.60],
+    RB: [0.19, 0.82],
 
-    ["MID", 0.47, 0.25],
-    ["MID", 0.48, 0.50],
-    ["MID", 0.47, 0.75],
+    CM1: [0.35, 0.30],
+    CM2: [0.38, 0.50],
+    CM3: [0.35, 0.70],
 
-    ["FWD", 0.70, 0.18],
-    ["FWD", 0.75, 0.50],
-    ["FWD", 0.70, 0.82],
-  ],
+    LW: [0.57, 0.17],
+    ST: [0.60, 0.50],
+    RW: [0.57, 0.83],
+  },
 
-  "3-5-2": [
-    ["GK", 0.07, 0.50],
+  "3-5-2": {
+    GK: [0.06, 0.50],
 
-    ["DEF", 0.23, 0.25],
-    ["DEF", 0.22, 0.50],
-    ["DEF", 0.23, 0.75],
+    CB1: [0.16, 0.28],
+    CB2: [0.14, 0.50],
+    CB3: [0.16, 0.72],
 
-    ["MID", 0.43, 0.12],
-    ["MID", 0.45, 0.34],
-    ["MID", 0.47, 0.50],
-    ["MID", 0.45, 0.66],
-    ["MID", 0.43, 0.88],
+    LWB: [0.32, 0.12],
+    CM1: [0.34, 0.38],
+    CDM: [0.31, 0.50],
+    CM2: [0.34, 0.62],
+    RWB: [0.32, 0.88],
 
-    ["FWD", 0.70, 0.38],
-    ["FWD", 0.70, 0.62],
-  ],
+    ST1: [0.58, 0.43],
+    ST2: [0.58, 0.57],
+  },
 
-  "5-3-2": [
-    ["GK", 0.07, 0.50],
+  "5-3-2": {
+    GK: [0.06, 0.50],
 
-    ["DEF", 0.21, 0.10],
-    ["DEF", 0.22, 0.30],
-    ["DEF", 0.22, 0.50],
-    ["DEF", 0.22, 0.70],
-    ["DEF", 0.21, 0.90],
+    LWB: [0.18, 0.12],
+    CB1: [0.15, 0.33],
+    CB2: [0.14, 0.50],
+    CB3: [0.15, 0.67],
+    RWB: [0.18, 0.88],
 
-    ["MID", 0.47, 0.28],
-    ["MID", 0.48, 0.50],
-    ["MID", 0.47, 0.72],
+    CM1: [0.34, 0.34],
+    CM2: [0.32, 0.50],
+    CM3: [0.34, 0.66],
 
-    ["FWD", 0.70, 0.40],
-    ["FWD", 0.70, 0.60],
-  ],
+    ST1: [0.57, 0.43],
+    ST2: [0.57, 0.57],
+  },
 
-  "4-2-3-1": [
-    ["GK", 0.07, 0.50],
+  "4-2-3-1": {
+    GK: [0.06, 0.50],
 
-    ["DEF", 0.23, 0.18],
-    ["DEF", 0.23, 0.40],
-    ["DEF", 0.23, 0.60],
-    ["DEF", 0.23, 0.82],
+    LB: [0.19, 0.18],
+    CB1: [0.16, 0.40],
+    CB2: [0.16, 0.60],
+    RB: [0.19, 0.82],
 
-    ["MID", 0.43, 0.37],
-    ["MID", 0.43, 0.63],
+    CDM1: [0.31, 0.40],
+    CDM2: [0.31, 0.60],
 
-    ["MID", 0.57, 0.18],
-    ["MID", 0.59, 0.50],
-    ["MID", 0.57, 0.82],
+    LW: [0.43, 0.18],
+    CAM: [0.46, 0.50],
+    RW: [0.43, 0.82],
 
-    ["FWD", 0.74, 0.50],
-  ],
+    ST: [0.60, 0.50],
+  },
 };
 
-export const normalizeFormation = (
-  formation
-) => {
-  const value =
-    String(formation || "")
-      .trim();
+function roleKey(role, used) {
+  const count = used[role] || 0;
+  used[role] = count + 1;
 
-  return FORMATIONS[value]
-    ? value
-    : "4-4-2";
-};
+  if (role === "CB" && count === 0) return "CB1";
+  if (role === "CB" && count === 1) return "CB2";
+  if (role === "CB" && count === 2) return "CB3";
 
-export const getFormationPosition = (
-  formation,
-  index,
-  side = "home"
-) => {
-  const formationData =
-    FORMATIONS[
-      normalizeFormation(formation)
-    ];
+  if (role === "CM" && count === 0) return "CM1";
+  if (role === "CM" && count === 1) return "CM2";
+  if (role === "CM" && count === 2) return "CM3";
 
-  const point =
-    formationData[index] ||
-    formationData[
-      formationData.length - 1
-    ];
+  if (role === "ST" && count === 0) return "ST1";
+  if (role === "ST" && count === 1) return "ST2";
 
-  let x =
-    point[1] * PITCH.width;
+  if (role === "CDM" && count === 0) return "CDM1";
+  if (role === "CDM" && count === 1) return "CDM2";
 
-  const y =
-    point[2] * PITCH.height;
+  return role;
+}
 
-  if (side === "away") {
-    x =
-      PITCH.width - x;
+export function getFormationPositions(
+  formation = "4-4-2",
+  team = "home"
+) {
+  const formationData = positions[formation] || positions["4-4-2"];
+
+  const roles = FORMATIONS[formation] || FORMATIONS["4-4-2"];
+
+  const used = {};
+
+  return roles.map((role) => {
+    const key = roleKey(role, used);
+
+    const source =
+      formationData[key] ||
+      formationData[role] ||
+      [0.3, 0.5];
+
+    let x = source[0] * 1050;
+    let y = source[1] * 680;
+
+    if (team === "away") {
+      x = 1050 - x;
+    }
+
+    return {
+      role,
+      x,
+      y,
+    };
+  });
+}
+
+export function getRoleGroup(position = "") {
+  const p = String(position).toUpperCase();
+
+  if (p.includes("GK") || p.includes("KEEPER")) {
+    return "GK";
   }
 
-  return {
-    role: point[0],
-    x,
-    y,
-  };
-};
+  if (
+    ["LB", "RB", "CB", "LWB", "RWB", "DF", "DC"].includes(p)
+  ) {
+    return "DEF";
+  }
 
-export const getFormationRequirements = (
-  formation
-) => {
-  return FORMATIONS[
-    normalizeFormation(formation)
-  ].map(
-    ([role]) => role
-  );
-};
+  if (
+    [
+      "CDM",
+      "DM",
+      "CM",
+      "CAM",
+      "AM",
+      "LM",
+      "RM",
+      "MF",
+    ].includes(p)
+  ) {
+    return "MID";
+  }
 
-export const getAvailableFormations = () => {
-  return Object.keys(FORMATIONS);
-};
+  return "ATT";
+}
+
+export function normalizePosition(position) {
+  const p = String(position || "").toUpperCase();
+
+  if (
+    p.includes("GK") ||
+    p.includes("KEEPER") ||
+    p === "G"
+  ) {
+    return "GK";
+  }
+
+  if (["LB", "LWB"].includes(p)) return p;
+  if (["RB", "RWB"].includes(p)) return p;
+
+  if (
+    ["CB", "DC", "DF", "DEF"].includes(p)
+  ) {
+    return "CB";
+  }
+
+  if (["CDM", "DM"].includes(p)) return "CDM";
+
+  if (["CAM", "AM"].includes(p)) return "CAM";
+
+  if (["LM"].includes(p)) return "LM";
+  if (["RM"].includes(p)) return "RM";
+
+  if (["LW", "LF"].includes(p)) return "LW";
+  if (["RW", "RF"].includes(p)) return "RW";
+
+  if (["ST", "CF", "FW"].includes(p)) return "ST";
+
+  return "CM";
+}
