@@ -14,6 +14,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "../../components/firebase";
@@ -28,9 +30,7 @@ import styles from "./Mach.module.css";
 ========================================================= */
 
 function firstValue(object, keys, fallback = null) {
-  if (!object) {
-    return fallback;
-  }
+  if (!object) return fallback;
 
   for (const key of keys) {
     const value = object[key];
@@ -71,19 +71,34 @@ function safeString(value, fallback = "") {
 }
 
 
+function normalizeId(value) {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    return String(
+      value.id ||
+      value.clubId ||
+      value.teamId ||
+      value.value ||
+      ""
+    );
+  }
+
+  return String(value);
+}
+
+
 /* =========================================================
    PLAYER HELPERS
 ========================================================= */
 
 function playerBelongsToClub(player, clubId) {
-  const wanted = String(
-    typeof clubId === "object"
-      ? clubId?.id ||
-        clubId?.clubId ||
-        clubId?.teamId ||
-        ""
-      : clubId
-  );
+  const wanted = normalizeId(clubId);
 
   if (!wanted) {
     return false;
@@ -104,15 +119,9 @@ function playerBelongsToClub(player, clubId) {
         value !== null
     )
     .map(value =>
-      String(
-        typeof value === "object"
-          ? value?.id ||
-            value?.clubId ||
-            value?.teamId ||
-            ""
-          : value
-      )
-    );
+      normalizeId(value)
+    )
+    .filter(Boolean);
 
   return values.includes(wanted);
 }
@@ -124,18 +133,12 @@ function normalizePlayer(player = {}, index = 0) {
     player.stats ||
     {};
 
-  const number =
-    player.number ??
-    player.shirtNumber ??
-    player.jerseyNumber ??
-    index + 1;
-
   return {
     id: String(
       player.id ||
-        player.playerId ||
-        player.uid ||
-        `player-${index + 1}`
+      player.playerId ||
+      player.uid ||
+      `player-${index + 1}`
     ),
 
     name:
@@ -146,7 +149,9 @@ function normalizePlayer(player = {}, index = 0) {
       `Player ${index + 1}`,
 
     number: safeNumber(
-      number,
+      player.number ??
+      player.shirtNumber ??
+      player.jerseyNumber,
       index + 1
     ),
 
@@ -163,93 +168,93 @@ function normalizePlayer(player = {}, index = 0) {
 
     pace: safeNumber(
       player.pace ??
-        ratings.pace ??
-        ratings.speed,
+      ratings.pace ??
+      ratings.speed,
       70
     ),
 
     passing: safeNumber(
       player.passing ??
-        ratings.passing ??
-        ratings.pass,
+      ratings.passing ??
+      ratings.pass,
       70
     ),
 
     shooting: safeNumber(
       player.shooting ??
-        ratings.shooting ??
-        ratings.shoot,
+      ratings.shooting ??
+      ratings.shoot,
       65
     ),
 
     dribbling: safeNumber(
       player.dribbling ??
-        ratings.dribbling ??
-        ratings.dribble,
+      ratings.dribbling ??
+      ratings.dribble,
       68
     ),
 
     defending: safeNumber(
       player.defending ??
-        ratings.defending ??
-        ratings.defence ??
-        ratings.defense,
+      ratings.defending ??
+      ratings.defence ??
+      ratings.defense,
       65
     ),
 
     stamina: safeNumber(
       player.stamina ??
-        ratings.stamina,
+      ratings.stamina,
       80
     ),
 
     strength: safeNumber(
       player.strength ??
-        ratings.strength ??
-        ratings.physical,
+      ratings.strength ??
+      ratings.physical,
       70
     ),
 
     vision: safeNumber(
       player.vision ??
-        ratings.vision,
+      ratings.vision,
       70
     ),
 
     goalkeeping: safeNumber(
       player.goalkeeping ??
-        ratings.goalkeeping ??
-        ratings.gk,
+      ratings.goalkeeping ??
+      ratings.gk,
       60
     ),
 
     composure: safeNumber(
       player.composure ??
-        ratings.composure,
+      ratings.composure,
       65
     ),
 
     positioning: safeNumber(
       player.positioning ??
-        ratings.positioning,
+      ratings.positioning,
       65
     ),
 
     acceleration: safeNumber(
       player.acceleration ??
-        ratings.acceleration,
+      ratings.acceleration,
       68
     ),
 
     aggression: safeNumber(
       player.aggression ??
-        ratings.aggression,
+      ratings.aggression,
       60
     ),
 
     balance: safeNumber(
       player.balance ??
-        ratings.balance,
+      ratings.balance,
       65
     ),
   };
@@ -267,8 +272,8 @@ function normalizeClub(
   return {
     id: String(
       club?.id ||
-        club?.clubId ||
-        fallbackId
+      club?.clubId ||
+      fallbackId
     ),
 
     name:
@@ -292,16 +297,12 @@ function normalizeClub(
       club?.tactics || {},
 
     players:
-      Array.isArray(
-        club?.players
-      )
+      Array.isArray(club?.players)
         ? club.players
         : [],
 
     bench:
-      Array.isArray(
-        club?.bench
-      )
+      Array.isArray(club?.bench)
         ? club.bench
         : [],
   };
@@ -357,6 +358,85 @@ function extractEmbeddedPlayers(
 
 
 /* =========================================================
+   BUILD BENCH
+========================================================= */
+
+function buildBench(
+  explicitBench,
+  clubBench,
+  allPlayers,
+  clubId,
+  startingPlayers
+) {
+  let source = [];
+
+  if (
+    Array.isArray(explicitBench) &&
+    explicitBench.length
+  ) {
+    source = explicitBench;
+  } else if (
+    Array.isArray(clubBench) &&
+    clubBench.length
+  ) {
+    source = clubBench;
+  } else {
+    const startingIds =
+      new Set(
+        startingPlayers.map(
+          player => String(player.id)
+        )
+      );
+
+    source =
+      allPlayers.filter(
+        player =>
+          playerBelongsToClub(
+            player,
+            clubId
+          ) &&
+          !startingIds.has(
+            String(
+              player.id ||
+              player.playerId ||
+              player.uid
+            )
+          )
+      );
+  }
+
+  const unique = [];
+  const ids = new Set();
+
+  source.forEach(
+    (player, index) => {
+      const normalized =
+        normalizePlayer(
+          player,
+          index
+        );
+
+      if (
+        !ids.has(
+          normalized.id
+        )
+      ) {
+        ids.add(
+          normalized.id
+        );
+
+        unique.push(
+          normalized
+        );
+      }
+    }
+  );
+
+  return unique.slice(0, 9);
+}
+
+
+/* =========================================================
    CLOCK
 ========================================================= */
 
@@ -364,19 +444,27 @@ function formatClock(
   minute,
   second
 ) {
-  const safeMinute = Math.max(
-    0,
-    Math.floor(
-      safeNumber(minute, 0)
-    )
-  );
+  const safeMinute =
+    Math.max(
+      0,
+      Math.floor(
+        safeNumber(
+          minute,
+          0
+        )
+      )
+    );
 
-  const safeSecond = Math.max(
-    0,
-    Math.floor(
-      safeNumber(second, 0)
-    )
-  );
+  const safeSecond =
+    Math.max(
+      0,
+      Math.floor(
+        safeNumber(
+          second,
+          0
+        )
+      )
+    );
 
   return `${String(
     safeMinute
@@ -387,11 +475,190 @@ function formatClock(
 
 
 /* =========================================================
+   FIRESTORE RESULT SAVE
+========================================================= */
+
+async function saveFinalResult(
+  matchId,
+  snapshot
+) {
+  if (
+    !matchId ||
+    !snapshot
+  ) {
+    throw new Error(
+      "Final match result is missing."
+    );
+  }
+
+  const score =
+    snapshot.score || {
+      home: 0,
+      away: 0,
+    };
+
+  const home =
+    snapshot.home || {};
+
+  const away =
+    snapshot.away || {};
+
+  const finalResult = {
+    status: "finished",
+
+    minute: safeNumber(
+      snapshot.minute,
+      90
+    ),
+
+    second: safeNumber(
+      snapshot.second,
+      0
+    ),
+
+    score: {
+      home: safeNumber(
+        score.home,
+        0
+      ),
+
+      away: safeNumber(
+        score.away,
+        0
+      ),
+    },
+
+    homeScore: safeNumber(
+      score.home,
+      0
+    ),
+
+    awayScore: safeNumber(
+      score.away,
+      0
+    ),
+
+    homeTeam: {
+      id: safeString(
+        home.id
+      ),
+
+      name: safeString(
+        home.name,
+        "Home"
+      ),
+
+      logo:
+        home.logo || "",
+    },
+
+    awayTeam: {
+      id: safeString(
+        away.id
+      ),
+
+      name: safeString(
+        away.name,
+        "Away"
+      ),
+
+      logo:
+        away.logo || "",
+    },
+
+    stats:
+      snapshot.stats || {},
+
+    events:
+      Array.isArray(
+        snapshot.events
+      )
+        ? snapshot.events
+        : [],
+
+    lastEvent:
+      snapshot.lastEvent || null,
+
+    ball:
+      snapshot.ball || null,
+
+    result:
+      snapshot.result || {
+        home:
+          safeNumber(
+            score.home,
+            0
+          ),
+
+        away:
+          safeNumber(
+            score.away,
+            0
+          ),
+      },
+
+    updatedAt:
+      serverTimestamp(),
+
+    finishedAt:
+      serverTimestamp(),
+
+    resultSaved:
+      true,
+  };
+
+  const matchRef =
+    doc(
+      db,
+      "matches",
+      String(matchId)
+    );
+
+  await setDoc(
+    matchRef,
+    {
+      finalResult,
+      score: finalResult.score,
+      homeScore:
+        finalResult.homeScore,
+      awayScore:
+        finalResult.awayScore,
+
+      status: "finished",
+
+      stats:
+        finalResult.stats,
+
+      events:
+        finalResult.events,
+
+      result:
+        finalResult.result,
+
+      resultSaved: true,
+
+      finishedAt:
+        serverTimestamp(),
+
+      updatedAt:
+        serverTimestamp(),
+    },
+    {
+      merge: true,
+    }
+  );
+
+  return true;
+}
+
+
+/* =========================================================
    MAIN PAGE
 ========================================================= */
 
 export default function MatchPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
   const {
     id,
@@ -402,6 +669,12 @@ export default function MatchPage() {
 
   const updateTimerRef =
     useRef(null);
+
+  const resultSavingRef =
+    useRef(false);
+
+  const redirectingRef =
+    useRef(false);
 
   const [loading, setLoading] =
     useState(true);
@@ -430,10 +703,6 @@ export default function MatchPage() {
   const [activeTab, setActiveTab] =
     useState("events");
 
-  /* =======================================================
-     TACTICS STATE
-  ======================================================= */
-
   const [tactics, setTactics] =
     useState({
       mentality: "balanced",
@@ -446,15 +715,112 @@ export default function MatchPage() {
   const [formation, setFormation] =
     useState("4-3-3");
 
-  /* =======================================================
-     SUBSTITUTION STATE
-  ======================================================= */
-
   const [outgoingPlayer, setOutgoingPlayer] =
     useState("");
 
   const [incomingPlayer, setIncomingPlayer] =
     useState("");
+
+  const [savingResult, setSavingResult] =
+    useState(false);
+
+
+  /* =======================================================
+     SAVE FINAL RESULT + REDIRECT
+  ======================================================= */
+
+  const finishAndSave =
+    useCallback(
+      async finalSnapshot => {
+        if (
+          !finalSnapshot ||
+          !id ||
+          resultSavingRef.current ||
+          redirectingRef.current
+        ) {
+          return;
+        }
+
+        resultSavingRef.current =
+          true;
+
+        setSavingResult(true);
+        setError("");
+
+        let lastError =
+          null;
+
+        /*
+         * Retry Firestore several times.
+         * This handles temporary connection problems.
+         */
+
+        for (
+          let attempt = 1;
+          attempt <= 5;
+          attempt++
+        ) {
+          try {
+            await saveFinalResult(
+              String(id),
+              finalSnapshot
+            );
+
+            redirectingRef.current =
+              true;
+
+            setSavingResult(false);
+
+            /*
+             * Give Firestore a moment to finish
+             * its local/server synchronization.
+             */
+
+            setTimeout(
+              () => {
+                router.replace(
+                  "/fixtures"
+                );
+              },
+              500
+            );
+
+            return;
+          } catch (err) {
+            lastError = err;
+
+            console.error(
+              `Final result save attempt ${attempt} failed:`,
+              err
+            );
+
+            if (
+              attempt < 5
+            ) {
+              await new Promise(
+                resolve =>
+                  setTimeout(
+                    resolve,
+                    attempt * 1000
+                  )
+              );
+            }
+          }
+        }
+
+        resultSavingRef.current =
+          false;
+
+        setSavingResult(false);
+
+        setError(
+          lastError?.message ||
+          "Final result ntibashije kubikwa muri database."
+        );
+      },
+      [id, router]
+    );
+
 
   /* =======================================================
      LOAD MATCH
@@ -471,22 +837,27 @@ export default function MatchPage() {
     let cancelled = false;
 
     async function loadMatch() {
+      let engine = null;
+
       try {
         setLoading(true);
         setError("");
 
-        const matchRef = doc(
-          db,
-          "matches",
-          String(id)
-        );
+        const matchRef =
+          doc(
+            db,
+            "matches",
+            String(id)
+          );
 
         const matchSnap =
           await getDoc(
             matchRef
           );
 
-        if (!matchSnap.exists()) {
+        if (
+          !matchSnap.exists()
+        ) {
           throw new Error(
             "Match ntiboneka muri database."
           );
@@ -526,23 +897,13 @@ export default function MatchPage() {
         }
 
         const normalizedHomeId =
-          String(
-            typeof homeClubId ===
-              "object"
-              ? homeClubId.id ||
-                homeClubId.clubId ||
-                homeClubId.teamId
-              : homeClubId
+          normalizeId(
+            homeClubId
           );
 
         const normalizedAwayId =
-          String(
-            typeof awayClubId ===
-              "object"
-              ? awayClubId.id ||
-                awayClubId.clubId ||
-                awayClubId.teamId
-              : awayClubId
+          normalizeId(
+            awayClubId
           );
 
         const [
@@ -603,9 +964,10 @@ export default function MatchPage() {
             })
           );
 
-        /* =================================================
+
+        /* ===============================================
            FIND HOME PLAYERS
-        ================================================= */
+        =============================================== */
 
         let homePlayers =
           allPlayers.filter(
@@ -616,9 +978,10 @@ export default function MatchPage() {
               )
           );
 
-        /* =================================================
+
+        /* ===============================================
            FIND AWAY PLAYERS
-        ================================================= */
+        =============================================== */
 
         let awayPlayers =
           allPlayers.filter(
@@ -629,9 +992,10 @@ export default function MatchPage() {
               )
           );
 
-        /* =================================================
-           MATCH EMBEDDED LINEUPS HAVE PRIORITY
-        ================================================= */
+
+        /* ===============================================
+           MATCH EMBEDDED LINEUPS
+        =============================================== */
 
         const embeddedHome =
           match?.home?.players ||
@@ -667,9 +1031,10 @@ export default function MatchPage() {
             embeddedAway;
         }
 
-        /* =================================================
+
+        /* ===============================================
            CLUB EMBEDDED PLAYERS
-        ================================================= */
+        =============================================== */
 
         if (
           homePlayers.length < 11
@@ -705,9 +1070,10 @@ export default function MatchPage() {
           }
         }
 
-        /* =================================================
-           NORMALIZE
-        ================================================= */
+
+        /* ===============================================
+           NORMALIZE STARTING XI
+        =============================================== */
 
         homePlayers =
           homePlayers
@@ -732,13 +1098,14 @@ export default function MatchPage() {
           );
         }
 
-        /* =================================================
+
+        /* ===============================================
            TACTICS
-        ================================================= */
+        =============================================== */
 
         const homeTactics =
-          homeClub.tactics ||
           match?.home?.tactics ||
+          homeClub.tactics ||
           {};
 
         setTactics({
@@ -768,40 +1135,38 @@ export default function MatchPage() {
         });
 
         setFormation(
-          homeClub.formation ||
           match?.home?.formation ||
+          homeClub.formation ||
           "4-3-3"
         );
 
-        /* =================================================
+
+        /* ===============================================
            BENCH
-        ================================================= */
+        =============================================== */
 
         const homeBench =
-          Array.isArray(
-            match?.home?.bench
-          )
-            ? match.home.bench
-            : Array.isArray(
-                homeClub.bench
-              )
-            ? homeClub.bench
-            : [];
+          buildBench(
+            match?.home?.bench,
+            homeClub.bench,
+            allPlayers,
+            normalizedHomeId,
+            homePlayers
+          );
 
         const awayBench =
-          Array.isArray(
-            match?.away?.bench
-          )
-            ? match.away.bench
-            : Array.isArray(
-                awayClub.bench
-              )
-            ? awayClub.bench
-            : [];
+          buildBench(
+            match?.away?.bench,
+            awayClub.bench,
+            allPlayers,
+            normalizedAwayId,
+            awayPlayers
+          );
 
-        /* =================================================
+
+        /* ===============================================
            ENGINE CONFIG
-        ================================================= */
+        =============================================== */
 
         const engineConfig = {
           matchId: String(id),
@@ -813,10 +1178,7 @@ export default function MatchPage() {
               homePlayers,
 
             bench:
-              homeBench
-                .map(
-                  normalizePlayer
-                ),
+              homeBench,
           },
 
           away: {
@@ -826,19 +1188,20 @@ export default function MatchPage() {
               awayPlayers,
 
             bench:
-              awayBench
-                .map(
-                  normalizePlayer
-                ),
+              awayBench,
           },
 
           metadata: {
             source:
               "firebase",
+
+            matchId:
+              String(id),
           },
         };
 
-        const engine =
+
+        engine =
           new MatchEngine(
             engineConfig
           );
@@ -846,17 +1209,17 @@ export default function MatchPage() {
         engineRef.current =
           engine;
 
-        /* =================================================
+
+        /* ===============================================
            ENGINE SUBSCRIPTION
-        ================================================= */
+        =============================================== */
 
         engine.subscribe(
           nextSnapshot => {
-            if (cancelled) {
-              return;
-            }
-
-            if (!nextSnapshot) {
+            if (
+              cancelled ||
+              !nextSnapshot
+            ) {
               return;
             }
 
@@ -872,6 +1235,11 @@ export default function MatchPage() {
                 : []
             );
 
+
+            /* ==========================================
+               UPDATE FORMATION
+            ========================================== */
+
             if (
               nextSnapshot.home
                 ?.formation
@@ -880,6 +1248,11 @@ export default function MatchPage() {
                 nextSnapshot.home.formation
               );
             }
+
+
+            /* ==========================================
+               UPDATE TACTICS
+            ========================================== */
 
             if (
               nextSnapshot.home
@@ -893,14 +1266,28 @@ export default function MatchPage() {
               );
             }
 
+
+            /* ==========================================
+               MATCH FINISHED
+            ========================================== */
+
             if (
               nextSnapshot.status ===
               "finished"
             ) {
               setStarting(false);
+
+              finishAndSave(
+                nextSnapshot
+              );
             }
           }
         );
+
+
+        /* ===============================================
+           WAIT ENGINE READY
+        =============================================== */
 
         await engine.ready;
 
@@ -921,6 +1308,22 @@ export default function MatchPage() {
         );
 
         setLoading(false);
+
+
+        /*
+         * If backend already reports finished,
+         * save it immediately.
+         */
+
+        if (
+          initial?.status ===
+          "finished"
+        ) {
+          finishAndSave(
+            initial
+          );
+        }
+
       } catch (err) {
         console.error(
           "Match loading error:",
@@ -930,10 +1333,17 @@ export default function MatchPage() {
         if (!cancelled) {
           setError(
             err?.message ||
-              "Failed to load match."
+            "Failed to load match."
           );
 
           setLoading(false);
+        }
+
+        if (
+          engine &&
+          cancelled
+        ) {
+          engine.destroy();
         }
       }
     }
@@ -958,6 +1368,7 @@ export default function MatchPage() {
         engineRef.current
       ) {
         engineRef.current.destroy();
+
         engineRef.current =
           null;
       }
@@ -965,6 +1376,7 @@ export default function MatchPage() {
   }, [
     router.isReady,
     id,
+    finishAndSave,
   ]);
 
 
@@ -1009,15 +1421,26 @@ export default function MatchPage() {
       );
     }
 
+    /*
+     * 350ms gives frequent state updates
+     * without hammering Render every few milliseconds.
+     */
+
     updateTimerRef.current =
-      setInterval(() => {
-        if (
-          engineRef.current &&
-          engineRef.current.isRunning()
-        ) {
-          engineRef.current.update();
-        }
-      }, 250);
+      setInterval(
+        () => {
+          const current =
+            engineRef.current;
+
+          if (
+            current &&
+            current.isRunning()
+          ) {
+            current.update();
+          }
+        },
+        350
+      );
 
     return () => {
       if (
@@ -1066,6 +1489,8 @@ export default function MatchPage() {
           setEvents(
             state?.events || []
           );
+
+          setStarting(false);
         } catch (err) {
           console.error(
             "Start error:",
@@ -1074,7 +1499,7 @@ export default function MatchPage() {
 
           setError(
             err?.message ||
-              "Match ntiyatangiye."
+            "Match ntiyatangiye."
           );
 
           setStarting(false);
@@ -1121,7 +1546,7 @@ export default function MatchPage() {
 
           setError(
             err?.message ||
-              "Pause failed."
+            "Pause failed."
           );
         }
       },
@@ -1130,7 +1555,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     TACTICS CHANGE
+     UPDATE TACTIC
   ======================================================= */
 
   function updateTactic(
@@ -1162,30 +1587,36 @@ export default function MatchPage() {
       setSavingTactics(true);
       setError("");
 
-      await engine.setUserTactics(
-        {
-          mentality:
-            tactics.mentality,
+      await engine.setUserTactics({
+        mentality:
+          tactics.mentality,
 
-          tempo:
-            safeNumber(
-              tactics.tempo,
-              60
-            ),
+        tempo:
+          safeNumber(
+            tactics.tempo,
+            60
+          ),
 
-          pressing:
-            tactics.pressing,
+        pressing:
+          tactics.pressing,
 
-          defensiveLine:
-            tactics.defensiveLine,
+        defensiveLine:
+          tactics.defensiveLine,
 
-          width:
-            safeNumber(
-              tactics.width,
-              55
-            ),
-        }
-      );
+        width:
+          safeNumber(
+            tactics.width,
+            55
+          ),
+      });
+
+      if (
+        formation
+      ) {
+        await engine.setFormation(
+          formation
+        );
+      }
 
       const state =
         engine.getState();
@@ -1201,7 +1632,7 @@ export default function MatchPage() {
 
       setError(
         err?.message ||
-          "Tactics ntizibitswe."
+        "Tactics ntizibitswe."
       );
     } finally {
       setSavingTactics(false);
@@ -1213,39 +1644,10 @@ export default function MatchPage() {
      FORMATION
   ======================================================= */
 
-  async function changeFormation(
+  function updateFormationLocal(
     value
   ) {
     setFormation(value);
-
-    const engine =
-      engineRef.current;
-
-    if (!engine) {
-      return;
-    }
-
-    try {
-      setError("");
-
-      await engine.setFormation(
-        value
-      );
-
-      setSnapshot(
-        engine.getState()
-      );
-    } catch (err) {
-      console.error(
-        "Formation error:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Formation ntihindutse."
-      );
-    }
   }
 
 
@@ -1267,17 +1669,6 @@ export default function MatchPage() {
     ) {
       setError(
         "Hitamo umukinnyi usohoka n'umusimbura."
-      );
-
-      return;
-    }
-
-    if (
-      outgoingPlayer ===
-      incomingPlayer
-    ) {
-      setError(
-        "Umukinnyi usimbura ntashobora kuba ari we usohoka."
       );
 
       return;
@@ -1313,7 +1704,7 @@ export default function MatchPage() {
 
       setError(
         err?.message ||
-          "Substitution yanze."
+        "Substitution yanze."
       );
     } finally {
       setSubstituting(false);
@@ -1361,7 +1752,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     PLAYERS ON PITCH
+     PLAYERS
   ======================================================= */
 
   const allPlayers =
@@ -1410,32 +1801,43 @@ export default function MatchPage() {
 
   const homeBench =
     useMemo(
-      () => {
-        return Array.isArray(
+      () =>
+        Array.isArray(
           home?.bench
         )
           ? home.bench
-          : [];
-      },
+          : [],
       [home]
     );
 
 
   /* =======================================================
-     STARTING PLAYERS
+     HOME PLAYERS
   ======================================================= */
 
   const homeOnPitch =
     useMemo(
-      () => {
-        return Array.isArray(
+      () =>
+        Array.isArray(
           home?.players
         )
           ? home.players
-          : [];
-      },
+          : [],
       [home]
     );
+
+
+  /* =======================================================
+     STATS
+  ======================================================= */
+
+  const homeStats =
+    snapshot?.stats?.home ||
+    {};
+
+  const awayStats =
+    snapshot?.stats?.away ||
+    {};
 
 
   /* =======================================================
@@ -1464,7 +1866,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     RENDER ERROR
+     ERROR PAGE
   ======================================================= */
 
   if (
@@ -1518,9 +1920,9 @@ export default function MatchPage() {
         }
       >
 
-        {/* =================================================
+        {/* ===============================================
             HEADER
-        ================================================= */}
+        =============================================== */}
 
         <header
           className={
@@ -1561,12 +1963,23 @@ export default function MatchPage() {
           >
             {clock}
           </div>
+
+
+          {savingResult && (
+            <div
+              className={
+                styles.savingResult
+              }
+            >
+              Saving result...
+            </div>
+          )}
         </header>
 
 
-        {/* =================================================
+        {/* ===============================================
             SCOREBOARD
-        ================================================= */}
+        =============================================== */}
 
         <section
           className={
@@ -1669,9 +2082,9 @@ export default function MatchPage() {
         </section>
 
 
-        {/* =================================================
+        {/* ===============================================
             CONTROLS
-        ================================================= */}
+        =============================================== */}
 
         <section
           className={
@@ -1688,7 +2101,8 @@ export default function MatchPage() {
                   startMatch
                 }
                 disabled={
-                  starting
+                  starting ||
+                  savingResult
                 }
                 className={
                   styles.startButton
@@ -1718,9 +2132,9 @@ export default function MatchPage() {
         </section>
 
 
-        {/* =================================================
+        {/* ===============================================
             ERROR
-        ================================================= */}
+        =============================================== */}
 
         {error && (
           <div
@@ -1733,9 +2147,9 @@ export default function MatchPage() {
         )}
 
 
-        {/* =================================================
+        {/* ===============================================
             PITCH
-        ================================================= */}
+        =============================================== */}
 
         <section
           className={
@@ -1778,9 +2192,9 @@ export default function MatchPage() {
           />
 
 
-          {/* =================================================
+          {/* ==========================================
               PLAYERS
-          ================================================= */}
+          ========================================== */}
 
           {allPlayers.map(
             player => {
@@ -1796,7 +2210,7 @@ export default function MatchPage() {
               const y =
                 safeNumber(
                   player.y,
-                  30
+                  50
                 );
 
               return (
@@ -1857,9 +2271,9 @@ export default function MatchPage() {
           )}
 
 
-          {/* =================================================
+          {/* ==========================================
               BALL
-          ================================================= */}
+          ========================================== */}
 
           {snapshot?.ball && (
             <div
@@ -1884,7 +2298,7 @@ export default function MatchPage() {
                     98,
                     safeNumber(
                       snapshot.ball.y,
-                      30
+                      50
                     )
                   )
                 )}%`,
@@ -1897,9 +2311,9 @@ export default function MatchPage() {
         </section>
 
 
-        {/* =================================================
-            MAIN CONTENT
-        ================================================= */}
+        {/* ===============================================
+            CONTENT
+        =============================================== */}
 
         <section
           className={
@@ -1913,9 +2327,9 @@ export default function MatchPage() {
             }
           >
 
-            {/* =================================================
+            {/* ==========================================
                 TABS
-            ================================================= */}
+            ========================================== */}
 
             <div
               className={
@@ -1939,7 +2353,6 @@ export default function MatchPage() {
                 Events
               </button>
 
-
               <button
                 className={
                   activeTab ===
@@ -1955,7 +2368,6 @@ export default function MatchPage() {
               >
                 Players
               </button>
-
 
               <button
                 className={
@@ -1973,7 +2385,6 @@ export default function MatchPage() {
                 Stats
               </button>
 
-
               <button
                 className={
                   activeTab ===
@@ -1989,7 +2400,6 @@ export default function MatchPage() {
               >
                 Tactics
               </button>
-
 
               <button
                 className={
@@ -2010,9 +2420,9 @@ export default function MatchPage() {
             </div>
 
 
-            {/* =================================================
+            {/* ==========================================
                 EVENTS
-            ================================================= */}
+            ========================================== */}
 
             {activeTab ===
               "events" && (
@@ -2030,7 +2440,7 @@ export default function MatchPage() {
                       <div
                         key={
                           event.id ||
-                          `${event.minute}-${event.type}-${index}`
+                          `${event.minute}-${event.second}-${event.type}-${index}`
                         }
                         className={
                           styles.event
@@ -2056,7 +2466,6 @@ export default function MatchPage() {
                     )
                   )}
 
-
                 {!events.length && (
                   <p
                     className={
@@ -2071,9 +2480,9 @@ export default function MatchPage() {
             )}
 
 
-            {/* =================================================
+            {/* ==========================================
                 PLAYERS
-            ================================================= */}
+            ========================================== */}
 
             {activeTab ===
               "players" && (
@@ -2084,7 +2493,6 @@ export default function MatchPage() {
               >
 
                 <div>
-
                   <h3>
                     {home?.name}
                   </h3>
@@ -2099,7 +2507,6 @@ export default function MatchPage() {
                           player.id
                         }
                       >
-
                         <b>
                           {
                             player.number
@@ -2117,16 +2524,13 @@ export default function MatchPage() {
                             player.position
                           }
                         </small>
-
                       </div>
                     )
                   )}
-
                 </div>
 
 
                 <div>
-
                   <h3>
                     {away?.name}
                   </h3>
@@ -2141,7 +2545,6 @@ export default function MatchPage() {
                           player.id
                         }
                       >
-
                         <b>
                           {
                             player.number
@@ -2159,20 +2562,18 @@ export default function MatchPage() {
                             player.position
                           }
                         </small>
-
                       </div>
                     )
                   )}
-
                 </div>
 
               </div>
             )}
 
 
-            {/* =================================================
+            {/* ==========================================
                 STATS
-            ================================================= */}
+            ========================================== */}
 
             {activeTab ===
               "stats" && (
@@ -2185,50 +2586,110 @@ export default function MatchPage() {
                 {[
                   [
                     "Possession",
-                    `${snapshot?.stats?.home?.possession || 0}%`,
-                    `${snapshot?.stats?.away?.possession || 0}%`,
+                    `${safeNumber(
+                      homeStats.possession,
+                      0
+                    )}%`,
+                    `${safeNumber(
+                      awayStats.possession,
+                      0
+                    )}%`,
                   ],
 
                   [
                     "Shots",
-                    snapshot?.stats?.home?.shots || 0,
-                    snapshot?.stats?.away?.shots || 0,
+                    safeNumber(
+                      homeStats.shots,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.shots,
+                      0
+                    ),
                   ],
 
                   [
                     "Shots on target",
-                    snapshot?.stats?.home?.shotsOnTarget || 0,
-                    snapshot?.stats?.away?.shotsOnTarget || 0,
+                    safeNumber(
+                      homeStats.shotsOnTarget,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.shotsOnTarget,
+                      0
+                    ),
                   ],
 
                   [
                     "Passes",
-                    snapshot?.stats?.home?.passes || 0,
-                    snapshot?.stats?.away?.passes || 0,
+                    safeNumber(
+                      homeStats.passes,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.passes,
+                      0
+                    ),
                   ],
 
                   [
                     "Corners",
-                    snapshot?.stats?.home?.corners || 0,
-                    snapshot?.stats?.away?.corners || 0,
+                    safeNumber(
+                      homeStats.corners,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.corners,
+                      0
+                    ),
                   ],
 
                   [
                     "Tackles",
-                    snapshot?.stats?.home?.tackles || 0,
-                    snapshot?.stats?.away?.tackles || 0,
+                    safeNumber(
+                      homeStats.tackles,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.tackles,
+                      0
+                    ),
                   ],
 
                   [
                     "Interceptions",
-                    snapshot?.stats?.home?.interceptions || 0,
-                    snapshot?.stats?.away?.interceptions || 0,
+                    safeNumber(
+                      homeStats.interceptions,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.interceptions,
+                      0
+                    ),
                   ],
 
                   [
                     "Saves",
-                    snapshot?.stats?.home?.saves || 0,
-                    snapshot?.stats?.away?.saves || 0,
+                    safeNumber(
+                      homeStats.saves,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.saves,
+                      0
+                    ),
+                  ],
+
+                  [
+                    "Fouls",
+                    safeNumber(
+                      homeStats.fouls,
+                      0
+                    ),
+                    safeNumber(
+                      awayStats.fouls,
+                      0
+                    ),
                   ],
 
                 ].map(
@@ -2262,9 +2723,9 @@ export default function MatchPage() {
             )}
 
 
-            {/* =================================================
+            {/* ==========================================
                 TACTICS
-            ================================================= */}
+            ========================================== */}
 
             {activeTab ===
               "tactics" && (
@@ -2291,14 +2752,11 @@ export default function MatchPage() {
                 </div>
 
 
-                {/* FORMATION */}
-
                 <div
                   className={
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Formation
                   </label>
@@ -2308,9 +2766,8 @@ export default function MatchPage() {
                       formation
                     }
                     onChange={event =>
-                      changeFormation(
-                        event.target
-                          .value
+                      updateFormationLocal(
+                        event.target.value
                       )
                     }
                     disabled={
@@ -2318,7 +2775,6 @@ export default function MatchPage() {
                       "finished"
                     }
                   >
-
                     <option value="4-3-3">
                       4-3-3
                     </option>
@@ -2338,21 +2794,15 @@ export default function MatchPage() {
                     <option value="5-3-2">
                       5-3-2
                     </option>
-
                   </select>
-
                 </div>
 
-
-                {/* MENTALITY */}
 
                 <div
                   className={
                     styles.formGroup
                   }
-
                 >
-
                   <label>
                     Mentality
                   </label>
@@ -2364,12 +2814,14 @@ export default function MatchPage() {
                     onChange={event =>
                       updateTactic(
                         "mentality",
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
+                    disabled={
+                      status ===
+                      "finished"
+                    }
                   >
-
                     <option value="very_defensive">
                       Very Defensive
                     </option>
@@ -2389,20 +2841,15 @@ export default function MatchPage() {
                     <option value="very_attacking">
                       Very Attacking
                     </option>
-
                   </select>
-
                 </div>
 
-
-                {/* PRESSING */}
 
                 <div
                   className={
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Pressing
                   </label>
@@ -2414,12 +2861,14 @@ export default function MatchPage() {
                     onChange={event =>
                       updateTactic(
                         "pressing",
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
+                    disabled={
+                      status ===
+                      "finished"
+                    }
                   >
-
                     <option value="low">
                       Low
                     </option>
@@ -2435,20 +2884,15 @@ export default function MatchPage() {
                     <option value="very_high">
                       Very High
                     </option>
-
                   </select>
-
                 </div>
 
-
-                {/* DEFENSIVE LINE */}
 
                 <div
                   className={
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Defensive Line
                   </label>
@@ -2460,12 +2904,14 @@ export default function MatchPage() {
                     onChange={event =>
                       updateTactic(
                         "defensiveLine",
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
+                    disabled={
+                      status ===
+                      "finished"
+                    }
                   >
-
                     <option value="low">
                       Low
                     </option>
@@ -2477,20 +2923,15 @@ export default function MatchPage() {
                     <option value="high">
                       High
                     </option>
-
                   </select>
-
                 </div>
 
-
-                {/* TEMPO */}
 
                 <div
                   className={
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Tempo:{" "}
                     {tactics.tempo}
@@ -2507,24 +2948,23 @@ export default function MatchPage() {
                       updateTactic(
                         "tempo",
                         Number(
-                          event.target
-                            .value
+                          event.target.value
                         )
                       )
                     }
+                    disabled={
+                      status ===
+                      "finished"
+                    }
                   />
-
                 </div>
 
-
-                {/* WIDTH */}
 
                 <div
                   className={
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Width:{" "}
                     {tactics.width}
@@ -2541,13 +2981,15 @@ export default function MatchPage() {
                       updateTactic(
                         "width",
                         Number(
-                          event.target
-                            .value
+                          event.target.value
                         )
                       )
                     }
+                    disabled={
+                      status ===
+                      "finished"
+                    }
                   />
-
                 </div>
 
 
@@ -2573,9 +3015,9 @@ export default function MatchPage() {
             )}
 
 
-            {/* =================================================
+            {/* ==========================================
                 SUBSTITUTIONS
-            ================================================= */}
+            ========================================== */}
 
             {activeTab ===
               "subs" && (
@@ -2605,7 +3047,6 @@ export default function MatchPage() {
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Player coming off
                   </label>
@@ -2616,8 +3057,7 @@ export default function MatchPage() {
                     }
                     onChange={event =>
                       setOutgoingPlayer(
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
                     disabled={
@@ -2628,7 +3068,6 @@ export default function MatchPage() {
                       substituting
                     }
                   >
-
                     <option value="">
                       Select player
                     </option>
@@ -2644,20 +3083,12 @@ export default function MatchPage() {
                           }
                         >
                           #{player.number}{" "}
-                          {
-                            player.name
-                          }{" "}
-                          (
-                          {
-                            player.position
-                          }
-                          )
+                          {player.name}{" "}
+                          ({player.position})
                         </option>
                       )
                     )}
-
                   </select>
-
                 </div>
 
 
@@ -2666,7 +3097,6 @@ export default function MatchPage() {
                     styles.formGroup
                   }
                 >
-
                   <label>
                     Player coming on
                   </label>
@@ -2677,8 +3107,7 @@ export default function MatchPage() {
                     }
                     onChange={event =>
                       setIncomingPlayer(
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
                     disabled={
@@ -2689,7 +3118,6 @@ export default function MatchPage() {
                       substituting
                     }
                   >
-
                     <option value="">
                       Select substitute
                     </option>
@@ -2705,20 +3133,12 @@ export default function MatchPage() {
                           }
                         >
                           #{player.number}{" "}
-                          {
-                            player.name
-                          }{" "}
-                          (
-                          {
-                            player.position
-                          }
-                          )
+                          {player.name}{" "}
+                          ({player.position})
                         </option>
                       )
                     )}
-
                   </select>
-
                 </div>
 
 
@@ -2753,10 +3173,10 @@ export default function MatchPage() {
                   <p>
                     Substitutions used:{" "}
                     <strong>
-                      {
-                        home?.substitutionsUsed ||
+                      {safeNumber(
+                        home?.substitutionsUsed,
                         0
-                      }
+                      )}
                     </strong>
                     / 5
                   </p>
