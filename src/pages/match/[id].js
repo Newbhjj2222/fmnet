@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../components/firebase";
+import { useAuth } from "../../context/AuthContext";
 import MatchEngine from "../../lib/match-engine/python-engine";
 
 import styles from "./Mach.module.css";
@@ -82,26 +83,8 @@ function sleep(ms) {
 
 
 /* =========================================================
-   COOKIE / USER HELPERS
+   USER HELPERS (from useAuth)
 ========================================================= */
-
-function getLoggedUserFromCookie() {
-  if (typeof document === "undefined") return null;
-
-  try {
-    const cookies = document.cookie.split(";").map(item => item.trim());
-    const userCookie = cookies.find(item => item.startsWith("user="));
-
-    if (!userCookie) return null;
-
-    const raw = decodeURIComponent(userCookie.substring("user=".length));
-    return JSON.parse(raw);
-  } catch (error) {
-    console.warn("Could not read user cookie:", error);
-    return null;
-  }
-}
-
 
 function getUsernameFromUser(user) {
   return safeString(
@@ -252,13 +235,9 @@ function getClubId(match, side) {
 
 
 /* =========================================================
-   MANAGED TEAM RESOLUTION (IMPROVED)
+   MANAGED TEAM RESOLUTION
 ========================================================= */
 
-/*
- * STEP 1: Reba niba match document ubwayo ifite explicit
- * managed club ID cyangwa side.
- */
 function getManagedClubIdFromMatch(match) {
   return normalizeId(
     firstValue(match, [
@@ -299,8 +278,8 @@ function getManagedSideFromMatch(match) {
 
 
 /*
- * STEP 2: Shaka muri "clubs" collection ukoresheje username
- * cyangwa userId y'uwo user winjiye.
+ * Shaka muri "clubs" collection ukoresheje userId cyangwa
+ * username y'uwo user winjiye (uva muri useAuth).
  */
 function findManagedClubInDatabase(clubs, username, userId) {
   const wantedUsername = safeString(username).toLowerCase();
@@ -313,7 +292,7 @@ function findManagedClubInDatabase(clubs, username, userId) {
   for (const club of clubs) {
     const data = club.data || club;
 
-    // Reba niba userId ihuye na managerId cyangwa ownerId
+    // ---- Reba userId ----
     const possibleIds = [
       data.managerId,
       data.managerUid,
@@ -336,7 +315,7 @@ function findManagedClubInDatabase(clubs, username, userId) {
       return normalizeId(data.id || data.clubId || club.id);
     }
 
-    // Reba niba username ihuye
+    // ---- Reba username ----
     const possibleUsernames = [
       data.username,
       data.userName,
@@ -367,7 +346,7 @@ function findManagedClubInDatabase(clubs, username, userId) {
 
 
 /*
- * STEP 3: Shaka mu home/away objects bya match ubwayo.
+ * Shaka mu home/away objects bya match ubwayo.
  */
 function findManagedSideInMatchTeams(match, username, userId) {
   const wantedUsername = safeString(username).toLowerCase();
@@ -550,11 +529,6 @@ function normalizeSide(value) {
 
 /* =========================================================
    POSSESSION — ISHINGIYE KURI PASSES
-   ---------------------------------------------------------
-   Home possession = homePasses / (homePasses + awayPasses) * 100
-   Away possession = 100 - home possession
-
-   Niba passes zose ari 0, dukoresha 50/50.
 ========================================================= */
 
 function calculatePossessionFromPasses(homePasses, awayPasses) {
@@ -580,15 +554,8 @@ function calculatePossessionFromPasses(homePasses, awayPasses) {
    LIVE STATS
 ========================================================= */
 
-/*
- * Iyi function ibara stats za rimwe ikipe.
- * Iriha priorities:
- *   1. Stats ziva kuri backend (niba zihari muri snapshot.stats)
- *   2. Stats zibarwa kuva mu ma events
- */
 function calculateLiveStats(snapshot, side) {
   const original = snapshot?.stats?.[side] || {};
-
   const events = Array.isArray(snapshot?.events) ? snapshot.events : [];
 
   const sideEvents = events.filter(event => {
@@ -702,7 +669,6 @@ async function saveFinalResult(matchId, snapshot) {
   const homeScore = safeNumber(score.home, 0);
   const awayScore = safeNumber(score.away, 0);
 
-  // ---- Stats + Possession ----
   const homeStatsRaw = calculateLiveStats(snapshot, "home");
   const awayStatsRaw = calculateLiveStats(snapshot, "away");
 
@@ -798,6 +764,19 @@ export default function MatchPage() {
   const router = useRouter();
   const { id } = router.query;
 
+  /* =======================================================
+     AUTH CONTEXT
+  ======================================================= */
+
+  const {
+    user,
+    loading: authLoading,
+  } = useAuth();
+
+  /* =======================================================
+     REFS
+  ======================================================= */
+
   const engineRef = useRef(null);
   const updateTimerRef = useRef(null);
   const resultSavingRef = useRef(false);
@@ -806,8 +785,8 @@ export default function MatchPage() {
   const matchConfigRef = useRef(null);
 
   /*
-   * managedSideRef ubu ishobora kuba null —
-   * bivuze ko tutaramenya ikipe user atoza.
+   * managedSideRef: "home" | "away" | null
+   * null bivuze ko user atari manager wa match iyi.
    */
   const managedSideRef = useRef(null);
 
@@ -827,10 +806,6 @@ export default function MatchPage() {
   const [events, setEvents] = useState([]);
   const [activeTab, setActiveTab] = useState("events");
 
-  /*
-   * Iyi state ibika side y'umutoza kugira ngo UI
-   * imenye ko "Managing: X" cyangwa niba ataramenye.
-   */
   const [managedSide, setManagedSide] = useState(null);
   const [managedTeamName, setManagedTeamName] = useState("Your Team");
 
@@ -950,17 +925,11 @@ export default function MatchPage() {
 
         const side = managedSideRef.current;
 
-        if (
-          side === "home" &&
-          nextSnapshot.home?.formation
-        ) {
+        if (side === "home" && nextSnapshot.home?.formation) {
           setFormation(nextSnapshot.home.formation);
         }
 
-        if (
-          side === "away" &&
-          nextSnapshot.away?.formation
-        ) {
+        if (side === "away" && nextSnapshot.away?.formation) {
           setFormation(nextSnapshot.away.formation);
         }
 
@@ -1025,9 +994,11 @@ export default function MatchPage() {
 
   /* =======================================================
      LOAD MATCH
+     (urutonde: rindira authLoading na router.isReady)
   ======================================================= */
 
   useEffect(() => {
+    if (authLoading) return;
     if (!router.isReady || !id) return;
 
     let cancelled = false;
@@ -1062,12 +1033,17 @@ export default function MatchPage() {
           );
         }
 
-        /* ---- Logged-in user ---- */
-        const loggedUser = getLoggedUserFromCookie();
-        const username = getUsernameFromUser(loggedUser);
-        const userId = getUserIdFromUser(loggedUser);
+        /* ---------------------------------------------
+           USER (uva muri useAuth)
+        --------------------------------------------- */
+        const username = getUsernameFromUser(user);
+        const userId = getUserIdFromUser(user);
 
-        /* ---- Fetch Firebase data ---- */
+        console.log("AUTH USER:", { userId, username });
+
+        /* ---------------------------------------------
+           FETCH FIREBASE DATA
+        --------------------------------------------- */
         const [homeClubSnap, awayClubSnap, playersSnap, clubsSnap] =
           await Promise.all([
             getDoc(doc(db, "clubs", homeClubId)),
@@ -1103,17 +1079,13 @@ export default function MatchPage() {
         }));
 
         /* =================================================
-           MANAGER DETECTION (UBURYO BUSHYUSHYE)
-           
+           MANAGER DETECTION
+           -------------------------------------------------
            1. Reba match.managerClubId / managedClubId
            2. Reba match.userSide / managerSide
-           3. Shaka muri clubs ukoresheje userId
-           4. Shaka muri clubs ukoresheje username
+           3. Shakisha muri clubs ukoresheje userId
+           4. Shakisha muri clubs ukoresheje username
            5. Reba match.home / match.away objects
-           
-           Ntidusubize "home" mu buryo bwikora keretse
-           nta na kimwe cyabonetse kandi match igaragaza
-           ko home ari yo.
         ================================================= */
 
         let resolvedManagedClubId = getManagedClubIdFromMatch(match);
@@ -1128,7 +1100,7 @@ export default function MatchPage() {
           );
         }
 
-        // Niba club ID yabonetse, hindura ibe side
+        // Niba club ID yabonetse, iyihuze na home/away
         if (resolvedManagedClubId) {
           if (resolvedManagedClubId === homeClubId) {
             resolvedManagedSide = "home";
@@ -1144,15 +1116,6 @@ export default function MatchPage() {
             username,
             userId
           );
-        }
-
-        // Niba byarananiranye, reba niba user ari manager wa club imwe
-        if (!resolvedManagedSide && resolvedManagedClubId) {
-          if (resolvedManagedClubId === homeClubId) {
-            resolvedManagedSide = "home";
-          } else if (resolvedManagedClubId === awayClubId) {
-            resolvedManagedSide = "away";
-          }
         }
 
         console.log("MANAGER DETECTION:", {
@@ -1276,7 +1239,7 @@ export default function MatchPage() {
           ? awayStarting
           : isHome
           ? homeStarting
-          : []; // Nta manager — ntacyo twerekana
+          : [];
 
         const managedBenchPlayers = isAway
           ? awayBench
@@ -1395,7 +1358,14 @@ export default function MatchPage() {
         engineRef.current = null;
       }
     };
-  }, [router.isReady, id, rebuildEngine, finishAndSave]);
+  }, [
+    authLoading,
+    user,
+    router.isReady,
+    id,
+    rebuildEngine,
+    finishAndSave,
+  ]);
 
   /* =======================================================
      LIVE POLLING
@@ -1459,10 +1429,13 @@ export default function MatchPage() {
     const engine = engineRef.current;
     if (!engine) return;
 
+    if (!managedSideRef.current) {
+      setError("Ntabwo uri manager w'ikipe iyi.");
+      return;
+    }
+
     if (managedStartingXI.length !== 11) {
-      setError(
-        "Ugomba kubanza kugira Starting XI y'abakinnyi 11."
-      );
+      setError("Ugomba kubanza kugira Starting XI y'abakinnyi 11.");
       setActiveTab("lineup");
       return;
     }
@@ -1493,6 +1466,11 @@ export default function MatchPage() {
     const engine = engineRef.current;
     if (!engine) return;
 
+    if (!managedSideRef.current) {
+      setError("Ntabwo uri manager w'ikipe iyi.");
+      return;
+    }
+
     try {
       setError("");
       await engine.pause();
@@ -1519,7 +1497,7 @@ export default function MatchPage() {
     if (!engine) return;
 
     if (!managedSideRef.current) {
-      setError("Ntabwo turi manager w'ikipe iyi.");
+      setError("Ntabwo uri manager w'ikipe iyi.");
       return;
     }
 
@@ -1569,6 +1547,8 @@ export default function MatchPage() {
 
   const removeFromStartingXI = useCallback(
     playerId => {
+      if (!managedSideRef.current) return;
+
       if (
         snapshot?.status !== "created" &&
         snapshot?.status !== "paused"
@@ -1592,6 +1572,8 @@ export default function MatchPage() {
 
   const addToStartingXI = useCallback(
     playerId => {
+      if (!managedSideRef.current) return;
+
       if (managedStartingXI.length >= 11) {
         setError("Starting XI ntishobora kurenga abakinnyi 11.");
         return;
@@ -1612,13 +1594,13 @@ export default function MatchPage() {
   );
 
   const saveStartingXI = useCallback(async () => {
-    if (managedStartingXI.length !== 11) {
-      setError("Starting XI igomba kuba igizwe n'abakinnyi 11.");
+    if (!managedSideRef.current) {
+      setError("Ntabwo uri manager w'ikipe iyi.");
       return;
     }
 
-    if (!managedSideRef.current) {
-      setError("Ntabwo turi manager w'ikipe iyi.");
+    if (managedStartingXI.length !== 11) {
+      setError("Starting XI igomba kuba igizwe n'abakinnyi 11.");
       return;
     }
 
@@ -1692,7 +1674,7 @@ export default function MatchPage() {
     if (!engine) return;
 
     if (!managedSideRef.current) {
-      setError("Ntabwo turi manager w'ikipe iyi.");
+      setError("Ntabwo uri manager w'ikipe iyi.");
       return;
     }
 
@@ -1772,7 +1754,7 @@ export default function MatchPage() {
   const status = snapshot?.status || "created";
 
   /* =======================================================
-     POSSESSION — ISHINGIYE KURI PASSES
+     STATS + POSSESSION (ISHINGIYE KURI PASSES)
   ======================================================= */
 
   const homeStats = useMemo(
@@ -1785,11 +1767,6 @@ export default function MatchPage() {
     [snapshot]
   );
 
-  /*
-   * Dushyira possession muri stats nyuma yo kubara passes.
-   * Iyi possession ibera kuri passes gusa (nta tracker
-   * y'igihe ikoreshwa).
-   */
   const possession = useMemo(
     () =>
       calculatePossessionFromPasses(
@@ -1799,9 +1776,6 @@ export default function MatchPage() {
     [homeStats.passes, awayStats.passes]
   );
 
-  /* ---------------------------------------------
-     Stats nyarutwa (zifite possession) zo kwerekana
-  --------------------------------------------- */
   const homeStatsWithPossession = useMemo(
     () => ({ ...homeStats, possession: possession.home }),
     [homeStats, possession.home]
@@ -1822,7 +1796,7 @@ export default function MatchPage() {
 
     return [
       ...homePlayers.map(player => ({ ...player, side: "home" })),
-      ...awayPlayers.map(player => ({ ...away, ...player, side: "away" })),
+      ...awayPlayers.map(player => ({ ...player, side: "away" })),
     ];
   }, [home, away]);
 
@@ -1837,10 +1811,10 @@ export default function MatchPage() {
     managedSide === "away" ? liveAwayBench : liveHomeBench;
 
   /* =======================================================
-     LOADING
+     LOADING (auth + page)
   ======================================================= */
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <main className={styles.loadingPage}>
         <div className={styles.spinner} />
@@ -1880,14 +1854,14 @@ export default function MatchPage() {
       </Head>
 
       <main className={styles.page}>
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        {/* HEADER */}
         <header className={styles.header}>
           <div className={styles.status}>
             <span
               className={
-                status === "playing" ? styles.liveDot : styles.statusDot
+                status === "playing"
+                  ? styles.liveDot
+                  : styles.statusDot
               }
             />
             {status === "playing"
@@ -1908,9 +1882,7 @@ export default function MatchPage() {
           )}
         </header>
 
-        {/* =================================================
-            SCORE
-        ================================================= */}
+        {/* SCOREBOARD */}
         <section className={styles.scoreboard}>
           <div className={styles.team}>
             {home?.logo ? (
@@ -1945,9 +1917,7 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* =================================================
-            MANAGED TEAM INFO
-        ================================================= */}
+        {/* MANAGED TEAM INFO */}
         <div className={styles.managerTeamBar}>
           {managedSide ? (
             <>
@@ -1955,13 +1925,13 @@ export default function MatchPage() {
               <span> ({managedSide})</span>
             </>
           ) : (
-            <span>Spectator mode — you are not managing a team.</span>
+            <span>
+              Spectator mode — you are not managing this match.
+            </span>
           )}
         </div>
 
-        {/* =================================================
-            CONTROLS
-        ================================================= */}
+        {/* CONTROLS */}
         <section className={styles.controls}>
           {managedSide &&
             status !== "finished" &&
@@ -1990,14 +1960,10 @@ export default function MatchPage() {
           )}
         </section>
 
-        {/* =================================================
-            ERROR
-        ================================================= */}
+        {/* ERROR */}
         {error && <div className={styles.errorBox}>{error}</div>}
 
-        {/* =================================================
-            PITCH
-        ================================================= */}
+        {/* PITCH */}
         <section className={styles.pitch}>
           <div className={styles.halfLine} />
           <div className={styles.centerCircle} />
@@ -2030,7 +1996,9 @@ export default function MatchPage() {
                 <span className={styles.playerNumber}>
                   {player.number}
                 </span>
-                <span className={styles.playerName}>{player.name}</span>
+                <span className={styles.playerName}>
+                  {player.name}
+                </span>
               </div>
             );
           })}
@@ -2054,9 +2022,7 @@ export default function MatchPage() {
           )}
         </section>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
+        {/* CONTENT */}
         <section className={styles.contentGrid}>
           <div className={styles.panel}>
             <div className={styles.tabs}>
@@ -2070,7 +2036,9 @@ export default function MatchPage() {
               ].map(tab => (
                 <button
                   key={tab[0]}
-                  className={activeTab === tab[0] ? styles.activeTab : ""}
+                  className={
+                    activeTab === tab[0] ? styles.activeTab : ""
+                  }
                   onClick={() => setActiveTab(tab[0])}
                 >
                   {tab[1]}
@@ -2078,7 +2046,7 @@ export default function MatchPage() {
               ))}
             </div>
 
-            {/* ---------- EVENTS ---------- */}
+            {/* EVENTS */}
             {activeTab === "events" && (
               <div className={styles.events}>
                 {events
@@ -2103,18 +2071,23 @@ export default function MatchPage() {
                   ))}
 
                 {!events.length && (
-                  <p className={styles.empty}>Match has not started.</p>
+                  <p className={styles.empty}>
+                    Match has not started.
+                  </p>
                 )}
               </div>
             )}
 
-            {/* ---------- PLAYERS ---------- */}
+            {/* PLAYERS */}
             {activeTab === "players" && (
               <div className={styles.playerList}>
                 <div>
                   <h3>{home?.name}</h3>
                   {home?.players?.map(player => (
-                    <div className={styles.listPlayer} key={player.id}>
+                    <div
+                      className={styles.listPlayer}
+                      key={player.id}
+                    >
                       <b>{player.number}</b>
                       <span>{player.name}</span>
                       <small>{player.position}</small>
@@ -2134,14 +2107,19 @@ export default function MatchPage() {
                       </div>
                     ))
                   ) : (
-                    <p className={styles.empty}>No bench players found.</p>
+                    <p className={styles.empty}>
+                      No bench players found.
+                    </p>
                   )}
                 </div>
 
                 <div>
                   <h3>{away?.name}</h3>
                   {away?.players?.map(player => (
-                    <div className={styles.listPlayer} key={player.id}>
+                    <div
+                      className={styles.listPlayer}
+                      key={player.id}
+                    >
                       <b>{player.number}</b>
                       <span>{player.name}</span>
                       <small>{player.position}</small>
@@ -2161,39 +2139,72 @@ export default function MatchPage() {
                       </div>
                     ))
                   ) : (
-                    <p className={styles.empty}>No bench players found.</p>
+                    <p className={styles.empty}>
+                      No bench players found.
+                    </p>
                   )}
                 </div>
               </div>
             )}
 
-            {/* ---------- STATS ---------- */}
+            {/* STATS */}
             {activeTab === "stats" && (
               <div className={styles.stats}>
                 {[
                   [
                     "Possession",
-                    `${Math.round(homeStatsWithPossession.possession)}%`,
-                    `${Math.round(awayStatsWithPossession.possession)}%`,
+                    `${Math.round(
+                      homeStatsWithPossession.possession
+                    )}%`,
+                    `${Math.round(
+                      awayStatsWithPossession.possession
+                    )}%`,
                   ],
-                  ["Passes", homeStatsWithPossession.passes, awayStatsWithPossession.passes],
-                  ["Shots", homeStatsWithPossession.shots, awayStatsWithPossession.shots],
+                  [
+                    "Passes",
+                    homeStatsWithPossession.passes,
+                    awayStatsWithPossession.passes,
+                  ],
+                  [
+                    "Shots",
+                    homeStatsWithPossession.shots,
+                    awayStatsWithPossession.shots,
+                  ],
                   [
                     "Shots on target",
                     homeStatsWithPossession.shotsOnTarget,
                     awayStatsWithPossession.shotsOnTarget,
                   ],
-                  ["Corners", homeStatsWithPossession.corners, awayStatsWithPossession.corners],
-                  ["Tackles", homeStatsWithPossession.tackles, awayStatsWithPossession.tackles],
+                  [
+                    "Corners",
+                    homeStatsWithPossession.corners,
+                    awayStatsWithPossession.corners,
+                  ],
+                  [
+                    "Tackles",
+                    homeStatsWithPossession.tackles,
+                    awayStatsWithPossession.tackles,
+                  ],
                   [
                     "Interceptions",
                     homeStatsWithPossession.interceptions,
                     awayStatsWithPossession.interceptions,
                   ],
-                  ["Saves", homeStatsWithPossession.saves, awayStatsWithPossession.saves],
-                  ["Fouls", homeStatsWithPossession.fouls, awayStatsWithPossession.fouls],
+                  [
+                    "Saves",
+                    homeStatsWithPossession.saves,
+                    awayStatsWithPossession.saves,
+                  ],
+                  [
+                    "Fouls",
+                    homeStatsWithPossession.fouls,
+                    awayStatsWithPossession.fouls,
+                  ],
                 ].map(row => (
-                  <div className={styles.statRow} key={row[0]}>
+                  <div
+                    className={styles.statRow}
+                    key={row[0]}
+                  >
                     <strong>{row[1]}</strong>
                     <span>{row[0]}</span>
                     <strong>{row[2]}</strong>
@@ -2202,7 +2213,7 @@ export default function MatchPage() {
               </div>
             )}
 
-            {/* ---------- STARTING XI ---------- */}
+            {/* STARTING XI */}
             {activeTab === "lineup" && managedSide && (
               <div className={styles.tacticsPanel}>
                 <div className={styles.sectionTitle}>
@@ -2256,8 +2267,12 @@ export default function MatchPage() {
                           status !== "finished" && (
                             <button
                               className={styles.addButton}
-                              onClick={() => addToStartingXI(player.id)}
-                              disabled={managedStartingXI.length >= 11}
+                              onClick={() =>
+                                addToStartingXI(player.id)
+                              }
+                              disabled={
+                                managedStartingXI.length >= 11
+                              }
                             >
                               Add
                             </button>
@@ -2266,28 +2281,32 @@ export default function MatchPage() {
                     ))}
 
                     {!managedBench.length && (
-                      <p className={styles.empty}>No bench players.</p>
+                      <p className={styles.empty}>
+                        No bench players.
+                      </p>
                     )}
                   </div>
                 </div>
 
-                {status !== "playing" && status !== "finished" && (
-                  <button
-                    className={styles.saveTacticsButton}
-                    onClick={saveStartingXI}
-                    disabled={
-                      savingLineup || managedStartingXI.length !== 11
-                    }
-                  >
-                    {savingLineup
-                      ? "Saving Starting XI..."
-                      : `✓ SAVE STARTING XI (${managedStartingXI.length}/11)`}
-                  </button>
-                )}
+                {status !== "playing" &&
+                  status !== "finished" && (
+                    <button
+                      className={styles.saveTacticsButton}
+                      onClick={saveStartingXI}
+                      disabled={
+                        savingLineup ||
+                        managedStartingXI.length !== 11
+                      }
+                    >
+                      {savingLineup
+                        ? "Saving Starting XI..."
+                        : `✓ SAVE STARTING XI (${managedStartingXI.length}/11)`}
+                    </button>
+                  )}
               </div>
             )}
 
-            {/* ---------- TACTICS ---------- */}
+            {/* TACTICS */}
             {activeTab === "tactics" && managedSide && (
               <div className={styles.tacticsPanel}>
                 <div className={styles.sectionTitle}>
@@ -2299,7 +2318,9 @@ export default function MatchPage() {
                   <label>Formation</label>
                   <select
                     value={formation}
-                    onChange={event => setFormation(event.target.value)}
+                    onChange={event =>
+                      setFormation(event.target.value)
+                    }
                     disabled={status === "finished"}
                   >
                     <option value="4-3-3">4-3-3</option>
@@ -2315,15 +2336,22 @@ export default function MatchPage() {
                   <select
                     value={tactics.mentality}
                     onChange={event =>
-                      updateTactic("mentality", event.target.value)
+                      updateTactic(
+                        "mentality",
+                        event.target.value
+                      )
                     }
                     disabled={status === "finished"}
                   >
-                    <option value="very_defensive">Very Defensive</option>
+                    <option value="very_defensive">
+                      Very Defensive
+                    </option>
                     <option value="defensive">Defensive</option>
                     <option value="balanced">Balanced</option>
                     <option value="attacking">Attacking</option>
-                    <option value="very_attacking">Very Attacking</option>
+                    <option value="very_attacking">
+                      Very Attacking
+                    </option>
                   </select>
                 </div>
 
@@ -2332,7 +2360,10 @@ export default function MatchPage() {
                   <select
                     value={tactics.pressing}
                     onChange={event =>
-                      updateTactic("pressing", event.target.value)
+                      updateTactic(
+                        "pressing",
+                        event.target.value
+                      )
                     }
                     disabled={status === "finished"}
                   >
@@ -2348,7 +2379,10 @@ export default function MatchPage() {
                   <select
                     value={tactics.defensiveLine}
                     onChange={event =>
-                      updateTactic("defensiveLine", event.target.value)
+                      updateTactic(
+                        "defensiveLine",
+                        event.target.value
+                      )
                     }
                     disabled={status === "finished"}
                   >
@@ -2366,7 +2400,10 @@ export default function MatchPage() {
                     max="100"
                     value={tactics.tempo}
                     onChange={event =>
-                      updateTactic("tempo", Number(event.target.value))
+                      updateTactic(
+                        "tempo",
+                        Number(event.target.value)
+                      )
                     }
                     disabled={status === "finished"}
                   />
@@ -2380,7 +2417,10 @@ export default function MatchPage() {
                     max="100"
                     value={tactics.width}
                     onChange={event =>
-                      updateTactic("width", Number(event.target.value))
+                      updateTactic(
+                        "width",
+                        Number(event.target.value)
+                      )
                     }
                     disabled={status === "finished"}
                   />
@@ -2389,14 +2429,18 @@ export default function MatchPage() {
                 <button
                   className={styles.saveTacticsButton}
                   onClick={saveTactics}
-                  disabled={savingTactics || status === "finished"}
+                  disabled={
+                    savingTactics || status === "finished"
+                  }
                 >
-                  {savingTactics ? "Saving..." : "✓ APPLY TACTICS"}
+                  {savingTactics
+                    ? "Saving..."
+                    : "✓ APPLY TACTICS"}
                 </button>
               </div>
             )}
 
-            {/* ---------- SUBSTITUTIONS ---------- */}
+            {/* SUBSTITUTIONS */}
             {activeTab === "subs" && managedSide && (
               <div className={styles.substitutionPanel}>
                 <div className={styles.sectionTitle}>
@@ -2422,8 +2466,12 @@ export default function MatchPage() {
                       ? away?.players
                       : home?.players
                     )?.map(player => (
-                      <option key={player.id} value={player.id}>
-                        #{player.number} {player.name} ({player.position})
+                      <option
+                        key={player.id}
+                        value={player.id}
+                      >
+                        #{player.number} {player.name} (
+                        {player.position})
                       </option>
                     ))}
                   </select>
@@ -2444,8 +2492,12 @@ export default function MatchPage() {
                   >
                     <option value="">Select substitute</option>
                     {liveManagedBench.map(player => (
-                      <option key={player.id} value={player.id}>
-                        #{player.number} {player.name} ({player.position})
+                      <option
+                        key={player.id}
+                        value={player.id}
+                      >
+                        #{player.number} {player.name} (
+                        {player.position})
                       </option>
                     ))}
                   </select>
@@ -2471,7 +2523,10 @@ export default function MatchPage() {
                   <p>
                     Substitutions used:{" "}
                     <strong>
-                      {safeNumber(managedTeam?.substitutionsUsed, 0)}
+                      {safeNumber(
+                        managedTeam?.substitutionsUsed,
+                        0
+                      )}
                     </strong>{" "}
                     / 5
                   </p>
