@@ -20,7 +20,6 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../components/firebase";
-
 import MatchEngine from "../../lib/match-engine/python-engine";
 
 import styles from "./Mach.module.css";
@@ -108,9 +107,7 @@ function sleep(ms) {
 function playerBelongsToClub(player, clubId) {
   const wanted = normalizeId(clubId);
 
-  if (!wanted) {
-    return false;
-  }
+  if (!wanted) return false;
 
   const values = [
     player.clubId,
@@ -340,7 +337,7 @@ function getClubId(match, side) {
 
 
 /* =========================================================
-   DETERMINE USER'S TEAM
+   MANAGED TEAM
 ========================================================= */
 
 function getManagedClubId(match) {
@@ -408,11 +405,6 @@ function getManagedSide(match) {
     return "away";
   }
 
-  /*
-   * Backward compatibility:
-   * old matches without managerClubId
-   * are treated as home-team matches.
-   */
   return "home";
 }
 
@@ -440,7 +432,7 @@ function extractEmbeddedPlayers(club, side) {
 
 
 /* =========================================================
-   BENCH
+   BENCH BUILDER
 ========================================================= */
 
 function buildBench(
@@ -554,7 +546,7 @@ function formatClock(minute, second) {
 
 
 /* =========================================================
-   STATS HELPERS
+   STATS
 ========================================================= */
 
 function getStat(source, keys, fallback = 0) {
@@ -587,21 +579,347 @@ function normalizeEventType(event) {
     event?.eventType ||
     event?.action ||
     event?.name
-  ).toLowerCase().replace(
-    /[\s-]+/g,
-    "_"
-  );
+  )
+    .toLowerCase()
+    .replace(
+      /[\s-]+/g,
+      "_"
+    );
 }
 
 
-/*
- * If the Python engine already sends complete stats,
- * those values remain authoritative.
- *
- * When the engine sends event information as well,
- * we use events to keep counters moving live.
- */
-function calculateLiveStats(snapshot, side) {
+/* =========================================================
+   POSSESSION DETECTION
+========================================================= */
+
+function detectPossessionSide(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  const candidates = [
+    snapshot.possessionSide,
+    snapshot.ball?.possessionSide,
+    snapshot.ball?.ownerSide,
+    snapshot.ball?.teamSide,
+    snapshot.ball?.side,
+    snapshot.ball?.possession,
+    snapshot.possession?.side,
+    snapshot.ball?.owner?.side,
+    snapshot.ball?.controller?.side,
+    snapshot.lastPossessionSide,
+    snapshot.lastTouchSide,
+  ];
+
+  for (const value of candidates) {
+    const side =
+      safeString(value)
+        .toLowerCase();
+
+    if (
+      side === "home" ||
+      side === "h"
+    ) {
+      return "home";
+    }
+
+    if (
+      side === "away" ||
+      side === "a"
+    ) {
+      return "away";
+    }
+  }
+
+  const eventList =
+    Array.isArray(
+      snapshot.events
+    )
+      ? snapshot.events
+      : [];
+
+  for (
+    let i = eventList.length - 1;
+    i >= 0;
+    i--
+  ) {
+    const event =
+      eventList[i];
+
+    const type =
+      normalizeEventType(
+        event
+      );
+
+    if (
+      type.includes("pass") ||
+      type.includes("dribble") ||
+      type.includes("tackle") ||
+      type.includes("interception") ||
+      type.includes("shot") ||
+      type.includes("cross") ||
+      type.includes("touch")
+    ) {
+      const side =
+        safeString(
+          event?.side ||
+          event?.team ||
+          event?.teamSide
+        ).toLowerCase();
+
+      if (
+        side === "home" ||
+        side === "h"
+      ) {
+        return "home";
+      }
+
+      if (
+        side === "away" ||
+        side === "a"
+      ) {
+        return "away";
+      }
+    }
+  }
+
+  const players = [
+    ...(Array.isArray(
+      snapshot.home?.players
+    )
+      ? snapshot.home.players.map(
+          player => ({
+            ...player,
+            side: "home",
+          })
+        )
+      : []),
+
+    ...(Array.isArray(
+      snapshot.away?.players
+    )
+      ? snapshot.away.players.map(
+          player => ({
+            ...player,
+            side: "away",
+          })
+        )
+      : []),
+  ];
+
+  const playerWithBall =
+    players.find(
+      player =>
+        player.hasBall === true ||
+        player.inPossession === true ||
+        player.isPossessing === true
+    );
+
+  if (playerWithBall) {
+    return playerWithBall.side;
+  }
+
+  return null;
+}
+
+
+/* =========================================================
+   POSSESSION TRACKER
+========================================================= */
+
+function updatePossessionTracker(
+  tracker,
+  snapshot
+) {
+  if (!snapshot) {
+    return;
+  }
+
+  const now =
+    Date.now();
+
+  const side =
+    detectPossessionSide(
+      snapshot
+    );
+
+  if (
+    !tracker.lastTime
+  ) {
+    tracker.lastTime = now;
+    tracker.lastSide =
+      side;
+
+    return;
+  }
+
+  const elapsed =
+    Math.max(
+      0,
+      Math.min(
+        now -
+          tracker.lastTime,
+        1500
+      )
+    );
+
+  tracker.lastTime =
+    now;
+
+  if (
+    snapshot.status !==
+    "playing"
+  ) {
+    return;
+  }
+
+  if (
+    side === "home"
+  ) {
+    tracker.homeMs +=
+      elapsed;
+
+    tracker.lastSide =
+      "home";
+  } else if (
+    side === "away"
+  ) {
+    tracker.awayMs +=
+      elapsed;
+
+    tracker.lastSide =
+      "away";
+  } else if (
+    tracker.lastSide ===
+    "home"
+  ) {
+    tracker.homeMs +=
+      elapsed;
+  } else if (
+    tracker.lastSide ===
+    "away"
+  ) {
+    tracker.awayMs +=
+      elapsed;
+  }
+}
+
+
+function getPossessionValues(
+  snapshot,
+  tracker
+) {
+  const originalHome =
+    snapshot?.stats?.home ||
+    {};
+
+  const originalAway =
+    snapshot?.stats?.away ||
+    {};
+
+  const directHome =
+    getStat(
+      originalHome,
+      [
+        "possession",
+        "possessionPercent",
+        "possession_percentage",
+      ],
+      -1
+    );
+
+  const directAway =
+    getStat(
+      originalAway,
+      [
+        "possession",
+        "possessionPercent",
+        "possession_percentage",
+      ],
+      -1
+    );
+
+  if (
+    directHome >= 0 ||
+    directAway >= 0
+  ) {
+    let home =
+      Math.max(
+        0,
+        directHome >= 0
+          ? directHome
+          : 0
+      );
+
+    let away =
+      Math.max(
+        0,
+        directAway >= 0
+          ? directAway
+          : 0
+      );
+
+    const total =
+      home + away;
+
+    if (total <= 0) {
+      return {
+        home: 50,
+        away: 50,
+      };
+    }
+
+    home =
+      (home / total) *
+      100;
+
+    away =
+      100 - home;
+
+    return {
+      home,
+      away,
+    };
+  }
+
+  const totalMs =
+    tracker.homeMs +
+    tracker.awayMs;
+
+  if (
+    totalMs <= 0
+  ) {
+    return {
+      home: 50,
+      away: 50,
+    };
+  }
+
+  const home =
+    Math.round(
+      (
+        tracker.homeMs /
+        totalMs
+      ) *
+        100
+    );
+
+  return {
+    home,
+    away: 100 - home,
+  };
+}
+
+
+/* =========================================================
+   LIVE STATS
+========================================================= */
+
+function calculateLiveStats(
+  snapshot,
+  side,
+  possessionValues
+) {
   const original =
     snapshot?.stats?.[side] ||
     {};
@@ -702,33 +1020,22 @@ function calculateLiveStats(snapshot, side) {
         );
 
       if (
-        type.includes("shot") &&
-        !type.includes("assist")
+        type.includes("shot")
       ) {
-        shots +=
-          type.includes(
-            "miss"
-          ) ||
-          type.includes(
-            "off_target"
-          ) ||
-          type.includes(
-            "saved"
-          ) ||
-          type === "shot"
-            ? 1
-            : 0;
+        if (
+          type.includes("miss") ||
+          type.includes("off_target") ||
+          type === "shot" ||
+          type.includes("saved") ||
+          type.includes("goal")
+        ) {
+          shots += 1;
+        }
 
         if (
-          type.includes(
-            "target"
-          ) ||
-          type.includes(
-            "saved"
-          ) ||
-          type.includes(
-            "goal"
-          )
+          type.includes("target") ||
+          type.includes("saved") ||
+          type.includes("goal")
         ) {
           shotsOnTarget += 1;
         }
@@ -736,8 +1043,12 @@ function calculateLiveStats(snapshot, side) {
 
       if (
         type === "pass" ||
-        type.includes("pass_completed") ||
-        type.includes("successful_pass")
+        type.includes(
+          "pass_completed"
+        ) ||
+        type.includes(
+          "successful_pass"
+        )
       ) {
         passes += 1;
       }
@@ -776,34 +1087,34 @@ function calculateLiveStats(snapshot, side) {
     }
   );
 
-  const possession =
-    getStat(
-      original,
-      [
-        "possession",
-        "possessionPercent",
-        "possession_percentage",
-      ],
-      0
-    );
-
   return {
     ...original,
-    possession,
+
+    possession:
+      possessionValues?.[side] ??
+      50,
+
     shots,
+
     shotsOnTarget,
+
     passes,
+
     corners,
+
     tackles,
+
     interceptions,
+
     saves,
+
     fouls,
   };
 }
 
 
 /* =========================================================
-   FIRESTORE RESULT
+   FIRESTORE FINAL RESULT
 ========================================================= */
 
 async function saveFinalResult(
@@ -840,17 +1151,37 @@ async function saveFinalResult(
       0
     );
 
+  const possessionTracker = {
+    homeMs: 0,
+    awayMs: 0,
+    lastTime: 0,
+    lastSide: null,
+  };
+
+  updatePossessionTracker(
+    possessionTracker,
+    snapshot
+  );
+
+  const possessionValues =
+    getPossessionValues(
+      snapshot,
+      possessionTracker
+    );
+
   const finalStats = {
     home:
       calculateLiveStats(
         snapshot,
-        "home"
+        "home",
+        possessionValues
       ),
 
     away:
       calculateLiveStats(
         snapshot,
-        "away"
+        "away",
+        possessionValues
       ),
   };
 
@@ -869,18 +1200,27 @@ async function saveFinalResult(
     winner = "away";
   }
 
+  const events =
+    Array.isArray(
+      snapshot.events
+    )
+      ? snapshot.events
+      : [];
+
   const finalResult = {
     status: "finished",
 
-    minute: safeNumber(
-      snapshot.minute,
-      90
-    ),
+    minute:
+      safeNumber(
+        snapshot.minute,
+        90
+      ),
 
-    second: safeNumber(
-      snapshot.second,
-      0
-    ),
+    second:
+      safeNumber(
+        snapshot.second,
+        0
+      ),
 
     score: {
       home: homeScore,
@@ -888,6 +1228,7 @@ async function saveFinalResult(
     },
 
     homeScore,
+
     awayScore,
 
     winner,
@@ -923,12 +1264,7 @@ async function saveFinalResult(
     stats:
       finalStats,
 
-    events:
-      Array.isArray(
-        snapshot.events
-      )
-        ? snapshot.events
-        : [],
+    events,
 
     lastEvent:
       snapshot.lastEvent ||
@@ -951,9 +1287,6 @@ async function saveFinalResult(
       String(matchId)
     );
 
-  /*
-   * Write result.
-   */
   await setDoc(
     matchRef,
     {
@@ -973,11 +1306,10 @@ async function saveFinalResult(
 
       finalStats,
 
-      events:
-        finalResult.events,
+      events,
 
       finalEvents:
-        finalResult.events,
+        events,
 
       result:
         finalResult.result,
@@ -998,9 +1330,8 @@ async function saveFinalResult(
   );
 
   /*
-   * Important:
-   * setDoc may resolve locally when Firebase
-   * is offline. Therefore verify against SERVER.
+   * This is deliberately checked against
+   * the SERVER, not local Firestore cache.
    */
   const serverSnap =
     await getDocFromServer(
@@ -1020,7 +1351,7 @@ async function saveFinalResult(
 
   if (
     serverData.status !==
-    "finished" ||
+      "finished" ||
     serverData.resultSaved !==
       true
   ) {
@@ -1065,6 +1396,18 @@ export default function MatchPage() {
 
   const managedSideRef =
     useRef("home");
+
+  /*
+   * Possession tracker stays alive while
+   * React renders the page.
+   */
+  const possessionRef =
+    useRef({
+      homeMs: 0,
+      awayMs: 0,
+      lastTime: 0,
+      lastSide: null,
+    });
 
 
   /* =======================================================
@@ -1136,9 +1479,24 @@ export default function MatchPage() {
     setManagedBench,
   ] = useState([]);
 
+  /*
+   * IMPORTANT:
+   * Bench for BOTH teams is kept separately
+   * from Python snapshots.
+   */
+  const [
+    homeBenchPlayers,
+    setHomeBenchPlayers,
+  ] = useState([]);
+
+  const [
+    awayBenchPlayers,
+    setAwayBenchPlayers,
+  ] = useState([]);
+
 
   /* =======================================================
-     MANAGED TEAM DATA
+     MANAGED TEAM
   ======================================================= */
 
   const managedSide =
@@ -1151,6 +1509,11 @@ export default function MatchPage() {
 
   const managedTeamName =
     managedTeam?.name ||
+    (
+      managedSide === "away"
+        ? matchDoc?.away?.name
+        : matchDoc?.home?.name
+    ) ||
     "Your Team";
 
 
@@ -1211,6 +1574,7 @@ export default function MatchPage() {
             );
 
             return;
+
           } catch (err) {
             lastError = err;
 
@@ -1260,6 +1624,14 @@ export default function MatchPage() {
               return;
             }
 
+            /*
+             * Update possession continuously.
+             */
+            updatePossessionTracker(
+              possessionRef.current,
+              nextSnapshot
+            );
+
             setSnapshot(
               nextSnapshot
             );
@@ -1271,6 +1643,36 @@ export default function MatchPage() {
                 ? nextSnapshot.events
                 : []
             );
+
+            /*
+             * Keep bench from snapshot if
+             * Python happens to return it.
+             */
+            if (
+              Array.isArray(
+                nextSnapshot.home?.bench
+              ) &&
+              nextSnapshot.home.bench.length
+            ) {
+              setHomeBenchPlayers(
+                nextSnapshot.home.bench.map(
+                  normalizePlayer
+                )
+              );
+            }
+
+            if (
+              Array.isArray(
+                nextSnapshot.away?.bench
+              ) &&
+              nextSnapshot.away.bench.length
+            ) {
+              setAwayBenchPlayers(
+                nextSnapshot.away.bench.map(
+                  normalizePlayer
+                )
+              );
+            }
 
             if (
               nextSnapshot.home
@@ -1329,7 +1731,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     BUILD / REBUILD ENGINE
+     REBUILD ENGINE
   ======================================================= */
 
   const rebuildEngine =
@@ -1351,6 +1753,7 @@ export default function MatchPage() {
 
         if (previous) {
           previous.destroy();
+
           engineRef.current =
             null;
         }
@@ -1363,16 +1766,20 @@ export default function MatchPage() {
 
           home: {
             ...config.home,
+
             players:
               homePlayers,
+
             bench:
               homeBench,
           },
 
           away: {
             ...config.away,
+
             players:
               awayPlayers,
+
             bench:
               awayBench,
           },
@@ -1396,6 +1803,11 @@ export default function MatchPage() {
           engine.getState();
 
         if (initial) {
+          updatePossessionTracker(
+            possessionRef.current,
+            initial
+          );
+
           setSnapshot(
             initial
           );
@@ -1439,6 +1851,13 @@ export default function MatchPage() {
 
         finishRequestedRef.current =
           false;
+
+        possessionRef.current = {
+          homeMs: 0,
+          awayMs: 0,
+          lastTime: 0,
+          lastSide: null,
+        };
 
         const matchRef =
           doc(
@@ -1570,7 +1989,7 @@ export default function MatchPage() {
 
 
         /* ===============================================
-           DATABASE SQUADS ONLY
+           DATABASE SQUADS
         =============================================== */
 
         let homePlayers =
@@ -1696,7 +2115,7 @@ export default function MatchPage() {
 
 
         /* ===============================================
-           STARTING XI FROM DATABASE/MATCH
+           STARTING XI
         =============================================== */
 
         let homeStarting =
@@ -1704,7 +2123,6 @@ export default function MatchPage() {
 
         let awayStarting =
           awayPlayers.slice(0, 11);
-
 
         if (
           Array.isArray(
@@ -1758,21 +2176,23 @@ export default function MatchPage() {
           );
 
 
-        /*
-         * Remove any player that is already
-         * in the starting XI from the bench.
-         */
         const homeXIIds =
           new Set(
             homeStarting.map(
-              p => String(p.id)
+              player =>
+                String(
+                  player.id
+                )
             )
           );
 
         const awayXIIds =
           new Set(
             awayStarting.map(
-              p => String(p.id)
+              player =>
+                String(
+                  player.id
+                )
             )
           );
 
@@ -1780,7 +2200,9 @@ export default function MatchPage() {
           homeBench.filter(
             player =>
               !homeXIIds.has(
-                String(player.id)
+                String(
+                  player.id
+                )
               )
           );
 
@@ -1788,9 +2210,25 @@ export default function MatchPage() {
           awayBench.filter(
             player =>
               !awayXIIds.has(
-                String(player.id)
+                String(
+                  player.id
+                )
               )
           );
+
+
+        /*
+         * STORE BOTH BENCHES LOCALLY.
+         *
+         * This is the important fix.
+         */
+        setHomeBenchPlayers(
+          homeBench
+        );
+
+        setAwayBenchPlayers(
+          awayBench
+        );
 
 
         /* ===============================================
@@ -1819,7 +2257,7 @@ export default function MatchPage() {
 
 
         /* ===============================================
-           MANAGED TACTICS
+           TACTICS
         =============================================== */
 
         const managedClub =
@@ -1877,7 +2315,8 @@ export default function MatchPage() {
         =============================================== */
 
         matchConfigRef.current = {
-          matchId: String(id),
+          matchId:
+            String(id),
 
           home: {
             ...homeClub,
@@ -1940,6 +2379,11 @@ export default function MatchPage() {
           engine?.getState();
 
         if (initial) {
+          updatePossessionTracker(
+            possessionRef.current,
+            initial
+          );
+
           setSnapshot(
             initial
           );
@@ -2068,17 +2512,26 @@ export default function MatchPage() {
             const state =
               await current.update();
 
+            if (!state) {
+              return;
+            }
+
+            /*
+             * Update possession every poll.
+             */
+            updatePossessionTracker(
+              possessionRef.current,
+              state
+            );
+
             /*
              * Safety finish.
-             * If Python reaches 90 but has not
-             * switched to finished yet, ask it
-             * to finalize.
              */
             if (
-              state?.status ===
+              state.status ===
                 "playing" &&
               safeNumber(
-                state?.minute,
+                state.minute,
                 0
               ) >= 90 &&
               !finishRequestedRef.current
@@ -2092,6 +2545,11 @@ export default function MatchPage() {
               if (
                 finished
               ) {
+                updatePossessionTracker(
+                  possessionRef.current,
+                  finished
+                );
+
                 setSnapshot(
                   finished
                 );
@@ -2102,6 +2560,7 @@ export default function MatchPage() {
                 );
               }
             }
+
           } catch (err) {
             console.error(
               "Live match update error:",
@@ -2165,10 +2624,22 @@ export default function MatchPage() {
           finishRequestedRef.current =
             false;
 
+          possessionRef.current = {
+            homeMs: 0,
+            awayMs: 0,
+            lastTime: Date.now(),
+            lastSide: null,
+          };
+
           await engine.start();
 
           const state =
             engine.getState();
+
+          updatePossessionTracker(
+            possessionRef.current,
+            state
+          );
 
           setSnapshot(
             state
@@ -2177,6 +2648,7 @@ export default function MatchPage() {
           setEvents(
             state?.events || []
           );
+
         } catch (err) {
           console.error(
             "Start error:",
@@ -2226,6 +2698,7 @@ export default function MatchPage() {
           setEvents(
             state?.events || []
           );
+
         } catch (err) {
           console.error(
             "Pause error:",
@@ -2313,10 +2786,6 @@ export default function MatchPage() {
         state
       );
 
-      /*
-       * Also keep the match document's
-       * manager settings synchronized.
-       */
       const matchRef =
         doc(
           db,
@@ -2332,6 +2801,7 @@ export default function MatchPage() {
         {
           [side]: {
             formation,
+
             tactics:
               nextTactics,
           },
@@ -2354,6 +2824,7 @@ export default function MatchPage() {
         err?.message ||
         "Tactics ntizibitswe."
       );
+
     } finally {
       setSavingTactics(false);
     }
@@ -2361,7 +2832,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     LINEUP EDITOR
+     STARTING XI
   ======================================================= */
 
   const removeFromStartingXI =
@@ -2472,26 +2943,12 @@ export default function MatchPage() {
           return;
         }
 
-        if (
-          managedSideRef.current !==
-            "home" &&
-          managedSideRef.current !==
-            "away"
-        ) {
-          return;
-        }
-
         try {
           setSavingLineup(true);
           setError("");
 
           const side =
             managedSideRef.current;
-
-          const otherSide =
-            side === "home"
-              ? "away"
-              : "home";
 
           const config =
             matchConfigRef.current;
@@ -2523,8 +2980,20 @@ export default function MatchPage() {
               : config.away.bench;
 
           /*
-           * Rebuild engine BEFORE kickoff.
+           * Update local bench state.
            */
+          if (
+            side === "home"
+          ) {
+            setHomeBenchPlayers(
+              homeBench
+            );
+          } else {
+            setAwayBenchPlayers(
+              awayBench
+            );
+          }
+
           await rebuildEngine(
             homeXI,
             awayXI,
@@ -2537,24 +3006,25 @@ export default function MatchPage() {
 
             home: {
               ...config.home,
+
               players:
                 homeXI,
+
               bench:
                 homeBench,
             },
 
             away: {
               ...config.away,
+
               players:
                 awayXI,
+
               bench:
                 awayBench,
             },
           };
 
-          /*
-           * Persist only the user's managed lineup.
-           */
           const matchRef =
             doc(
               db,
@@ -2573,6 +3043,7 @@ export default function MatchPage() {
                   managedBench,
 
                 formation,
+
                 tactics,
               },
 
@@ -2584,8 +3055,6 @@ export default function MatchPage() {
             }
           );
 
-          setError("");
-
         } catch (err) {
           console.error(
             "Starting XI save error:",
@@ -2596,6 +3065,7 @@ export default function MatchPage() {
             err?.message ||
             "Starting XI ntibashije kubikwa."
           );
+
         } finally {
           setSavingLineup(false);
         }
@@ -2654,10 +3124,6 @@ export default function MatchPage() {
         state?.events || []
       );
 
-      /*
-       * Update local managed lineup
-       * after successful substitution.
-       */
       const outgoing =
         managedStartingXI.find(
           player =>
@@ -2676,27 +3142,74 @@ export default function MatchPage() {
         outgoing &&
         incoming
       ) {
+        const nextStarting =
+          managedStartingXI.map(
+            player =>
+              String(player.id) ===
+              String(outgoing.id)
+                ? incoming
+                : player
+          );
+
+        const nextBench =
+          managedBench.map(
+            player =>
+              String(player.id) ===
+              String(incoming.id)
+                ? outgoing
+                : player
+          );
+
         setManagedStartingXI(
-          previous =>
-            previous.map(
-              player =>
-                String(player.id) ===
-                String(outgoing.id)
-                  ? incoming
-                  : player
-            )
+          nextStarting
         );
 
         setManagedBench(
-          previous =>
-            previous.map(
-              player =>
-                String(player.id) ===
-                String(incoming.id)
-                  ? outgoing
-                  : player
-            )
+          nextBench
         );
+
+        /*
+         * Keep the corresponding team bench
+         * synchronized.
+         */
+        if (
+          managedSideRef.current ===
+          "home"
+        ) {
+          setHomeBenchPlayers(
+            nextBench
+          );
+        } else {
+          setAwayBenchPlayers(
+            nextBench
+          );
+        }
+
+        /*
+         * Update engine config too.
+         */
+        if (
+          matchConfigRef.current
+        ) {
+          const side =
+            managedSideRef.current;
+
+          matchConfigRef.current = {
+            ...matchConfigRef.current,
+
+            [side]: {
+              ...matchConfigRef.current[
+                side
+              ],
+
+              players:
+                nextStarting,
+
+              bench:
+                nextBench,
+            },
+          };
+        }
       }
 
       setOutgoingPlayer("");
@@ -2712,6 +3225,7 @@ export default function MatchPage() {
         err?.message ||
         "Substitution yanze."
       );
+
     } finally {
       setSubstituting(false);
     }
@@ -2758,6 +3272,17 @@ export default function MatchPage() {
 
 
   /* =======================================================
+     POSSESSION
+  ======================================================= */
+
+  const possession =
+    getPossessionValues(
+      snapshot,
+      possessionRef.current
+    );
+
+
+  /* =======================================================
      LIVE STATS
   ======================================================= */
 
@@ -2766,9 +3291,14 @@ export default function MatchPage() {
       () =>
         calculateLiveStats(
           snapshot,
-          "home"
+          "home",
+          possession
         ),
-      [snapshot]
+      [
+        snapshot,
+        possession.home,
+        possession.away,
+      ]
     );
 
   const awayStats =
@@ -2776,14 +3306,19 @@ export default function MatchPage() {
       () =>
         calculateLiveStats(
           snapshot,
-          "away"
+          "away",
+          possession
         ),
-      [snapshot]
+      [
+        snapshot,
+        possession.home,
+        possession.away,
+      ]
     );
 
 
   /* =======================================================
-     ALL PLAYERS ON PITCH
+     PLAYERS ON PITCH
   ======================================================= */
 
   const allPlayers =
@@ -2827,31 +3362,60 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     MANAGED BENCH FROM SNAPSHOT
+     BENCH FALLBACK
   ======================================================= */
 
-  const liveManagedBench =
+  const liveHomeBench =
     useMemo(
       () => {
-        const source =
-          managedSide ===
-          "away"
-            ? away?.bench
-            : home?.bench;
+        if (
+          Array.isArray(
+            home?.bench
+          ) &&
+          home.bench.length
+        ) {
+          return home.bench.map(
+            normalizePlayer
+          );
+        }
 
-        return Array.isArray(
-          source
-        )
-          ? source
-          : managedBench;
+        return homeBenchPlayers;
       },
       [
-        managedSide,
         home,
-        away,
-        managedBench,
+        homeBenchPlayers,
       ]
     );
+
+
+  const liveAwayBench =
+    useMemo(
+      () => {
+        if (
+          Array.isArray(
+            away?.bench
+          ) &&
+          away.bench.length
+        ) {
+          return away.bench.map(
+            normalizePlayer
+          );
+        }
+
+        return awayBenchPlayers;
+      },
+      [
+        away,
+        awayBenchPlayers,
+      ]
+    );
+
+
+  const liveManagedBench =
+    managedSide ===
+    "away"
+      ? liveAwayBench
+      : liveHomeBench;
 
 
   /* =======================================================
@@ -2880,7 +3444,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     ERROR WITHOUT SNAPSHOT
+     ERROR
   ======================================================= */
 
   if (
@@ -2998,7 +3562,6 @@ export default function MatchPage() {
             styles.scoreboard
           }
         >
-
           <div
             className={
               styles.team
@@ -3090,12 +3653,11 @@ export default function MatchPage() {
                 "Away"}
             </strong>
           </div>
-
         </section>
 
 
         {/* =================================================
-            MANAGED TEAM INDICATOR
+            MANAGER
         ================================================= */}
 
         <div
@@ -3119,7 +3681,6 @@ export default function MatchPage() {
             styles.controls
           }
         >
-
           {status !==
             "finished" &&
             status !==
@@ -3147,7 +3708,6 @@ export default function MatchPage() {
               </button>
             )}
 
-
           {status ===
             "playing" && (
             <button
@@ -3161,7 +3721,6 @@ export default function MatchPage() {
               ⏸ PAUSE
             </button>
           )}
-
         </section>
 
 
@@ -3189,7 +3748,6 @@ export default function MatchPage() {
             styles.pitch
           }
         >
-
           <div
             className={
               styles.halfLine
@@ -3330,7 +3888,6 @@ export default function MatchPage() {
               ⚽
             </div>
           )}
-
         </section>
 
 
@@ -3343,7 +3900,6 @@ export default function MatchPage() {
             styles.contentGrid
           }
         >
-
           <div
             className={
               styles.panel
@@ -3359,7 +3915,6 @@ export default function MatchPage() {
                 styles.tabs
               }
             >
-
               <button
                 className={
                   activeTab ===
@@ -3375,7 +3930,6 @@ export default function MatchPage() {
               >
                 Events
               </button>
-
 
               <button
                 className={
@@ -3393,7 +3947,6 @@ export default function MatchPage() {
                 Players
               </button>
 
-
               <button
                 className={
                   activeTab ===
@@ -3409,7 +3962,6 @@ export default function MatchPage() {
               >
                 Stats
               </button>
-
 
               <button
                 className={
@@ -3427,7 +3979,6 @@ export default function MatchPage() {
                 Starting XI
               </button>
 
-
               <button
                 className={
                   activeTab ===
@@ -3444,7 +3995,6 @@ export default function MatchPage() {
                 Tactics
               </button>
 
-
               <button
                 className={
                   activeTab ===
@@ -3460,7 +4010,6 @@ export default function MatchPage() {
               >
                 Substitutions
               </button>
-
             </div>
 
 
@@ -3475,12 +4024,14 @@ export default function MatchPage() {
                   styles.events
                 }
               >
-
                 {events
                   .slice()
                   .reverse()
                   .map(
-                    (event, index) => (
+                    (
+                      event,
+                      index
+                    ) => (
                       <div
                         key={
                           event.id ||
@@ -3490,7 +4041,6 @@ export default function MatchPage() {
                           styles.event
                         }
                       >
-
                         <span>
                           {
                             event.minute ??
@@ -3507,7 +4057,6 @@ export default function MatchPage() {
                             "Match event"
                           }
                         </p>
-
                       </div>
                     )
                   )}
@@ -3521,13 +4070,12 @@ export default function MatchPage() {
                     Match has not started.
                   </p>
                 )}
-
               </div>
             )}
 
 
             {/* =================================================
-                PLAYERS
+                PLAYERS + BENCH
             ================================================= */}
 
             {activeTab ===
@@ -3538,6 +4086,7 @@ export default function MatchPage() {
                 }
               >
 
+                {/* HOME */}
                 <div>
                   <h3>
                     {home?.name}
@@ -3573,9 +4122,53 @@ export default function MatchPage() {
                       </div>
                     )
                   )}
+
+                  <h3>
+                    Bench
+                  </h3>
+
+                  {liveHomeBench.length ? (
+                    liveHomeBench.map(
+                      player => (
+                        <div
+                          className={
+                            styles.listPlayer
+                          }
+                          key={`home-bench-${player.id}`}
+                        >
+                          <b>
+                            {
+                              player.number
+                            }
+                          </b>
+
+                          <span>
+                            {
+                              player.name
+                            }
+                          </span>
+
+                          <small>
+                            {
+                              player.position
+                            }
+                          </small>
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <p
+                      className={
+                        styles.empty
+                      }
+                    >
+                      No bench players found.
+                    </p>
+                  )}
                 </div>
 
 
+                {/* AWAY */}
                 <div>
                   <h3>
                     {away?.name}
@@ -3611,6 +4204,49 @@ export default function MatchPage() {
                       </div>
                     )
                   )}
+
+                  <h3>
+                    Bench
+                  </h3>
+
+                  {liveAwayBench.length ? (
+                    liveAwayBench.map(
+                      player => (
+                        <div
+                          className={
+                            styles.listPlayer
+                          }
+                          key={`away-bench-${player.id}`}
+                        >
+                          <b>
+                            {
+                              player.number
+                            }
+                          </b>
+
+                          <span>
+                            {
+                              player.name
+                            }
+                          </span>
+
+                          <small>
+                            {
+                              player.position
+                            }
+                          </small>
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <p
+                      className={
+                        styles.empty
+                      }
+                    >
+                      No bench players found.
+                    </p>
+                  )}
                 </div>
 
               </div>
@@ -3632,15 +4268,19 @@ export default function MatchPage() {
                 {[
                   [
                     "Possession",
-                    `${getStat(
-                      homeStats,
-                      ["possession"],
-                      0
+                    `${Math.round(
+                      getStat(
+                        homeStats,
+                        ["possession"],
+                        50
+                      )
                     )}%`,
-                    `${getStat(
-                      awayStats,
-                      ["possession"],
-                      0
+                    `${Math.round(
+                      getStat(
+                        awayStats,
+                        ["possession"],
+                        50
+                      )
                     )}%`,
                   ],
 
@@ -3724,16 +4364,12 @@ export default function MatchPage() {
                     "Interceptions",
                     getStat(
                       homeStats,
-                      [
-                        "interceptions",
-                      ],
+                      ["interceptions"],
                       0
                     ),
                     getStat(
                       awayStats,
-                      [
-                        "interceptions",
-                      ],
+                      ["interceptions"],
                       0
                     ),
                   ],
@@ -3775,7 +4411,6 @@ export default function MatchPage() {
                         row[0]
                       }
                     >
-
                       <strong>
                         {row[1]}
                       </strong>
@@ -3787,7 +4422,6 @@ export default function MatchPage() {
                       <strong>
                         {row[2]}
                       </strong>
-
                     </div>
                   )
                 )}
@@ -3820,23 +4454,21 @@ export default function MatchPage() {
                   </h3>
 
                   <span>
-                    {managedStartingXI.length}
+                    {
+                      managedStartingXI.length
+                    }
                     /11
                   </span>
                 </div>
-
 
                 <p
                   className={
                     styles.empty
                   }
                 >
-                  Abakinnyi ubona hano ni abo
-                  ikipe yawe ifite muri
-                  database. Hitamo 11 bazatangira
-                  mbere ya kickoff.
+                  Hitamo abakinnyi 11
+                  bazatangira umukino.
                 </p>
-
 
                 <div
                   className={
@@ -3859,7 +4491,6 @@ export default function MatchPage() {
                             player.id
                           }
                         >
-
                           <b>
                             {
                               player.number
@@ -3895,11 +4526,9 @@ export default function MatchPage() {
                               Remove
                             </button>
                           )}
-
                         </div>
                       )
                     )}
-
                   </div>
 
 
@@ -3918,7 +4547,6 @@ export default function MatchPage() {
                             player.id
                           }
                         >
-
                           <b>
                             {
                               player.number
@@ -3958,11 +4586,19 @@ export default function MatchPage() {
                               Add
                             </button>
                           )}
-
                         </div>
                       )
                     )}
 
+                    {!managedBench.length && (
+                      <p
+                        className={
+                          styles.empty
+                        }
+                      >
+                        No bench players.
+                      </p>
+                    )}
                   </div>
 
                 </div>
@@ -4365,7 +5001,6 @@ export default function MatchPage() {
                         </option>
                       )
                     )}
-
                   </select>
                 </div>
 
@@ -4416,7 +5051,6 @@ export default function MatchPage() {
                         </option>
                       )
                     )}
-
                   </select>
                 </div>
 
@@ -4474,7 +5108,6 @@ export default function MatchPage() {
             )}
 
           </div>
-
         </section>
 
       </main>
