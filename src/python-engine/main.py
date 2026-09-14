@@ -1,219 +1,205 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from typing import Any
 
-from match_engine import MatchManager
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
-app = Flask(__name__)
-CORS(app)
-
-manager = MatchManager()
+from football_engine import FootballMatch
 
 
-def ok(data):
-    return jsonify({
-        "success": True,
-        "data": data
-    })
+app = FastAPI(
+    title="Virtual Football Python Engine",
+    version="1.0.0",
+)
 
 
-def error(message, status=400):
-    return jsonify({
-        "success": False,
-        "error": message
-    }), status
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+matches: dict[str, FootballMatch] = {}
 
 
 @app.get("/")
-def home():
-    return jsonify({
-        "success": True,
-        "service": "Virtual Football Manager Python Engine",
-        "status": "online"
-    })
+def root():
+    return {
+        "ok": True,
+        "service": "Virtual Football Python Engine",
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "ok": True,
+        "service": "football-engine",
+        "matches": len(matches),
+    }
 
 
 @app.post("/match/create")
-def create_match():
-    try:
-        data = request.get_json(silent=True) or {}
+def create_match(config: dict[str, Any]):
+    match_id = str(config.get("matchId", "")).strip()
 
-        match_id = data.get("matchId")
-
-        if not match_id:
-            return error("matchId is required")
-
-        snapshot = manager.create(data)
-
-        return ok(snapshot)
-
-    except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.get("/match/<match_id>")
-def get_match(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        engine.advance()
-
-        return ok(engine.snapshot())
-
-    except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.post("/match/<match_id>/start")
-def start_match(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        result = engine.start()
-
-        return ok(result)
-
-    except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.post("/match/<match_id>/pause")
-def pause_match(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        result = engine.pause()
-
-        return ok(result)
-
-    except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.post("/match/<match_id>/second-half")
-def second_half(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        result = engine.start_second_half()
-
-        return ok(result)
-
-    except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.post("/match/<match_id>/update")
-def update_match(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        engine.advance()
-
-        return ok(engine.snapshot())
-
-    except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.post("/match/<match_id>/tactics")
-def change_tactics(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        data = request.get_json(silent=True) or {}
-
-        engine.set_tactics(
-            data.get("side", "home"),
-            data.get("tactics", {})
+    if not match_id:
+        raise HTTPException(
+            status_code=400,
+            detail="matchId is required",
         )
 
-        return ok(engine.snapshot())
+    if match_id in matches:
+        return matches[match_id].snapshot()
+
+    try:
+        match = FootballMatch(config)
+        matches[match_id] = match
+
+        return match.snapshot()
 
     except Exception as exc:
-        return error(str(exc), 500)
-
-
-@app.post("/match/<match_id>/formation")
-def change_formation(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        data = request.get_json(silent=True) or {}
-
-        engine.set_formation(
-            data.get("side", "home"),
-            data.get("formation", "4-4-2")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not create match: {exc}",
         )
 
-        return ok(engine.snapshot())
 
-    except Exception as exc:
-        return error(str(exc), 500)
+@app.post("/match/{match_id}/start")
+def start_match(match_id: str):
+    match = matches.get(match_id)
 
-
-@app.post("/match/<match_id>/substitute")
-def substitute(match_id):
-    try:
-        engine = manager.get(match_id)
-
-        if engine is None:
-            return error("Match not found", 404)
-
-        data = request.get_json(silent=True) or {}
-
-        result = engine.substitute(
-            data.get("side", "home"),
-            data.get("outgoingId"),
-            data.get("incomingId")
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
         )
 
-        return ok(result)
-
-    except Exception as exc:
-        return error(str(exc), 500)
+    return match.start()
 
 
-@app.post("/match/<match_id>/finish")
-def finish_match(match_id):
-    try:
-        engine = manager.get(match_id)
+@app.post("/match/{match_id}/pause")
+def pause_match(match_id: str):
+    match = matches.get(match_id)
 
-        if engine is None:
-            return error("Match not found", 404)
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
 
-        result = engine.finish()
-
-        return ok(result)
-
-    except Exception as exc:
-        return error(str(exc), 500)
+    return match.pause()
 
 
-if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        threaded=True
+@app.get("/match/{match_id}/state")
+def match_state(match_id: str):
+    match = matches.get(match_id)
+
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
+
+    return match.snapshot()
+
+
+@app.post("/match/{match_id}/tactics")
+def update_tactics(
+    match_id: str,
+    body: dict[str, Any],
+):
+    match = matches.get(match_id)
+
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
+
+    side = body.get("side", "home")
+    tactics = body.get("tactics", {})
+
+    return match.set_tactics(
+        side,
+        tactics,
     )
+
+
+@app.post("/match/{match_id}/formation")
+def update_formation(
+    match_id: str,
+    body: dict[str, Any],
+):
+    match = matches.get(match_id)
+
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
+
+    side = body.get("side", "home")
+    formation = body.get("formation")
+
+    return match.set_formation(
+        side,
+        formation,
+    )
+
+
+@app.post("/match/{match_id}/substitute")
+def substitute(
+    match_id: str,
+    body: dict[str, Any],
+):
+    match = matches.get(match_id)
+
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
+
+    side = body.get("side", "home")
+    outgoing_id = body.get("outgoingId")
+    incoming_id = body.get("incomingId")
+
+    return match.substitute(
+        side,
+        outgoing_id,
+        incoming_id,
+    )
+
+
+@app.post("/match/{match_id}/finish")
+def finish_match(match_id: str):
+    match = matches.get(match_id)
+
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
+
+    return match.finish()
+
+
+@app.delete("/match/{match_id}")
+def delete_match(match_id: str):
+    match = matches.pop(match_id, None)
+
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail="Match not found",
+        )
+
+    match.pause()
+
+    return {
+        "ok": True,
+        "message": "Match deleted",
+    }
