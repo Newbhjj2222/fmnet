@@ -1,17 +1,69 @@
-.canvasWrap {
+/* =========================================================
+   MatchCanvas.module.css
+   Responsive 2D match pitch canvas
+========================================================= */
+
+.wrapper {
+  position: relative;
   width: 100%;
-  max-width: 1050px;
-  margin: 0 auto;
-  overflow: hidden;
+  aspect-ratio: 100 / 64;
   border-radius: 18px;
-  background: #061b12;
-  border: 1px solid rgba(255,255,255,.12);
-  box-shadow: 0 20px 50px rgba(0,0,0,.35);
+  overflow: hidden;
+
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(0, 224, 164, 0.15), transparent 60%),
+    linear-gradient(180deg, #04121a 0%, #020a10 100%);
+
+  border: 1px solid rgba(0, 224, 164, 0.25);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    inset 0 0 60px rgba(0, 0, 0, 0.4);
+
+  isolation: isolate;
+}
+
+/* Soft glow on top of pitch */
+.wrapper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      800px 400px at 50% 120%,
+      rgba(0, 179, 255, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      600px 300px at 50% -20%,
+      rgba(0, 224, 164, 0.12),
+      transparent 60%
+    );
+  z-index: 2;
 }
 
 .canvas {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  touch-action: none;
+  height: 100%;
+  display: block;
+  z-index: 1;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 768px) {
+  .wrapper {
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .wrapper {
+    border-radius: 12px;
+    aspect-ratio: 100 / 68;
+  }
 }
