@@ -1,8 +1,7 @@
 const PYTHON_ENGINE_URL =
   "https://python-engine-1.onrender.com";
 
-
-async function pythonRequest(
+async function requestPython(
   path,
   options = {}
 ) {
@@ -19,174 +18,324 @@ async function pythonRequest(
 
   const text = await response.text();
 
-  let data = null;
+  let data = {};
 
   try {
     data = text
       ? JSON.parse(text)
-      : null;
+      : {};
   } catch {
     throw new Error(
-      `Python engine returned invalid JSON (${response.status}). ` +
-      `Response: ${text.slice(0, 500)}`
+      `Invalid response from match engine: ${text.slice(
+        0,
+        300
+      )}`
     );
   }
 
   if (!response.ok) {
     throw new Error(
       data?.detail ||
-      `Python engine HTTP ${response.status}`
+        `Match engine error ${response.status}`
     );
   }
 
   return data;
 }
 
+function num(value, fallback = 0) {
+  const n = Number(value);
+
+  return Number.isFinite(n)
+    ? n
+    : fallback;
+}
 
 function cleanPlayer(
-  player,
+  player = {},
   index = 0
 ) {
+  const ratings =
+    player.ratings || {};
+
   return {
     id: String(
-      player?.id ??
-      player?.playerId ??
-      `player-${index}`
+      player.id ||
+        player.playerId ||
+        player.uid ||
+        `player-${index + 1}`
     ),
 
     name:
-      player?.name ||
-      player?.displayName ||
+      player.name ||
+      player.displayName ||
+      player.fullName ||
       `Player ${index + 1}`,
 
-    number: Number(
-      player?.number ??
-      player?.shirtNumber ??
+    number: num(
+      player.number ||
+        player.shirtNumber ||
+        player.jerseyNumber ||
+        index + 1,
       index + 1
     ),
 
     position:
-      player?.position ||
-      player?.pos ||
-      "MID",
+      player.position ||
+      player.role ||
+      "CM",
 
-    overall: Number(
-      player?.overall ?? 60
+    role:
+      player.role ||
+      player.position ||
+      "CM",
+
+    pace: num(
+      player.pace ??
+        ratings.pace,
+      70
     ),
 
-    pace: Number(
-      player?.pace ??
-      player?.speed ??
+    passing: num(
+      player.passing ??
+        ratings.passing,
+      70
+    ),
+
+    shooting: num(
+      player.shooting ??
+        ratings.shooting,
+      65
+    ),
+
+    dribbling: num(
+      player.dribbling ??
+        ratings.dribbling,
+      68
+    ),
+
+    defending: num(
+      player.defending ??
+        ratings.defending,
+      65
+    ),
+
+    stamina: num(
+      player.stamina ??
+        ratings.stamina,
+      80
+    ),
+
+    strength: num(
+      player.strength ??
+        ratings.strength,
+      70
+    ),
+
+    vision: num(
+      player.vision ??
+        ratings.vision,
+      70
+    ),
+
+    goalkeeping: num(
+      player.goalkeeping ??
+        ratings.goalkeeping,
       60
     ),
+  };
+}
 
-    passing: Number(
-      player?.passing ?? 60
+function cleanTeam(
+  team = {},
+  fallbackName
+) {
+  const players =
+    Array.isArray(team.players)
+      ? team.players
+      : Array.isArray(team.lineup)
+      ? team.lineup
+      : [];
+
+  const bench =
+    Array.isArray(team.bench)
+      ? team.bench
+      : Array.isArray(team.substitutes)
+      ? team.substitutes
+      : [];
+
+  return {
+    id:
+      team.id ||
+      team.clubId ||
+      team.teamId ||
+      fallbackName.toLowerCase(),
+
+    name:
+      team.name ||
+      team.clubName ||
+      fallbackName,
+
+    logo:
+      team.logo ||
+      team.logoUrl ||
+      team.image ||
+      "",
+
+    formation:
+      team.formation ||
+      "4-3-3",
+
+    tactics:
+      team.tactics || {},
+
+    players: players.map(
+      cleanPlayer
     ),
 
-    dribbling: Number(
-      player?.dribbling ?? 60
-    ),
-
-    shooting: Number(
-      player?.shooting ?? 60
-    ),
-
-    defending: Number(
-      player?.defending ?? 60
-    ),
-
-    stamina: Number(
-      player?.stamina ?? 80
+    bench: bench.map(
+      (player, index) =>
+        cleanPlayer(
+          player,
+          index + 11
+        )
     ),
   };
 }
 
 
-function cleanPlayers(players) {
-  if (!Array.isArray(players)) {
-    return [];
-  }
+class MatchEngine {
+  constructor(config = {}) {
+    this.config = config;
 
-  return players.map(
-    cleanPlayer
-  );
-}
+    this.matchId =
+      config.matchId ||
+      config.id;
 
+    this.lastSnapshot = null;
 
-export default class MatchEngine {
-  constructor(config) {
-    this.config = {
-      ...config,
-
-      homePlayers:
-        cleanPlayers(
-          config.homePlayers
-        ),
-
-      awayPlayers:
-        cleanPlayers(
-          config.awayPlayers
-        ),
-    };
-
-    this.snapshot = null;
-
-    this.running = false;
+    this.ready = null;
 
     this.requestInFlight = false;
 
-    this.lastPoll = 0;
+    this.pollTimer = null;
+
+    this.listeners = new Set();
 
     this.ready = this.create();
   }
 
 
+  subscribe(listener) {
+    if (
+      typeof listener !==
+      "function"
+    ) {
+      return () => {};
+    }
+
+    this.listeners.add(
+      listener
+    );
+
+    if (this.lastSnapshot) {
+      listener(
+        this.lastSnapshot
+      );
+    }
+
+    return () => {
+      this.listeners.delete(
+        listener
+      );
+    };
+  }
+
+
+  emit(snapshot) {
+    for (const listener of this.listeners) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        console.error(
+          "Match listener error:",
+          error
+        );
+      }
+    }
+  }
+
+
   async create() {
-    const result =
-      await pythonRequest(
+    const payload = {
+      ...this.config,
+
+      matchId:
+        this.matchId,
+
+      home: cleanTeam(
+        this.config.home || {},
+        "Home Team"
+      ),
+
+      away: cleanTeam(
+        this.config.away || {},
+        "Away Team"
+      ),
+    };
+
+    if (
+      payload.home.players.length < 11
+    ) {
+      console.warn(
+        "Home team has fewer than 11 players"
+      );
+    }
+
+    if (
+      payload.away.players.length < 11
+    ) {
+      console.warn(
+        "Away team has fewer than 11 players"
+      );
+    }
+
+    const snapshot =
+      await requestPython(
         "/match/create",
         {
           method: "POST",
-
           body: JSON.stringify(
-            this.config
+            payload
           ),
         }
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
+    return snapshot;
   }
 
 
-  applySnapshot(
-    snapshot
-  ) {
+  applySnapshot(snapshot) {
     if (!snapshot) {
       return;
     }
 
-    this.snapshot =
+    this.lastSnapshot =
       snapshot;
 
-    this.running =
-      snapshot.status === "live";
+    this.status =
+      snapshot.status ||
+      "created";
 
-    this.home =
-      snapshot.home || {};
+    this.minute =
+      num(snapshot.minute);
 
-    this.away =
-      snapshot.away || {};
-
-    this.ball =
-      snapshot.ball || {};
-
-    this.events =
-      snapshot.events || [];
+    this.second =
+      num(snapshot.second);
 
     this.score =
       snapshot.score || {
@@ -194,113 +343,127 @@ export default class MatchEngine {
         away: 0,
       };
 
-    this.minute =
-      Number(
-        snapshot.minute || 0
-      );
+    this.home =
+      snapshot.home || null;
 
-    this.second =
-      Number(
-        snapshot.second || 0
-      );
+    this.away =
+      snapshot.away || null;
 
-    this.status =
-      snapshot.status ||
-      "ready";
+    this.ball =
+      snapshot.ball || null;
+
+    this.events =
+      Array.isArray(
+        snapshot.events
+      )
+        ? snapshot.events
+        : [];
+
+    this.stats =
+      snapshot.stats || {};
+
+    this.emit(snapshot);
   }
 
 
   async start() {
     await this.ready;
 
-    const result =
-      await pythonRequest(
-        `/match/${this.config.matchId}/start`,
+    const snapshot =
+      await requestPython(
+        `/match/${this.matchId}/start`,
         {
           method: "POST",
         }
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
+    this.startPolling();
+
+    return snapshot;
+  }
+
+
+  async resume() {
+    return this.start();
   }
 
 
   async pause() {
-    this.running = false;
+    await this.ready;
 
-    const result =
-      await pythonRequest(
-        `/match/${this.config.matchId}/pause`,
+    const snapshot =
+      await requestPython(
+        `/match/${this.matchId}/pause`,
         {
           method: "POST",
         }
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
+    this.stopPolling();
+
+    return snapshot;
   }
 
 
   async update() {
-    if (!this.snapshot) {
-      return null;
-    }
-
     if (
-      this.requestInFlight
+      this.requestInFlight ||
+      !this.matchId
     ) {
-      return this.snapshot;
+      return this.lastSnapshot;
     }
-
-    if (
-      !this.running
-    ) {
-      return this.snapshot;
-    }
-
-    const now =
-      Date.now();
-
-    if (
-      now - this.lastPoll < 100
-    ) {
-      return this.snapshot;
-    }
-
-    this.lastPoll = now;
 
     this.requestInFlight = true;
 
     try {
-      const result =
-        await pythonRequest(
-          `/match/${this.config.matchId}/state`
+      const snapshot =
+        await requestPython(
+          `/match/${this.matchId}/state`
         );
 
       this.applySnapshot(
-        result
+        snapshot
       );
 
-      return result;
-
+      return snapshot;
     } catch (error) {
       console.error(
-        "Python engine state error:",
+        "Match state error:",
         error
       );
 
-      return this.snapshot;
-
+      return this.lastSnapshot;
     } finally {
-      this.requestInFlight =
-        false;
+      this.requestInFlight = false;
+    }
+  }
+
+
+  startPolling() {
+    this.stopPolling();
+
+    this.pollTimer =
+      setInterval(() => {
+        this.update();
+      }, 500);
+  }
+
+
+  stopPolling() {
+    if (this.pollTimer) {
+      clearInterval(
+        this.pollTimer
+      );
+
+      this.pollTimer = null;
     }
   }
 
@@ -308,12 +471,13 @@ export default class MatchEngine {
   async setUserTactics(
     tactics
   ) {
-    const result =
-      await pythonRequest(
-        `/match/${this.config.matchId}/tactics`,
+    await this.ready;
+
+    const snapshot =
+      await requestPython(
+        `/match/${this.matchId}/tactics`,
         {
           method: "POST",
-
           body: JSON.stringify({
             side: "home",
             tactics,
@@ -322,35 +486,35 @@ export default class MatchEngine {
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
+    return snapshot;
   }
 
 
   async setFormation(
-    side,
     formation
   ) {
-    const result =
-      await pythonRequest(
-        `/match/${this.config.matchId}/formation`,
+    await this.ready;
+
+    const snapshot =
+      await requestPython(
+        `/match/${this.matchId}/formation`,
         {
           method: "POST",
-
           body: JSON.stringify({
-            side,
+            side: "home",
             formation,
           }),
         }
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
+    return snapshot;
   }
 
 
@@ -358,12 +522,13 @@ export default class MatchEngine {
     outgoingId,
     incomingId
   ) {
-    const result =
-      await pythonRequest(
-        `/match/${this.config.matchId}/substitute`,
+    await this.ready;
+
+    const snapshot =
+      await requestPython(
+        `/match/${this.matchId}/substitute`,
         {
           method: "POST",
-
           body: JSON.stringify({
             side: "home",
             outgoingId,
@@ -373,57 +538,52 @@ export default class MatchEngine {
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
+    return snapshot;
   }
 
 
   async finish() {
-    const result =
-      await pythonRequest(
-        `/match/${this.config.matchId}/finish`,
+    await this.ready;
+
+    const snapshot =
+      await requestPython(
+        `/match/${this.matchId}/finish`,
         {
           method: "POST",
         }
       );
 
     this.applySnapshot(
-      result
+      snapshot
     );
 
-    return result;
-  }
+    this.stopPolling();
 
-
-  getSnapshot() {
-    return this.snapshot;
-  }
-
-
-  getState() {
-    return this.snapshot;
-  }
-
-
-  serializeResult() {
-    return this.snapshot;
+    return snapshot;
   }
 
 
   isFinished() {
     return (
-      this.snapshot?.status ===
-        "finished" ||
-      Number(
-        this.snapshot?.minute || 0
-      ) >= 90
+      this.status ===
+      "finished"
     );
   }
 
 
-  stop() {
-    this.running = false;
+  getState() {
+    return this.lastSnapshot;
+  }
+
+
+  destroy() {
+    this.stopPolling();
+    this.listeners.clear();
   }
 }
+
+
+export default MatchEngine;
