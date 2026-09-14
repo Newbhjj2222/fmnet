@@ -19,7 +19,7 @@ import { db } from "../../components/firebase";
 
 import MatchEngine from "../../lib/match-engine/engine";
 
-import styles from "./match.module.css";
+import styles from "./Mach.module.css";
 
 
 function firstValue(
