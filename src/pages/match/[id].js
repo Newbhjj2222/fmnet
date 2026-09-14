@@ -1,6 +1,6 @@
 import {
-  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -13,202 +13,263 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
-  updateDoc,
-  where,
-  serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "../../components/firebase";
 
-import PythonMatchEngine from "../../lib/match-engine/python-engine";
-
-import {
-  DEFAULT_TACTICS,
-} from "../../lib/match-engine/constants";
-
-import MatchCanvas from "../../components/match/MatchCanvas";
-import LineupFormation from "../../components/match/LineupFormation";
-import TacticsPanel from "../../components/match/TacticsPanel";
-import SubstitutionPanel from "../../components/match/SubstitutionPanel";
-import MatchStats from "../../components/match/MatchStats";
-import MatchEvents from "../../components/match/MatchEvents";
+import MatchEngine from "../../lib/match-engine/engine";
 
 import styles from "./match.module.css";
 
 
-const MATCH_CONFIG = {
-  footballMinutes: 90,
-  realDurationSeconds: 480,
-  firstHalfMinutes: 45,
-  secondHalfMinutes: 45,
-};
+function firstValue(
+  object,
+  keys,
+  fallback = null
+) {
+  for (const key of keys) {
+    const value =
+      object?.[key];
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+    ) {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
+
+function playerBelongsToClub(
+  player,
+  clubId
+) {
+  const wanted =
+    String(clubId);
+
+  const values = [
+    player.clubId,
+    player.currentClub,
+    player.currentClubId,
+    player.teamId,
+    player.team,
+    player.club,
+    player.clubID,
+  ]
+    .filter(
+      value =>
+        value !== undefined &&
+        value !== null
+    )
+    .map(value =>
+      String(
+        typeof value ===
+          "object"
+          ? value.id ||
+              value.clubId ||
+              value.teamId ||
+              ""
+          : value
+      )
+    );
+
+  return values.includes(
+    wanted
+  );
+}
 
 
 function normalizePlayer(
-  data,
-  id
+  player,
+  index
 ) {
-  const source =
-    data || {};
+  const ratings =
+    player.ratings || {};
 
   return {
-    id,
+    id: String(
+      player.id ||
+        player.playerId ||
+        player.uid ||
+        `player-${index + 1}`
+    ),
 
-    ...source,
-
-    overall:
-      Number(
-        source.overall ??
-        source.rating ??
-        source.ovr ??
-        60
-      ),
-
-    shirtNumber:
-      source.shirtNumber ??
-      source.jerseyNumber ??
-      source.number ??
-      null,
+    name:
+      player.name ||
+      player.displayName ||
+      player.fullName ||
+      `Player ${index + 1}`,
 
     number:
-      source.shirtNumber ??
-      source.jerseyNumber ??
-      source.number ??
-      null,
+      Number(
+        player.number ||
+          player.shirtNumber ||
+          player.jerseyNumber ||
+          index + 1
+      ),
+
+    position:
+      player.position ||
+      player.role ||
+      "CM",
+
+    role:
+      player.role ||
+      player.position ||
+      "CM",
+
+    pace:
+      Number(
+        player.pace ??
+          ratings.pace ??
+          70
+      ),
+
+    passing:
+      Number(
+        player.passing ??
+          ratings.passing ??
+          70
+      ),
+
+    shooting:
+      Number(
+        player.shooting ??
+          ratings.shooting ??
+          65
+      ),
+
+    dribbling:
+      Number(
+        player.dribbling ??
+          ratings.dribbling ??
+          68
+      ),
+
+    defending:
+      Number(
+        player.defending ??
+          ratings.defending ??
+          65
+      ),
+
+    stamina:
+      Number(
+        player.stamina ??
+          ratings.stamina ??
+          80
+      ),
+
+    strength:
+      Number(
+        player.strength ??
+          ratings.strength ??
+          70
+      ),
+
+    vision:
+      Number(
+        player.vision ??
+          ratings.vision ??
+          70
+      ),
+
+    goalkeeping:
+      Number(
+        player.goalkeeping ??
+          ratings.goalkeeping ??
+          60
+      ),
   };
 }
 
 
-async function loadPlayers(
-  clubId
+function normalizeClub(
+  club,
+  fallbackId
 ) {
-  if (!clubId) {
-    return [];
-  }
+  return {
+    id: String(
+      club?.id ||
+        club?.clubId ||
+        fallbackId
+    ),
 
-  const fields = [
-    "clubId",
-    "teamId",
-    "currentClub",
-  ];
+    name:
+      club?.name ||
+      club?.clubName ||
+      club?.title ||
+      "Unknown Club",
 
-  for (
-    const field of fields
-  ) {
-    try {
-      const q =
-        query(
-          collection(
-            db,
-            "players"
-          ),
-          where(
-            field,
-            "==",
-            clubId
-          )
-        );
+    logo:
+      club?.logo ||
+      club?.logoUrl ||
+      club?.image ||
+      club?.imageUrl ||
+      "",
 
-      const snap =
-        await getDocs(q);
+    formation:
+      club?.formation ||
+      "4-3-3",
 
-      if (!snap.empty) {
-        return snap.docs.map(
-          (item) =>
-            normalizePlayer(
-              item.data(),
-              item.id
-            )
-        );
-      }
-    } catch (error) {
-      console.error(
-        `Player query failed for ${field}`,
-        error
-      );
-    }
-  }
-
-  return [];
+    tactics:
+      club?.tactics || {},
+  };
 }
 
 
-function getEmbeddedPlayers(
+function getClubId(
   match,
   side
 ) {
-  const candidates =
-    side === "home"
-      ? [
-          match?.homePlayers,
-          match?.homeLineup,
-          match?.homeSquad,
-        ]
-      : [
-          match?.awayPlayers,
-          match?.awayLineup,
-          match?.awaySquad,
-        ];
+  if (side === "home") {
+    return firstValue(
+      match,
+      [
+        "homeClubId",
+        "homeTeamId",
+        "homeId",
+        "homeClub",
+        "homeTeam",
+      ]
+    );
+  }
 
-  for (
-    const value of candidates
-  ) {
-    if (
-      Array.isArray(value) &&
-      value.length
-    ) {
-      return value.map(
-        (player, index) =>
-          normalizePlayer(
-            player,
-            player?.id ??
-            player?.playerId ??
-            `${side}-${index}`
-          )
-      );
+  return firstValue(
+    match,
+    [
+      "awayClubId",
+      "awayTeamId",
+      "awayId",
+      "awayClub",
+      "awayTeam",
+    ]
+  );
+}
+
+
+function extractEmbeddedPlayers(
+  club,
+  side
+) {
+  const possible = [
+    club?.players,
+    club?.squad,
+    club?.lineup,
+    club?.[`players${side}`],
+  ];
+
+  for (const list of possible) {
+    if (Array.isArray(list)) {
+      return list;
     }
   }
 
   return [];
-}
-
-
-function idsFromPlayers(
-  players
-) {
-  return (
-    Array.isArray(players)
-      ? players
-      : []
-  )
-    .map(
-      (player) =>
-        player?.id ??
-        player?.playerId
-    )
-    .filter(Boolean);
-}
-
-
-function getScore(
-  snapshot,
-  side
-) {
-  if (!snapshot) {
-    return 0;
-  }
-
-  const direct =
-    side === "home"
-      ? snapshot.homeScore
-      : snapshot.awayScore;
-
-  return Number(
-    direct ??
-    snapshot.score?.[side] ??
-    0
-  );
 }
 
 
@@ -216,420 +277,52 @@ export default function MatchPage() {
   const router =
     useRouter();
 
-  const matchId =
-    router.query.id;
+  const {
+    id,
+  } = router.query;
 
   const engineRef =
     useRef(null);
 
-  const pollRef =
-    useRef(null);
-
-  const mountedRef =
-    useRef(true);
-
-  const savingRef =
-    useRef(false);
-
   const [loading, setLoading] =
     useState(true);
 
+  const [starting, setStarting] =
+    useState(false);
+
   const [error, setError] =
+    useState("");
+
+  const [matchDoc, setMatchDoc] =
     useState(null);
 
   const [snapshot, setSnapshot] =
     useState(null);
 
-  const [formation, setFormation] =
-    useState("4-4-2");
+  const [events, setEvents] =
+    useState([]);
 
-  const [userTactics, setUserTactics] =
-    useState(
-      DEFAULT_TACTICS
-    );
-
-  const [starting, setStarting] =
-    useState(false);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [finishing, setFinishing] =
-    useState(false);
-
-
-  const saveMatch =
-    useCallback(
-      async (
-        currentSnapshot,
-        final = false
-      ) => {
-        if (
-          !matchId ||
-          !currentSnapshot ||
-          savingRef.current
-        ) {
-          return;
-        }
-
-        try {
-          savingRef.current =
-            true;
-
-          setSaving(true);
-
-          const matchRef =
-            doc(
-              db,
-              "matches",
-              matchId
-            );
-
-          const home =
-            currentSnapshot.home ||
-            {};
-
-          const away =
-            currentSnapshot.away ||
-            {};
-
-          await updateDoc(
-            matchRef,
-            {
-              status:
-                final
-                  ? "finished"
-                  : currentSnapshot.status,
-
-              minute:
-                Number(
-                  currentSnapshot.minute ||
-                  0
-                ),
-
-              second:
-                Number(
-                  currentSnapshot.second ||
-                  0
-                ),
-
-              homeScore:
-                getScore(
-                  currentSnapshot,
-                  "home"
-                ),
-
-              awayScore:
-                getScore(
-                  currentSnapshot,
-                  "away"
-                ),
-
-              score:
-                currentSnapshot.score ||
-                {
-                  home: 0,
-                  away: 0,
-                },
-
-              homeStats:
-                home.stats ||
-                {},
-
-              awayStats:
-                away.stats ||
-                {},
-
-              events:
-                currentSnapshot.events ||
-                [],
-
-              homeLineupIds:
-                (
-                  home.players ||
-                  []
-                )
-                  .filter(
-                    (p) =>
-                      p.onPitch !==
-                      false
-                  )
-                  .map(
-                    (p) =>
-                      p.id
-                  ),
-
-              awayLineupIds:
-                (
-                  away.players ||
-                  []
-                )
-                  .filter(
-                    (p) =>
-                      p.onPitch !==
-                      false
-                  )
-                  .map(
-                    (p) =>
-                      p.id
-                  ),
-
-              homeFormation:
-                home.formation ||
-                "4-4-2",
-
-              awayFormation:
-                away.formation ||
-                "4-4-2",
-
-              homeTactics:
-                home.tactics ||
-                {},
-
-              awayTactics:
-                away.tactics ||
-                {},
-
-              result:
-                currentSnapshot.result ||
-                null,
-
-              updatedAt:
-                serverTimestamp(),
-
-              ...(final
-                ? {
-                    finishedAt:
-                      serverTimestamp(),
-                  }
-                : {}),
-            }
-          );
-        } catch (err) {
-          console.error(
-            "Firestore save failed",
-            err
-          );
-        } finally {
-          savingRef.current =
-            false;
-
-          if (
-            mountedRef.current
-          ) {
-            setSaving(false);
-          }
-        }
-      },
-      [matchId]
-    );
-
-
-  const pollPython =
-    useCallback(
-      async () => {
-        const engine =
-          engineRef.current;
-
-        if (!engine) {
-          return;
-        }
-
-        try {
-          const next =
-            await engine.update();
-
-          if (
-            mountedRef.current
-          ) {
-            setSnapshot(
-              next
-            );
-          }
-
-          if (
-            next.status ===
-              "finished" ||
-            Number(
-              next.minute || 0
-            ) >= 90
-          ) {
-            await finishMatch(
-              next
-            );
-          }
-        } catch (err) {
-          console.error(
-            "Python engine update failed",
-            err
-          );
-
-          if (
-            mountedRef.current
-          ) {
-            setError(
-              err.message ||
-              "Python engine connection failed"
-            );
-          }
-        }
-      },
-      []
-    );
-
-
-  const startPolling =
-    useCallback(
-      () => {
-        if (
-          pollRef.current
-        ) {
-          clearInterval(
-            pollRef.current
-          );
-        }
-
-        /*
-         * Python simulation is driven
-         * by wall-clock time.
-         *
-         * 100ms = 10 updates/sec.
-         */
-
-        pollRef.current =
-          setInterval(
-            pollPython,
-            100
-          );
-      },
-      [pollPython]
-    );
-
-
-  const stopPolling =
-    useCallback(
-      () => {
-        if (
-          pollRef.current
-        ) {
-          clearInterval(
-            pollRef.current
-          );
-
-          pollRef.current =
-            null;
-        }
-      },
-      []
-    );
-
-
-  const finishMatch =
-    useCallback(
-      async (
-        finalSnapshot
-      ) => {
-        if (
-          !finalSnapshot ||
-          finishing
-        ) {
-          return;
-        }
-
-        setFinishing(
-          true
-        );
-
-        stopPolling();
-
-        try {
-          await saveMatch(
-            {
-              ...finalSnapshot,
-              status:
-                "finished",
-              minute: 90,
-              second: 0,
-            },
-            true
-          );
-
-          setSnapshot(
-            {
-              ...finalSnapshot,
-              status:
-                "finished",
-              minute: 90,
-              second: 0,
-              finished: true,
-              running: false,
-            }
-          );
-
-          setTimeout(
-            () => {
-              if (
-                mountedRef.current
-              ) {
-                router.push(
-                  "/fixtures"
-                );
-              }
-            },
-            1800
-          );
-        } finally {
-          setFinishing(
-            false
-          );
-        }
-      },
-      [
-        finishing,
-        router,
-        saveMatch,
-        stopPolling,
-      ]
-    );
+  const [activeTab, setActiveTab] =
+    useState("events");
 
 
   useEffect(() => {
-    mountedRef.current =
-      true;
-
-    return () => {
-      mountedRef.current =
-        false;
-
-      stopPolling();
-    };
-  }, [
-    stopPolling,
-  ]);
-
-
-  useEffect(() => {
-    if (
-      !router.isReady ||
-      !matchId
-    ) {
+    if (!router.isReady || !id) {
       return;
     }
 
-    let cancelled =
-      false;
+    let cancelled = false;
 
-    async function initialize() {
+    async function loadMatch() {
       try {
         setLoading(true);
-
-        setError(null);
+        setError("");
 
         const matchRef =
           doc(
             db,
             "matches",
-            matchId
+            String(id)
           );
 
         const matchSnap =
@@ -637,221 +330,313 @@ export default function MatchPage() {
             matchRef
           );
 
-        if (
-          !matchSnap.exists()
-        ) {
+        if (!matchSnap.exists()) {
           throw new Error(
-            "Match not found"
+            "Match ntiboneka muri database."
           );
         }
 
         const match =
           matchSnap.data();
 
-        let homePlayers =
-          getEmbeddedPlayers(
+        if (cancelled) {
+          return;
+        }
+
+        setMatchDoc({
+          id: matchSnap.id,
+          ...match,
+        });
+
+        const homeClubId =
+          getClubId(
             match,
             "home"
           );
 
-        let awayPlayers =
-          getEmbeddedPlayers(
+        const awayClubId =
+          getClubId(
             match,
             "away"
           );
 
-        const homeClubId =
-          match.homeClubId ??
-          match.homeTeamId ??
-          match.homeTeam?.id;
+        if (
+          !homeClubId ||
+          !awayClubId
+        ) {
+          throw new Error(
+            "Match ibura homeClubId cyangwa awayClubId."
+          );
+        }
 
-        const awayClubId =
-          match.awayClubId ??
-          match.awayTeamId ??
-          match.awayTeam?.id;
+        const [
+          homeClubSnap,
+          awayClubSnap,
+          playersSnap,
+        ] =
+          await Promise.all([
+            getDoc(
+              doc(
+                db,
+                "clubs",
+                String(
+                  typeof homeClubId ===
+                    "object"
+                    ? homeClubId.id
+                    : homeClubId
+                )
+              )
+            ),
+
+            getDoc(
+              doc(
+                db,
+                "clubs",
+                String(
+                  typeof awayClubId ===
+                    "object"
+                    ? awayClubId.id
+                    : awayClubId
+                )
+              )
+            ),
+
+            getDocs(
+              collection(
+                db,
+                "players"
+              )
+            ),
+          ]);
+
+        const homeClub =
+          normalizeClub(
+            homeClubSnap.exists()
+              ? homeClubSnap.data()
+              : {},
+            homeClubId
+          );
+
+        const awayClub =
+          normalizeClub(
+            awayClubSnap.exists()
+              ? awayClubSnap.data()
+              : {},
+            awayClubId
+          );
+
+        const allPlayers =
+          playersSnap.docs.map(
+            playerDoc => ({
+              id: playerDoc.id,
+              ...playerDoc.data(),
+            })
+          );
+
+        let homePlayers =
+          allPlayers.filter(
+            player =>
+              playerBelongsToClub(
+                player,
+                homeClubId
+              )
+          );
+
+        let awayPlayers =
+          allPlayers.filter(
+            player =>
+              playerBelongsToClub(
+                player,
+                awayClubId
+              )
+          );
+
+        /*
+         * Match itself may already contain
+         * a selected lineup. Prefer that lineup.
+         */
+
+        const embeddedHome =
+          match?.home?.players ||
+          match?.home?.lineup ||
+          match?.homeLineup ||
+          match?.homePlayers ||
+          [];
+
+        const embeddedAway =
+          match?.away?.players ||
+          match?.away?.lineup ||
+          match?.awayLineup ||
+          match?.awayPlayers ||
+          [];
 
         if (
-          !homePlayers.length
+          Array.isArray(
+            embeddedHome
+          ) &&
+          embeddedHome.length
         ) {
           homePlayers =
-            await loadPlayers(
-              homeClubId
-            );
+            embeddedHome;
         }
 
         if (
-          !awayPlayers.length
+          Array.isArray(
+            embeddedAway
+          ) &&
+          embeddedAway.length
         ) {
           awayPlayers =
-            await loadPlayers(
-              awayClubId
-            );
+            embeddedAway;
         }
 
-        const homeLineupIds =
-          match.homeLineupIds?.length
-            ? match.homeLineupIds
-            : idsFromPlayers(
-                homePlayers.slice(
-                  0,
-                  11
-                )
-              );
+        if (
+          homePlayers.length < 11
+        ) {
+          const embedded =
+            extractEmbeddedPlayers(
+              homeClub,
+              "home"
+            );
 
-        const awayLineupIds =
-          match.awayLineupIds?.length
-            ? match.awayLineupIds
-            : idsFromPlayers(
-                awayPlayers.slice(
-                  0,
-                  11
-                )
-              );
+          if (
+            embedded.length
+          ) {
+            homePlayers =
+              embedded;
+          }
+        }
 
-        const homeFormation =
-          match.homeFormation ||
-          "4-4-2";
+        if (
+          awayPlayers.length < 11
+        ) {
+          const embedded =
+            extractEmbeddedPlayers(
+              awayClub,
+              "away"
+            );
 
-        const awayFormation =
-          match.awayFormation ||
-          "4-4-2";
+          if (
+            embedded.length
+          ) {
+            awayPlayers =
+              embedded;
+          }
+        }
 
-        const homeTactics = {
-          ...DEFAULT_TACTICS,
-          ...(match.homeTactics ||
-            {}),
-        };
+        homePlayers =
+          homePlayers
+            .slice(0, 11)
+            .map(
+              normalizePlayer
+            );
 
-        const awayTactics = {
-          ...DEFAULT_TACTICS,
-          ...(match.awayTactics ||
-            {}),
+        awayPlayers =
+          awayPlayers
+            .slice(0, 11)
+            .map(
+              normalizePlayer
+            );
+
+        if (
+          homePlayers.length < 11 ||
+          awayPlayers.length < 11
+        ) {
+          throw new Error(
+            `Abakinnyi ntibuzuye. ${homeClub.name}: ${homePlayers.length}, ${awayClub.name}: ${awayPlayers.length}.`
+          );
+        }
+
+        const engineConfig = {
+          matchId: String(id),
+
+          home: {
+            ...homeClub,
+
+            players:
+              homePlayers,
+
+            bench:
+              Array.isArray(
+                match?.home?.bench
+              )
+                ? match.home.bench
+                : [],
+          },
+
+          away: {
+            ...awayClub,
+
+            players:
+              awayPlayers,
+
+            bench:
+              Array.isArray(
+                match?.away?.bench
+              )
+                ? match.away.bench
+                : [],
+          },
         };
 
         const engine =
-          new PythonMatchEngine(
-            {
-              matchId,
-
-              homeTeam: {
-                id:
-                  homeClubId,
-
-                name:
-                  match.homeTeamName ??
-                  match.homeClubName ??
-                  match.homeTeam?.name ??
-                  "Home",
-
-                logo:
-                  match.homeTeamLogo ??
-                  match.homeTeam?.logo ??
-                  "",
-              },
-
-              awayTeam: {
-                id:
-                  awayClubId,
-
-                name:
-                  match.awayTeamName ??
-                  match.awayClubName ??
-                  match.awayTeam?.name ??
-                  "Away",
-
-                logo:
-                  match.awayTeamLogo ??
-                  match.awayTeam?.logo ??
-                  "",
-              },
-
-              homePlayers,
-
-              awayPlayers,
-
-              homeLineupIds,
-
-              awayLineupIds,
-
-              formationHome:
-                homeFormation,
-
-              formationAway:
-                awayFormation,
-
-              tacticsHome:
-                homeTactics,
-
-              tacticsAway:
-                awayTactics,
-
-              initialScore: {
-                home:
-                  Number(
-                    match.homeScore ??
-                    match.score?.home ??
-                    0
-                  ),
-
-                away:
-                  Number(
-                    match.awayScore ??
-                    match.score?.away ??
-                    0
-                  ),
-              },
-
-              initialMinute:
-                Number(
-                  match.minute ||
-                  0
-                ),
-
-              initialEvents:
-                match.events ||
-                [],
-            }
+          new MatchEngine(
+            engineConfig
           );
 
         engineRef.current =
           engine;
 
-        const initial =
-          await engine.create();
+        engine.subscribe(
+          nextSnapshot => {
+            if (cancelled) {
+              return;
+            }
+
+            setSnapshot(
+              nextSnapshot
+            );
+
+            setEvents(
+              nextSnapshot.events ||
+                []
+            );
+
+            if (
+              nextSnapshot.status ===
+              "finished"
+            ) {
+              setStarting(false);
+            }
+          }
+        );
+
+        await engine.ready;
 
         if (
           cancelled
         ) {
+          engine.destroy();
           return;
         }
 
         setSnapshot(
-          initial
+          engine.getState()
         );
 
-        setFormation(
-          homeFormation
-        );
-
-        setUserTactics(
-          homeTactics
+        setEvents(
+          engine.getState()
+            ?.events || []
         );
 
         setLoading(false);
-
-        startPolling();
       } catch (err) {
-        console.error(
-          "Match initialization failed",
-          err
-        );
+        console.error(err);
 
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setError(
-            err.message ||
-            "Match initialization failed"
+            err?.message ||
+              "Failed to load match."
           );
 
           setLoading(false);
@@ -859,255 +644,90 @@ export default function MatchPage() {
       }
     }
 
-    initialize();
+    loadMatch();
 
     return () => {
       cancelled = true;
+
+      if (
+        engineRef.current
+      ) {
+        engineRef.current.destroy();
+        engineRef.current =
+          null;
+      }
     };
   }, [
     router.isReady,
-    matchId,
-    startPolling,
+    id,
   ]);
 
 
-  const startMatch =
-    useCallback(
-      async () => {
-        const engine =
-          engineRef.current;
+  async function startMatch() {
+    const engine =
+      engineRef.current;
 
-        if (
-          !engine ||
-          starting
-        ) {
-          return;
-        }
+    if (!engine) {
+      return;
+    }
 
-        try {
-          setStarting(true);
+    try {
+      setStarting(true);
+      setError("");
 
-          setError(null);
+      await engine.start();
 
-          const next =
-            await engine.start();
+      setSnapshot(
+        engine.getState()
+      );
+    } catch (err) {
+      console.error(err);
 
-          setSnapshot(
-            next
-          );
+      setError(
+        err?.message ||
+          "Match ntiyatangiye."
+      );
 
-          startPolling();
-        } catch (err) {
-          setError(
-            err.message
-          );
-        } finally {
-          setStarting(false);
-        }
-      },
-      [
-        starting,
-        startPolling,
-      ]
-    );
-
-
-  const startSecondHalf =
-    useCallback(
-      async () => {
-        const engine =
-          engineRef.current;
-
-        if (!engine) {
-          return;
-        }
-
-        try {
-          const next =
-            await engine.startSecondHalf();
-
-          setSnapshot(
-            next
-          );
-
-          startPolling();
-        } catch (err) {
-          setError(
-            err.message
-          );
-        }
-      },
-      [startPolling]
-    );
-
-
-  const handleTacticsChange =
-    async (
-      tactics
-    ) => {
-      const engine =
-        engineRef.current;
-
-      if (!engine) {
-        return;
-      }
-
-      try {
-        const safe = {
-          ...DEFAULT_TACTICS,
-          ...(tactics || {}),
-        };
-
-        setUserTactics(
-          safe
-        );
-
-        const next =
-          await engine.setUserTactics(
-            safe
-          );
-
-        setSnapshot(
-          next
-        );
-      } catch (err) {
-        setError(
-          err.message
-        );
-      }
-    };
-
-
-  const handleFormationChange =
-    async (
-      nextFormation
-    ) => {
-      const engine =
-        engineRef.current;
-
-      if (!engine) {
-        return;
-      }
-
-      try {
-        setFormation(
-          nextFormation
-        );
-
-        const next =
-          await engine.setFormation(
-            "home",
-            nextFormation
-          );
-
-        setSnapshot(
-          next
-        );
-      } catch (err) {
-        setError(
-          err.message
-        );
-      }
-    };
-
-
-  const handleSubstitution =
-    async (
-      outgoingId,
-      incomingId
-    ) => {
-      const engine =
-        engineRef.current;
-
-      if (!engine) {
-        return;
-      }
-
-      try {
-        const success =
-          await engine.substituteUser(
-            outgoingId,
-            incomingId
-          );
-
-        if (success) {
-          setSnapshot(
-            engine.getSnapshot()
-          );
-        }
-      } catch (err) {
-        setError(
-          err.message
-        );
-      }
-    };
-
-
-  if (loading) {
-    return (
-      <main
-        className={
-          styles.loading
-        }
-      >
-        <div
-          className={
-            styles.spinner
-          }
-        />
-
-        <p>
-          Loading Python football engine...
-        </p>
-      </main>
-    );
+      setStarting(false);
+    }
   }
 
 
-  if (error) {
-    return (
-      <main
-        className={
-          styles.error
-        }
-      >
-        <h1>
-          Match Engine Error
-        </h1>
+  async function pauseMatch() {
+    const engine =
+      engineRef.current;
 
-        <p>
-          {error}
-        </p>
+    if (!engine) {
+      return;
+    }
 
-        <button
-          onClick={() =>
-            window.location.reload()
-          }
-        >
-          Reload Match
-        </button>
-      </main>
-    );
+    try {
+      await engine.pause();
+
+      setSnapshot(
+        engine.getState()
+      );
+    } catch (err) {
+      console.error(err);
+      setError(
+        err?.message ||
+          "Pause failed."
+      );
+    }
   }
 
 
   const home =
-    snapshot?.home || {};
+    snapshot?.home;
 
   const away =
-    snapshot?.away || {};
+    snapshot?.away;
 
-  const homeScore =
-    getScore(
-      snapshot,
-      "home"
-    );
-
-  const awayScore =
-    getScore(
-      snapshot,
-      "away"
-    );
+  const score =
+    snapshot?.score || {
+      home: 0,
+      away: 0,
+    };
 
   const minute =
     Number(
@@ -1119,28 +739,98 @@ export default function MatchPage() {
       snapshot?.second || 0
     );
 
-  const halfTime =
-    snapshot?.phase ===
-    "half_time";
 
-  const finished =
-    snapshot?.status ===
-      "finished" ||
-    minute >= 90;
+  const clock =
+    `${String(
+      minute
+    ).padStart(2, "0")}:${String(
+      second
+    ).padStart(2, "0")}`;
+
+
+  const status =
+    snapshot?.status ||
+    "created";
+
+
+  const allPlayers = useMemo(
+    () => [
+      ...(home?.players || []).map(
+        player => ({
+          ...player,
+          side: "home",
+        })
+      ),
+
+      ...(away?.players || []).map(
+        player => ({
+          ...player,
+          side: "away",
+        })
+      ),
+    ],
+    [
+      home,
+      away,
+    ]
+  );
+
+
+  if (loading) {
+    return (
+      <main
+        className={
+          styles.loadingPage
+        }
+      >
+        <div
+          className={
+            styles.spinner
+          }
+        />
+
+        <p>
+          Loading match...
+        </p>
+      </main>
+    );
+  }
+
+
+  if (error && !snapshot) {
+    return (
+      <main
+        className={
+          styles.errorPage
+        }
+      >
+        <h2>
+          Match Error
+        </h2>
+
+        <p>
+          {error}
+        </p>
+      </main>
+    );
+  }
 
 
   return (
     <>
       <Head>
         <title>
-          {home.name || "Home"} vs{" "}
-          {away.name || "Away"} |
-          Virtual Football Manager
+          {home?.name ||
+            "Home"}{" "}
+          vs{" "}
+          {away?.name ||
+            "Away"}{" "}
+          | Live Match
         </title>
 
         <meta
-          name="description"
-          content="Live Python-powered 2D football simulation."
+          name="viewport"
+          content="width=device-width, initial-scale=1"
         />
       </Head>
 
@@ -1149,20 +839,73 @@ export default function MatchPage() {
           styles.page
         }
       >
+
         <header
           className={
-            styles.scoreHeader
+            styles.header
+          }
+        >
+          <div>
+            <span
+              className={
+                styles.liveDot
+              }
+            />
+
+            {status ===
+            "playing"
+              ? "LIVE MATCH"
+              : status.toUpperCase()}
+          </div>
+
+          <div
+            className={
+              styles.clock
+            }
+          >
+            {clock}
+          </div>
+        </header>
+
+
+        <section
+          className={
+            styles.scoreboard
           }
         >
           <div
             className={
-              styles.teamHeader
+              styles.team
             }
           >
+            {home?.logo ? (
+              <img
+                src={
+                  home.logo
+                }
+                alt={
+                  home.name
+                }
+                className={
+                  styles.logo
+                }
+              />
+            ) : (
+              <div
+                className={
+                  styles.logoPlaceholder
+                }
+              >
+                ⚽
+              </div>
+            )}
+
             <strong>
-              {home.name}
+              {home?.name ||
+                "Home"}
             </strong>
           </div>
+
 
           <div
             className={
@@ -1170,234 +913,498 @@ export default function MatchPage() {
             }
           >
             <span>
-              {homeScore}
+              {score.home}
             </span>
 
             <small>
-              {String(
-                minute
-              ).padStart(2, "0")}
-              :
-              {String(
-                second
-              ).padStart(2, "0")}
+              -
             </small>
 
             <span>
-              {awayScore}
+              {score.away}
             </span>
           </div>
 
+
           <div
             className={
-              styles.teamHeader
+              styles.team
             }
           >
+            {away?.logo ? (
+              <img
+                src={
+                  away.logo
+                }
+                alt={
+                  away.name
+                }
+                className={
+                  styles.logo
+                }
+              />
+            ) : (
+              <div
+                className={
+                  styles.logoPlaceholder
+                }
+              >
+                ⚽
+              </div>
+            )}
+
             <strong>
-              {away.name}
+              {away?.name ||
+                "Away"}
             </strong>
           </div>
-        </header>
+        </section>
 
 
         <section
-          style={{
-            display:
-              "flex",
-
-            justifyContent:
-              "center",
-
-            gap: 10,
-
-            padding: 14,
-
-            flexWrap:
-              "wrap",
-          }}
+          className={
+            styles.controls
+          }
         >
-          {!finished &&
-            !halfTime && (
+          {status !==
+            "finished" &&
+            status !==
+              "playing" && (
               <button
                 onClick={
                   startMatch
                 }
                 disabled={
-                  starting ||
-                  snapshot?.running
+                  starting
+                }
+                className={
+                  styles.startButton
                 }
               >
                 {starting
-                  ? "STARTING..."
-                  : "START MATCH"}
+                  ? "Starting..."
+                  : "▶ START MATCH"}
               </button>
             )}
 
 
-          {halfTime &&
-            !finished && (
-              <button
-                onClick={
-                  startSecondHalf
-                }
-              >
-                START SECOND HALF
-              </button>
-            )}
+          {status ===
+            "playing" && (
+            <button
+              onClick={
+                pauseMatch
+              }
+              className={
+                styles.pauseButton
+              }
+            >
+              ⏸ PAUSE
+            </button>
+          )}
+        </section>
 
 
-          {halfTime &&
-            !finished && (
-              <strong>
-                HALF TIME
-              </strong>
-            )}
+        {error && (
+          <div
+            className={
+              styles.errorBox
+            }
+          >
+            {error}
+          </div>
+        )}
 
 
-          {finished && (
-            <strong>
-              FULL TIME
-              {finishing
-                ? " • Saving..."
-                : ""}
-            </strong>
+        <section
+          className={
+            styles.pitch
+          }
+        >
+          <div
+            className={
+              styles.halfLine
+            }
+          />
+
+          <div
+            className={
+              styles.centerCircle
+            }
+          />
+
+          <div
+            className={
+              styles.centerSpot
+            }
+          />
+
+          <div
+            className={`${styles.penaltyBox} ${styles.leftBox}`}
+          />
+
+          <div
+            className={`${styles.penaltyBox} ${styles.rightBox}`}
+          />
+
+          <div
+            className={`${styles.goalBox} ${styles.leftGoal}`}
+          />
+
+          <div
+            className={`${styles.goalBox} ${styles.rightGoal}`}
+          />
+
+
+          {allPlayers.map(
+            player => {
+              const x =
+                Number(
+                  player.x ??
+                    50
+                );
+
+              const y =
+                Number(
+                  player.y ??
+                    30
+                );
+
+              return (
+                <div
+                  key={`${player.side}-${player.id}`}
+                  className={`${styles.player} ${
+                    player.side ===
+                    "home"
+                      ? styles.homePlayer
+                      : styles.awayPlayer
+                  } ${
+                    player.hasBall
+                      ? styles.hasBall
+                      : ""
+                  }`}
+                  style={{
+                    left: `${x}%`,
+                    top: `${y}%`,
+                  }}
+                >
+                  <span
+                    className={
+                      styles.playerNumber
+                    }
+                  >
+                    {
+                      player.number
+                    }
+                  </span>
+
+                  <span
+                    className={
+                      styles.playerName
+                    }
+                  >
+                    {
+                      player.name
+                    }
+                  </span>
+                </div>
+              );
+            }
+          )}
+
+
+          {snapshot?.ball && (
+            <div
+              className={
+                styles.ball
+              }
+              style={{
+                left: `${snapshot.ball.x}%`,
+                top: `${snapshot.ball.y}%`,
+              }}
+            >
+              ⚽
+            </div>
           )}
         </section>
 
 
         <section
           className={
-            styles.pitchSection
+            styles.contentGrid
           }
         >
-          <MatchCanvas
-            snapshot={
-              snapshot
-            }
-          />
 
           <div
             className={
-              styles.liveBadge
+              styles.panel
             }
           >
-            {finished
-              ? "FULL TIME"
-              : halfTime
-                ? "HALF TIME"
-                : snapshot?.running
-                  ? "LIVE"
-                  : "READY"}
-
-            {saving &&
-              " • Saving..."}
-          </div>
-        </section>
-
-
-        <section
-          style={{
-            textAlign:
-              "center",
-
-            padding: 10,
-          }}
-        >
-          <small>
-            90 football minutes =
-            8 real minutes
-          </small>
-        </section>
-
-
-        <section
-          className={
-            styles.controlGrid
-          }
-        >
-          <LineupFormation
-            team={
-              home
-            }
-          />
-
-          <div>
-            <TacticsPanel
-              tactics={
-                userTactics
-              }
-
-              formation={
-                formation
-              }
-
-              onChange={
-                handleTacticsChange
-              }
-
-              onFormationChange={
-                handleFormationChange
-              }
-
-              disabled={
-                finished
-              }
-            />
-
             <div
               className={
-                styles.spacer
+                styles.tabs
               }
-            />
+            >
+              <button
+                className={
+                  activeTab ===
+                  "events"
+                    ? styles.activeTab
+                    : ""
+                }
+                onClick={() =>
+                  setActiveTab(
+                    "events"
+                  )
+                }
+              >
+                Events
+              </button>
 
-            <SubstitutionPanel
-              team={
-                home
-              }
+              <button
+                className={
+                  activeTab ===
+                  "players"
+                    ? styles.activeTab
+                    : ""
+                }
+                onClick={() =>
+                  setActiveTab(
+                    "players"
+                  )
+                }
+              >
+                Players
+              </button>
 
-              onSubstitute={
-                handleSubstitution
-              }
+              <button
+                className={
+                  activeTab ===
+                  "stats"
+                    ? styles.activeTab
+                    : ""
+                }
+                onClick={() =>
+                  setActiveTab(
+                    "stats"
+                  )
+                }
+              >
+                Stats
+              </button>
+            </div>
 
-              disabled={
-                finished
-              }
-            />
+
+            {activeTab ===
+              "events" && (
+              <div
+                className={
+                  styles.events
+                }
+              >
+                {events
+                  .slice()
+                  .reverse()
+                  .map(event => (
+                    <div
+                      key={
+                        event.id
+                      }
+                      className={
+                        styles.event
+                      }
+                    >
+                      <span>
+                        {event.minute}'
+                      </span>
+
+                      <p>
+                        {event.text}
+                      </p>
+                    </div>
+                  ))}
+
+                {!events.length && (
+                  <p
+                    className={
+                      styles.empty
+                    }
+                  >
+                    Match has not started.
+                  </p>
+                )}
+              </div>
+            )}
+
+
+            {activeTab ===
+              "players" && (
+              <div
+                className={
+                  styles.playerList
+                }
+              >
+                <div>
+                  <h3>
+                    {home?.name}
+                  </h3>
+
+                  {home?.players?.map(
+                    player => (
+                      <div
+                        className={
+                          styles.listPlayer
+                        }
+                        key={
+                          player.id
+                        }
+                      >
+                        <b>
+                          {
+                            player.number
+                          }
+                        </b>
+
+                        <span>
+                          {
+                            player.name
+                          }
+                        </span>
+
+                        <small>
+                          {
+                            player.position
+                          }
+                        </small>
+                      </div>
+                    )
+                  )}
+                </div>
+
+
+                <div>
+                  <h3>
+                    {away?.name}
+                  </h3>
+
+                  {away?.players?.map(
+                    player => (
+                      <div
+                        className={
+                          styles.listPlayer
+                        }
+                        key={
+                          player.id
+                        }
+                      >
+                        <b>
+                          {
+                            player.number
+                          }
+                        </b>
+
+                        <span>
+                          {
+                            player.name
+                          }
+                        </span>
+
+                        <small>
+                          {
+                            player.position
+                          }
+                        </small>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+
+            {activeTab ===
+              "stats" && (
+              <div
+                className={
+                  styles.stats
+                }
+              >
+                {[
+                  [
+                    "Possession",
+                    `${snapshot?.stats?.home?.possession || 0}%`,
+                    `${snapshot?.stats?.away?.possession || 0}%`,
+                  ],
+
+                  [
+                    "Shots",
+                    snapshot?.stats?.home?.shots || 0,
+                    snapshot?.stats?.away?.shots || 0,
+                  ],
+
+                  [
+                    "Shots on target",
+                    snapshot?.stats?.home?.shotsOnTarget || 0,
+                    snapshot?.stats?.away?.shotsOnTarget || 0,
+                  ],
+
+                  [
+                    "Passes",
+                    snapshot?.stats?.home?.passes || 0,
+                    snapshot?.stats?.away?.passes || 0,
+                  ],
+
+                  [
+                    "Corners",
+                    snapshot?.stats?.home?.corners || 0,
+                    snapshot?.stats?.away?.corners || 0,
+                  ],
+
+                  [
+                    "Tackles",
+                    snapshot?.stats?.home?.tackles || 0,
+                    snapshot?.stats?.away?.tackles || 0,
+                  ],
+
+                  [
+                    "Interceptions",
+                    snapshot?.stats?.home?.interceptions || 0,
+                    snapshot?.stats?.away?.interceptions || 0,
+                  ],
+
+                  [
+                    "Saves",
+                    snapshot?.stats?.home?.saves || 0,
+                    snapshot?.stats?.away?.saves || 0,
+                  ],
+                ].map(
+                  row => (
+                    <div
+                      className={
+                        styles.statRow
+                      }
+                      key={
+                        row[0]
+                      }
+                    >
+                      <strong>
+                        {row[1]}
+                      </strong>
+
+                      <span>
+                        {row[0]}
+                      </span>
+
+                      <strong>
+                        {row[2]}
+                      </strong>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
           </div>
         </section>
 
-
-        <section
-          className={
-            styles.controlGrid
-          }
-        >
-          <LineupFormation
-            team={
-              away
-            }
-          />
-
-          <MatchStats
-            home={
-              home.stats
-            }
-
-            away={
-              away.stats
-            }
-          />
-        </section>
-
-
-        <section>
-          <MatchEvents
-            events={
-              snapshot?.events ||
-              []
-            }
-          />
-        </section>
       </main>
     </>
   );
