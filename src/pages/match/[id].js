@@ -13,6 +13,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   serverTimestamp,
@@ -26,7 +27,7 @@ import styles from "./Mach.module.css";
 
 
 /* =========================================================
-   HELPERS
+   BASIC HELPERS
 ========================================================= */
 
 function firstValue(object, keys, fallback = null) {
@@ -93,6 +94,13 @@ function normalizeId(value) {
 }
 
 
+function sleep(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+}
+
+
 /* =========================================================
    PLAYER HELPERS
 ========================================================= */
@@ -118,9 +126,7 @@ function playerBelongsToClub(player, clubId) {
         value !== undefined &&
         value !== null
     )
-    .map(value =>
-      normalizeId(value)
-    )
+    .map(value => normalizeId(value))
     .filter(Boolean);
 
   return values.includes(wanted);
@@ -265,10 +271,7 @@ function normalizePlayer(player = {}, index = 0) {
    CLUB HELPERS
 ========================================================= */
 
-function normalizeClub(
-  club,
-  fallbackId
-) {
+function normalizeClub(club, fallbackId) {
   return {
     id: String(
       club?.id ||
@@ -336,10 +339,89 @@ function getClubId(match, side) {
 }
 
 
-function extractEmbeddedPlayers(
-  club,
-  side
-) {
+/* =========================================================
+   DETERMINE USER'S TEAM
+========================================================= */
+
+function getManagedClubId(match) {
+  return normalizeId(
+    firstValue(
+      match,
+      [
+        "managerClubId",
+        "managedClubId",
+        "userClubId",
+        "userTeamId",
+        "managerTeamId",
+        "controlledClubId",
+        "controlledTeamId",
+      ]
+    )
+  );
+}
+
+
+function getManagedSide(match) {
+  const explicitSide =
+    safeString(
+      firstValue(
+        match,
+        [
+          "userSide",
+          "managerSide",
+          "controlledSide",
+        ]
+      )
+    ).toLowerCase();
+
+  if (
+    explicitSide === "home" ||
+    explicitSide === "away"
+  ) {
+    return explicitSide;
+  }
+
+  const managedClub =
+    getManagedClubId(match);
+
+  const homeId =
+    normalizeId(
+      getClubId(match, "home")
+    );
+
+  const awayId =
+    normalizeId(
+      getClubId(match, "away")
+    );
+
+  if (
+    managedClub &&
+    managedClub === homeId
+  ) {
+    return "home";
+  }
+
+  if (
+    managedClub &&
+    managedClub === awayId
+  ) {
+    return "away";
+  }
+
+  /*
+   * Backward compatibility:
+   * old matches without managerClubId
+   * are treated as home-team matches.
+   */
+  return "home";
+}
+
+
+/* =========================================================
+   EMBEDDED PLAYERS
+========================================================= */
+
+function extractEmbeddedPlayers(club, side) {
   const possible = [
     club?.players,
     club?.squad,
@@ -358,7 +440,7 @@ function extractEmbeddedPlayers(
 
 
 /* =========================================================
-   BUILD BENCH
+   BENCH
 ========================================================= */
 
 function buildBench(
@@ -440,10 +522,7 @@ function buildBench(
    CLOCK
 ========================================================= */
 
-function formatClock(
-  minute,
-  second
-) {
+function formatClock(minute, second) {
   const safeMinute =
     Math.max(
       0,
@@ -475,7 +554,256 @@ function formatClock(
 
 
 /* =========================================================
-   FIRESTORE RESULT SAVE
+   STATS HELPERS
+========================================================= */
+
+function getStat(source, keys, fallback = 0) {
+  if (!source) {
+    return fallback;
+  }
+
+  for (const key of keys) {
+    const value =
+      source[key];
+
+    if (
+      value !== undefined &&
+      value !== null
+    ) {
+      return safeNumber(
+        value,
+        fallback
+      );
+    }
+  }
+
+  return fallback;
+}
+
+
+function normalizeEventType(event) {
+  return safeString(
+    event?.type ||
+    event?.eventType ||
+    event?.action ||
+    event?.name
+  ).toLowerCase().replace(
+    /[\s-]+/g,
+    "_"
+  );
+}
+
+
+/*
+ * If the Python engine already sends complete stats,
+ * those values remain authoritative.
+ *
+ * When the engine sends event information as well,
+ * we use events to keep counters moving live.
+ */
+function calculateLiveStats(snapshot, side) {
+  const original =
+    snapshot?.stats?.[side] ||
+    {};
+
+  const events =
+    Array.isArray(
+      snapshot?.events
+    )
+      ? snapshot.events
+      : [];
+
+  const sideEvents =
+    events.filter(event => {
+      const eventSide =
+        safeString(
+          event?.side ||
+          event?.team ||
+          event?.teamSide
+        ).toLowerCase();
+
+      return (
+        eventSide === side ||
+        eventSide ===
+          (side === "home"
+            ? "h"
+            : "a")
+      );
+    });
+
+  let shots =
+    getStat(
+      original,
+      ["shots", "shot"],
+      0
+    );
+
+  let shotsOnTarget =
+    getStat(
+      original,
+      [
+        "shotsOnTarget",
+        "shots_on_target",
+        "onTarget",
+      ],
+      0
+    );
+
+  let passes =
+    getStat(
+      original,
+      ["passes", "pass"],
+      0
+    );
+
+  let tackles =
+    getStat(
+      original,
+      ["tackles", "tackle"],
+      0
+    );
+
+  let interceptions =
+    getStat(
+      original,
+      [
+        "interceptions",
+        "interception",
+      ],
+      0
+    );
+
+  let corners =
+    getStat(
+      original,
+      ["corners", "corner"],
+      0
+    );
+
+  let saves =
+    getStat(
+      original,
+      ["saves", "save"],
+      0
+    );
+
+  let fouls =
+    getStat(
+      original,
+      ["fouls", "foul"],
+      0
+    );
+
+  sideEvents.forEach(
+    event => {
+      const type =
+        normalizeEventType(
+          event
+        );
+
+      if (
+        type.includes("shot") &&
+        !type.includes("assist")
+      ) {
+        shots +=
+          type.includes(
+            "miss"
+          ) ||
+          type.includes(
+            "off_target"
+          ) ||
+          type.includes(
+            "saved"
+          ) ||
+          type === "shot"
+            ? 1
+            : 0;
+
+        if (
+          type.includes(
+            "target"
+          ) ||
+          type.includes(
+            "saved"
+          ) ||
+          type.includes(
+            "goal"
+          )
+        ) {
+          shotsOnTarget += 1;
+        }
+      }
+
+      if (
+        type === "pass" ||
+        type.includes("pass_completed") ||
+        type.includes("successful_pass")
+      ) {
+        passes += 1;
+      }
+
+      if (
+        type.includes("tackle")
+      ) {
+        tackles += 1;
+      }
+
+      if (
+        type.includes(
+          "interception"
+        )
+      ) {
+        interceptions += 1;
+      }
+
+      if (
+        type.includes("corner")
+      ) {
+        corners += 1;
+      }
+
+      if (
+        type.includes("save")
+      ) {
+        saves += 1;
+      }
+
+      if (
+        type.includes("foul")
+      ) {
+        fouls += 1;
+      }
+    }
+  );
+
+  const possession =
+    getStat(
+      original,
+      [
+        "possession",
+        "possessionPercent",
+        "possession_percentage",
+      ],
+      0
+    );
+
+  return {
+    ...original,
+    possession,
+    shots,
+    shotsOnTarget,
+    passes,
+    corners,
+    tackles,
+    interceptions,
+    saves,
+    fouls,
+  };
+}
+
+
+/* =========================================================
+   FIRESTORE RESULT
 ========================================================= */
 
 async function saveFinalResult(
@@ -492,16 +820,54 @@ async function saveFinalResult(
   }
 
   const score =
-    snapshot.score || {
-      home: 0,
-      away: 0,
-    };
+    snapshot.score || {};
 
   const home =
     snapshot.home || {};
 
   const away =
     snapshot.away || {};
+
+  const homeScore =
+    safeNumber(
+      score.home,
+      0
+    );
+
+  const awayScore =
+    safeNumber(
+      score.away,
+      0
+    );
+
+  const finalStats = {
+    home:
+      calculateLiveStats(
+        snapshot,
+        "home"
+      ),
+
+    away:
+      calculateLiveStats(
+        snapshot,
+        "away"
+      ),
+  };
+
+  let winner =
+    "draw";
+
+  if (
+    homeScore >
+    awayScore
+  ) {
+    winner = "home";
+  } else if (
+    awayScore >
+    homeScore
+  ) {
+    winner = "away";
+  }
 
   const finalResult = {
     status: "finished",
@@ -517,26 +883,14 @@ async function saveFinalResult(
     ),
 
     score: {
-      home: safeNumber(
-        score.home,
-        0
-      ),
-
-      away: safeNumber(
-        score.away,
-        0
-      ),
+      home: homeScore,
+      away: awayScore,
     },
 
-    homeScore: safeNumber(
-      score.home,
-      0
-    ),
+    homeScore,
+    awayScore,
 
-    awayScore: safeNumber(
-      score.away,
-      0
-    ),
+    winner,
 
     homeTeam: {
       id: safeString(
@@ -567,7 +921,7 @@ async function saveFinalResult(
     },
 
     stats:
-      snapshot.stats || {},
+      finalStats,
 
     events:
       Array.isArray(
@@ -577,34 +931,17 @@ async function saveFinalResult(
         : [],
 
     lastEvent:
-      snapshot.lastEvent || null,
-
-    ball:
-      snapshot.ball || null,
+      snapshot.lastEvent ||
+      null,
 
     result:
       snapshot.result || {
-        home:
-          safeNumber(
-            score.home,
-            0
-          ),
-
-        away:
-          safeNumber(
-            score.away,
-            0
-          ),
+        home: homeScore,
+        away: awayScore,
+        winner,
       },
 
-    updatedAt:
-      serverTimestamp(),
-
-    finishedAt:
-      serverTimestamp(),
-
-    resultSaved:
-      true,
+    resultSaved: true,
   };
 
   const matchRef =
@@ -614,26 +951,38 @@ async function saveFinalResult(
       String(matchId)
     );
 
+  /*
+   * Write result.
+   */
   await setDoc(
     matchRef,
     {
-      finalResult,
-      score: finalResult.score,
-      homeScore:
-        finalResult.homeScore,
-      awayScore:
-        finalResult.awayScore,
-
       status: "finished",
 
+      finalResult,
+
+      score:
+        finalResult.score,
+
+      homeScore,
+
+      awayScore,
+
       stats:
-        finalResult.stats,
+        finalStats,
+
+      finalStats,
 
       events:
         finalResult.events,
 
+      finalEvents:
+        finalResult.events,
+
       result:
         finalResult.result,
+
+      winner,
 
       resultSaved: true,
 
@@ -647,6 +996,38 @@ async function saveFinalResult(
       merge: true,
     }
   );
+
+  /*
+   * Important:
+   * setDoc may resolve locally when Firebase
+   * is offline. Therefore verify against SERVER.
+   */
+  const serverSnap =
+    await getDocFromServer(
+      matchRef
+    );
+
+  if (
+    !serverSnap.exists()
+  ) {
+    throw new Error(
+      "Firestore server ntiyemeje ko match yabitswe."
+    );
+  }
+
+  const serverData =
+    serverSnap.data();
+
+  if (
+    serverData.status !==
+    "finished" ||
+    serverData.resultSaved !==
+      true
+  ) {
+    throw new Error(
+      "Firestore server ntiyagaruye final result neza."
+    );
+  }
 
   return true;
 }
@@ -676,6 +1057,20 @@ export default function MatchPage() {
   const redirectingRef =
     useRef(false);
 
+  const finishRequestedRef =
+    useRef(false);
+
+  const matchConfigRef =
+    useRef(null);
+
+  const managedSideRef =
+    useRef("home");
+
+
+  /* =======================================================
+     STATE
+  ======================================================= */
+
   const [loading, setLoading] =
     useState(true);
 
@@ -686,6 +1081,12 @@ export default function MatchPage() {
     useState(false);
 
   const [substituting, setSubstituting] =
+    useState(false);
+
+  const [savingLineup, setSavingLineup] =
+    useState(false);
+
+  const [savingResult, setSavingResult] =
     useState(false);
 
   const [error, setError] =
@@ -715,18 +1116,46 @@ export default function MatchPage() {
   const [formation, setFormation] =
     useState("4-3-3");
 
-  const [outgoingPlayer, setOutgoingPlayer] =
-    useState("");
+  const [
+    outgoingPlayer,
+    setOutgoingPlayer,
+  ] = useState("");
 
-  const [incomingPlayer, setIncomingPlayer] =
-    useState("");
+  const [
+    incomingPlayer,
+    setIncomingPlayer,
+  ] = useState("");
 
-  const [savingResult, setSavingResult] =
-    useState(false);
+  const [
+    managedStartingXI,
+    setManagedStartingXI,
+  ] = useState([]);
+
+  const [
+    managedBench,
+    setManagedBench,
+  ] = useState([]);
 
 
   /* =======================================================
-     SAVE FINAL RESULT + REDIRECT
+     MANAGED TEAM DATA
+  ======================================================= */
+
+  const managedSide =
+    managedSideRef.current;
+
+  const managedTeam =
+    managedSide === "away"
+      ? snapshot?.away
+      : snapshot?.home;
+
+  const managedTeamName =
+    managedTeam?.name ||
+    "Your Team";
+
+
+  /* =======================================================
+     FINAL RESULT SAVE
   ======================================================= */
 
   const finishAndSave =
@@ -750,17 +1179,23 @@ export default function MatchPage() {
         let lastError =
           null;
 
-        /*
-         * Retry Firestore several times.
-         * This handles temporary connection problems.
-         */
-
         for (
           let attempt = 1;
           attempt <= 5;
           attempt++
         ) {
           try {
+            if (
+              typeof navigator !==
+                "undefined" &&
+              navigator.onLine ===
+                false
+            ) {
+              throw new Error(
+                "Internet connection is offline."
+              );
+            }
+
             await saveFinalResult(
               String(id),
               finalSnapshot
@@ -771,18 +1206,8 @@ export default function MatchPage() {
 
             setSavingResult(false);
 
-            /*
-             * Give Firestore a moment to finish
-             * its local/server synchronization.
-             */
-
-            setTimeout(
-              () => {
-                router.replace(
-                  "/fixtures"
-                );
-              },
-              500
+            await router.replace(
+              "/fixtures"
             );
 
             return;
@@ -797,12 +1222,8 @@ export default function MatchPage() {
             if (
               attempt < 5
             ) {
-              await new Promise(
-                resolve =>
-                  setTimeout(
-                    resolve,
-                    attempt * 1000
-                  )
+              await sleep(
+                attempt * 1200
               );
             }
           }
@@ -823,6 +1244,174 @@ export default function MatchPage() {
 
 
   /* =======================================================
+     ENGINE SUBSCRIPTION
+  ======================================================= */
+
+  const attachEngine =
+    useCallback(
+      engine => {
+        if (!engine) {
+          return;
+        }
+
+        engine.subscribe(
+          nextSnapshot => {
+            if (!nextSnapshot) {
+              return;
+            }
+
+            setSnapshot(
+              nextSnapshot
+            );
+
+            setEvents(
+              Array.isArray(
+                nextSnapshot.events
+              )
+                ? nextSnapshot.events
+                : []
+            );
+
+            if (
+              nextSnapshot.home
+                ?.formation &&
+              managedSideRef.current ===
+                "home"
+            ) {
+              setFormation(
+                nextSnapshot.home.formation
+              );
+            }
+
+            if (
+              nextSnapshot.away
+                ?.formation &&
+              managedSideRef.current ===
+                "away"
+            ) {
+              setFormation(
+                nextSnapshot.away.formation
+              );
+            }
+
+            const controlledTeam =
+              managedSideRef.current ===
+              "away"
+                ? nextSnapshot.away
+                : nextSnapshot.home;
+
+            if (
+              controlledTeam?.tactics
+            ) {
+              setTactics(
+                previous => ({
+                  ...previous,
+                  ...controlledTeam.tactics,
+                })
+              );
+            }
+
+            if (
+              nextSnapshot.status ===
+              "finished"
+            ) {
+              setStarting(false);
+
+              finishAndSave(
+                nextSnapshot
+              );
+            }
+          }
+        );
+      },
+      [finishAndSave]
+    );
+
+
+  /* =======================================================
+     BUILD / REBUILD ENGINE
+  ======================================================= */
+
+  const rebuildEngine =
+    useCallback(
+      async (
+        homePlayers,
+        awayPlayers,
+        homeBench,
+        awayBench
+      ) => {
+        if (
+          !matchConfigRef.current
+        ) {
+          return null;
+        }
+
+        const previous =
+          engineRef.current;
+
+        if (previous) {
+          previous.destroy();
+          engineRef.current =
+            null;
+        }
+
+        const config =
+          matchConfigRef.current;
+
+        const engineConfig = {
+          ...config,
+
+          home: {
+            ...config.home,
+            players:
+              homePlayers,
+            bench:
+              homeBench,
+          },
+
+          away: {
+            ...config.away,
+            players:
+              awayPlayers,
+            bench:
+              awayBench,
+          },
+        };
+
+        const engine =
+          new MatchEngine(
+            engineConfig
+          );
+
+        engineRef.current =
+          engine;
+
+        attachEngine(
+          engine
+        );
+
+        await engine.ready;
+
+        const initial =
+          engine.getState();
+
+        if (initial) {
+          setSnapshot(
+            initial
+          );
+
+          setEvents(
+            initial.events || []
+          );
+        }
+
+        return engine;
+      },
+      [attachEngine]
+    );
+
+
+  /* =======================================================
      LOAD MATCH
   ======================================================= */
 
@@ -834,14 +1423,22 @@ export default function MatchPage() {
       return;
     }
 
-    let cancelled = false;
+    let cancelled =
+      false;
 
     async function loadMatch() {
-      let engine = null;
-
       try {
         setLoading(true);
         setError("");
+
+        resultSavingRef.current =
+          false;
+
+        redirectingRef.current =
+          false;
+
+        finishRequestedRef.current =
+          false;
 
         const matchRef =
           doc(
@@ -876,15 +1473,19 @@ export default function MatchPage() {
         });
 
         const homeClubId =
-          getClubId(
-            match,
-            "home"
+          normalizeId(
+            getClubId(
+              match,
+              "home"
+            )
           );
 
         const awayClubId =
-          getClubId(
-            match,
-            "away"
+          normalizeId(
+            getClubId(
+              match,
+              "away"
+            )
           );
 
         if (
@@ -896,15 +1497,18 @@ export default function MatchPage() {
           );
         }
 
-        const normalizedHomeId =
-          normalizeId(
-            homeClubId
+        const managedClubId =
+          getManagedClubId(
+            match
           );
 
-        const normalizedAwayId =
-          normalizeId(
-            awayClubId
+        const managedSideFromMatch =
+          getManagedSide(
+            match
           );
+
+        managedSideRef.current =
+          managedSideFromMatch;
 
         const [
           homeClubSnap,
@@ -916,7 +1520,7 @@ export default function MatchPage() {
               doc(
                 db,
                 "clubs",
-                normalizedHomeId
+                homeClubId
               )
             ),
 
@@ -924,7 +1528,7 @@ export default function MatchPage() {
               doc(
                 db,
                 "clubs",
-                normalizedAwayId
+                awayClubId
               )
             ),
 
@@ -945,7 +1549,7 @@ export default function MatchPage() {
             homeClubSnap.exists()
               ? homeClubSnap.data()
               : {},
-            normalizedHomeId
+            homeClubId
           );
 
         const awayClub =
@@ -953,7 +1557,7 @@ export default function MatchPage() {
             awayClubSnap.exists()
               ? awayClubSnap.data()
               : {},
-            normalizedAwayId
+            awayClubId
           );
 
         const allPlayers =
@@ -966,35 +1570,38 @@ export default function MatchPage() {
 
 
         /* ===============================================
-           FIND HOME PLAYERS
+           DATABASE SQUADS ONLY
         =============================================== */
 
         let homePlayers =
-          allPlayers.filter(
-            player =>
-              playerBelongsToClub(
-                player,
-                normalizedHomeId
-              )
-          );
-
-
-        /* ===============================================
-           FIND AWAY PLAYERS
-        =============================================== */
+          allPlayers
+            .filter(
+              player =>
+                playerBelongsToClub(
+                  player,
+                  homeClubId
+                )
+            )
+            .map(
+              normalizePlayer
+            );
 
         let awayPlayers =
-          allPlayers.filter(
-            player =>
-              playerBelongsToClub(
-                player,
-                normalizedAwayId
-              )
-          );
+          allPlayers
+            .filter(
+              player =>
+                playerBelongsToClub(
+                  player,
+                  awayClubId
+                )
+            )
+            .map(
+              normalizePlayer
+            );
 
 
         /* ===============================================
-           MATCH EMBEDDED LINEUPS
+           EMBEDDED MATCH LINEUPS
         =============================================== */
 
         const embeddedHome =
@@ -1018,7 +1625,9 @@ export default function MatchPage() {
           embeddedHome.length >= 11
         ) {
           homePlayers =
-            embeddedHome;
+            embeddedHome.map(
+              normalizePlayer
+            );
         }
 
         if (
@@ -1028,7 +1637,9 @@ export default function MatchPage() {
           embeddedAway.length >= 11
         ) {
           awayPlayers =
-            embeddedAway;
+            embeddedAway.map(
+              normalizePlayer
+            );
         }
 
 
@@ -1049,7 +1660,9 @@ export default function MatchPage() {
             embedded.length >= 11
           ) {
             homePlayers =
-              embedded;
+              embedded.map(
+                normalizePlayer
+              );
           }
         }
 
@@ -1066,28 +1679,11 @@ export default function MatchPage() {
             embedded.length >= 11
           ) {
             awayPlayers =
-              embedded;
+              embedded.map(
+                normalizePlayer
+              );
           }
         }
-
-
-        /* ===============================================
-           NORMALIZE STARTING XI
-        =============================================== */
-
-        homePlayers =
-          homePlayers
-            .slice(0, 11)
-            .map(
-              normalizePlayer
-            );
-
-        awayPlayers =
-          awayPlayers
-            .slice(0, 11)
-            .map(
-              normalizePlayer
-            );
 
         if (
           homePlayers.length < 11 ||
@@ -1100,82 +1696,194 @@ export default function MatchPage() {
 
 
         /* ===============================================
-           TACTICS
+           STARTING XI FROM DATABASE/MATCH
         =============================================== */
 
-        const homeTactics =
-          match?.home?.tactics ||
-          homeClub.tactics ||
-          {};
+        let homeStarting =
+          homePlayers.slice(0, 11);
 
-        setTactics({
-          mentality:
-            homeTactics.mentality ||
-            "balanced",
+        let awayStarting =
+          awayPlayers.slice(0, 11);
 
-          tempo:
-            safeNumber(
-              homeTactics.tempo,
-              60
-            ),
 
-          pressing:
-            homeTactics.pressing ||
-            "medium",
+        if (
+          Array.isArray(
+            match?.home?.startingXI
+          ) &&
+          match.home.startingXI.length >= 11
+        ) {
+          homeStarting =
+            match.home.startingXI
+              .slice(0, 11)
+              .map(
+                normalizePlayer
+              );
+        }
 
-          defensiveLine:
-            homeTactics.defensiveLine ||
-            "medium",
-
-          width:
-            safeNumber(
-              homeTactics.width,
-              55
-            ),
-        });
-
-        setFormation(
-          match?.home?.formation ||
-          homeClub.formation ||
-          "4-3-3"
-        );
+        if (
+          Array.isArray(
+            match?.away?.startingXI
+          ) &&
+          match.away.startingXI.length >= 11
+        ) {
+          awayStarting =
+            match.away.startingXI
+              .slice(0, 11)
+              .map(
+                normalizePlayer
+              );
+        }
 
 
         /* ===============================================
            BENCH
         =============================================== */
 
-        const homeBench =
+        let homeBench =
           buildBench(
             match?.home?.bench,
             homeClub.bench,
             allPlayers,
-            normalizedHomeId,
-            homePlayers
+            homeClubId,
+            homeStarting
           );
 
-        const awayBench =
+        let awayBench =
           buildBench(
             match?.away?.bench,
             awayClub.bench,
             allPlayers,
-            normalizedAwayId,
-            awayPlayers
+            awayClubId,
+            awayStarting
           );
+
+
+        /*
+         * Remove any player that is already
+         * in the starting XI from the bench.
+         */
+        const homeXIIds =
+          new Set(
+            homeStarting.map(
+              p => String(p.id)
+            )
+          );
+
+        const awayXIIds =
+          new Set(
+            awayStarting.map(
+              p => String(p.id)
+            )
+          );
+
+        homeBench =
+          homeBench.filter(
+            player =>
+              !homeXIIds.has(
+                String(player.id)
+              )
+          );
+
+        awayBench =
+          awayBench.filter(
+            player =>
+              !awayXIIds.has(
+                String(player.id)
+              )
+          );
+
+
+        /* ===============================================
+           MANAGED TEAM
+        =============================================== */
+
+        const managedStarting =
+          managedSideFromMatch ===
+          "away"
+            ? awayStarting
+            : homeStarting;
+
+        const managedBenchPlayers =
+          managedSideFromMatch ===
+          "away"
+            ? awayBench
+            : homeBench;
+
+        setManagedStartingXI(
+          managedStarting
+        );
+
+        setManagedBench(
+          managedBenchPlayers
+        );
+
+
+        /* ===============================================
+           MANAGED TACTICS
+        =============================================== */
+
+        const managedClub =
+          managedSideFromMatch ===
+          "away"
+            ? awayClub
+            : homeClub;
+
+        const managedMatchSide =
+          managedSideFromMatch ===
+          "away"
+            ? match?.away
+            : match?.home;
+
+        const savedTactics =
+          managedMatchSide?.tactics ||
+          managedClub.tactics ||
+          {};
+
+        setTactics({
+          mentality:
+            savedTactics.mentality ||
+            "balanced",
+
+          tempo:
+            safeNumber(
+              savedTactics.tempo,
+              60
+            ),
+
+          pressing:
+            savedTactics.pressing ||
+            "medium",
+
+          defensiveLine:
+            savedTactics.defensiveLine ||
+            "medium",
+
+          width:
+            safeNumber(
+              savedTactics.width,
+              55
+            ),
+        });
+
+        setFormation(
+          managedMatchSide?.formation ||
+          managedClub.formation ||
+          "4-3-3"
+        );
 
 
         /* ===============================================
            ENGINE CONFIG
         =============================================== */
 
-        const engineConfig = {
+        matchConfigRef.current = {
           matchId: String(id),
 
           home: {
             ...homeClub,
 
             players:
-              homePlayers,
+              homeStarting,
 
             bench:
               homeBench,
@@ -1185,7 +1893,7 @@ export default function MatchPage() {
             ...awayClub,
 
             players:
-              awayPlayers,
+              awayStarting,
 
             bench:
               awayBench,
@@ -1197,123 +1905,51 @@ export default function MatchPage() {
 
             matchId:
               String(id),
+
+            managedClubId:
+              managedClubId ||
+              (
+                managedSideFromMatch ===
+                "away"
+                  ? awayClubId
+                  : homeClubId
+              ),
+
+            managedSide:
+              managedSideFromMatch,
           },
         };
 
 
-        engine =
-          new MatchEngine(
-            engineConfig
+        const engine =
+          await rebuildEngine(
+            homeStarting,
+            awayStarting,
+            homeBench,
+            awayBench
           );
 
-        engineRef.current =
-          engine;
-
-
-        /* ===============================================
-           ENGINE SUBSCRIPTION
-        =============================================== */
-
-        engine.subscribe(
-          nextSnapshot => {
-            if (
-              cancelled ||
-              !nextSnapshot
-            ) {
-              return;
-            }
-
-            setSnapshot(
-              nextSnapshot
-            );
-
-            setEvents(
-              Array.isArray(
-                nextSnapshot.events
-              )
-                ? nextSnapshot.events
-                : []
-            );
-
-
-            /* ==========================================
-               UPDATE FORMATION
-            ========================================== */
-
-            if (
-              nextSnapshot.home
-                ?.formation
-            ) {
-              setFormation(
-                nextSnapshot.home.formation
-              );
-            }
-
-
-            /* ==========================================
-               UPDATE TACTICS
-            ========================================== */
-
-            if (
-              nextSnapshot.home
-                ?.tactics
-            ) {
-              setTactics(
-                previous => ({
-                  ...previous,
-                  ...nextSnapshot.home.tactics,
-                })
-              );
-            }
-
-
-            /* ==========================================
-               MATCH FINISHED
-            ========================================== */
-
-            if (
-              nextSnapshot.status ===
-              "finished"
-            ) {
-              setStarting(false);
-
-              finishAndSave(
-                nextSnapshot
-              );
-            }
-          }
-        );
-
-
-        /* ===============================================
-           WAIT ENGINE READY
-        =============================================== */
-
-        await engine.ready;
-
-        if (cancelled) {
-          engine.destroy();
+        if (
+          cancelled
+        ) {
+          engine?.destroy();
           return;
         }
 
         const initial =
-          engine.getState();
+          engine?.getState();
 
-        setSnapshot(
-          initial
-        );
+        if (initial) {
+          setSnapshot(
+            initial
+          );
 
-        setEvents(
-          initial?.events || []
-        );
+          setEvents(
+            initial.events || []
+          );
+        }
 
         setLoading(false);
-
-
-        /*
-         * If backend already reports finished,
-         * save it immediately.
-         */
 
         if (
           initial?.status ===
@@ -1337,13 +1973,6 @@ export default function MatchPage() {
           );
 
           setLoading(false);
-        }
-
-        if (
-          engine &&
-          cancelled
-        ) {
-          engine.destroy();
         }
       }
     }
@@ -1376,12 +2005,13 @@ export default function MatchPage() {
   }, [
     router.isReady,
     id,
+    rebuildEngine,
     finishAndSave,
   ]);
 
 
   /* =======================================================
-     LIVE ENGINE POLLING
+     LIVE POLLING
   ======================================================= */
 
   useEffect(() => {
@@ -1421,25 +2051,65 @@ export default function MatchPage() {
       );
     }
 
-    /*
-     * 350ms gives frequent state updates
-     * without hammering Render every few milliseconds.
-     */
-
     updateTimerRef.current =
       setInterval(
-        () => {
+        async () => {
           const current =
             engineRef.current;
 
           if (
-            current &&
-            current.isRunning()
+            !current ||
+            !current.isRunning()
           ) {
-            current.update();
+            return;
+          }
+
+          try {
+            const state =
+              await current.update();
+
+            /*
+             * Safety finish.
+             * If Python reaches 90 but has not
+             * switched to finished yet, ask it
+             * to finalize.
+             */
+            if (
+              state?.status ===
+                "playing" &&
+              safeNumber(
+                state?.minute,
+                0
+              ) >= 90 &&
+              !finishRequestedRef.current
+            ) {
+              finishRequestedRef.current =
+                true;
+
+              const finished =
+                await current.finish();
+
+              if (
+                finished
+              ) {
+                setSnapshot(
+                  finished
+                );
+
+                setEvents(
+                  finished.events ||
+                  []
+                );
+              }
+            }
+          } catch (err) {
+            console.error(
+              "Live match update error:",
+              err
+            );
           }
         },
-        350
+        400
       );
 
     return () => {
@@ -1460,7 +2130,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     START MATCH
+     START
   ======================================================= */
 
   const startMatch =
@@ -1473,9 +2143,27 @@ export default function MatchPage() {
           return;
         }
 
+        if (
+          managedStartingXI.length !==
+          11
+        ) {
+          setError(
+            "Ugomba kubanza kugira Starting XI y'abakinnyi 11."
+          );
+
+          setActiveTab(
+            "lineup"
+          );
+
+          return;
+        }
+
         try {
           setStarting(true);
           setError("");
+
+          finishRequestedRef.current =
+            false;
 
           await engine.start();
 
@@ -1489,8 +2177,6 @@ export default function MatchPage() {
           setEvents(
             state?.events || []
           );
-
-          setStarting(false);
         } catch (err) {
           console.error(
             "Start error:",
@@ -1501,16 +2187,18 @@ export default function MatchPage() {
             err?.message ||
             "Match ntiyatangiye."
           );
-
+        } finally {
           setStarting(false);
         }
       },
-      []
+      [
+        managedStartingXI.length,
+      ]
     );
 
 
   /* =======================================================
-     PAUSE MATCH
+     PAUSE
   ======================================================= */
 
   const pauseMatch =
@@ -1555,7 +2243,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     UPDATE TACTIC
+     TACTICS
   ======================================================= */
 
   function updateTactic(
@@ -1571,10 +2259,6 @@ export default function MatchPage() {
   }
 
 
-  /* =======================================================
-     SAVE TACTICS
-  ======================================================= */
-
   async function saveTactics() {
     const engine =
       engineRef.current;
@@ -1587,7 +2271,7 @@ export default function MatchPage() {
       setSavingTactics(true);
       setError("");
 
-      await engine.setUserTactics({
+      const nextTactics = {
         mentality:
           tactics.mentality,
 
@@ -1608,7 +2292,11 @@ export default function MatchPage() {
             tactics.width,
             55
           ),
-      });
+      };
+
+      await engine.setUserTactics(
+        nextTactics
+      );
 
       if (
         formation
@@ -1624,6 +2312,38 @@ export default function MatchPage() {
       setSnapshot(
         state
       );
+
+      /*
+       * Also keep the match document's
+       * manager settings synchronized.
+       */
+      const matchRef =
+        doc(
+          db,
+          "matches",
+          String(id)
+        );
+
+      const side =
+        managedSideRef.current;
+
+      await setDoc(
+        matchRef,
+        {
+          [side]: {
+            formation,
+            tactics:
+              nextTactics,
+          },
+
+          updatedAt:
+            serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      );
+
     } catch (err) {
       console.error(
         "Tactics error:",
@@ -1641,14 +2361,254 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     FORMATION
+     LINEUP EDITOR
   ======================================================= */
 
-  function updateFormationLocal(
-    value
-  ) {
-    setFormation(value);
-  }
+  const removeFromStartingXI =
+    useCallback(
+      playerId => {
+        if (
+          snapshot?.status !==
+            "created" &&
+          snapshot?.status !==
+            "paused"
+        ) {
+          return;
+        }
+
+        const player =
+          managedStartingXI.find(
+            item =>
+              String(item.id) ===
+              String(playerId)
+          );
+
+        if (!player) {
+          return;
+        }
+
+        setManagedStartingXI(
+          previous =>
+            previous.filter(
+              item =>
+                String(item.id) !==
+                String(playerId)
+            )
+        );
+
+        setManagedBench(
+          previous => [
+            ...previous,
+            player,
+          ]
+        );
+      },
+      [
+        managedStartingXI,
+        snapshot?.status,
+      ]
+    );
+
+
+  const addToStartingXI =
+    useCallback(
+      playerId => {
+        if (
+          managedStartingXI.length >=
+          11
+        ) {
+          setError(
+            "Starting XI ntishobora kurenga abakinnyi 11."
+          );
+
+          return;
+        }
+
+        const player =
+          managedBench.find(
+            item =>
+              String(item.id) ===
+              String(playerId)
+          );
+
+        if (!player) {
+          return;
+        }
+
+        setManagedBench(
+          previous =>
+            previous.filter(
+              item =>
+                String(item.id) !==
+                String(playerId)
+            )
+        );
+
+        setManagedStartingXI(
+          previous => [
+            ...previous,
+            player,
+          ]
+        );
+      },
+      [
+        managedBench,
+        managedStartingXI.length,
+      ]
+    );
+
+
+  const saveStartingXI =
+    useCallback(
+      async () => {
+        if (
+          managedStartingXI.length !==
+          11
+        ) {
+          setError(
+            "Starting XI igomba kuba igizwe n'abakinnyi 11."
+          );
+
+          return;
+        }
+
+        if (
+          managedSideRef.current !==
+            "home" &&
+          managedSideRef.current !==
+            "away"
+        ) {
+          return;
+        }
+
+        try {
+          setSavingLineup(true);
+          setError("");
+
+          const side =
+            managedSideRef.current;
+
+          const otherSide =
+            side === "home"
+              ? "away"
+              : "home";
+
+          const config =
+            matchConfigRef.current;
+
+          if (!config) {
+            throw new Error(
+              "Match configuration ntiboneka."
+            );
+          }
+
+          const homeXI =
+            side === "home"
+              ? managedStartingXI
+              : config.home.players;
+
+          const awayXI =
+            side === "away"
+              ? managedStartingXI
+              : config.away.players;
+
+          const homeBench =
+            side === "home"
+              ? managedBench
+              : config.home.bench;
+
+          const awayBench =
+            side === "away"
+              ? managedBench
+              : config.away.bench;
+
+          /*
+           * Rebuild engine BEFORE kickoff.
+           */
+          await rebuildEngine(
+            homeXI,
+            awayXI,
+            homeBench,
+            awayBench
+          );
+
+          matchConfigRef.current = {
+            ...config,
+
+            home: {
+              ...config.home,
+              players:
+                homeXI,
+              bench:
+                homeBench,
+            },
+
+            away: {
+              ...config.away,
+              players:
+                awayXI,
+              bench:
+                awayBench,
+            },
+          };
+
+          /*
+           * Persist only the user's managed lineup.
+           */
+          const matchRef =
+            doc(
+              db,
+              "matches",
+              String(id)
+            );
+
+          await setDoc(
+            matchRef,
+            {
+              [side]: {
+                startingXI:
+                  managedStartingXI,
+
+                bench:
+                  managedBench,
+
+                formation,
+                tactics,
+              },
+
+              updatedAt:
+                serverTimestamp(),
+            },
+            {
+              merge: true,
+            }
+          );
+
+          setError("");
+
+        } catch (err) {
+          console.error(
+            "Starting XI save error:",
+            err
+          );
+
+          setError(
+            err?.message ||
+            "Starting XI ntibashije kubikwa."
+          );
+        } finally {
+          setSavingLineup(false);
+        }
+      },
+      [
+        managedStartingXI,
+        managedBench,
+        rebuildEngine,
+        formation,
+        tactics,
+        id,
+      ]
+    );
 
 
   /* =======================================================
@@ -1694,8 +2654,54 @@ export default function MatchPage() {
         state?.events || []
       );
 
+      /*
+       * Update local managed lineup
+       * after successful substitution.
+       */
+      const outgoing =
+        managedStartingXI.find(
+          player =>
+            String(player.id) ===
+            String(outgoingPlayer)
+        );
+
+      const incoming =
+        managedBench.find(
+          player =>
+            String(player.id) ===
+            String(incomingPlayer)
+        );
+
+      if (
+        outgoing &&
+        incoming
+      ) {
+        setManagedStartingXI(
+          previous =>
+            previous.map(
+              player =>
+                String(player.id) ===
+                String(outgoing.id)
+                  ? incoming
+                  : player
+            )
+        );
+
+        setManagedBench(
+          previous =>
+            previous.map(
+              player =>
+                String(player.id) ===
+                String(incoming.id)
+                  ? outgoing
+                  : player
+            )
+        );
+      }
+
       setOutgoingPlayer("");
       setIncomingPlayer("");
+
     } catch (err) {
       console.error(
         "Substitution error:",
@@ -1713,7 +2719,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     SNAPSHOT DATA
+     SNAPSHOT
   ======================================================= */
 
   const home =
@@ -1752,7 +2758,32 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     PLAYERS
+     LIVE STATS
+  ======================================================= */
+
+  const homeStats =
+    useMemo(
+      () =>
+        calculateLiveStats(
+          snapshot,
+          "home"
+        ),
+      [snapshot]
+    );
+
+  const awayStats =
+    useMemo(
+      () =>
+        calculateLiveStats(
+          snapshot,
+          "away"
+        ),
+      [snapshot]
+    );
+
+
+  /* =======================================================
+     ALL PLAYERS ON PITCH
   ======================================================= */
 
   const allPlayers =
@@ -1796,52 +2827,35 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     HOME BENCH
+     MANAGED BENCH FROM SNAPSHOT
   ======================================================= */
 
-  const homeBench =
+  const liveManagedBench =
     useMemo(
-      () =>
-        Array.isArray(
-          home?.bench
+      () => {
+        const source =
+          managedSide ===
+          "away"
+            ? away?.bench
+            : home?.bench;
+
+        return Array.isArray(
+          source
         )
-          ? home.bench
-          : [],
-      [home]
+          ? source
+          : managedBench;
+      },
+      [
+        managedSide,
+        home,
+        away,
+        managedBench,
+      ]
     );
 
 
   /* =======================================================
-     HOME PLAYERS
-  ======================================================= */
-
-  const homeOnPitch =
-    useMemo(
-      () =>
-        Array.isArray(
-          home?.players
-        )
-          ? home.players
-          : [],
-      [home]
-    );
-
-
-  /* =======================================================
-     STATS
-  ======================================================= */
-
-  const homeStats =
-    snapshot?.stats?.home ||
-    {};
-
-  const awayStats =
-    snapshot?.stats?.away ||
-    {};
-
-
-  /* =======================================================
-     RENDER LOADING
+     LOADING
   ======================================================= */
 
   if (loading) {
@@ -1866,7 +2880,7 @@ export default function MatchPage() {
 
 
   /* =======================================================
-     ERROR PAGE
+     ERROR WITHOUT SNAPSHOT
   ======================================================= */
 
   if (
@@ -1920,9 +2934,9 @@ export default function MatchPage() {
         }
       >
 
-        {/* ===============================================
+        {/* =================================================
             HEADER
-        =============================================== */}
+        ================================================= */}
 
         <header
           className={
@@ -1955,7 +2969,6 @@ export default function MatchPage() {
               : "READY"}
           </div>
 
-
           <div
             className={
               styles.clock
@@ -1964,22 +2977,21 @@ export default function MatchPage() {
             {clock}
           </div>
 
-
           {savingResult && (
             <div
               className={
                 styles.savingResult
               }
             >
-              Saving result...
+              Saving final result...
             </div>
           )}
         </header>
 
 
-        {/* ===============================================
-            SCOREBOARD
-        =============================================== */}
+        {/* =================================================
+            SCORE
+        ================================================= */}
 
         <section
           className={
@@ -2082,9 +3094,25 @@ export default function MatchPage() {
         </section>
 
 
-        {/* ===============================================
+        {/* =================================================
+            MANAGED TEAM INDICATOR
+        ================================================= */}
+
+        <div
+          className={
+            styles.managerTeamBar
+          }
+        >
+          Managing:{" "}
+          <strong>
+            {managedTeamName}
+          </strong>
+        </div>
+
+
+        {/* =================================================
             CONTROLS
-        =============================================== */}
+        ================================================= */}
 
         <section
           className={
@@ -2102,7 +3130,9 @@ export default function MatchPage() {
                 }
                 disabled={
                   starting ||
-                  savingResult
+                  savingResult ||
+                  managedStartingXI.length !==
+                    11
                 }
                 className={
                   styles.startButton
@@ -2110,6 +3140,9 @@ export default function MatchPage() {
               >
                 {starting
                   ? "Starting..."
+                  : managedStartingXI.length !==
+                    11
+                  ? `SELECT 11 PLAYERS (${managedStartingXI.length}/11)`
                   : "▶ START MATCH"}
               </button>
             )}
@@ -2132,9 +3165,9 @@ export default function MatchPage() {
         </section>
 
 
-        {/* ===============================================
+        {/* =================================================
             ERROR
-        =============================================== */}
+        ================================================= */}
 
         {error && (
           <div
@@ -2147,9 +3180,9 @@ export default function MatchPage() {
         )}
 
 
-        {/* ===============================================
+        {/* =================================================
             PITCH
-        =============================================== */}
+        ================================================= */}
 
         <section
           className={
@@ -2191,10 +3224,6 @@ export default function MatchPage() {
             className={`${styles.goalBox} ${styles.rightGoal}`}
           />
 
-
-          {/* ==========================================
-              PLAYERS
-          ========================================== */}
 
           {allPlayers.map(
             player => {
@@ -2244,7 +3273,6 @@ export default function MatchPage() {
                     )}%`,
                   }}
                 >
-
                   <span
                     className={
                       styles.playerNumber
@@ -2264,16 +3292,11 @@ export default function MatchPage() {
                       player.name
                     }
                   </span>
-
                 </div>
               );
             }
           )}
 
-
-          {/* ==========================================
-              BALL
-          ========================================== */}
 
           {snapshot?.ball && (
             <div
@@ -2311,9 +3334,9 @@ export default function MatchPage() {
         </section>
 
 
-        {/* ===============================================
+        {/* =================================================
             CONTENT
-        =============================================== */}
+        ================================================= */}
 
         <section
           className={
@@ -2327,9 +3350,9 @@ export default function MatchPage() {
             }
           >
 
-            {/* ==========================================
+            {/* =================================================
                 TABS
-            ========================================== */}
+            ================================================= */}
 
             <div
               className={
@@ -2353,6 +3376,7 @@ export default function MatchPage() {
                 Events
               </button>
 
+
               <button
                 className={
                   activeTab ===
@@ -2368,6 +3392,7 @@ export default function MatchPage() {
               >
                 Players
               </button>
+
 
               <button
                 className={
@@ -2385,6 +3410,24 @@ export default function MatchPage() {
                 Stats
               </button>
 
+
+              <button
+                className={
+                  activeTab ===
+                  "lineup"
+                    ? styles.activeTab
+                    : ""
+                }
+                onClick={() =>
+                  setActiveTab(
+                    "lineup"
+                  )
+                }
+              >
+                Starting XI
+              </button>
+
+
               <button
                 className={
                   activeTab ===
@@ -2400,6 +3443,7 @@ export default function MatchPage() {
               >
                 Tactics
               </button>
+
 
               <button
                 className={
@@ -2420,9 +3464,9 @@ export default function MatchPage() {
             </div>
 
 
-            {/* ==========================================
+            {/* =================================================
                 EVENTS
-            ========================================== */}
+            ================================================= */}
 
             {activeTab ===
               "events" && (
@@ -2449,7 +3493,8 @@ export default function MatchPage() {
 
                         <span>
                           {
-                            event.minute
+                            event.minute ??
+                            0
                           }
                           '
                         </span>
@@ -2458,7 +3503,8 @@ export default function MatchPage() {
                           {
                             event.text ||
                             event.description ||
-                            event.type
+                            event.type ||
+                            "Match event"
                           }
                         </p>
 
@@ -2480,9 +3526,9 @@ export default function MatchPage() {
             )}
 
 
-            {/* ==========================================
+            {/* =================================================
                 PLAYERS
-            ========================================== */}
+            ================================================= */}
 
             {activeTab ===
               "players" && (
@@ -2571,9 +3617,9 @@ export default function MatchPage() {
             )}
 
 
-            {/* ==========================================
+            {/* =================================================
                 STATS
-            ========================================== */}
+            ================================================= */}
 
             {activeTab ===
               "stats" && (
@@ -2586,112 +3632,139 @@ export default function MatchPage() {
                 {[
                   [
                     "Possession",
-                    `${safeNumber(
-                      homeStats.possession,
+                    `${getStat(
+                      homeStats,
+                      ["possession"],
                       0
                     )}%`,
-                    `${safeNumber(
-                      awayStats.possession,
+                    `${getStat(
+                      awayStats,
+                      ["possession"],
                       0
                     )}%`,
                   ],
 
                   [
                     "Shots",
-                    safeNumber(
-                      homeStats.shots,
+                    getStat(
+                      homeStats,
+                      ["shots"],
                       0
                     ),
-                    safeNumber(
-                      awayStats.shots,
+                    getStat(
+                      awayStats,
+                      ["shots"],
                       0
                     ),
                   ],
 
                   [
                     "Shots on target",
-                    safeNumber(
-                      homeStats.shotsOnTarget,
+                    getStat(
+                      homeStats,
+                      [
+                        "shotsOnTarget",
+                        "shots_on_target",
+                      ],
                       0
                     ),
-                    safeNumber(
-                      awayStats.shotsOnTarget,
+                    getStat(
+                      awayStats,
+                      [
+                        "shotsOnTarget",
+                        "shots_on_target",
+                      ],
                       0
                     ),
                   ],
 
                   [
                     "Passes",
-                    safeNumber(
-                      homeStats.passes,
+                    getStat(
+                      homeStats,
+                      ["passes"],
                       0
                     ),
-                    safeNumber(
-                      awayStats.passes,
+                    getStat(
+                      awayStats,
+                      ["passes"],
                       0
                     ),
                   ],
 
                   [
                     "Corners",
-                    safeNumber(
-                      homeStats.corners,
+                    getStat(
+                      homeStats,
+                      ["corners"],
                       0
                     ),
-                    safeNumber(
-                      awayStats.corners,
+                    getStat(
+                      awayStats,
+                      ["corners"],
                       0
                     ),
                   ],
 
                   [
                     "Tackles",
-                    safeNumber(
-                      homeStats.tackles,
+                    getStat(
+                      homeStats,
+                      ["tackles"],
                       0
                     ),
-                    safeNumber(
-                      awayStats.tackles,
+                    getStat(
+                      awayStats,
+                      ["tackles"],
                       0
                     ),
                   ],
 
                   [
                     "Interceptions",
-                    safeNumber(
-                      homeStats.interceptions,
+                    getStat(
+                      homeStats,
+                      [
+                        "interceptions",
+                      ],
                       0
                     ),
-                    safeNumber(
-                      awayStats.interceptions,
+                    getStat(
+                      awayStats,
+                      [
+                        "interceptions",
+                      ],
                       0
                     ),
                   ],
 
                   [
                     "Saves",
-                    safeNumber(
-                      homeStats.saves,
+                    getStat(
+                      homeStats,
+                      ["saves"],
                       0
                     ),
-                    safeNumber(
-                      awayStats.saves,
+                    getStat(
+                      awayStats,
+                      ["saves"],
                       0
                     ),
                   ],
 
                   [
                     "Fouls",
-                    safeNumber(
-                      homeStats.fouls,
+                    getStat(
+                      homeStats,
+                      ["fouls"],
                       0
                     ),
-                    safeNumber(
-                      awayStats.fouls,
+                    getStat(
+                      awayStats,
+                      ["fouls"],
                       0
                     ),
                   ],
-
                 ].map(
                   row => (
                     <div
@@ -2723,9 +3796,208 @@ export default function MatchPage() {
             )}
 
 
-            {/* ==========================================
+            {/* =================================================
+                STARTING XI
+            ================================================= */}
+
+            {activeTab ===
+              "lineup" && (
+              <div
+                className={
+                  styles.tacticsPanel
+                }
+              >
+
+                <div
+                  className={
+                    styles.sectionTitle
+                  }
+                >
+                  <h3>
+                    {managedTeamName}
+                    {" "}
+                    Starting XI
+                  </h3>
+
+                  <span>
+                    {managedStartingXI.length}
+                    /11
+                  </span>
+                </div>
+
+
+                <p
+                  className={
+                    styles.empty
+                  }
+                >
+                  Abakinnyi ubona hano ni abo
+                  ikipe yawe ifite muri
+                  database. Hitamo 11 bazatangira
+                  mbere ya kickoff.
+                </p>
+
+
+                <div
+                  className={
+                    styles.playerList
+                  }
+                >
+
+                  <div>
+                    <h3>
+                      Starting XI
+                    </h3>
+
+                    {managedStartingXI.map(
+                      player => (
+                        <div
+                          className={
+                            styles.listPlayer
+                          }
+                          key={
+                            player.id
+                          }
+                        >
+
+                          <b>
+                            {
+                              player.number
+                            }
+                          </b>
+
+                          <span>
+                            {
+                              player.name
+                            }
+                          </span>
+
+                          <small>
+                            {
+                              player.position
+                            }
+                          </small>
+
+                          {status !==
+                            "playing" &&
+                            status !==
+                              "finished" && (
+                            <button
+                              className={
+                                styles.removeButton
+                              }
+                              onClick={() =>
+                                removeFromStartingXI(
+                                  player.id
+                                )
+                              }
+                            >
+                              Remove
+                            </button>
+                          )}
+
+                        </div>
+                      )
+                    )}
+
+                  </div>
+
+
+                  <div>
+                    <h3>
+                      Bench
+                    </h3>
+
+                    {managedBench.map(
+                      player => (
+                        <div
+                          className={
+                            styles.listPlayer
+                          }
+                          key={
+                            player.id
+                          }
+                        >
+
+                          <b>
+                            {
+                              player.number
+                            }
+                          </b>
+
+                          <span>
+                            {
+                              player.name
+                            }
+                          </span>
+
+                          <small>
+                            {
+                              player.position
+                            }
+                          </small>
+
+                          {status !==
+                            "playing" &&
+                            status !==
+                              "finished" && (
+                            <button
+                              className={
+                                styles.addButton
+                              }
+                              onClick={() =>
+                                addToStartingXI(
+                                  player.id
+                                )
+                              }
+                              disabled={
+                                managedStartingXI.length >=
+                                11
+                              }
+                            >
+                              Add
+                            </button>
+                          )}
+
+                        </div>
+                      )
+                    )}
+
+                  </div>
+
+                </div>
+
+
+                {status !==
+                  "playing" &&
+                  status !==
+                    "finished" && (
+                  <button
+                    className={
+                      styles.saveTacticsButton
+                    }
+                    onClick={
+                      saveStartingXI
+                    }
+                    disabled={
+                      savingLineup ||
+                      managedStartingXI.length !==
+                        11
+                    }
+                  >
+                    {savingLineup
+                      ? "Saving Starting XI..."
+                      : `✓ SAVE STARTING XI (${managedStartingXI.length}/11)`}
+                  </button>
+                )}
+
+              </div>
+            )}
+
+
+            {/* =================================================
                 TACTICS
-            ========================================== */}
+            ================================================= */}
 
             {activeTab ===
               "tactics" && (
@@ -2741,8 +4013,8 @@ export default function MatchPage() {
                   }
                 >
                   <h3>
-                    {home?.name ||
-                      "Your Team"}{" "}
+                    {managedTeamName}
+                    {" "}
                     Tactics
                   </h3>
 
@@ -2766,7 +4038,7 @@ export default function MatchPage() {
                       formation
                     }
                     onChange={event =>
-                      updateFormationLocal(
+                      setFormation(
                         event.target.value
                       )
                     }
@@ -3015,9 +4287,9 @@ export default function MatchPage() {
             )}
 
 
-            {/* ==========================================
+            {/* =================================================
                 SUBSTITUTIONS
-            ========================================== */}
+            ================================================= */}
 
             {activeTab ===
               "subs" && (
@@ -3037,7 +4309,7 @@ export default function MatchPage() {
                   </h3>
 
                   <span>
-                    {home?.name}
+                    {managedTeamName}
                   </span>
                 </div>
 
@@ -3072,7 +4344,12 @@ export default function MatchPage() {
                       Select player
                     </option>
 
-                    {homeOnPitch.map(
+                    {(
+                      managedSide ===
+                      "away"
+                        ? away?.players
+                        : home?.players
+                    )?.map(
                       player => (
                         <option
                           key={
@@ -3088,6 +4365,7 @@ export default function MatchPage() {
                         </option>
                       )
                     )}
+
                   </select>
                 </div>
 
@@ -3122,7 +4400,7 @@ export default function MatchPage() {
                       Select substitute
                     </option>
 
-                    {homeBench.map(
+                    {liveManagedBench.map(
                       player => (
                         <option
                           key={
@@ -3138,6 +4416,7 @@ export default function MatchPage() {
                         </option>
                       )
                     )}
+
                   </select>
                 </div>
 
@@ -3174,7 +4453,7 @@ export default function MatchPage() {
                     Substitutions used:{" "}
                     <strong>
                       {safeNumber(
-                        home?.substitutionsUsed,
+                        managedTeam?.substitutionsUsed,
                         0
                       )}
                     </strong>
@@ -3185,7 +4464,7 @@ export default function MatchPage() {
                     Available substitutes:{" "}
                     <strong>
                       {
-                        homeBench.length
+                        liveManagedBench.length
                       }
                     </strong>
                   </p>
