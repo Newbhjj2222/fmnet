@@ -26,10 +26,6 @@ import MatchEngine from "../../lib/match-engine/python-engine";
 import styles from "./Mach.module.css";
 
 
-/* =========================================================
-   BASIC HELPERS
-========================================================= */
-
 function firstValue(object, keys, fallback = null) {
   if (!object) return fallback;
 
@@ -82,10 +78,6 @@ function sleep(ms) {
 }
 
 
-/* =========================================================
-   USER HELPERS (from useAuth)
-========================================================= */
-
 function getUsernameFromUser(user) {
   return safeString(
     user?.username ||
@@ -107,17 +99,6 @@ function getUserIdFromUser(user) {
 }
 
 
-/* =========================================================
-   PLAYER RATING HELPERS
-========================================================= */
-
-/*
- * Iyi function ibara rating y'umukinnyi.
- * Igerageza:
- *   1. player.overall / player.rating / player.ovr
- *   2. Kubara average y'ibintu (pace, shooting, passing,
- *      dribbling, defending, physical/strength)
- */
 function getPlayerRating(player) {
   if (!player) return 0;
 
@@ -150,10 +131,6 @@ function getPlayerRating(player) {
   return Math.round(sum / attrs.length);
 }
 
-
-/* =========================================================
-   PLAYER HELPERS
-========================================================= */
 
 function playerBelongsToClub(player, clubId) {
   const wanted = normalizeId(clubId);
@@ -226,7 +203,6 @@ function normalizePlayer(player = {}, index = 0) {
     balance: safeNumber(player.balance ?? ratings.balance, 65),
   };
 
-  // Preserve overall if it exists on the source
   if (player.overall !== undefined && player.overall !== null) {
     normalized.overall = safeNumber(player.overall, 0);
   }
@@ -238,10 +214,6 @@ function normalizePlayer(player = {}, index = 0) {
   return normalized;
 }
 
-
-/* =========================================================
-   CLUB HELPERS
-========================================================= */
 
 function normalizeClub(club, fallbackId) {
   return {
@@ -288,10 +260,6 @@ function getClubId(match, side) {
   ]);
 }
 
-
-/* =========================================================
-   MANAGED TEAM RESOLUTION
-========================================================= */
 
 function getManagedClubIdFromMatch(match) {
   return normalizeId(
@@ -441,10 +409,6 @@ function findManagedSideInMatchTeams(match, username, userId) {
 }
 
 
-/* =========================================================
-   EMBEDDED PLAYERS
-========================================================= */
-
 function extractEmbeddedPlayers(club, side) {
   const possible = [
     club?.players,
@@ -460,10 +424,6 @@ function extractEmbeddedPlayers(club, side) {
   return [];
 }
 
-
-/* =========================================================
-   BENCH
-========================================================= */
 
 function buildBench(
   explicitBench,
@@ -510,10 +470,6 @@ function buildBench(
 }
 
 
-/* =========================================================
-   CLOCK
-========================================================= */
-
 function formatClock(minute, second) {
   const safeMinute = Math.max(0, Math.floor(safeNumber(minute, 0)));
   const safeSecond = Math.max(0, Math.floor(safeNumber(second, 0)));
@@ -521,10 +477,6 @@ function formatClock(minute, second) {
   return `${String(safeMinute).padStart(2, "0")}:${String(safeSecond).padStart(2, "0")}`;
 }
 
-
-/* =========================================================
-   STATS HELPERS
-========================================================= */
 
 function getStat(source, keys, fallback = 0) {
   if (!source) return fallback;
@@ -573,10 +525,6 @@ function normalizeSide(value) {
 }
 
 
-/* =========================================================
-   POSSESSION — ISHINGIYE KURI PASSES
-========================================================= */
-
 function calculatePossessionFromPasses(homePasses, awayPasses) {
   const h = safeNumber(homePasses, 0);
   const a = safeNumber(awayPasses, 0);
@@ -595,10 +543,6 @@ function calculatePossessionFromPasses(homePasses, awayPasses) {
   };
 }
 
-
-/* =========================================================
-   LIVE STATS
-========================================================= */
 
 function calculateLiveStats(snapshot, side) {
   const original = snapshot?.stats?.[side] || {};
@@ -699,10 +643,6 @@ function calculateLiveStats(snapshot, side) {
 }
 
 
-/* =========================================================
-   FIRESTORE FINAL RESULT
-========================================================= */
-
 async function saveFinalResult(matchId, snapshot) {
   if (!matchId || !snapshot) {
     throw new Error("Final match result is missing.");
@@ -802,26 +742,14 @@ async function saveFinalResult(matchId, snapshot) {
 }
 
 
-/* =========================================================
-   MAIN PAGE
-========================================================= */
-
 export default function MatchPage() {
   const router = useRouter();
   const { id } = router.query;
-
-  /* =======================================================
-     AUTH CONTEXT
-  ======================================================= */
 
   const {
     user,
     loading: authLoading,
   } = useAuth();
-
-  /* =======================================================
-     REFS
-  ======================================================= */
 
   const engineRef = useRef(null);
   const updateTimerRef = useRef(null);
@@ -830,10 +758,6 @@ export default function MatchPage() {
   const finishRequestedRef = useRef(false);
   const matchConfigRef = useRef(null);
   const managedSideRef = useRef(null);
-
-  /* =======================================================
-     STATE
-  ======================================================= */
 
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -849,11 +773,6 @@ export default function MatchPage() {
   const [managedSide, setManagedSide] = useState(null);
   const [managedTeamName, setManagedTeamName] = useState("Your Team");
 
-  /*
-   * Tactics state.
-   * Iyi tactics ihindurwa na manager haba mbere
-   * cyangwa mu gihe umukino ukomeje (live).
-   */
   const [tactics, setTactics] = useState({
     mentality: "balanced",
     tempo: 60,
@@ -869,10 +788,6 @@ export default function MatchPage() {
   const [managedBench, setManagedBench] = useState([]);
   const [homeBenchPlayers, setHomeBenchPlayers] = useState([]);
   const [awayBenchPlayers, setAwayBenchPlayers] = useState([]);
-
-  /* =======================================================
-     FINAL SAVE
-  ======================================================= */
 
   const finishAndSave = useCallback(
     async finalSnapshot => {
@@ -930,10 +845,6 @@ export default function MatchPage() {
     },
     [id, router]
   );
-
-  /* =======================================================
-     ENGINE SUBSCRIPTION
-  ======================================================= */
 
   const attachEngine = useCallback(
     engine => {
@@ -997,10 +908,6 @@ export default function MatchPage() {
     [finishAndSave]
   );
 
-  /* =======================================================
-     REBUILD ENGINE
-  ======================================================= */
-
   const rebuildEngine = useCallback(
     async (homePlayers, awayPlayers, homeBench, awayBench) => {
       if (!matchConfigRef.current) return null;
@@ -1036,10 +943,6 @@ export default function MatchPage() {
     },
     [attachEngine]
   );
-
-  /* =======================================================
-     LOAD MATCH
-  ======================================================= */
 
   useEffect(() => {
     if (authLoading) return;
@@ -1112,10 +1015,6 @@ export default function MatchPage() {
           data: clubDoc.data(),
         }));
 
-        /* =================================================
-           MANAGER DETECTION
-        ================================================= */
-
         let resolvedManagedClubId = getManagedClubIdFromMatch(match);
         let resolvedManagedSide = getManagedSideFromMatch(match);
 
@@ -1143,21 +1042,8 @@ export default function MatchPage() {
           );
         }
 
-        console.log("MANAGER DETECTION:", {
-          managedClubId: resolvedManagedClubId,
-          managedSide: resolvedManagedSide,
-          homeClubId,
-          awayClubId,
-          username,
-          userId,
-        });
-
         managedSideRef.current = resolvedManagedSide;
         setManagedSide(resolvedManagedSide);
-
-        /* =================================================
-           SQUADS
-        ================================================= */
 
         let homePlayers = allPlayers
           .filter(player => playerBelongsToClub(player, homeClubId))
@@ -1209,10 +1095,6 @@ export default function MatchPage() {
           );
         }
 
-        /* =================================================
-           STARTING XI + BENCH
-        ================================================= */
-
         let homeStarting = homePlayers.slice(0, 11);
         let awayStarting = awayPlayers.slice(0, 11);
 
@@ -1253,10 +1135,6 @@ export default function MatchPage() {
         setHomeBenchPlayers(homeBench);
         setAwayBenchPlayers(awayBench);
 
-        /* =================================================
-           MANAGED TEAM DATA
-        ================================================= */
-
         const isAway = resolvedManagedSide === "away";
         const isHome = resolvedManagedSide === "home";
 
@@ -1282,10 +1160,6 @@ export default function MatchPage() {
           : "No Team";
 
         setManagedTeamName(managedClubName);
-
-        /* =================================================
-           TACTICS
-        ================================================= */
 
         const managedClub = isAway
           ? awayClub
@@ -1315,10 +1189,6 @@ export default function MatchPage() {
             managedClub?.formation ||
             "4-3-3"
         );
-
-        /* =================================================
-           ENGINE CONFIG
-        ================================================= */
 
         matchConfigRef.current = {
           matchId: String(id),
@@ -1392,10 +1262,6 @@ export default function MatchPage() {
     finishAndSave,
   ]);
 
-  /* =======================================================
-     LIVE POLLING
-  ======================================================= */
-
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || !snapshot) return;
@@ -1446,10 +1312,6 @@ export default function MatchPage() {
     };
   }, [snapshot?.status]);
 
-  /* =======================================================
-     START
-  ======================================================= */
-
   const startMatch = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1483,10 +1345,6 @@ export default function MatchPage() {
     }
   }, [managedStartingXI.length]);
 
-  /* =======================================================
-     PAUSE
-  ======================================================= */
-
   const pauseMatch = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1509,19 +1367,7 @@ export default function MatchPage() {
     }
   }, []);
 
-  /* =======================================================
-     TACTICS
-     ---------------------------------------------------------
-     Ubu tactics zishobora guhindurwa:
-       - Mbere y'umukino (status = "created")
-       - Mu gihe umukino ukomeje (status = "playing")
-       - Mu gihe umukino wahagaritswe (status = "paused")
-     Gusa gusa ntibishoboka iyo umukino warangiye
-     (status = "finished").
-  ======================================================= */
-
-  const tacticsLocked =
-    status === "finished";
+  const tacticsLocked = status === "finished";
 
   function updateTactic(field, value) {
     if (tacticsLocked) return;
@@ -1554,11 +1400,6 @@ export default function MatchPage() {
         width: safeNumber(tactics.width, 55),
       };
 
-      /*
-       * Iyi iha engine tactics nshya.
-       * Niba umukino uri live, engine ihita iyikoresha
-       * mu ma ticks ari muri processing.
-       */
       await engine.setUserTactics(nextTactics);
 
       if (formation) {
@@ -1568,11 +1409,6 @@ export default function MatchPage() {
       const state = engine.getState();
       setSnapshot(state);
 
-      /*
-       * Kubika muri Firestore.
-       * Ibi bituma niba user a-subscribe cyangwa
-       * agasubira kuri page, tactics ze ziba zibitswe.
-       */
       const matchRef = doc(db, "matches", String(id));
       const side = managedSideRef.current;
 
@@ -1591,10 +1427,6 @@ export default function MatchPage() {
       setSavingTactics(false);
     }
   }
-
-  /* =======================================================
-     STARTING XI
-  ======================================================= */
 
   const removeFromStartingXI = useCallback(
     playerId => {
@@ -1716,10 +1548,6 @@ export default function MatchPage() {
     id,
   ]);
 
-  /* =======================================================
-     SUBSTITUTION
-  ======================================================= */
-
   async function makeSubstitution() {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1792,10 +1620,6 @@ export default function MatchPage() {
     }
   }
 
-  /* =======================================================
-     SNAPSHOT VALUES
-  ======================================================= */
-
   const home = snapshot?.home || null;
   const away = snapshot?.away || null;
   const score = snapshot?.score || { home: 0, away: 0 };
@@ -1803,10 +1627,6 @@ export default function MatchPage() {
   const second = safeNumber(snapshot?.second, 0);
   const clock = formatClock(minute, second);
   const status = snapshot?.status || "created";
-
-  /* =======================================================
-     STATS + POSSESSION
-  ======================================================= */
 
   const homeStats = useMemo(
     () => calculateLiveStats(snapshot, "home"),
@@ -1837,10 +1657,6 @@ export default function MatchPage() {
     [awayStats, possession.away]
   );
 
-  /* =======================================================
-     PITCH PLAYERS
-  ======================================================= */
-
   const allPlayers = useMemo(() => {
     const homePlayers = Array.isArray(home?.players) ? home.players : [];
     const awayPlayers = Array.isArray(away?.players) ? away.players : [];
@@ -1851,19 +1667,11 @@ export default function MatchPage() {
     ];
   }, [home, away]);
 
-  /* =======================================================
-     BENCH
-  ======================================================= */
-
   const liveHomeBench = homeBenchPlayers;
   const liveAwayBench = awayBenchPlayers;
 
   const liveManagedBench =
     managedSide === "away" ? liveAwayBench : liveHomeBench;
-
-  /* =======================================================
-     LOADING
-  ======================================================= */
 
   if (authLoading || loading) {
     return (
@@ -1874,10 +1682,6 @@ export default function MatchPage() {
     );
   }
 
-  /* =======================================================
-     ERROR
-  ======================================================= */
-
   if (error && !snapshot) {
     return (
       <main className={styles.errorPage}>
@@ -1886,10 +1690,6 @@ export default function MatchPage() {
       </main>
     );
   }
-
-  /* =======================================================
-     PAGE
-  ======================================================= */
 
   return (
     <>
@@ -1905,9 +1705,6 @@ export default function MatchPage() {
       </Head>
 
       <main className={styles.page}>
-        {/* =================================================
-            HEADER
-        ================================================= */}
         <header className={styles.header}>
           <div className={styles.status}>
             <span
@@ -1935,9 +1732,6 @@ export default function MatchPage() {
           )}
         </header>
 
-        {/* =================================================
-            SCOREBOARD
-        ================================================= */}
         <section className={styles.scoreboard}>
           <div className={styles.team}>
             {home?.logo ? (
@@ -1972,9 +1766,6 @@ export default function MatchPage() {
           </div>
         </section>
 
-        {/* =================================================
-            MANAGED TEAM INFO
-        ================================================= */}
         <div className={styles.managerTeamBar}>
           {managedSide ? (
             <>
@@ -1988,9 +1779,6 @@ export default function MatchPage() {
           )}
         </div>
 
-        {/* =================================================
-            CONTROLS
-        ================================================= */}
         <section className={styles.controls}>
           {managedSide &&
             status !== "finished" &&
@@ -2022,14 +1810,8 @@ export default function MatchPage() {
           )}
         </section>
 
-        {/* =================================================
-            ERROR
-        ================================================= */}
         {error && <div className={styles.errorBox}>{error}</div>}
 
-        {/* =================================================
-            PITCH
-        ================================================= */}
         <section className={styles.pitch}>
           <div className={styles.halfLine} />
           <div className={styles.centerCircle} />
@@ -2088,12 +1870,8 @@ export default function MatchPage() {
           )}
         </section>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
         <section className={styles.contentGrid}>
           <div className={styles.panel}>
-            {/* TABS */}
             <div className={styles.tabs}>
               {[
                 ["events", "Events"],
@@ -2115,9 +1893,6 @@ export default function MatchPage() {
               ))}
             </div>
 
-            {/* =================================================
-                EVENTS
-            ================================================= */}
             {activeTab === "events" && (
               <div className={styles.events}>
                 {events
@@ -2149,12 +1924,8 @@ export default function MatchPage() {
               </div>
             )}
 
-            {/* =================================================
-                PLAYERS (Home / Away, Including Bench)
-            ================================================= */}
             {activeTab === "players" && (
               <div className={styles.playerList}>
-                {/* HOME */}
                 <div>
                   <h3>{home?.name}</h3>
 
@@ -2221,7 +1992,6 @@ export default function MatchPage() {
                   )}
                 </div>
 
-                {/* AWAY */}
                 <div>
                   <h3>{away?.name}</h3>
 
@@ -2290,9 +2060,6 @@ export default function MatchPage() {
               </div>
             )}
 
-            {/* =================================================
-                STATS
-            ================================================= */}
             {activeTab === "stats" && (
               <div className={styles.stats}>
                 {[
@@ -2358,15 +2125,6 @@ export default function MatchPage() {
               </div>
             )}
 
-            {/* =================================================
-                STARTING XI (Manager)
-                -------------------------------------------------
-                Buri mukinnyi yerekana:
-                  - # number
-                  - Name
-                  - Position
-                  - Rating (⭐)
-            ================================================= */}
             {activeTab === "lineup" && managedSide && (
               <div className={styles.tacticsPanel}>
                 <div className={styles.sectionTitle}>
@@ -2379,7 +2137,6 @@ export default function MatchPage() {
                 </p>
 
                 <div className={styles.playerList}>
-                  {/* STARTING XI */}
                   <div>
                     <h3>Starting XI</h3>
 
@@ -2423,7 +2180,6 @@ export default function MatchPage() {
                     })}
                   </div>
 
-                  {/* BENCH */}
                   <div>
                     <h3>Bench ({managedBench.length})</h3>
 
@@ -2495,15 +2251,6 @@ export default function MatchPage() {
               </div>
             )}
 
-            {/* =================================================
-                TACTICS (Live Editable)
-                -------------------------------------------------
-                Ubu tactics zishobora guhindurwa:
-                  - Mbere y'umukino
-                  - Mu gihe umukino ukomeje (LIVE)
-                  - Mu gihe wahagaritswe
-                Gusa kuri "finished" nticyemewe.
-            ================================================= */}
             {activeTab === "tactics" && managedSide && (
               <div className={styles.tacticsPanel}>
                 <div className={styles.sectionTitle}>
@@ -2525,7 +2272,6 @@ export default function MatchPage() {
                   </p>
                 )}
 
-                {/* FORMATION */}
                 <div className={styles.formGroup}>
                   <label>Formation</label>
                   <select
@@ -2543,7 +2289,6 @@ export default function MatchPage() {
                   </select>
                 </div>
 
-                {/* MENTALITY */}
                 <div className={styles.formGroup}>
                   <label>Mentality</label>
                   <select
@@ -2568,7 +2313,6 @@ export default function MatchPage() {
                   </select>
                 </div>
 
-                {/* PRESSING */}
                 <div className={styles.formGroup}>
                   <label>Pressing</label>
                   <select
@@ -2588,7 +2332,6 @@ export default function MatchPage() {
                   </select>
                 </div>
 
-                {/* DEFENSIVE LINE */}
                 <div className={styles.formGroup}>
                   <label>Defensive Line</label>
                   <select
@@ -2607,7 +2350,6 @@ export default function MatchPage() {
                   </select>
                 </div>
 
-                {/* TEMPO */}
                 <div className={styles.formGroup}>
                   <label>Tempo: {tactics.tempo}</label>
                   <input
@@ -2625,7 +2367,6 @@ export default function MatchPage() {
                   />
                 </div>
 
-                {/* WIDTH */}
                 <div className={styles.formGroup}>
                   <label>Width: {tactics.width}</label>
                   <input
@@ -2657,9 +2398,6 @@ export default function MatchPage() {
               </div>
             )}
 
-            {/* =================================================
-                SUBSTITUTIONS
-            ================================================= */}
             {activeTab === "subs" && managedSide && (
               <div className={styles.substitutionPanel}>
                 <div className={styles.sectionTitle}>
