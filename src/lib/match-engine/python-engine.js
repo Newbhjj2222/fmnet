@@ -1,318 +1,165 @@
 const PYTHON_ENGINE_URL =
-  "https://fmnet-seven.vercel.app";
+  "https://python-engine-1.onrender.com";
 
-async function request(
+
+async function pythonRequest(
   path,
   options = {}
 ) {
-  const response =
-    await fetch(
-      `${PYTHON_ENGINE_URL}${path}`,
-      {
-        method:
-          options.method || "GET",
+  const response = await fetch(
+    `${PYTHON_ENGINE_URL}${path}`,
+    {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    }
+  );
 
-        headers: {
-          "Content-Type":
-            "application/json",
+  const text = await response.text();
 
-          ...(options.headers || {}),
-        },
-
-        body:
-          options.body
-            ? JSON.stringify(
-                options.body
-              )
-            : undefined,
-      }
-    );
-
-  let json;
+  let data = null;
 
   try {
-    json =
-      await response.json();
+    data = text
+      ? JSON.parse(text)
+      : null;
   } catch {
     throw new Error(
-      `Python engine returned invalid JSON (${response.status})`
+      `Python engine returned invalid JSON (${response.status}). ` +
+      `Response: ${text.slice(0, 500)}`
     );
   }
 
-  if (
-    !response.ok ||
-    json?.success === false
-  ) {
+  if (!response.ok) {
     throw new Error(
-      json?.error ||
-      `Python engine error ${response.status}`
+      data?.detail ||
+      `Python engine HTTP ${response.status}`
     );
   }
 
-  return (
-    json?.data ??
-    json
+  return data;
+}
+
+
+function cleanPlayer(
+  player,
+  index = 0
+) {
+  return {
+    id: String(
+      player?.id ??
+      player?.playerId ??
+      `player-${index}`
+    ),
+
+    name:
+      player?.name ||
+      player?.displayName ||
+      `Player ${index + 1}`,
+
+    number: Number(
+      player?.number ??
+      player?.shirtNumber ??
+      index + 1
+    ),
+
+    position:
+      player?.position ||
+      player?.pos ||
+      "MID",
+
+    overall: Number(
+      player?.overall ?? 60
+    ),
+
+    pace: Number(
+      player?.pace ??
+      player?.speed ??
+      60
+    ),
+
+    passing: Number(
+      player?.passing ?? 60
+    ),
+
+    dribbling: Number(
+      player?.dribbling ?? 60
+    ),
+
+    shooting: Number(
+      player?.shooting ?? 60
+    ),
+
+    defending: Number(
+      player?.defending ?? 60
+    ),
+
+    stamina: Number(
+      player?.stamina ?? 80
+    ),
+  };
+}
+
+
+function cleanPlayers(players) {
+  if (!Array.isArray(players)) {
+    return [];
+  }
+
+  return players.map(
+    cleanPlayer
   );
 }
 
 
-export default class PythonMatchEngine {
+export default class MatchEngine {
   constructor(config) {
-    this.config = config;
+    this.config = {
+      ...config,
 
-    this.snapshotData = null;
+      homePlayers:
+        cleanPlayers(
+          config.homePlayers
+        ),
+
+      awayPlayers:
+        cleanPlayers(
+          config.awayPlayers
+        ),
+    };
+
+    this.snapshot = null;
 
     this.running = false;
 
-    this.started = false;
+    this.requestInFlight = false;
 
-    this.paused = true;
+    this.lastPoll = 0;
 
-    this.minute = 0;
-
-    this.second = 0;
-
-    this.events = [];
-
-    this.home = {
-      players: [],
-      bench: [],
-      stats: {},
-    };
-
-    this.away = {
-      players: [],
-      bench: [],
-      stats: {},
-    };
+    this.ready = this.create();
   }
 
 
   async create() {
-    const snapshot =
-      await request(
+    const result =
+      await pythonRequest(
         "/match/create",
         {
           method: "POST",
-          body: this.config,
+
+          body: JSON.stringify(
+            this.config
+          ),
         }
       );
 
     this.applySnapshot(
-      snapshot
+      result
     );
 
-    return snapshot;
-  }
-
-
-  async start() {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/start`,
-        {
-          method: "POST",
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    this.running = true;
-    this.started = true;
-    this.paused = false;
-
-    return snapshot;
-  }
-
-
-  async pause() {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/pause`,
-        {
-          method: "POST",
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    this.running = false;
-    this.paused = true;
-
-    return snapshot;
-  }
-
-
-  async startSecondHalf() {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/second-half`,
-        {
-          method: "POST",
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    this.running = true;
-    this.started = true;
-    this.paused = false;
-
-    return snapshot;
-  }
-
-
-  async update() {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/update`,
-        {
-          method: "POST",
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    return snapshot;
-  }
-
-
-  async setUserTactics(
-    tactics
-  ) {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/tactics`,
-        {
-          method: "POST",
-
-          body: {
-            side: "home",
-            tactics,
-          },
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    return snapshot;
-  }
-
-
-  async setFormation(
-    side,
-    formation
-  ) {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/formation`,
-        {
-          method: "POST",
-
-          body: {
-            side,
-            formation,
-          },
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    return snapshot;
-  }
-
-
-  async substituteUser(
-    outgoingId,
-    incomingId
-  ) {
-    const result =
-      await request(
-        `/match/${this.config.matchId}/substitute`,
-        {
-          method: "POST",
-
-          body: {
-            side: "home",
-
-            outgoingId,
-
-            incomingId,
-          },
-        }
-      );
-
-    if (
-      result?.snapshot
-    ) {
-      this.applySnapshot(
-        result.snapshot
-      );
-    }
-
-    return (
-      result?.success !==
-      false
-    );
-  }
-
-
-  async finish() {
-    const snapshot =
-      await request(
-        `/match/${this.config.matchId}/finish`,
-        {
-          method: "POST",
-        }
-      );
-
-    this.applySnapshot(
-      snapshot
-    );
-
-    this.running = false;
-    this.paused = true;
-
-    return snapshot;
-  }
-
-
-  isFinished() {
-    return (
-      this.snapshotData
-        ?.finished === true ||
-      Number(
-        this.snapshotData
-          ?.minute || 0
-      ) >= 90
-    );
-  }
-
-
-  getSnapshot() {
-    return this.snapshotData;
-  }
-
-
-  serializeResult() {
-    return this.snapshotData;
-  }
-
-
-  getState() {
-    return this.snapshotData;
+    return result;
   }
 
 
@@ -323,8 +170,29 @@ export default class PythonMatchEngine {
       return;
     }
 
-    this.snapshotData =
+    this.snapshot =
       snapshot;
+
+    this.running =
+      snapshot.status === "live";
+
+    this.home =
+      snapshot.home || {};
+
+    this.away =
+      snapshot.away || {};
+
+    this.ball =
+      snapshot.ball || {};
+
+    this.events =
+      snapshot.events || [];
+
+    this.score =
+      snapshot.score || {
+        home: 0,
+        away: 0,
+      };
 
     this.minute =
       Number(
@@ -336,35 +204,226 @@ export default class PythonMatchEngine {
         snapshot.second || 0
       );
 
-    this.events =
-      Array.isArray(
-        snapshot.events
-      )
-        ? snapshot.events
-        : [];
+    this.status =
+      snapshot.status ||
+      "ready";
+  }
 
-    this.home =
-      snapshot.home || {
-        players: [],
-        bench: [],
-        stats: {},
-      };
 
-    this.away =
-      snapshot.away || {
-        players: [],
-        bench: [],
-        stats: {},
-      };
+  async start() {
+    await this.ready;
 
-    this.running =
-      snapshot.running === true;
+    const result =
+      await pythonRequest(
+        `/match/${this.config.matchId}/start`,
+        {
+          method: "POST",
+        }
+      );
 
-    this.started =
-      this.running ||
-      this.minute > 0;
+    this.applySnapshot(
+      result
+    );
 
-    this.paused =
-      !this.running;
+    return result;
+  }
+
+
+  async pause() {
+    this.running = false;
+
+    const result =
+      await pythonRequest(
+        `/match/${this.config.matchId}/pause`,
+        {
+          method: "POST",
+        }
+      );
+
+    this.applySnapshot(
+      result
+    );
+
+    return result;
+  }
+
+
+  async update() {
+    if (!this.snapshot) {
+      return null;
+    }
+
+    if (
+      this.requestInFlight
+    ) {
+      return this.snapshot;
+    }
+
+    if (
+      !this.running
+    ) {
+      return this.snapshot;
+    }
+
+    const now =
+      Date.now();
+
+    if (
+      now - this.lastPoll < 100
+    ) {
+      return this.snapshot;
+    }
+
+    this.lastPoll = now;
+
+    this.requestInFlight = true;
+
+    try {
+      const result =
+        await pythonRequest(
+          `/match/${this.config.matchId}/state`
+        );
+
+      this.applySnapshot(
+        result
+      );
+
+      return result;
+
+    } catch (error) {
+      console.error(
+        "Python engine state error:",
+        error
+      );
+
+      return this.snapshot;
+
+    } finally {
+      this.requestInFlight =
+        false;
+    }
+  }
+
+
+  async setUserTactics(
+    tactics
+  ) {
+    const result =
+      await pythonRequest(
+        `/match/${this.config.matchId}/tactics`,
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            side: "home",
+            tactics,
+          }),
+        }
+      );
+
+    this.applySnapshot(
+      result
+    );
+
+    return result;
+  }
+
+
+  async setFormation(
+    side,
+    formation
+  ) {
+    const result =
+      await pythonRequest(
+        `/match/${this.config.matchId}/formation`,
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            side,
+            formation,
+          }),
+        }
+      );
+
+    this.applySnapshot(
+      result
+    );
+
+    return result;
+  }
+
+
+  async substituteUser(
+    outgoingId,
+    incomingId
+  ) {
+    const result =
+      await pythonRequest(
+        `/match/${this.config.matchId}/substitute`,
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            side: "home",
+            outgoingId,
+            incomingId,
+          }),
+        }
+      );
+
+    this.applySnapshot(
+      result
+    );
+
+    return result;
+  }
+
+
+  async finish() {
+    const result =
+      await pythonRequest(
+        `/match/${this.config.matchId}/finish`,
+        {
+          method: "POST",
+        }
+      );
+
+    this.applySnapshot(
+      result
+    );
+
+    return result;
+  }
+
+
+  getSnapshot() {
+    return this.snapshot;
+  }
+
+
+  getState() {
+    return this.snapshot;
+  }
+
+
+  serializeResult() {
+    return this.snapshot;
+  }
+
+
+  isFinished() {
+    return (
+      this.snapshot?.status ===
+        "finished" ||
+      Number(
+        this.snapshot?.minute || 0
+      ) >= 90
+    );
+  }
+
+
+  stop() {
+    this.running = false;
   }
 }
