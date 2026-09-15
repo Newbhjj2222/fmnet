@@ -71,6 +71,39 @@ function sleep(ms) {
 }
 
 /* =========================================================
+   SAFE FIRESTORE WRITE (retry-based)
+========================================================= */
+
+async function safeFirestoreWrite(fn, retries = 3, label = "firestore") {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.onLine === false
+      ) {
+        throw new Error("Internet connection is offline.");
+      }
+
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `[${label}] write attempt ${attempt} failed:`,
+        err?.message || err
+      );
+
+      if (attempt < retries) {
+        await sleep(attempt * 800);
+      }
+    }
+  }
+
+  throw lastError || new Error("Firestore write failed.");
+}
+
+/* =========================================================
    USER
 ========================================================= */
 
@@ -207,7 +240,10 @@ function calculatePlayerRating(player) {
     player?.shooting ?? ratings.shooting,
     player?.dribbling ?? ratings.dribbling,
     player?.defending ?? ratings.defending ?? ratings.defence,
-    player?.physical ?? player?.strength ?? ratings.physical ?? ratings.strength,
+    player?.physical ??
+      player?.strength ??
+      ratings.physical ??
+      ratings.strength,
   ]
     .map(value => safeNumber(value, 0))
     .filter(value => value > 0);
@@ -247,24 +283,19 @@ function playerBelongsToClub(player, clubId) {
 }
 
 /* =========================================================
-   FORMATION POSITIONS  (YASAKARWE HO)
-   x = horizontal  (0 = left, 100 = right)
-   y = vertical    (0 = top, 100 = bottom)
+   FORMATION POSITIONS
 ========================================================= */
 
 const FORMATION_POSITIONS = {
   "4-3-3": [
     { position: "GK", x: 7, y: 50 },
-
     { position: "RB", x: 22, y: 88 },
     { position: "CB", x: 18, y: 66 },
     { position: "CB", x: 18, y: 34 },
     { position: "LB", x: 22, y: 12 },
-
     { position: "CM", x: 43, y: 72 },
     { position: "CM", x: 38, y: 50 },
     { position: "CM", x: 43, y: 28 },
-
     { position: "RW", x: 65, y: 85 },
     { position: "ST", x: 80, y: 50 },
     { position: "LW", x: 65, y: 15 },
@@ -272,69 +303,56 @@ const FORMATION_POSITIONS = {
 
   "4-4-2": [
     { position: "GK", x: 7, y: 50 },
-
     { position: "RB", x: 22, y: 88 },
     { position: "CB", x: 18, y: 66 },
     { position: "CB", x: 18, y: 34 },
     { position: "LB", x: 22, y: 12 },
-
     { position: "RM", x: 46, y: 86 },
     { position: "CM", x: 40, y: 62 },
     { position: "CM", x: 40, y: 38 },
     { position: "LM", x: 46, y: 14 },
-
     { position: "ST", x: 79, y: 66 },
     { position: "ST", x: 79, y: 34 },
   ],
 
   "4-2-3-1": [
     { position: "GK", x: 7, y: 50 },
-
     { position: "RB", x: 22, y: 88 },
     { position: "CB", x: 18, y: 66 },
     { position: "CB", x: 18, y: 34 },
     { position: "LB", x: 22, y: 12 },
-
     { position: "DM", x: 38, y: 66 },
     { position: "DM", x: 38, y: 34 },
-
     { position: "RW", x: 60, y: 85 },
     { position: "AM", x: 55, y: 50 },
     { position: "LW", x: 60, y: 15 },
-
     { position: "ST", x: 80, y: 50 },
   ],
 
   "3-5-2": [
     { position: "GK", x: 7, y: 50 },
-
     { position: "CB", x: 18, y: 72 },
     { position: "CB", x: 16, y: 50 },
     { position: "CB", x: 18, y: 28 },
-
     { position: "RM", x: 44, y: 88 },
     { position: "CM", x: 38, y: 66 },
     { position: "CM", x: 35, y: 50 },
     { position: "CM", x: 38, y: 34 },
     { position: "LM", x: 44, y: 12 },
-
     { position: "ST", x: 78, y: 66 },
     { position: "ST", x: 78, y: 34 },
   ],
 
   "5-3-2": [
     { position: "GK", x: 7, y: 50 },
-
     { position: "RB", x: 20, y: 88 },
     { position: "CB", x: 17, y: 66 },
     { position: "CB", x: 15, y: 50 },
     { position: "CB", x: 17, y: 34 },
     { position: "LB", x: 20, y: 12 },
-
     { position: "CM", x: 41, y: 66 },
     { position: "CM", x: 38, y: 50 },
     { position: "CM", x: 41, y: 34 },
-
     { position: "ST", x: 78, y: 66 },
     { position: "ST", x: 78, y: 34 },
   ],
@@ -352,7 +370,6 @@ function positionCompatibility(playerPosition, wantedPosition) {
 
   const groups = {
     GK: ["GK"],
-
     RB: ["RB", "RWB", "RM"],
     LB: ["LB", "LWB", "LM"],
     CB: ["CB"],
@@ -437,7 +454,6 @@ function assignFormationPositions(players, formation, side = "home") {
     });
   });
 
-  // Safety fallback if there are more players.
   remaining.forEach((player, index) => {
     const fallbackX =
       side === "home" ? 25 + index * 3 : 75 - index * 3;
@@ -732,7 +748,7 @@ function extractEmbeddedPlayers(club, side) {
 }
 
 /* =========================================================
-   BENCH  (YAVUGURUWE - ROBUST)
+   BENCH
 ========================================================= */
 
 function buildBench(
@@ -748,16 +764,11 @@ function buildBench(
 
   let source = [];
 
-  // 1) Explicit bench from match document
   if (Array.isArray(explicitBench) && explicitBench.length) {
     source = explicitBench;
-  }
-  // 2) Bench saved on the club
-  else if (Array.isArray(clubBench) && clubBench.length) {
+  } else if (Array.isArray(clubBench) && clubBench.length) {
     source = clubBench;
-  }
-  // 3) All players from "players" collection that belong to this club
-  else {
+  } else {
     source = allPlayers.filter(
       player =>
         playerBelongsToClub(player, clubId) &&
@@ -767,8 +778,6 @@ function buildBench(
     );
   }
 
-  // 4) Last resort: any player that isn't in the Starting XI.
-  //    (helps when clubId wasn't linked to players properly)
   if (!source.length && Array.isArray(allPlayers) && allPlayers.length) {
     source = allPlayers.filter(
       player =>
@@ -996,15 +1005,12 @@ async function saveFinalResult(matchId, snapshot) {
 
   const finalResult = {
     status: "finished",
-
     minute: safeNumber(snapshot.minute, 90),
     second: safeNumber(snapshot.second, 0),
-
     score: { home: homeScore, away: awayScore },
     homeScore,
     awayScore,
     winner,
-
     homeTeam: {
       id: safeString(home.id),
       name: safeString(home.name, "Home"),
@@ -1015,7 +1021,6 @@ async function saveFinalResult(matchId, snapshot) {
       name: safeString(away.name, "Away"),
       logo: away.logo || "",
     },
-
     stats: finalStats,
     events,
     lastEvent: snapshot.lastEvent || null,
@@ -1034,7 +1039,6 @@ async function saveFinalResult(matchId, snapshot) {
     {
       status: "finished",
       finalResult,
-
       score: finalResult.score,
       homeScore,
       awayScore,
@@ -1095,6 +1099,7 @@ export default function MatchPage() {
   const [savingResult, setSavingResult] = useState(false);
 
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [matchDoc, setMatchDoc] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [events, setEvents] = useState([]);
@@ -1201,7 +1206,6 @@ export default function MatchPage() {
           Array.isArray(nextSnapshot.events) ? nextSnapshot.events : []
         );
 
-        // ⚠️ Bench: hanya update iyo engine yohereje bench ifite abakinnyi
         if (
           Array.isArray(nextSnapshot.home?.bench) &&
           nextSnapshot.home.bench.length > 0
@@ -1787,7 +1791,8 @@ export default function MatchPage() {
     const engine = engineRef.current;
     if (!engine) return;
 
-    if (!managedSideRef.current) {
+    const side = managedSideRef.current;
+    if (!side) {
       setError("Ntabwo uri manager w'ikipe iyi.");
       return;
     }
@@ -1804,18 +1809,32 @@ export default function MatchPage() {
         width: safeNumber(tactics.width, 55),
       };
 
-      await engine.setUserTactics(nextTactics);
-
-      if (formation) {
-        await engine.setFormation(formation);
+      // Engine update — don't fail if the engine can't be reached.
+      try {
+        if (typeof engine.setUserTactics === "function") {
+          await engine.setUserTactics(nextTactics);
+        }
+        if (formation && typeof engine.setFormation === "function") {
+          await engine.setFormation(formation);
+        }
+      } catch (engineErr) {
+        console.warn("Engine tactics update failed:", engineErr);
       }
 
-      const state = engine.getState();
-      setSnapshot(state);
+      let state = null;
+      try {
+        state = engine.getState();
+      } catch (e) {
+        console.warn("getState failed:", e);
+      }
 
-      if (state?.status === "created" || state?.status === "paused") {
-        const side = managedSideRef.current;
+      if (state) setSnapshot(state);
 
+      if (
+        state?.status === "created" ||
+        state?.status === "paused" ||
+        !state
+      ) {
         const currentHome =
           state?.home?.players ||
           matchConfigRef.current?.home?.players ||
@@ -1867,17 +1886,30 @@ export default function MatchPage() {
         );
       }
 
-      const matchRef = doc(db, "matches", String(id));
-      const side = managedSideRef.current;
-
-      await setDoc(
-        matchRef,
-        {
-          [side]: { formation, tactics: nextTactics },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      // Persist via safe write — won't crash the UI.
+      try {
+        await safeFirestoreWrite(
+          async () => {
+            const matchRef = doc(db, "matches", String(id));
+            await setDoc(
+              matchRef,
+              {
+                [side]: { formation, tactics: nextTactics },
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          },
+          3,
+          "saveTactics"
+        );
+      } catch (err) {
+        console.warn("Firestore tactics save failed:", err);
+        setError(
+          "Tactics zakozwe muri engine ariko ntizabitswe muri database (network)."
+        );
+        return;
+      }
     } catch (err) {
       console.error("Tactics error:", err);
       setError(err?.message || "Tactics ntizibitswe.");
@@ -1947,7 +1979,8 @@ export default function MatchPage() {
   );
 
   const saveStartingXI = useCallback(async () => {
-    if (!managedSideRef.current) {
+    const side = managedSideRef.current;
+    if (!side) {
       setError("Ntabwo uri manager w'ikipe iyi.");
       return;
     }
@@ -1961,7 +1994,6 @@ export default function MatchPage() {
       setSavingLineup(true);
       setError("");
 
-      const side = managedSideRef.current;
       const config = matchConfigRef.current;
 
       if (!config) {
@@ -2011,21 +2043,33 @@ export default function MatchPage() {
         ball: { x: 50, y: 50 },
       };
 
-      const matchRef = doc(db, "matches", String(id));
-
-      await setDoc(
-        matchRef,
-        {
-          [side]: {
-            startingXI: positionedXI,
-            bench: managedBench,
-            formation,
-            tactics,
+      try {
+        await safeFirestoreWrite(
+          async () => {
+            const matchRef = doc(db, "matches", String(id));
+            await setDoc(
+              matchRef,
+              {
+                [side]: {
+                  startingXI: positionedXI,
+                  bench: managedBench,
+                  formation,
+                  tactics,
+                },
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
           },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+          3,
+          "saveStartingXI"
+        );
+      } catch (err) {
+        console.warn("Firestore lineup save failed:", err);
+        setError(
+          "Starting XI yabitswe mu engine ariko ntiyabitswe muri database (network)."
+        );
+      }
 
       const newState = engineRef.current?.getState();
       if (newState) {
@@ -2050,15 +2094,21 @@ export default function MatchPage() {
   ]);
 
   /* =======================================================
-     SUBSTITUTION
+     SUBSTITUTION  (YAVUGURUWE CYANE)
   ======================================================= */
 
   async function makeSubstitution() {
     const engine = engineRef.current;
-    if (!engine) return;
 
-    if (!managedSideRef.current) {
+    const side = managedSideRef.current;
+
+    if (!side) {
       setError("Ntabwo uri manager w'ikipe iyi.");
+      return;
+    }
+
+    if (!engine) {
+      setError("Engine ntiribaho. Ongera ugerageze.");
       return;
     }
 
@@ -2067,66 +2117,180 @@ export default function MatchPage() {
       return;
     }
 
+    if (String(outgoingPlayer) === String(incomingPlayer)) {
+      setError("Ntushobora gusimbuza umukinnyi ku wundi uwo ari we.");
+      return;
+    }
+
+    const outgoing = managedStartingXI.find(
+      player => String(player.id) === String(outgoingPlayer)
+    );
+
+    const incoming = managedBench.find(
+      player => String(player.id) === String(incomingPlayer)
+    );
+
+    if (!outgoing) {
+      setError("Umukinnyi usohoka ntabonetse muri Starting XI.");
+      return;
+    }
+
+    if (!incoming) {
+      setError("Umukinnyi winjira ntabonetse kuri bench.");
+      return;
+    }
+
+    // Check substitution limit
+    if (substitutionsUsed >= 5) {
+      setError("Ntushobora gusimbuza barenze 5.");
+      return;
+    }
+
     try {
       setSubstituting(true);
       setError("");
+      setSuccessMessage("");
 
-      await engine.substituteUser(outgoingPlayer, incomingPlayer);
+      let engineError = null;
 
-      const state = engine.getState();
-      setSnapshot(state);
-      setEvents(state?.events || []);
-
-      const outgoing = managedStartingXI.find(
-        player => String(player.id) === String(outgoingPlayer)
-      );
-
-      const incoming = managedBench.find(
-        player => String(player.id) === String(incomingPlayer)
-      );
-
-      if (outgoing && incoming) {
-        const nextStarting = managedStartingXI.map(player =>
-          String(player.id) === String(outgoing.id)
-            ? {
-                ...incoming,
-                x: outgoing.x,
-                y: outgoing.y,
-                formationPosition: outgoing.formationPosition,
-              }
-            : player
-        );
-
-        const nextBench = managedBench.map(player =>
-          String(player.id) === String(incoming.id)
-            ? outgoing
-            : player
-        );
-
-        setManagedStartingXI(nextStarting);
-        setManagedBench(nextBench);
-
-        if (managedSideRef.current === "home") {
-          setHomeBenchPlayers(nextBench);
+      /* ---------------------------------------------
+         STEP 1: Try to notify the engine.
+         Igerageza uburyo bubiri:
+           - engine.substituteUser(outgoing, incoming)
+           - engine.substitute(side, outgoing, incoming)
+      --------------------------------------------- */
+      try {
+        if (typeof engine.substituteUser === "function") {
+          await engine.substituteUser(
+            outgoingPlayer,
+            incomingPlayer
+          );
+        } else if (typeof engine.substitute === "function") {
+          await engine.substitute(
+            side,
+            outgoingPlayer,
+            incomingPlayer
+          );
         } else {
-          setAwayBenchPlayers(nextBench);
+          throw new Error(
+            "Engine nta substitute method ifite (substituteUser cyangwa substitute)."
+          );
         }
-
-        if (matchConfigRef.current) {
-          const side = managedSideRef.current;
-          matchConfigRef.current = {
-            ...matchConfigRef.current,
-            [side]: {
-              ...matchConfigRef.current[side],
-              players: nextStarting,
-              bench: nextBench,
-            },
-          };
-        }
+      } catch (err) {
+        engineError = err;
+        console.error("Engine substitution error:", err);
       }
 
-      setOutgoingPlayer("");
-      setIncomingPlayer("");
+      /* ---------------------------------------------
+         STEP 2: Update LOCAL state NO MATTER WHAT.
+         Bityo UI ntizahagarara n'ubwo engine yanze.
+      --------------------------------------------- */
+      const nextStarting = managedStartingXI.map(player =>
+        String(player.id) === String(outgoing.id)
+          ? {
+              ...incoming,
+              x: outgoing.x,
+              y: outgoing.y,
+              formationPosition:
+                outgoing.formationPosition || incoming.position,
+              position: outgoing.position,
+              role: outgoing.role,
+            }
+          : player
+      );
+
+      const nextBench = managedBench.map(player =>
+        String(player.id) === String(incoming.id)
+          ? outgoing
+          : player
+      );
+
+      setManagedStartingXI(nextStarting);
+      setManagedBench(nextBench);
+
+      if (side === "home") {
+        setHomeBenchPlayers(nextBench);
+      } else {
+        setAwayBenchPlayers(nextBench);
+      }
+
+      if (matchConfigRef.current) {
+        matchConfigRef.current = {
+          ...matchConfigRef.current,
+          [side]: {
+            ...matchConfigRef.current[side],
+            players: nextStarting,
+            bench: nextBench,
+          },
+        };
+      }
+
+      /* ---------------------------------------------
+         STEP 3: Refresh snapshot from engine (soft).
+      --------------------------------------------- */
+      try {
+        const state =
+          typeof engine.getState === "function"
+            ? engine.getState()
+            : null;
+
+        if (state) {
+          setSnapshot(state);
+          setEvents(state?.events || []);
+        }
+      } catch (e) {
+        console.warn("getState after substitution failed:", e);
+      }
+
+      /* ---------------------------------------------
+         STEP 4: Log the substitution into Firestore.
+         Non-fatal — ntibihagarike UI.
+      --------------------------------------------- */
+      try {
+        await safeFirestoreWrite(
+          async () => {
+            const matchRef = doc(db, "matches", String(id));
+            await setDoc(
+              matchRef,
+              {
+                [`substitutionsLog`]: {
+                  [`${side}_lastOutgoing`]: outgoing.id,
+                  [`${side}_lastIncoming`]: incoming.id,
+                  [`${side}_at`]: serverTimestamp(),
+                },
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          },
+          2,
+          "substitutionLog"
+        );
+      } catch (err) {
+        console.warn(
+          "Firestore substitution log failed (non-fatal):",
+          err
+        );
+      }
+
+      /* ---------------------------------------------
+         STEP 5: Report result.
+      --------------------------------------------- */
+      if (engineError) {
+        setError(
+          "Substitution yabitswe mu UI ariko engine yanze: " +
+            (engineError.message || "unknown error")
+        );
+      } else {
+        setSuccessMessage(
+          `Substitution yagenze neza: ${outgoing.name} → ${incoming.name}`
+        );
+
+        setTimeout(() => setSuccessMessage(""), 4000);
+
+        setOutgoingPlayer("");
+        setIncomingPlayer("");
+      }
     } catch (err) {
       console.error("Substitution error:", err);
       setError(err?.message || "Substitution yanze.");
@@ -2195,7 +2359,6 @@ export default function MatchPage() {
   const liveHomeBench = homeBenchPlayers;
   const liveAwayBench = awayBenchPlayers;
 
-  // Fallback: niba live bench iri empty, koresha managedBench
   const liveManagedBench =
     (managedSide === "away" ? liveAwayBench : liveHomeBench).length > 0
       ? managedSide === "away"
@@ -2361,6 +2524,23 @@ export default function MatchPage() {
         {/* ERROR */}
         {error && <div className={styles.errorBox}>{error}</div>}
 
+        {/* SUCCESS */}
+        {successMessage && (
+          <div
+            className={styles.successBox}
+            style={{
+              background: "#065f46",
+              color: "#d1fae5",
+              padding: "10px 14px",
+              borderRadius: 8,
+              margin: "8px 0",
+              fontSize: 14,
+            }}
+          >
+            ✓ {successMessage}
+          </div>
+        )}
+
         {/* PITCH */}
         <section className={styles.pitch}>
           <div className={styles.halfLine} />
@@ -2389,7 +2569,9 @@ export default function MatchPage() {
                   player.side === "home"
                     ? styles.homePlayer
                     : styles.awayPlayer
-                } ${player.hasBall ? styles.hasBall : ""}`}
+                } ${player.hasBall ? styles.hasBall : ""} ${
+                  player.injured ? styles.injured : ""
+                }`}
                 style={{
                   left: `${Math.max(2, Math.min(98, x))}%`,
                   top: `${Math.max(3, Math.min(97, y))}%`,
@@ -2909,6 +3091,7 @@ export default function MatchPage() {
                   <span>{managedTeamName}</span>
                 </div>
 
+                {/* PLAYER COMING OFF — uses managedStartingXI for local sync */}
                 <div className={styles.formGroup}>
                   <label>Player coming off</label>
                   <select
@@ -2923,22 +3106,25 @@ export default function MatchPage() {
                     }
                   >
                     <option value="">Select player</option>
-                    {(managedSide === "away"
-                      ? away?.players
-                      : home?.players
-                    )?.map(player => (
+                    {managedStartingXI.map(player => (
                       <option key={player.id} value={player.id}>
                         #{player.number} {player.name} (
-                        {normalizePosition(player.position)}) -{" "}
+                        {normalizePosition(
+                          player.position ||
+                            player.formationPosition
+                        )}
+                        ) -{" "}
                         {safeNumber(
                           player.rating,
                           calculatePlayerRating(player)
                         )}
+                        {player.injured ? " 🚑" : ""}
                       </option>
                     ))}
                   </select>
                 </div>
 
+                {/* PLAYER COMING ON */}
                 <div className={styles.formGroup}>
                   <label>Player coming on</label>
                   <select
@@ -2981,7 +3167,8 @@ export default function MatchPage() {
                     status === "finished" ||
                     status === "created" ||
                     !outgoingPlayer ||
-                    !incomingPlayer
+                    !incomingPlayer ||
+                    String(outgoingPlayer) === String(incomingPlayer)
                   }
                 >
                   {substituting
