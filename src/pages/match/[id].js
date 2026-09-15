@@ -28,24 +28,19 @@ import styles from "./Mach.module.css";
 
 function firstValue(object, keys, fallback = null) {
   if (!object) return fallback;
-
   for (const key of keys) {
     const value = object[key];
-
     if (value !== undefined && value !== null && value !== "") {
       return value;
     }
   }
-
   return fallback;
 }
-
 
 function safeNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
-
 
 function safeString(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
@@ -53,23 +48,15 @@ function safeString(value, fallback = "") {
   return result || fallback;
 }
 
-
 function normalizeId(value) {
   if (value === undefined || value === null) return "";
-
   if (typeof value === "object") {
     return String(
-      value.id ||
-      value.clubId ||
-      value.teamId ||
-      value.value ||
-      ""
+      value.id || value.clubId || value.teamId || value.value || ""
     );
   }
-
   return String(value);
 }
-
 
 function sleep(ms) {
   return new Promise(resolve => {
@@ -77,27 +64,21 @@ function sleep(ms) {
   });
 }
 
-
 function getUsernameFromUser(user) {
   return safeString(
     user?.username ||
-    user?.userName ||
-    user?.displayName ||
-    user?.name ||
-    user?.email
+      user?.userName ||
+      user?.displayName ||
+      user?.name ||
+      user?.email
   ).toLowerCase();
 }
 
-
 function getUserIdFromUser(user) {
   return safeString(
-    user?.uid ||
-    user?.id ||
-    user?.userId ||
-    user?._id
+    user?.uid || user?.id || user?.userId || user?._id
   );
 }
-
 
 function getPlayerRating(player) {
   if (!player) return 0;
@@ -131,7 +112,6 @@ function getPlayerRating(player) {
   return Math.round(sum / attrs.length);
 }
 
-
 function playerBelongsToClub(player, clubId) {
   const wanted = normalizeId(clubId);
   if (!wanted) return false;
@@ -152,50 +132,50 @@ function playerBelongsToClub(player, clubId) {
   return values.includes(wanted);
 }
 
-
 function normalizePlayer(player = {}, index = 0) {
   const ratings = player.ratings || player.stats || {};
 
   const normalized = {
     id: String(
       player.id ||
-      player.playerId ||
-      player.uid ||
-      `player-${index + 1}`
+        player.playerId ||
+        player.uid ||
+        `player-${index + 1}`
     ),
-
     name:
       player.name ||
       player.displayName ||
       player.fullName ||
       player.playerName ||
       `Player ${index + 1}`,
-
     number: safeNumber(
       player.number ?? player.shirtNumber ?? player.jerseyNumber,
       index + 1
     ),
-
     position:
       player.position ||
       player.preferredPosition ||
       player.role ||
       "CM",
-
     role: player.role || player.position || "CM",
-
     pace: safeNumber(player.pace ?? ratings.pace ?? ratings.speed, 70),
     passing: safeNumber(player.passing ?? ratings.passing ?? ratings.pass, 70),
     shooting: safeNumber(player.shooting ?? ratings.shooting ?? ratings.shoot, 65),
     dribbling: safeNumber(player.dribbling ?? ratings.dribbling ?? ratings.dribble, 68),
     defending: safeNumber(
-      player.defending ?? ratings.defending ?? ratings.defence ?? ratings.defense,
+      player.defending ??
+        ratings.defending ??
+        ratings.defence ??
+        ratings.defense,
       65
     ),
     stamina: safeNumber(player.stamina ?? ratings.stamina, 80),
     strength: safeNumber(player.strength ?? ratings.strength ?? ratings.physical, 70),
     vision: safeNumber(player.vision ?? ratings.vision, 70),
-    goalkeeping: safeNumber(player.goalkeeping ?? ratings.goalkeeping ?? ratings.gk, 60),
+    goalkeeping: safeNumber(
+      player.goalkeeping ?? ratings.goalkeeping ?? ratings.gk,
+      60
+    ),
     composure: safeNumber(player.composure ?? ratings.composure, 65),
     positioning: safeNumber(player.positioning ?? ratings.positioning, 65),
     acceleration: safeNumber(player.acceleration ?? ratings.acceleration, 68),
@@ -214,31 +194,19 @@ function normalizePlayer(player = {}, index = 0) {
   return normalized;
 }
 
-
 function normalizeClub(club, fallbackId) {
   return {
     id: String(club?.id || club?.clubId || fallbackId),
-
     name:
-      club?.name ||
-      club?.clubName ||
-      club?.title ||
-      "Unknown Club",
-
+      club?.name || club?.clubName || club?.title || "Unknown Club",
     logo:
-      club?.logo ||
-      club?.logoUrl ||
-      club?.image ||
-      club?.imageUrl ||
-      "",
-
+      club?.logo || club?.logoUrl || club?.image || club?.imageUrl || "",
     formation: club?.formation || "4-3-3",
     tactics: club?.tactics || {},
     players: Array.isArray(club?.players) ? club.players : [],
     bench: Array.isArray(club?.bench) ? club.bench : [],
   };
 }
-
 
 function getClubId(match, side) {
   if (side === "home") {
@@ -250,7 +218,6 @@ function getClubId(match, side) {
       "homeTeam",
     ]);
   }
-
   return firstValue(match, [
     "awayClubId",
     "awayTeamId",
@@ -259,7 +226,6 @@ function getClubId(match, side) {
     "awayTeam",
   ]);
 }
-
 
 function getManagedClubIdFromMatch(match) {
   return normalizeId(
@@ -280,7 +246,6 @@ function getManagedClubIdFromMatch(match) {
   );
 }
 
-
 function getManagedSideFromMatch(match) {
   const explicitSide = safeString(
     firstValue(match, [
@@ -295,18 +260,14 @@ function getManagedSideFromMatch(match) {
   if (explicitSide === "home" || explicitSide === "away") {
     return explicitSide;
   }
-
   return null;
 }
-
 
 function findManagedClubInDatabase(clubs, username, userId) {
   const wantedUsername = safeString(username).toLowerCase();
   const wantedUserId = safeString(userId);
 
-  if (!wantedUsername && !wantedUserId) {
-    return null;
-  }
+  if (!wantedUsername && !wantedUserId) return null;
 
   for (const club of clubs) {
     const data = club.data || club;
@@ -361,7 +322,6 @@ function findManagedClubInDatabase(clubs, username, userId) {
   return null;
 }
 
-
 function findManagedSideInMatchTeams(match, username, userId) {
   const wantedUsername = safeString(username).toLowerCase();
   const wantedUserId = safeString(userId);
@@ -408,7 +368,6 @@ function findManagedSideInMatchTeams(match, username, userId) {
   return null;
 }
 
-
 function extractEmbeddedPlayers(club, side) {
   const possible = [
     club?.players,
@@ -420,10 +379,8 @@ function extractEmbeddedPlayers(club, side) {
   for (const list of possible) {
     if (Array.isArray(list)) return list;
   }
-
   return [];
 }
-
 
 function buildBench(
   explicitBench,
@@ -469,7 +426,6 @@ function buildBench(
     .slice(0, 9);
 }
 
-
 function formatClock(minute, second) {
   const safeMinute = Math.max(0, Math.floor(safeNumber(minute, 0)));
   const safeSecond = Math.max(0, Math.floor(safeNumber(second, 0)));
@@ -477,20 +433,16 @@ function formatClock(minute, second) {
   return `${String(safeMinute).padStart(2, "0")}:${String(safeSecond).padStart(2, "0")}`;
 }
 
-
 function getStat(source, keys, fallback = 0) {
   if (!source) return fallback;
-
   for (const key of keys) {
     const value = source[key];
     if (value !== undefined && value !== null) {
       return safeNumber(value, fallback);
     }
   }
-
   return fallback;
 }
-
 
 function hasStat(source, keys) {
   if (!source) return false;
@@ -499,40 +451,27 @@ function hasStat(source, keys) {
   );
 }
 
-
 function normalizeEventType(event) {
   return safeString(
-    event?.type ||
-    event?.eventType ||
-    event?.action ||
-    event?.name
+    event?.type || event?.eventType || event?.action || event?.name
   )
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
 }
 
-
 function normalizeSide(value) {
   const side = safeString(value).toLowerCase();
-
-  if (["home", "h", "home_team", "hometeam"].includes(side)) {
-    return "home";
-  }
-  if (["away", "a", "away_team", "awayteam"].includes(side)) {
-    return "away";
-  }
+  if (["home", "h", "home_team", "hometeam"].includes(side)) return "home";
+  if (["away", "a", "away_team", "awayteam"].includes(side)) return "away";
   return null;
 }
-
 
 function calculatePossessionFromPasses(homePasses, awayPasses) {
   const h = safeNumber(homePasses, 0);
   const a = safeNumber(awayPasses, 0);
   const total = h + a;
 
-  if (total <= 0) {
-    return { home: 50, away: 50 };
-  }
+  if (total <= 0) return { home: 50, away: 50 };
 
   const homePercent = Math.round((h / total) * 100);
   const safeHome = Math.max(0, Math.min(100, homePercent));
@@ -542,7 +481,6 @@ function calculatePossessionFromPasses(homePasses, awayPasses) {
     away: 100 - safeHome,
   };
 }
-
 
 function calculateLiveStats(snapshot, side) {
   const original = snapshot?.stats?.[side] || {};
@@ -585,9 +523,7 @@ function calculateLiveStats(snapshot, side) {
   sideEvents.forEach(event => {
     const type = normalizeEventType(event);
 
-    if (calculateShots && type.includes("shot")) {
-      shots += 1;
-    }
+    if (calculateShots && type.includes("shot")) shots += 1;
 
     if (
       calculateTargets &&
@@ -608,25 +544,11 @@ function calculateLiveStats(snapshot, side) {
       passes += 1;
     }
 
-    if (calculateTackles && type.includes("tackle")) {
-      tackles += 1;
-    }
-
-    if (calculateInterceptions && type.includes("interception")) {
-      interceptions += 1;
-    }
-
-    if (calculateCorners && type.includes("corner")) {
-      corners += 1;
-    }
-
-    if (calculateSaves && type.includes("save")) {
-      saves += 1;
-    }
-
-    if (calculateFouls && type.includes("foul")) {
-      fouls += 1;
-    }
+    if (calculateTackles && type.includes("tackle")) tackles += 1;
+    if (calculateInterceptions && type.includes("interception")) interceptions += 1;
+    if (calculateCorners && type.includes("corner")) corners += 1;
+    if (calculateSaves && type.includes("save")) saves += 1;
+    if (calculateFouls && type.includes("foul")) fouls += 1;
   });
 
   return {
@@ -641,7 +563,6 @@ function calculateLiveStats(snapshot, side) {
     fouls,
   };
 }
-
 
 async function saveFinalResult(matchId, snapshot) {
   if (!matchId || !snapshot) {
@@ -746,10 +667,7 @@ export default function MatchPage() {
   const router = useRouter();
   const { id } = router.query;
 
-  const {
-    user,
-    loading: authLoading,
-  } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const engineRef = useRef(null);
   const updateTimerRef = useRef(null);
@@ -788,6 +706,28 @@ export default function MatchPage() {
   const [managedBench, setManagedBench] = useState([]);
   const [homeBenchPlayers, setHomeBenchPlayers] = useState([]);
   const [awayBenchPlayers, setAwayBenchPlayers] = useState([]);
+
+  /* =========================================================
+     SNAPSHOT-DERIVED VALUES
+     ---------------------------------------------------------
+     Izi ZIGOMBA KUBA HEJURU y'amasomo yose akoresha
+     `status`. Niba ziri munsi, habaho "Cannot access
+     'status' before initialization" (TDZ error) mu gihe
+     wa build/prerender ya Next.js.
+  ========================================================= */
+
+  const home = snapshot?.home || null;
+  const away = snapshot?.away || null;
+  const score = snapshot?.score || { home: 0, away: 0 };
+  const minute = safeNumber(snapshot?.minute, 0);
+  const second = safeNumber(snapshot?.second, 0);
+  const clock = formatClock(minute, second);
+  const status = snapshot?.status || "created";
+  const tacticsLocked = status === "finished";
+
+  /* =========================================================
+     FINAL SAVE
+  ========================================================= */
 
   const finishAndSave = useCallback(
     async finalSnapshot => {
@@ -846,6 +786,10 @@ export default function MatchPage() {
     [id, router]
   );
 
+  /* =========================================================
+     ENGINE SUBSCRIPTION
+  ========================================================= */
+
   const attachEngine = useCallback(
     engine => {
       if (!engine) return;
@@ -856,9 +800,7 @@ export default function MatchPage() {
         setSnapshot(nextSnapshot);
 
         setEvents(
-          Array.isArray(nextSnapshot.events)
-            ? nextSnapshot.events
-            : []
+          Array.isArray(nextSnapshot.events) ? nextSnapshot.events : []
         );
 
         if (
@@ -908,6 +850,10 @@ export default function MatchPage() {
     [finishAndSave]
   );
 
+  /* =========================================================
+     REBUILD ENGINE
+  ========================================================= */
+
   const rebuildEngine = useCallback(
     async (homePlayers, awayPlayers, homeBench, awayBench) => {
       if (!matchConfigRef.current) return null;
@@ -943,6 +889,10 @@ export default function MatchPage() {
     },
     [attachEngine]
   );
+
+  /* =========================================================
+     LOAD MATCH
+  ========================================================= */
 
   useEffect(() => {
     if (authLoading) return;
@@ -1262,6 +1212,10 @@ export default function MatchPage() {
     finishAndSave,
   ]);
 
+  /* =========================================================
+     LIVE POLLING
+  ========================================================= */
+
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || !snapshot) return;
@@ -1312,6 +1266,10 @@ export default function MatchPage() {
     };
   }, [snapshot?.status]);
 
+  /* =========================================================
+     START
+  ========================================================= */
+
   const startMatch = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1345,6 +1303,10 @@ export default function MatchPage() {
     }
   }, [managedStartingXI.length]);
 
+  /* =========================================================
+     PAUSE
+  ========================================================= */
+
   const pauseMatch = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1367,7 +1329,9 @@ export default function MatchPage() {
     }
   }, []);
 
-  const tacticsLocked = status === "finished";
+  /* =========================================================
+     TACTICS
+  ========================================================= */
 
   function updateTactic(field, value) {
     if (tacticsLocked) return;
@@ -1427,6 +1391,10 @@ export default function MatchPage() {
       setSavingTactics(false);
     }
   }
+
+  /* =========================================================
+     STARTING XI
+  ========================================================= */
 
   const removeFromStartingXI = useCallback(
     playerId => {
@@ -1548,6 +1516,10 @@ export default function MatchPage() {
     id,
   ]);
 
+  /* =========================================================
+     SUBSTITUTION
+  ========================================================= */
+
   async function makeSubstitution() {
     const engine = engineRef.current;
     if (!engine) return;
@@ -1620,13 +1592,9 @@ export default function MatchPage() {
     }
   }
 
-  const home = snapshot?.home || null;
-  const away = snapshot?.away || null;
-  const score = snapshot?.score || { home: 0, away: 0 };
-  const minute = safeNumber(snapshot?.minute, 0);
-  const second = safeNumber(snapshot?.second, 0);
-  const clock = formatClock(minute, second);
-  const status = snapshot?.status || "created";
+  /* =========================================================
+     MEMOIZED VALUES
+  ========================================================= */
 
   const homeStats = useMemo(
     () => calculateLiveStats(snapshot, "home"),
@@ -1673,6 +1641,10 @@ export default function MatchPage() {
   const liveManagedBench =
     managedSide === "away" ? liveAwayBench : liveHomeBench;
 
+  /* =========================================================
+     EARLY RETURNS
+  ========================================================= */
+
   if (authLoading || loading) {
     return (
       <main className={styles.loadingPage}>
@@ -1691,13 +1663,16 @@ export default function MatchPage() {
     );
   }
 
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
   return (
     <>
       <Head>
         <title>
           {home?.name || "Home"} vs {away?.name || "Away"} | Live Match
         </title>
-
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1"
@@ -1801,10 +1776,7 @@ export default function MatchPage() {
             )}
 
           {managedSide && status === "playing" && (
-            <button
-              onClick={pauseMatch}
-              className={styles.pauseButton}
-            >
+            <button onClick={pauseMatch} className={styles.pauseButton}>
               ⏸ PAUSE
             </button>
           )}
@@ -1928,27 +1900,19 @@ export default function MatchPage() {
               <div className={styles.playerList}>
                 <div>
                   <h3>{home?.name}</h3>
-
                   {home?.players?.map(player => {
                     const rating = getPlayerRating(player);
-
                     return (
-                      <div
-                        className={styles.listPlayer}
-                        key={player.id}
-                      >
+                      <div className={styles.listPlayer} key={player.id}>
                         <b className={styles.playerJersey}>
                           #{player.number}
                         </b>
-
                         <span className={styles.playerNameText}>
                           {player.name}
                         </span>
-
                         <small className={styles.playerPosition}>
                           {player.position}
                         </small>
-
                         <em className={styles.playerRating}>
                           ⭐ {rating}
                         </em>
@@ -1957,11 +1921,9 @@ export default function MatchPage() {
                   })}
 
                   <h3>Bench ({liveHomeBench.length})</h3>
-
                   {liveHomeBench.length > 0 ? (
                     liveHomeBench.map(player => {
                       const rating = getPlayerRating(player);
-
                       return (
                         <div
                           className={styles.listPlayer}
@@ -1970,15 +1932,12 @@ export default function MatchPage() {
                           <b className={styles.playerJersey}>
                             #{player.number}
                           </b>
-
                           <span className={styles.playerNameText}>
                             {player.name}
                           </span>
-
                           <small className={styles.playerPosition}>
                             {player.position}
                           </small>
-
                           <em className={styles.playerRating}>
                             ⭐ {rating}
                           </em>
@@ -1994,27 +1953,19 @@ export default function MatchPage() {
 
                 <div>
                   <h3>{away?.name}</h3>
-
                   {away?.players?.map(player => {
                     const rating = getPlayerRating(player);
-
                     return (
-                      <div
-                        className={styles.listPlayer}
-                        key={player.id}
-                      >
+                      <div className={styles.listPlayer} key={player.id}>
                         <b className={styles.playerJersey}>
                           #{player.number}
                         </b>
-
                         <span className={styles.playerNameText}>
                           {player.name}
                         </span>
-
                         <small className={styles.playerPosition}>
                           {player.position}
                         </small>
-
                         <em className={styles.playerRating}>
                           ⭐ {rating}
                         </em>
@@ -2023,11 +1974,9 @@ export default function MatchPage() {
                   })}
 
                   <h3>Bench ({liveAwayBench.length})</h3>
-
                   {liveAwayBench.length > 0 ? (
                     liveAwayBench.map(player => {
                       const rating = getPlayerRating(player);
-
                       return (
                         <div
                           className={styles.listPlayer}
@@ -2036,15 +1985,12 @@ export default function MatchPage() {
                           <b className={styles.playerJersey}>
                             #{player.number}
                           </b>
-
                           <span className={styles.playerNameText}>
                             {player.name}
                           </span>
-
                           <small className={styles.playerPosition}>
                             {player.position}
                           </small>
-
                           <em className={styles.playerRating}>
                             ⭐ {rating}
                           </em>
@@ -2113,10 +2059,7 @@ export default function MatchPage() {
                     awayStatsWithPossession.fouls,
                   ],
                 ].map(row => (
-                  <div
-                    className={styles.statRow}
-                    key={row[0]}
-                  >
+                  <div className={styles.statRow} key={row[0]}>
                     <strong>{row[1]}</strong>
                     <span>{row[0]}</span>
                     <strong>{row[2]}</strong>
@@ -2139,10 +2082,8 @@ export default function MatchPage() {
                 <div className={styles.playerList}>
                   <div>
                     <h3>Starting XI</h3>
-
                     {managedStartingXI.map(player => {
                       const rating = getPlayerRating(player);
-
                       return (
                         <div
                           className={styles.listPlayer}
@@ -2151,15 +2092,12 @@ export default function MatchPage() {
                           <b className={styles.playerJersey}>
                             #{player.number}
                           </b>
-
                           <span className={styles.playerNameText}>
                             {player.name}
                           </span>
-
                           <small className={styles.playerPosition}>
                             {player.position}
                           </small>
-
                           <em className={styles.playerRating}>
                             ⭐ {rating}
                           </em>
@@ -2182,10 +2120,8 @@ export default function MatchPage() {
 
                   <div>
                     <h3>Bench ({managedBench.length})</h3>
-
                     {managedBench.map(player => {
                       const rating = getPlayerRating(player);
-
                       return (
                         <div
                           className={styles.listPlayer}
@@ -2194,15 +2130,12 @@ export default function MatchPage() {
                           <b className={styles.playerJersey}>
                             #{player.number}
                           </b>
-
                           <span className={styles.playerNameText}>
                             {player.name}
                           </span>
-
                           <small className={styles.playerPosition}>
                             {player.position}
                           </small>
-
                           <em className={styles.playerRating}>
                             ⭐ {rating}
                           </em>
@@ -2294,10 +2227,7 @@ export default function MatchPage() {
                   <select
                     value={tactics.mentality}
                     onChange={event =>
-                      updateTactic(
-                        "mentality",
-                        event.target.value
-                      )
+                      updateTactic("mentality", event.target.value)
                     }
                     disabled={tacticsLocked}
                   >
@@ -2318,10 +2248,7 @@ export default function MatchPage() {
                   <select
                     value={tactics.pressing}
                     onChange={event =>
-                      updateTactic(
-                        "pressing",
-                        event.target.value
-                      )
+                      updateTactic("pressing", event.target.value)
                     }
                     disabled={tacticsLocked}
                   >
@@ -2419,18 +2346,13 @@ export default function MatchPage() {
                     }
                   >
                     <option value="">Select player</option>
-
                     {(managedSide === "away"
                       ? away?.players
                       : home?.players
                     )?.map(player => {
                       const rating = getPlayerRating(player);
-
                       return (
-                        <option
-                          key={player.id}
-                          value={player.id}
-                        >
+                        <option key={player.id} value={player.id}>
                           #{player.number} {player.name} (
                           {player.position}) ⭐ {rating}
                         </option>
@@ -2453,15 +2375,10 @@ export default function MatchPage() {
                     }
                   >
                     <option value="">Select substitute</option>
-
                     {liveManagedBench.map(player => {
                       const rating = getPlayerRating(player);
-
                       return (
-                        <option
-                          key={player.id}
-                          value={player.id}
-                        >
+                        <option key={player.id} value={player.id}>
                           #{player.number} {player.name} (
                           {player.position}) ⭐ {rating}
                         </option>
