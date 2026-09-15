@@ -47,7 +47,7 @@ export default function HomePage() {
               <div className={styles.featureIcon}>⚽</div>
               <h3 className={styles.featureTitle}>3D Match Engine</h3>
               <p className={styles.featureDesc}>
-                Watch your team play in stunning 3D with realistic player
+                Watch your team play in stunning 2D with realistic player
                 animations and AI behavior.
               </p>
             </div>
@@ -73,19 +73,19 @@ export default function HomePage() {
 
           <div className={styles.stats}>
             <div className={styles.statItem}>
-              <div className={styles.statNumber}>500+</div>
+              <div className={styles.statNumber}>10500+</div>
               <div className={styles.statLabel}>Players</div>
             </div>
             <div className={styles.statItem}>
-              <div className={styles.statNumber}>20+</div>
+              <div className={styles.statNumber}>800+</div>
               <div className={styles.statLabel}>Clubs</div>
             </div>
             <div className={styles.statItem}>
-              <div className={styles.statNumber}>100+</div>
+              <div className={styles.statNumber}>400+</div>
               <div className={styles.statLabel}>Achievements</div>
             </div>
             <div className={styles.statItem}>
-              <div className={styles.statNumber}>50+</div>
+              <div className={styles.statNumber}>150+</div>
               <div className={styles.statLabel}>Hours of Gameplay</div>
             </div>
           </div>
